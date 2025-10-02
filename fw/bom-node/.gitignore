@@ -1,0 +1,11 @@
+# folders
+build/
+.vscode/
+.devcontainer/
+managed_components/
+generated/
+CMakeFiles/
+
+# files
+sdkconfig.old
+CMakeCache.txt
