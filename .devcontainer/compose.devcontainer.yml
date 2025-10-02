@@ -1,0 +1,31 @@
+services:
+  fw-esp-devcontainer:
+    build:
+      context: ..
+      dockerfile: .devcontainer/fw-esp-devcontainer/Dockerfile
+    volumes:
+      # Mount the root folder that contains .git
+      - ../:/workspace:cached
+    devices:
+      - /dev/ttyUSB0:/dev/ttyUSB0
+    # For JTAG debugging, we need access to USB devices
+    # Alternative to privileged: true - map specific USB devices as needed
+    # privileged: true
+    cap_add:
+      - SYS_PTRACE
+    security_opt:
+      - seccomp:unconfined
+    command: sleep infinity
+
+  fw-esp-devcontainer-noesp:
+    build:
+      context: ..
+      dockerfile: .devcontainer/fw-esp-devcontainer-noesp/Dockerfile
+    volumes:
+      # Mount the root folder that contains .git
+      - ../:/workspace:cached
+    cap_add:
+      - SYS_PTRACE
+    security_opt:
+      - seccomp:unconfined
+    command: sleep infinity

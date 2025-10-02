@@ -1,0 +1,44 @@
+{
+  "name": "Felix FW ESP Devcontainer - NO ESP",
+  "dockerComposeFile": ["../compose.devcontainer.yml"],
+  "service": "fw-esp-devcontainer-noesp",
+  "runServices": ["fw-esp-devcontainer-noesp"],
+  "workspaceFolder": "/workspace",
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "bash",
+        "idf.espIdfPath": "/opt/esp/idf",
+        "idf.toolsPath": "/opt/esp",
+        "idf.gitPath": "/usr/bin/git",
+        "idf.openOcdConfigs": ["board/esp32s3-builtin.cfg"],
+        "clang-format.executable": "/usr/bin/clang-format",
+        "editor.formatOnPaste": true,
+        "editor.formatOnSave": true,
+        "C_Cpp.intelliSenseEngine": "default",
+        "C_Cpp.intelliSenseEngineFallback": "enabled",
+        "C_Cpp.autocomplete": "default",
+        "C_Cpp.errorSquiggles": "enabled",
+        "C_Cpp.loggingLevel": "Information",
+        "C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools",
+        "cmake.configureOnOpen": false,
+        "cmake.buildDirectory": "${workspaceFolder}/build"
+      },
+      "extensions": [
+        "espressif.esp-idf-extension",
+        "espressif.esp-idf-web",
+        "github.vscode-pull-request-github",
+        "ms-azuretools.vscode-docker",
+        "ms-vscode-remote.vscode-remote-extensionpack",
+        "ms-vscode.cmake-tools",
+        "ms-vscode.cpptools",
+        "ms-vscode.cpptools-extension-pack",
+        "ms-vscode.cpptools-themes",
+        "ms-vscode.makefile-tools",
+        "esbenp.prettier-vscode",
+        "gruntfuggly.todo-tree",
+        "xaver.clang-format"
+      ]
+    }
+  }
+}
