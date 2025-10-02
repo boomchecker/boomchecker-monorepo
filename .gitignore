@@ -1,0 +1,15 @@
+# VS code
+.vscode
+
+# Build Outputs
+.next/
+out/
+build
+dist
+.bin
+
+# pnpm
+.pnpm-store
+
+# Python
+.venv
