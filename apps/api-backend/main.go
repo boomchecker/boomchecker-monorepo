@@ -1,7 +1,17 @@
 package main
 
-import "fmt"
+import (
+	"github.com/boomchecker/api-backend/internal/handlers"
+	"github.com/gin-gonic/gin"
+)
 
 func main() {
-	fmt.Println("Hello, world!")
+	// Create a Gin router with default middleware (logger and recovery)
+	router := gin.Default()
+
+	// Register health check endpoint
+	router.GET("/ping", handlers.PingHandler)
+
+	// Start server on port 8080
+	router.Run(":8080")
 }
