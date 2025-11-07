@@ -15,7 +15,7 @@ env:
   AWS_ROLE: ${{ secrets.AWS_ROLE }}
   AWS_BUCKET_NAME: ${{ secrets.AWS_BUCKET_NAME }}
   AWS_BUCKET_KEY_NAME: ${{ secrets.AWS_BUCKET_KEY_NAME }}
-  EC2_INSTANCE_ID: ${{ secrets.EC2_INSTANCE_ID }}
+  EC2_INSTANCE_ID: ${{ secrets.AWS_INSTANCE_ID }}
   API_PORT: 8080
 
 jobs:
