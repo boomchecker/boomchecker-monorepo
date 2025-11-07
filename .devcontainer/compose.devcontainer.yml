@@ -29,3 +29,16 @@ services:
     security_opt:
       - seccomp:unconfined
     command: sleep infinity
+
+  api-backend-devcontainer:
+    build:
+      context: ..
+      dockerfile: .devcontainer/api-backend-devcontainer/Dockerfile
+    volumes:
+      # Mount the root folder that contains .git
+      - ../:/workspace:cached
+    cap_add:
+      - SYS_PTRACE
+    security_opt:
+      - seccomp:unconfined
+    command: sleep infinity
