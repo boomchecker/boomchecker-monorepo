@@ -15,7 +15,7 @@ env:
   AWS_ROLE: ${{ secrets.AWS_ROLE }}
   AWS_BUCKET_NAME: ${{ secrets.AWS_BUCKET_NAME }}
   AWS_BUCKET_KEY_NAME: ${{ secrets.AWS_BUCKET_KEY_NAME }}
-  EC2_INSTANCE_ID: ${{ secrets.EC2_INSTANCE_ID }}
+  EC2_INSTANCE_ID: ${{ secrets.AWS_INSTANCE_ID }}
   API_PORT: 8080
 
 jobs:
@@ -32,7 +32,16 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version-file: ./apps/api-backend/go.mod
-          cache-dependency-path: ./apps/api-backend/go.sum
+          cache: true
+          cache-dependency-path: ./apps/api-backend/go.mod
+
+      - name: Download dependencies
+        working-directory: ./apps/api-backend
+        run: |
+          echo "Downloading Go dependencies..."
+          go mod download
+          go mod tidy
+          go mod verify
 
       - name: Run tests
         working-directory: ./apps/api-backend
@@ -70,6 +79,7 @@ jobs:
             --region ${{ env.AWS_REGION }}
 
       - name: Deploy to EC2 via SSM
+        id: deploy
         run: |
           echo "Sending deploy command to EC2 instance..."
           COMMAND_ID=$(aws ssm send-command \
@@ -123,9 +133,10 @@ jobs:
             exit 1
           fi
           
-          echo "Deploy successful!"
+          echo "✅ Deploy successful!"
 
       - name: Wait and verify service status
+        id: verify
         run: |
           echo "Waiting for service to be fully ready..."
           sleep 5
@@ -183,9 +194,9 @@ jobs:
           echo "Deployment completed successfully and API is healthy!"
 
       - name: Rollback on failure
-        if: failure()
+        if: failure() && steps.deploy.conclusion == 'failure' || steps.verify.conclusion == 'failure'
         run: |
-          echo "Deployment or health check failed! Attempting rollback..."
+          echo "⚠️ Deployment or health check failed! Attempting rollback..."
           
           ROLLBACK_COMMAND_ID=$(aws ssm send-command \
             --instance-ids "${{ env.EC2_INSTANCE_ID }}" \
