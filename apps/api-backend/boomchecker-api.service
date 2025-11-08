@@ -1,0 +1,15 @@
+[Unit]
+Description=BoomChecker API Backend
+After=network.target
+
+[Service]
+Type=simple
+User=ec2-user
+WorkingDirectory=/opt/boomchecker
+ExecStart=/opt/boomchecker/api-backend
+Environment="PORT=80"
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

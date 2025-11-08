@@ -71,11 +71,16 @@ jobs:
           ls -lh api-backend
           file api-backend
 
-      - name: Upload binary to S3
+      - name: Upload binary and service file to S3
         run: |
           echo "Uploading binary to S3..."
           aws s3 cp ./apps/api-backend/api-backend \
             s3://${{ env.AWS_BUCKET_NAME }}/${{ env.AWS_BUCKET_KEY_NAME }} \
+            --region ${{ env.AWS_REGION }}
+          
+          echo "Uploading systemd service file to S3..."
+          aws s3 cp ./apps/api-backend/boomchecker-api.service \
+            s3://${{ env.AWS_BUCKET_NAME }}/staging/boomchecker-api.service \
             --region ${{ env.AWS_REGION }}
 
       - name: Deploy to EC2 via SSM
@@ -93,22 +98,8 @@ jobs:
               "if [ -f /opt/boomchecker/api-backend ]; then sudo cp /opt/boomchecker/api-backend /opt/boomchecker/backup/api-backend.backup; fi",
               "sudo aws s3 cp s3://${{ env.AWS_BUCKET_NAME }}/${{ env.AWS_BUCKET_KEY_NAME }} /opt/boomchecker/api-backend",
               "sudo chmod +x /opt/boomchecker/api-backend",
-              "echo Creating/updating systemd service with PORT=${{ env.API_PORT }}...",
-              "echo \"[Unit]\" | sudo tee /etc/systemd/system/boomchecker-api.service > /dev/null",
-              "echo \"Description=BoomChecker API Backend\" | sudo tee -a /etc/systemd/system/boomchecker-api.service > /dev/null",
-              "echo \"After=network.target\" | sudo tee -a /etc/systemd/system/boomchecker-api.service > /dev/null",
-              "echo \"\" | sudo tee -a /etc/systemd/system/boomchecker-api.service > /dev/null",
-              "echo \"[Service]\" | sudo tee -a /etc/systemd/system/boomchecker-api.service > /dev/null",
-              "echo \"Type=simple\" | sudo tee -a /etc/systemd/system/boomchecker-api.service > /dev/null",
-              "echo \"User=ec2-user\" | sudo tee -a /etc/systemd/system/boomchecker-api.service > /dev/null",
-              "echo \"WorkingDirectory=/opt/boomchecker\" | sudo tee -a /etc/systemd/system/boomchecker-api.service > /dev/null",
-              "echo \"ExecStart=/opt/boomchecker/api-backend\" | sudo tee -a /etc/systemd/system/boomchecker-api.service > /dev/null",
-              "echo \"Environment=PORT=${{ env.API_PORT }}\" | sudo tee -a /etc/systemd/system/boomchecker-api.service > /dev/null",
-              "echo \"Restart=always\" | sudo tee -a /etc/systemd/system/boomchecker-api.service > /dev/null",
-              "echo \"RestartSec=5\" | sudo tee -a /etc/systemd/system/boomchecker-api.service > /dev/null",
-              "echo \"\" | sudo tee -a /etc/systemd/system/boomchecker-api.service > /dev/null",
-              "echo \"[Install]\" | sudo tee -a /etc/systemd/system/boomchecker-api.service > /dev/null",
-              "echo \"WantedBy=multi-user.target\" | sudo tee -a /etc/systemd/system/boomchecker-api.service > /dev/null",
+              "echo Downloading and installing systemd service...",
+              "sudo aws s3 cp s3://${{ env.AWS_BUCKET_NAME }}/staging/boomchecker-api.service /etc/systemd/system/boomchecker-api.service",
               "sudo systemctl daemon-reload",
               "sudo systemctl enable boomchecker-api",
               "sudo systemctl start boomchecker-api",
