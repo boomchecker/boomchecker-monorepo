@@ -1,8 +1,6 @@
 package main
 
 import (
-	"os"
-
 	"github.com/boomchecker/api-backend/internal/handlers"
 	"github.com/gin-gonic/gin"
 )
@@ -14,12 +12,6 @@ func main() {
 	// Register health check endpoint
 	router.GET("/ping", handlers.PingHandler)
 
-	// Get port from environment variable, default to 8080 for local development
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
-	}
-
-	// Start server
-	router.Run(":" + port)
+	// Start server on port 8080
+	router.Run(":8080")
 }
