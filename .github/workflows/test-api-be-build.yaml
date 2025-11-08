@@ -45,11 +45,11 @@ jobs:
           
           echo "Verifying binary was created..."
           if [ ! -f api-backend ]; then
-            echo "❌ Build failed - binary not found"
+            echo "Build failed - binary not found"
             exit 1
           fi
           
-          echo "✅ Binary info:"
+          echo "Binary info:"
           ls -lh api-backend
           file api-backend
 
@@ -62,7 +62,7 @@ jobs:
 
       - name: Build summary
         run: |
-          echo "### ✅ Build Successful!" >> $GITHUB_STEP_SUMMARY
+          echo "### Build Successful!" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "- Tests passed ✓" >> $GITHUB_STEP_SUMMARY
           echo "- Binary built for Linux ARM64 ✓" >> $GITHUB_STEP_SUMMARY
