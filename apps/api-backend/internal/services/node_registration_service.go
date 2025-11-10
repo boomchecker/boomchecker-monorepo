@@ -30,20 +30,20 @@ func NewNodeRegistrationService(
 
 // RegistrationRequest contains the data needed to register a node
 type RegistrationRequest struct {
-	RegistrationToken string   `json:"registration_token" binding:"required"`
-	MacAddress        string   `json:"mac_address" binding:"required"`
-	FirmwareVersion   *string  `json:"firmware_version,omitempty"`
-	Latitude          *float64 `json:"latitude,omitempty"`
-	Longitude         *float64 `json:"longitude,omitempty"`
+	RegistrationToken string   `json:"registration_token" binding:"required" example:"a1b2c3d4-e5f6-7890-abcd-ef1234567890"`
+	MacAddress        string   `json:"mac_address" binding:"required" example:"AA:BB:CC:DD:EE:FF"`
+	FirmwareVersion   *string  `json:"firmware_version,omitempty" example:"1.0.0"`
+	Latitude          *float64 `json:"latitude,omitempty" example:"50.0755"`
+	Longitude         *float64 `json:"longitude,omitempty" example:"14.4378"`
 }
 
 // RegistrationResponse contains the data returned after successful registration
 type RegistrationResponse struct {
-	UUID       string `json:"uuid"`
-	JWTToken   string `json:"jwt_token"`
-	ExpiresAt  string `json:"expires_at"` // UTC timestamp when JWT expires (RFC3339 format)
-	IsNewNode  bool   `json:"is_new_node"`
-	MacAddress string `json:"mac_address"`
+	UUID       string `json:"uuid" example:"550e8400-e29b-41d4-a716-446655440000"`
+	JWTToken   string `json:"jwt_token" example:"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."`
+	ExpiresAt  string `json:"expires_at" example:"2025-12-10T14:30:00Z"` // UTC timestamp when JWT expires (RFC3339 format)
+	IsNewNode  bool   `json:"is_new_node" example:"true"`
+	MacAddress string `json:"mac_address" example:"AA:BB:CC:DD:EE:FF"`
 }
 
 // RegisterNode handles the complete node registration flow

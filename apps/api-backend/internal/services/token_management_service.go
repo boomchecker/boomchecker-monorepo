@@ -241,7 +241,7 @@ func (s *TokenManagementService) convertToListResponse(tokens []*models.Registra
 			AuthorizedMAC: token.PreAuthorizedMacAddress,
 			Description:   nil, // Model doesn't have Description field
 			IsExpired:     token.IsExpired(),
-			IsActive:      token.IsActive(),
+			IsActive:      token.IsValid(),
 			CreatedAt:     token.CreatedAt.UTC().Format(time.RFC3339),
 		}
 	}

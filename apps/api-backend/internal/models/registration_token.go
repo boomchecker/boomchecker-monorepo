@@ -35,6 +35,7 @@ type RegistrationToken struct {
 	// PreAuthorizedMacAddress optionally restricts token to a specific MAC address
 	// If set, token can only register this MAC address
 	// Format: AA:BB:CC:DD:EE:FF (uppercase, colon-separated)
+	// NOTE: This is a soft reference - the MAC address doesn't need to exist yet in nodes table
 	PreAuthorizedMacAddress *string `gorm:"type:text" json:"pre_authorized_mac_address,omitempty"`
 
 	// CreatedAt is the token creation timestamp
@@ -44,10 +45,6 @@ type RegistrationToken struct {
 	// UpdatedAt is the last modification timestamp
 	// Stored in UTC, format: 2025-11-10T14:30:00Z
 	UpdatedAt time.Time `gorm:"type:datetime;not null" json:"updated_at"`
-
-	// PreAuthorizedNode is the optional GORM relationship to the pre-authorized node
-	// Links to Node via MacAddress (ON DELETE SET NULL)
-	PreAuthorizedNode *Node `gorm:"foreignKey:PreAuthorizedMacAddress;references:MacAddress" json:"pre_authorized_node,omitempty"`
 }
 
 // TableName overrides the default table name for GORM
