@@ -59,8 +59,12 @@ jobs:
       - name: Build Go API binary
         working-directory: ./apps/api-backend
         run: |
-          echo "Building Go binary for Linux ARM64..."
-          GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -o api-backend -ldflags="-s -w" .
+          echo "Building Go binary for Linux ARM64 with CGO..."
+          # Install cross-compilation tools for ARM64
+          sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu
+          
+          # Build with CGO enabled for mattn/go-sqlite3
+          CC=aarch64-linux-gnu-gcc GOOS=linux GOARCH=arm64 CGO_ENABLED=1 go build -o api-backend -ldflags="-s -w" .
           
           echo "Verifying binary was created..."
           if [ ! -f api-backend ]; then
