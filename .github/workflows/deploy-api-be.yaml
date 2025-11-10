@@ -99,9 +99,7 @@ jobs:
               "echo \"APP_ENV=staging\" | sudo tee -a /opt/boomchecker/.env",
               "echo \"DB_PATH=/opt/boomchecker/data/boomchecker.db\" | sudo tee -a /opt/boomchecker/.env",
               "sudo systemctl start boomchecker-api",
-              "echo Waiting for service to start...",
-              "sleep 3",
-              "sudo systemctl is-active boomchecker-api || exit 1"
+              "echo Service start command issued successfully"
             ]' \
             --region ${{ env.AWS_REGION }} \
             --output text \
@@ -144,7 +142,7 @@ jobs:
         id: verify
         run: |
           echo "Waiting for service to be fully ready..."
-          sleep 5
+          sleep 10
           
           echo "Verifying BoomChecker API health..."
           COMMAND_ID=$(aws ssm send-command \
@@ -155,14 +153,34 @@ jobs:
               "echo Checking systemd service status:",
               "sudo systemctl status boomchecker-api --no-pager || true",
               "echo",
-              "echo Checking API health endpoint:",
-              "response=$(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:${{ env.API_PORT }}/ping)",
-              "echo \"HTTP Status: $response\"",
-              "if [ \"$response\" -ne 200 ]; then",
-              "  echo \"Health check failed! API not responding correctly\"",
-              "  exit 1",
-              "fi",
-              "echo \"API is healthy and responding\""
+              "echo Waiting for service to be fully active...",
+              "for i in {1..30}; do",
+              "  if sudo systemctl is-active --quiet boomchecker-api; then",
+              "    echo \"Service is active after $i seconds\"",
+              "    break",
+              "  fi",
+              "  if [ $i -eq 30 ]; then",
+              "    echo \"Timeout: Service did not become active\"",
+              "    sudo journalctl -u boomchecker-api -n 50 --no-pager",
+              "    exit 1",
+              "  fi",
+              "  sleep 1",
+              "done",
+              "echo",
+              "echo Checking API health endpoint with retries:",
+              "for i in {1..10}; do",
+              "  response=$(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:${{ env.API_PORT }}/ping)",
+              "  echo \"Attempt $i - HTTP Status: $response\"",
+              "  if [ \"$response\" -eq 200 ]; then",
+              "    echo \"API is healthy and responding!\"",
+              "    exit 0",
+              "  fi",
+              "  sleep 2",
+              "done",
+              "echo \"Health check failed after 10 attempts\"",
+              "echo \"Checking logs for errors:\"",
+              "sudo journalctl -u boomchecker-api -n 50 --no-pager",
+              "exit 1"
             ]' \
             --region ${{ env.AWS_REGION }} \
             --output text \
