@@ -51,17 +51,18 @@ func NewTokenManagementHandler(tokenService *services.TokenManagementService) *T
 	}
 }
 
-// CreateToken handles POST /admin/tokens
-// @Summary Create a new registration token
-// @Description Creates a new registration token for node registration. Optionally restrict to specific MAC address.
+// CreateToken handles POST /admin/registration-node-tokens
+// @Summary Create registration token
+// @Description Create new registration token with optional expiration, usage limit, and MAC authorization
 // @Tags admin
 // @Accept json
 // @Produce json
-// @Param request body services.CreateTokenRequest true "Token creation request"
-// @Success 201 {object} services.CreateTokenResponse "Token created successfully"
-// @Failure 400 {object} ErrorResponse "Bad request - validation failed"
+// @Security AdminAuth
+// @Param request body services.CreateTokenRequest true "Token configuration"
+// @Success 201 {object} services.CreateTokenResponse "Token created"
+// @Failure 400 {object} ErrorResponse "Invalid request or validation error"
 // @Failure 500 {object} ErrorResponse "Internal server error"
-// @Router /admin/tokens [post]
+// @Router /admin/registration-node-tokens [post]
 func (h *TokenManagementHandler) CreateToken(c *gin.Context) {
 	var req services.CreateTokenRequest
 
@@ -92,14 +93,15 @@ func (h *TokenManagementHandler) CreateToken(c *gin.Context) {
 	c.JSON(http.StatusCreated, response)
 }
 
-// ListAllTokens handles GET /admin/tokens
-// @Summary List all registration tokens
-// @Description Returns all registration tokens including expired ones
+// ListAllTokens handles GET /admin/registration-node-tokens
+// @Summary List all tokens
+// @Description Return all registration tokens (active, expired, used)
 // @Tags admin
 // @Produce json
-// @Success 200 {array} services.TokenListResponse "List of all tokens"
+// @Security AdminAuth
+// @Success 200 {object} map[string]interface{} "List with tokens array and count"
 // @Failure 500 {object} ErrorResponse "Internal server error"
-// @Router /admin/tokens [get]
+// @Router /admin/registration-node-tokens [get]
 func (h *TokenManagementHandler) ListAllTokens(c *gin.Context) {
 	tokens, err := h.tokenService.ListAllTokens()
 	if err != nil {
@@ -116,14 +118,15 @@ func (h *TokenManagementHandler) ListAllTokens(c *gin.Context) {
 	})
 }
 
-// ListActiveTokens handles GET /admin/tokens/active
-// @Summary List active registration tokens
-// @Description Returns only non-expired tokens with remaining uses
+// ListActiveTokens handles GET /admin/registration-node-tokens/active
+// @Summary List active tokens
+// @Description Return only non-expired tokens with remaining uses
 // @Tags admin
 // @Produce json
-// @Success 200 {array} services.TokenListResponse "List of active tokens"
+// @Security AdminAuth
+// @Success 200 {object} map[string]interface{} "List with tokens array and count"
 // @Failure 500 {object} ErrorResponse "Internal server error"
-// @Router /admin/tokens/active [get]
+// @Router /admin/registration-node-tokens/active [get]
 func (h *TokenManagementHandler) ListActiveTokens(c *gin.Context) {
 	tokens, err := h.tokenService.ListActiveTokens()
 	if err != nil {
@@ -140,16 +143,17 @@ func (h *TokenManagementHandler) ListActiveTokens(c *gin.Context) {
 	})
 }
 
-// GetToken handles GET /admin/tokens/:token
-// @Summary Get a specific token
-// @Description Returns details of a specific registration token
+// GetToken handles GET /admin/registration-node-tokens/:token
+// @Summary Get token details
+// @Description Return details of specific registration token
 // @Tags admin
 // @Produce json
+// @Security AdminAuth
 // @Param token path string true "Token value"
 // @Success 200 {object} services.TokenListResponse "Token details"
 // @Failure 404 {object} ErrorResponse "Token not found"
 // @Failure 500 {object} ErrorResponse "Internal server error"
-// @Router /admin/tokens/{token} [get]
+// @Router /admin/registration-node-tokens/{token} [get]
 func (h *TokenManagementHandler) GetToken(c *gin.Context) {
 	tokenValue := c.Param("token")
 
@@ -165,15 +169,16 @@ func (h *TokenManagementHandler) GetToken(c *gin.Context) {
 	c.JSON(http.StatusOK, token)
 }
 
-// DeleteToken handles DELETE /admin/tokens/:token
-// @Summary Delete a registration token
-// @Description Permanently removes a registration token from the database
+// DeleteToken handles DELETE /admin/registration-node-tokens/:token
+// @Summary Delete token
+// @Description Permanently remove registration token
 // @Tags admin
+// @Security AdminAuth
 // @Param token path string true "Token value"
-// @Success 204 "Token deleted successfully"
+// @Success 204 "Token deleted"
 // @Failure 404 {object} ErrorResponse "Token not found"
 // @Failure 500 {object} ErrorResponse "Internal server error"
-// @Router /admin/tokens/{token} [delete]
+// @Router /admin/registration-node-tokens/{token} [delete]
 func (h *TokenManagementHandler) DeleteToken(c *gin.Context) {
 	tokenValue := c.Param("token")
 
@@ -188,14 +193,15 @@ func (h *TokenManagementHandler) DeleteToken(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
-// CleanupExpiredTokens handles POST /admin/tokens/cleanup
+// CleanupExpiredTokens handles POST /admin/registration-node-tokens/cleanup
 // @Summary Cleanup expired tokens
-// @Description Removes all expired tokens from the database
+// @Description Remove all expired tokens from database
 // @Tags admin
 // @Produce json
-// @Success 200 {object} map[string]interface{} "Cleanup results"
+// @Security AdminAuth
+// @Success 200 {object} map[string]interface{} "Cleanup results with deleted count"
 // @Failure 500 {object} ErrorResponse "Internal server error"
-// @Router /admin/tokens/cleanup [post]
+// @Router /admin/registration-node-tokens/cleanup [post]
 func (h *TokenManagementHandler) CleanupExpiredTokens(c *gin.Context) {
 	count, err := h.tokenService.CleanupExpiredTokens()
 	if err != nil {
@@ -212,14 +218,15 @@ func (h *TokenManagementHandler) CleanupExpiredTokens(c *gin.Context) {
 	})
 }
 
-// GetStatistics handles GET /admin/tokens/statistics
+// GetStatistics handles GET /admin/registration-node-tokens/statistics
 // @Summary Get token statistics
-// @Description Returns statistics about registration tokens (total, active, expired)
+// @Description Return statistics about registration tokens (total, active, expired counts)
 // @Tags admin
 // @Produce json
+// @Security AdminAuth
 // @Success 200 {object} map[string]interface{} "Token statistics"
 // @Failure 500 {object} ErrorResponse "Internal server error"
-// @Router /admin/tokens/statistics [get]
+// @Router /admin/registration-node-tokens/statistics [get]
 func (h *TokenManagementHandler) GetStatistics(c *gin.Context) {
 	stats, err := h.tokenService.GetStatistics()
 	if err != nil {

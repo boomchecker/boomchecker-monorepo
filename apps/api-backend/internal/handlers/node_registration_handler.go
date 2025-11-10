@@ -21,16 +21,17 @@ func NewNodeRegistrationHandler(registrationService *services.NodeRegistrationSe
 }
 
 // RegisterNode handles POST /nodes/register
-// @Summary Register a new node or re-register an existing node
-// @Description Registers a node using a registration token. Returns UUID and JWT token for authentication.
+// @Summary Register a new IoT device
+// @Description Register a new node or re-register existing node using registration token. Returns UUID and JWT for authentication.
 // @Tags nodes
 // @Accept json
 // @Produce json
-// @Param request body services.RegistrationRequest true "Registration request"
-// @Success 200 {object} services.RegistrationResponse "Successfully registered (re-registration)"
-// @Success 201 {object} services.RegistrationResponse "Successfully registered (new node)"
-// @Failure 400 {object} ErrorResponse "Bad request - validation failed"
-// @Failure 401 {object} ErrorResponse "Unauthorized - invalid or expired token"
+// @Param request body services.RegistrationRequest true "Registration data with token and MAC address"
+// @Success 200 {object} services.RegistrationResponse "Re-registration successful"
+// @Success 201 {object} services.RegistrationResponse "New node registered"
+// @Failure 400 {object} ErrorResponse "Invalid request or validation error"
+// @Failure 401 {object} ErrorResponse "Invalid, expired, or unauthorized token"
+// @Failure 403 {object} ErrorResponse "Node is revoked"
 // @Failure 500 {object} ErrorResponse "Internal server error"
 // @Router /nodes/register [post]
 func (h *NodeRegistrationHandler) RegisterNode(c *gin.Context) {

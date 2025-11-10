@@ -9,6 +9,12 @@ import (
 )
 
 // PingHandler handles the /ping endpoint for health checks
+// @Summary Health check
+// @Description Simple health check endpoint
+// @Tags health
+// @Produce json
+// @Success 200 {object} models.HealthResponse "Service is healthy"
+// @Router /ping [get]
 func PingHandler(c *gin.Context) {
 	response := models.HealthResponse{
 		Status:    "ok",

@@ -14,7 +14,35 @@ import (
 	"github.com/boomchecker/api-backend/internal/services"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
+
+	_ "github.com/boomchecker/api-backend/docs" // swagger docs
 )
+
+// @title BoomChecker API
+// @version 1.0
+// @description REST API for BoomChecker IoT system - device registration and management with JWT-based authentication
+// @termsOfService https://boomchecker.com/terms
+
+// @contact.name API Support
+// @contact.email support@boomchecker.com
+
+// @license.name MIT
+// @license.url https://opensource.org/licenses/MIT
+
+// @host localhost:8080
+// @BasePath /
+
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
+// @description Type "Bearer" followed by a space and JWT token for node authentication
+
+// @securityDefinitions.apikey AdminAuth
+// @in header
+// @name Authorization
+// @description Type "Bearer" followed by a space and JWT token for admin authentication
 
 func main() {
 	// Load .env file if it exists (development)
@@ -88,6 +116,9 @@ func main() {
 
 	// Create a Gin router with default middleware (logger and recovery)
 	router := gin.Default()
+
+	// Swagger documentation endpoint
+	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	// Register health check endpoint
 	router.GET("/ping", handlers.PingHandler)
