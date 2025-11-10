@@ -9,6 +9,8 @@ import (
 	"github.com/boomchecker/api-backend/internal/crypto"
 	"github.com/boomchecker/api-backend/internal/database"
 	"github.com/boomchecker/api-backend/internal/handlers"
+	"github.com/boomchecker/api-backend/internal/repositories"
+	"github.com/boomchecker/api-backend/internal/services"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 )
@@ -71,6 +73,16 @@ func main() {
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 
+	// Initialize repositories
+	nodeRepo := repositories.NewNodeRepository(db)
+	tokenRepo := repositories.NewRegistrationTokenRepository(db)
+
+	// Initialize services
+	registrationService := services.NewNodeRegistrationService(nodeRepo, tokenRepo)
+
+	// Initialize handlers
+	nodeRegistrationHandler := handlers.NewNodeRegistrationHandler(registrationService)
+
 	// Create a Gin router with default middleware (logger and recovery)
 	router := gin.Default()
 
@@ -79,6 +91,9 @@ func main() {
 
 	// TODO: Add database health check endpoint
 	// router.GET("/health", handlers.HealthCheckHandler(db))
+
+	// Register node registration endpoint
+	router.POST("/nodes/register", nodeRegistrationHandler.RegisterNode)
 
 	// Start server on port 8080 in a goroutine
 	go func() {
