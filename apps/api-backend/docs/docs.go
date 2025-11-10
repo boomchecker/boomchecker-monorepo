@@ -402,19 +402,23 @@ const docTemplate = `{
             ],
             "properties": {
                 "authorized_mac": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "AA:BB:CC:DD:EE:FF"
                 },
                 "description": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "Token for production nodes"
                 },
                 "expires_in_hours": {
                     "type": "integer",
-                    "minimum": 1
+                    "minimum": 1,
+                    "example": 24
                 },
                 "max_uses": {
                     "description": "If not provided, defaults to 1",
                     "type": "integer",
-                    "minimum": 1
+                    "minimum": 1,
+                    "example": 1
                 }
             }
         },
@@ -422,22 +426,28 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "authorized_mac": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "AA:BB:CC:DD:EE:FF"
                 },
                 "created_at": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "2025-11-10T14:30:00Z"
                 },
                 "description": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "Token for production nodes"
                 },
                 "expires_at": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "2025-11-11T14:30:00Z"
                 },
                 "max_uses": {
-                    "type": "integer"
+                    "type": "integer",
+                    "example": 1
                 },
                 "token": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
                 }
             }
         },
@@ -449,19 +459,24 @@ const docTemplate = `{
             ],
             "properties": {
                 "firmware_version": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "1.0.0"
                 },
                 "latitude": {
-                    "type": "number"
+                    "type": "number",
+                    "example": 50.0755
                 },
                 "longitude": {
-                    "type": "number"
+                    "type": "number",
+                    "example": 14.4378
                 },
                 "mac_address": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "AA:BB:CC:DD:EE:FF"
                 },
                 "registration_token": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
                 }
             }
         },
@@ -470,19 +485,24 @@ const docTemplate = `{
             "properties": {
                 "expires_at": {
                     "description": "UTC timestamp when JWT expires (RFC3339 format)",
-                    "type": "string"
+                    "type": "string",
+                    "example": "2025-12-10T14:30:00Z"
                 },
                 "is_new_node": {
-                    "type": "boolean"
+                    "type": "boolean",
+                    "example": true
                 },
                 "jwt_token": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
                 },
                 "mac_address": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "AA:BB:CC:DD:EE:FF"
                 },
                 "uuid": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "550e8400-e29b-41d4-a716-446655440000"
                 }
             }
         },
@@ -490,31 +510,40 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "authorized_mac": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "AA:BB:CC:DD:EE:FF"
                 },
                 "created_at": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "2025-11-10T14:30:00Z"
                 },
                 "description": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "Token for production nodes"
                 },
                 "expires_at": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "2025-11-11T14:30:00Z"
                 },
                 "is_active": {
-                    "type": "boolean"
+                    "type": "boolean",
+                    "example": true
                 },
                 "is_expired": {
-                    "type": "boolean"
+                    "type": "boolean",
+                    "example": false
                 },
                 "max_uses": {
-                    "type": "integer"
+                    "type": "integer",
+                    "example": 1
                 },
                 "token": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
                 },
                 "used_count": {
-                    "type": "integer"
+                    "type": "integer",
+                    "example": 0
                 }
             }
         }

@@ -19,14 +19,18 @@ definitions:
   services.CreateTokenRequest:
     properties:
       authorized_mac:
+        example: AA:BB:CC:DD:EE:FF
         type: string
       description:
+        example: Token for production nodes
         type: string
       expires_in_hours:
+        example: 24
         minimum: 1
         type: integer
       max_uses:
         description: If not provided, defaults to 1
+        example: 1
         minimum: 1
         type: integer
     required:
@@ -35,29 +39,40 @@ definitions:
   services.CreateTokenResponse:
     properties:
       authorized_mac:
+        example: AA:BB:CC:DD:EE:FF
         type: string
       created_at:
+        example: "2025-11-10T14:30:00Z"
         type: string
       description:
+        example: Token for production nodes
         type: string
       expires_at:
+        example: "2025-11-11T14:30:00Z"
         type: string
       max_uses:
+        example: 1
         type: integer
       token:
+        example: a1b2c3d4-e5f6-7890-abcd-ef1234567890
         type: string
     type: object
   services.RegistrationRequest:
     properties:
       firmware_version:
+        example: 1.0.0
         type: string
       latitude:
+        example: 50.0755
         type: number
       longitude:
+        example: 14.4378
         type: number
       mac_address:
+        example: AA:BB:CC:DD:EE:FF
         type: string
       registration_token:
+        example: a1b2c3d4-e5f6-7890-abcd-ef1234567890
         type: string
     required:
     - mac_address
@@ -67,35 +82,49 @@ definitions:
     properties:
       expires_at:
         description: UTC timestamp when JWT expires (RFC3339 format)
+        example: "2025-12-10T14:30:00Z"
         type: string
       is_new_node:
+        example: true
         type: boolean
       jwt_token:
+        example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
         type: string
       mac_address:
+        example: AA:BB:CC:DD:EE:FF
         type: string
       uuid:
+        example: 550e8400-e29b-41d4-a716-446655440000
         type: string
     type: object
   services.TokenListResponse:
     properties:
       authorized_mac:
+        example: AA:BB:CC:DD:EE:FF
         type: string
       created_at:
+        example: "2025-11-10T14:30:00Z"
         type: string
       description:
+        example: Token for production nodes
         type: string
       expires_at:
+        example: "2025-11-11T14:30:00Z"
         type: string
       is_active:
+        example: true
         type: boolean
       is_expired:
+        example: false
         type: boolean
       max_uses:
+        example: 1
         type: integer
       token:
+        example: a1b2c3d4-e5f6-7890-abcd-ef1234567890
         type: string
       used_count:
+        example: 0
         type: integer
     type: object
 host: localhost:8080
