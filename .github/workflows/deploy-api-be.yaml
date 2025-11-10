@@ -90,9 +90,14 @@ jobs:
               "echo Starting deploy on EC2...",
               "sudo systemctl stop boomchecker-api || echo Service not running",
               "sudo mkdir -p /opt/boomchecker/backup",
+              "sudo mkdir -p /opt/boomchecker/data",
               "if [ -f /opt/boomchecker/api-backend ]; then sudo cp /opt/boomchecker/api-backend /opt/boomchecker/backup/api-backend.backup; fi",
               "sudo aws s3 cp s3://${{ env.AWS_BUCKET_NAME }}/${{ env.AWS_BUCKET_KEY_NAME }} /opt/boomchecker/api-backend",
               "sudo chmod +x /opt/boomchecker/api-backend",
+              "echo Setting up environment variables...",
+              "echo \"GIN_MODE=release\" | sudo tee /opt/boomchecker/.env",
+              "echo \"APP_ENV=staging\" | sudo tee -a /opt/boomchecker/.env",
+              "echo \"DB_PATH=/opt/boomchecker/data/boomchecker.db\" | sudo tee -a /opt/boomchecker/.env",
               "sudo systemctl start boomchecker-api",
               "echo Waiting for service to start...",
               "sleep 3",
@@ -133,7 +138,7 @@ jobs:
             exit 1
           fi
           
-          echo "✅ Deploy successful!"
+          echo "Deploy successful!"
 
       - name: Wait and verify service status
         id: verify
@@ -196,7 +201,7 @@ jobs:
       - name: Rollback on failure
         if: failure() && steps.deploy.conclusion == 'failure' || steps.verify.conclusion == 'failure'
         run: |
-          echo "⚠️ Deployment or health check failed! Attempting rollback..."
+          echo "Deployment or health check failed! Attempting rollback..."
           
           ROLLBACK_COMMAND_ID=$(aws ssm send-command \
             --instance-ids "${{ env.EC2_INSTANCE_ID }}" \

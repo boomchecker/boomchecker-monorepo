@@ -25,14 +25,14 @@ func main() {
 		// Set to release mode unless explicitly in development
 		if env == "development" || env == "dev" {
 			gin.SetMode(gin.DebugMode)
-			log.Println("🔧 Running in DEBUG mode")
+			log.Println("Running in DEBUG mode")
 		} else {
 			gin.SetMode(gin.ReleaseMode)
-			log.Println("🚀 Running in RELEASE mode")
+			log.Println("Running in RELEASE mode")
 		}
 	} else {
 		gin.SetMode(ginMode)
-		log.Printf("🔧 Running in %s mode (from GIN_MODE)", ginMode)
+		log.Printf("Running in %s mode (from GIN_MODE)", ginMode)
 	}
 
 	// Initialize database
