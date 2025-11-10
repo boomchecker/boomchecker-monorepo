@@ -69,14 +69,7 @@ func InitDB(config *Config) (*gorm.DB, error) {
 
 		// Log database path for debugging
 		log.Printf("Database path: %s", config.DatabasePath)
-
-		// Check if we can write to the database directory
-		if err := checkDatabaseWritePermissions(config.DatabasePath); err != nil {
-			return nil, fmt.Errorf("database directory permission check failed: %w", err)
-		}
-	}
-
-	// Configure GORM logger
+	} // Configure GORM logger
 	gormConfig := &gorm.Config{
 		Logger: logger.Default.LogMode(config.LogLevel),
 		NowFunc: func() time.Time {
@@ -253,46 +246,5 @@ func ensureDirExists(dir string) error {
 	}
 
 	log.Printf("Created database directory: %s", dir)
-	return nil
-}
-
-// checkDatabaseWritePermissions verifies that we can write to the database directory
-func checkDatabaseWritePermissions(dbPath string) error {
-	// Extract directory from database path
-	dir := dbPath
-	lastSlash := -1
-	for i := len(dbPath) - 1; i >= 0; i-- {
-		if dbPath[i] == '/' || dbPath[i] == '\\' {
-			lastSlash = i
-			break
-		}
-	}
-
-	if lastSlash != -1 {
-		dir = dbPath[:lastSlash]
-	} else {
-		dir = "."
-	}
-
-	// Check if directory exists and get its info
-	info, err := os.Stat(dir)
-	if err != nil {
-		return fmt.Errorf("cannot access database directory %s: %w", dir, err)
-	}
-
-	if !info.IsDir() {
-		return fmt.Errorf("%s is not a directory", dir)
-	}
-
-	// Try to create a test file to verify write permissions
-	testFile := dir + "/.write_test_" + fmt.Sprintf("%d", time.Now().UnixNano())
-	f, err := os.Create(testFile)
-	if err != nil {
-		return fmt.Errorf("cannot write to database directory %s: %w (check permissions)", dir, err)
-	}
-	f.Close()
-	os.Remove(testFile)
-
-	log.Printf("Database directory %s is writable", dir)
 	return nil
 }
