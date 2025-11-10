@@ -1,4 +1,1 @@
 *.env.*
-
-# Swagger documentation (generated)
-docs/
