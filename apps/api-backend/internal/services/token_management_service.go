@@ -74,18 +74,20 @@ func (s *TokenManagementService) CreateToken(req *CreateTokenRequest) (*CreateTo
 	// Normalize MAC address if provided
 	var authorizedMAC *string
 	if req.AuthorizedMAC != nil && *req.AuthorizedMAC != "" {
-		normalized := validators.NormalizeMACAddress(*req.AuthorizedMAC)
+		normalized, err := validators.NormalizeMACAddress(*req.AuthorizedMAC)
+		if err != nil {
+			return nil, fmt.Errorf("invalid MAC address: %w", err)
+		}
 		authorizedMAC = &normalized
 	}
 
 	// Create token model
 	token := &models.RegistrationToken{
-		Token:         tokenValue,
-		ExpiresAt:     expiresAt,
-		MaxUses:       req.MaxUses,
-		UsedCount:     0,
-		AuthorizedMac: authorizedMAC,
-		Description:   req.Description,
+		Token:                   tokenValue,
+		ExpiresAt:               &expiresAt,
+		UsageLimit:              req.MaxUses,
+		UsedCount:               0,
+		PreAuthorizedMacAddress: authorizedMAC,
 	}
 
 	// Save to database
@@ -95,10 +97,10 @@ func (s *TokenManagementService) CreateToken(req *CreateTokenRequest) (*CreateTo
 
 	return &CreateTokenResponse{
 		Token:         token.Token,
-		ExpiresAt:     token.ExpiresAt,
-		MaxUses:       token.MaxUses,
-		AuthorizedMAC: token.AuthorizedMac,
-		Description:   token.Description,
+		ExpiresAt:     *token.ExpiresAt,
+		MaxUses:       token.UsageLimit,
+		AuthorizedMAC: token.PreAuthorizedMacAddress,
+		Description:   req.Description,
 		CreatedAt:     token.CreatedAt,
 	}, nil
 }
@@ -130,13 +132,18 @@ func (s *TokenManagementService) GetToken(tokenValue string) (*TokenListResponse
 		return nil, fmt.Errorf("token not found: %w", err)
 	}
 
+	expiresAt := time.Time{}
+	if token.ExpiresAt != nil {
+		expiresAt = *token.ExpiresAt
+	}
+
 	return &TokenListResponse{
 		Token:         token.Token,
-		ExpiresAt:     token.ExpiresAt,
-		MaxUses:       token.MaxUses,
+		ExpiresAt:     expiresAt,
+		MaxUses:       token.UsageLimit,
 		UsedCount:     token.UsedCount,
-		AuthorizedMAC: token.AuthorizedMac,
-		Description:   token.Description,
+		AuthorizedMAC: token.PreAuthorizedMacAddress,
+		Description:   nil, // Model doesn't have Description field
 		IsExpired:     token.IsExpired(),
 		IsActive:      token.IsValid(),
 		CreatedAt:     token.CreatedAt,
@@ -197,8 +204,8 @@ func (s *TokenManagementService) validateCreateTokenRequest(req *CreateTokenRequ
 
 	// Validate MAC address if provided
 	if req.AuthorizedMAC != nil && *req.AuthorizedMAC != "" {
-		if !validators.ValidateMACAddress(*req.AuthorizedMAC) {
-			return fmt.Errorf("invalid MAC address format: %s", *req.AuthorizedMAC)
+		if err := validators.ValidateMACAddress(*req.AuthorizedMAC, "authorized_mac"); err != nil {
+			return err
 		}
 	}
 
@@ -209,13 +216,18 @@ func (s *TokenManagementService) validateCreateTokenRequest(req *CreateTokenRequ
 func (s *TokenManagementService) convertToListResponse(tokens []*models.RegistrationToken) []*TokenListResponse {
 	response := make([]*TokenListResponse, len(tokens))
 	for i, token := range tokens {
+		expiresAt := time.Time{}
+		if token.ExpiresAt != nil {
+			expiresAt = *token.ExpiresAt
+		}
+
 		response[i] = &TokenListResponse{
 			Token:         token.Token,
-			ExpiresAt:     token.ExpiresAt,
-			MaxUses:       token.MaxUses,
+			ExpiresAt:     expiresAt,
+			MaxUses:       token.UsageLimit,
 			UsedCount:     token.UsedCount,
-			AuthorizedMAC: token.AuthorizedMac,
-			Description:   token.Description,
+			AuthorizedMAC: token.PreAuthorizedMacAddress,
+			Description:   nil, // Model doesn't have Description field
 			IsExpired:     token.IsExpired(),
 			IsActive:      token.IsValid(),
 			CreatedAt:     token.CreatedAt,

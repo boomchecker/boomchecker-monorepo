@@ -62,7 +62,10 @@ func (s *NodeRegistrationService) RegisterNode(req *RegistrationRequest) (*Regis
 	}
 
 	// Step 2: Normalize MAC address
-	normalizedMAC := validators.NormalizeMACAddress(req.MacAddress)
+	normalizedMAC, err := validators.NormalizeMACAddress(req.MacAddress)
+	if err != nil {
+		return nil, fmt.Errorf("invalid MAC address: %w", err)
+	}
 	req.MacAddress = normalizedMAC
 
 	// Step 3: Validate registration token
@@ -90,16 +93,10 @@ func (s *NodeRegistrationService) handleNewRegistration(
 	// Generate new UUID for the node
 	nodeUUID := uuid.New().String()
 
-	// Generate secure JWT secret
-	jwtSecret, err := crypto.GenerateJWTSecret()
+	// Generate and encrypt JWT secret
+	jwtSecret, encryptedSecret, err := crypto.EncryptJWTSecret()
 	if err != nil {
-		return nil, fmt.Errorf("failed to generate JWT secret: %w", err)
-	}
-
-	// Encrypt JWT secret before storing
-	encryptedSecret, err := crypto.EncryptJWTSecret(jwtSecret)
-	if err != nil {
-		return nil, fmt.Errorf("failed to encrypt JWT secret: %w", err)
+		return nil, fmt.Errorf("failed to generate and encrypt JWT secret: %w", err)
 	}
 
 	// Create node model
@@ -209,8 +206,8 @@ func (s *NodeRegistrationService) validateRegistrationRequest(req *RegistrationR
 	}
 
 	// Validate MAC address
-	if !validators.ValidateMACAddress(req.MacAddress) {
-		return fmt.Errorf("invalid MAC address format: %s", req.MacAddress)
+	if err := validators.ValidateMACAddress(req.MacAddress, "mac_address"); err != nil {
+		return err
 	}
 
 	// Validate firmware version if provided
@@ -225,8 +222,8 @@ func (s *NodeRegistrationService) validateRegistrationRequest(req *RegistrationR
 		if req.Latitude == nil || req.Longitude == nil {
 			return fmt.Errorf("both latitude and longitude must be provided")
 		}
-		if !validators.ValidateGPSCoordinates(*req.Latitude, *req.Longitude) {
-			return fmt.Errorf("invalid GPS coordinates: lat=%f, lon=%f", *req.Latitude, *req.Longitude)
+		if err := validators.ValidateGPSCoordinates(*req.Latitude, *req.Longitude); err != nil {
+			return err
 		}
 	}
 
@@ -239,12 +236,12 @@ func (s *NodeRegistrationService) generateNodeJWT(nodeUUID string, jwtSecret str
 	// JWT expires in 30 days
 	expiresIn := int64(30 * 24 * 60 * 60) // 30 days in seconds
 
-	token, err := crypto.GenerateNodeJWT(nodeUUID, jwtSecret, time.Duration(expiresIn)*time.Second)
+	token, expiresAt, err := crypto.GenerateNodeJWT(nodeUUID, jwtSecret, time.Duration(expiresIn)*time.Second)
 	if err != nil {
 		return "", 0, err
 	}
 
-	return token, expiresIn, nil
+	return token, expiresAt, nil
 }
 
 // Helper function to create a pointer to a time value
