@@ -10,8 +10,6 @@ import (
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
-
-	_ "github.com/mattn/go-sqlite3"
 )
 
 // Config holds database configuration options
@@ -68,10 +66,10 @@ func InitDB(config *Config) (*gorm.DB, error) {
 		if err := ensureDBDirectory(config.DatabasePath); err != nil {
 			return nil, fmt.Errorf("failed to create database directory: %w", err)
 		}
-		
+
 		// Log database path for debugging
 		log.Printf("Database path: %s", config.DatabasePath)
-		
+
 		// Check if we can write to the database directory
 		if err := checkDatabaseWritePermissions(config.DatabasePath); err != nil {
 			return nil, fmt.Errorf("database directory permission check failed: %w", err)
@@ -89,11 +87,9 @@ func InitDB(config *Config) (*gorm.DB, error) {
 
 	// Open SQLite connection using pure-Go driver (modernc.org/sqlite)
 	// This avoids CGO dependency required by mattn/go-sqlite3
+	// sqlite.Open() automatically uses the pure-Go driver without CGO
 	log.Printf("Opening SQLite database: %s", config.DatabasePath)
-	db, err := gorm.Open(sqlite.Dialector{
-		DriverName: "sqlite",
-		DSN:        config.DatabasePath,
-	}, gormConfig)
+	db, err := gorm.Open(sqlite.Open(config.DatabasePath), gormConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to database at %s: %w", config.DatabasePath, err)
 	}
@@ -271,23 +267,23 @@ func checkDatabaseWritePermissions(dbPath string) error {
 			break
 		}
 	}
-	
+
 	if lastSlash != -1 {
 		dir = dbPath[:lastSlash]
 	} else {
 		dir = "."
 	}
-	
+
 	// Check if directory exists and get its info
 	info, err := os.Stat(dir)
 	if err != nil {
 		return fmt.Errorf("cannot access database directory %s: %w", dir, err)
 	}
-	
+
 	if !info.IsDir() {
 		return fmt.Errorf("%s is not a directory", dir)
 	}
-	
+
 	// Try to create a test file to verify write permissions
 	testFile := dir + "/.write_test_" + fmt.Sprintf("%d", time.Now().UnixNano())
 	f, err := os.Create(testFile)
@@ -296,7 +292,7 @@ func checkDatabaseWritePermissions(dbPath string) error {
 	}
 	f.Close()
 	os.Remove(testFile)
-	
+
 	log.Printf("Database directory %s is writable", dir)
 	return nil
 }

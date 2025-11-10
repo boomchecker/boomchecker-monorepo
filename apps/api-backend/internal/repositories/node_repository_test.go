@@ -8,17 +8,12 @@ import (
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
-
-	_ "github.com/mattn/go-sqlite3" // Use CGO SQLite driver for tests
 )
 
 // setupTestDB creates an in-memory SQLite database for testing
 func setupTestDB(t *testing.T) *gorm.DB {
-	// Create in-memory database with pure-Go driver
-	db, err := gorm.Open(sqlite.Dialector{
-		DriverName: "sqlite",
-		DSN:        ":memory:",
-	}, &gorm.Config{
+	// Create in-memory database using the default SQLite driver
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Silent), // Suppress logs during tests
 	})
 	if err != nil {
