@@ -9,6 +9,7 @@ import (
 	"github.com/boomchecker/api-backend/internal/crypto"
 	"github.com/boomchecker/api-backend/internal/database"
 	"github.com/boomchecker/api-backend/internal/handlers"
+	"github.com/boomchecker/api-backend/internal/middleware"
 	"github.com/boomchecker/api-backend/internal/repositories"
 	"github.com/boomchecker/api-backend/internal/services"
 	"github.com/gin-gonic/gin"
@@ -79,9 +80,11 @@ func main() {
 
 	// Initialize services
 	registrationService := services.NewNodeRegistrationService(nodeRepo, tokenRepo)
+	tokenManagementService := services.NewTokenManagementService(tokenRepo)
 
 	// Initialize handlers
 	nodeRegistrationHandler := handlers.NewNodeRegistrationHandler(registrationService)
+	tokenManagementHandler := handlers.NewTokenManagementHandler(tokenManagementService)
 
 	// Create a Gin router with default middleware (logger and recovery)
 	router := gin.Default()
@@ -92,8 +95,35 @@ func main() {
 	// TODO: Add database health check endpoint
 	// router.GET("/health", handlers.HealthCheckHandler(db))
 
-	// Register node registration endpoint
+	// Register node registration endpoint (public)
 	router.POST("/nodes/register", nodeRegistrationHandler.RegisterNode)
+
+	// TODO: Admin Authentication - Email-based JWT login flow
+	// Current state: Admin endpoints are UNPROTECTED (middleware allows all requests)
+	// Required implementation:
+	//   1. POST /admin/auth/request - Admin provides email, receives JWT via email (24h validity)
+	//   2. Update middleware.AdminAuthMiddleware() to validate JWT from Authorization header
+	//   3. Configure email service (SMTP/SendGrid/etc) for sending login tokens
+	//   4. Add ADMIN_JWT_SECRET to .env (separate from node JWT encryption key)
+	// See internal/middleware/admin_auth.go for detailed implementation plan
+
+	// Register admin token management endpoints (protected by middleware)
+	// WARNING: Currently unprotected - AdminAuthMiddleware is a placeholder
+	adminGroup := router.Group("/admin")
+	adminGroup.Use(middleware.AdminAuthMiddleware()) // TODO: Implement proper JWT validation
+	{
+		// Token management
+		adminGroup.POST("/tokens", tokenManagementHandler.CreateToken)
+		adminGroup.GET("/tokens", tokenManagementHandler.ListAllTokens)
+		adminGroup.GET("/tokens/active", tokenManagementHandler.ListActiveTokens)
+		adminGroup.GET("/tokens/statistics", tokenManagementHandler.GetStatistics)
+		adminGroup.POST("/tokens/cleanup", tokenManagementHandler.CleanupExpiredTokens)
+		adminGroup.GET("/tokens/:token", tokenManagementHandler.GetToken)
+		adminGroup.DELETE("/tokens/:token", tokenManagementHandler.DeleteToken)
+
+		// TODO: Add admin auth endpoints here when implemented
+		// adminGroup.POST("/auth/request", adminAuthHandler.RequestLogin)
+	}
 
 	// Start server on port 8080 in a goroutine
 	go func() {
