@@ -153,7 +153,7 @@ func (r *RegistrationTokenRepository) ListActive() ([]*models.RegistrationToken,
 	var tokens []*models.RegistrationToken
 	// Find tokens that are not expired and either unlimited or have remaining uses
 	if err := r.db.Where("expires_at > ?", now).
-		Where("max_uses IS NULL OR used_count < max_uses").
+		Where("usage_limit IS NULL OR used_count < usage_limit").
 		Order("created_at DESC").
 		Find(&tokens).Error; err != nil {
 		return nil, fmt.Errorf("failed to list active tokens: %w", err)
@@ -258,7 +258,7 @@ func (r *RegistrationTokenRepository) CountActive() (int64, error) {
 	var count int64
 	if err := r.db.Model(&models.RegistrationToken{}).
 		Where("expires_at > ?", now).
-		Where("max_uses IS NULL OR used_count < max_uses").
+		Where("usage_limit IS NULL OR used_count < usage_limit").
 		Count(&count).Error; err != nil {
 		return 0, fmt.Errorf("failed to count active tokens: %w", err)
 	}

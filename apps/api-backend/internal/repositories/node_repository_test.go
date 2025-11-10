@@ -8,12 +8,16 @@ import (
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
+	_ "modernc.org/sqlite" // Use pure-Go SQLite driver
 )
 
 // setupTestDB creates an in-memory SQLite database for testing
 func setupTestDB(t *testing.T) *gorm.DB {
-	// Create in-memory database
-	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{
+	// Create in-memory database with pure-Go driver
+	db, err := gorm.Open(sqlite.Dialector{
+		DriverName: "sqlite",
+		DSN:        ":memory:",
+	}, &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Silent), // Suppress logs during tests
 	})
 	if err != nil {
@@ -38,8 +42,8 @@ func setupTestDB(t *testing.T) *gorm.DB {
 	if err := db.Exec("CREATE INDEX IF NOT EXISTS idx_nodes_status ON nodes(status)").Error; err != nil {
 		t.Fatalf("failed to create status index: %v", err)
 	}
-	if err := db.Exec("CREATE INDEX IF NOT EXISTS idx_nodes_last_seen ON nodes(last_seen)").Error; err != nil {
-		t.Fatalf("failed to create last_seen index: %v", err)
+	if err := db.Exec("CREATE INDEX IF NOT EXISTS idx_nodes_last_seen_at ON nodes(last_seen_at)").Error; err != nil {
+		t.Fatalf("failed to create last_seen_at index: %v", err)
 	}
 
 	return db
@@ -297,11 +301,11 @@ func TestNodeRepository_UpdateLastSeen(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FindByUUID() error = %v", err)
 	}
-	if found.LastSeen == nil {
-		t.Error("LastSeen should not be nil after UpdateLastSeen()")
+	if found.LastSeenAt == nil {
+		t.Error("LastSeenAt should not be nil after UpdateLastSeen()")
 	}
-	if found.LastSeen != nil && found.LastSeen.Before(node.CreatedAt) {
-		t.Error("LastSeen should be after CreatedAt")
+	if found.LastSeenAt != nil && found.LastSeenAt.Before(node.CreatedAt) {
+		t.Error("LastSeenAt should be after CreatedAt")
 	}
 }
 
@@ -343,7 +347,7 @@ func TestNodeRepository_ListByStatus(t *testing.T) {
 	}
 }
 
-// TestNodeRepository_Delete tests soft delete
+// TestNodeRepository_Delete tests delete (sets status to revoked)
 func TestNodeRepository_Delete(t *testing.T) {
 	db := setupTestDB(t)
 	repo := NewNodeRepository(db)
@@ -359,24 +363,18 @@ func TestNodeRepository_Delete(t *testing.T) {
 		t.Fatalf("Create() error = %v", err)
 	}
 
-	// Soft delete
+	// Delete (should set status to revoked)
 	if err := repo.Delete(node.UUID); err != nil {
 		t.Fatalf("Delete() error = %v", err)
 	}
 
-	// Try to find - should fail because of soft delete
-	_, err := repo.FindByUUID(node.UUID)
-	if err == nil {
-		t.Error("FindByUUID() after Delete() should return error, got nil")
+	// Node should still exist but with revoked status
+	found, err := repo.FindByUUID(node.UUID)
+	if err != nil {
+		t.Fatalf("FindByUUID() after Delete() error = %v", err)
 	}
-
-	// Verify it still exists in DB with DeletedAt set
-	var deletedNode models.Node
-	if err := db.Unscoped().Where("uuid = ?", node.UUID).First(&deletedNode).Error; err != nil {
-		t.Fatalf("Failed to find soft-deleted node: %v", err)
-	}
-	if deletedNode.DeletedAt.Time.IsZero() {
-		t.Error("DeletedAt should be set after soft delete")
+	if found.Status != models.NodeStatusRevoked {
+		t.Errorf("Status after Delete() = %v, want %v", found.Status, models.NodeStatusRevoked)
 	}
 }
 
