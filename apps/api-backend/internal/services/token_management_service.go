@@ -9,6 +9,7 @@ import (
 	"github.com/boomchecker/api-backend/internal/models"
 	"github.com/boomchecker/api-backend/internal/repositories"
 	"github.com/boomchecker/api-backend/internal/validators"
+	"github.com/google/uuid"
 )
 
 // TokenManagementService handles the business logic for registration token management
@@ -67,6 +68,9 @@ func (s *TokenManagementService) CreateToken(req *CreateTokenRequest) (*CreateTo
 		return nil, fmt.Errorf("failed to generate token: %w", err)
 	}
 
+	// Generate UUID for token ID
+	tokenID := uuid.New().String()
+
 	// Calculate expiration time
 	now := time.Now().UTC()
 	expiresAt := now.Add(time.Duration(req.ExpiresInHours) * time.Hour)
@@ -83,6 +87,7 @@ func (s *TokenManagementService) CreateToken(req *CreateTokenRequest) (*CreateTo
 
 	// Create token model
 	token := &models.RegistrationToken{
+		ID:                      tokenID,
 		Token:                   tokenValue,
 		ExpiresAt:               &expiresAt,
 		UsageLimit:              req.MaxUses,

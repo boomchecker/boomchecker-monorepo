@@ -107,19 +107,19 @@ func main() {
 	//   4. Add ADMIN_JWT_SECRET to .env (separate from node JWT encryption key)
 	// See internal/middleware/admin_auth.go for detailed implementation plan
 
-	// Register admin token management endpoints (protected by middleware)
+	// Register admin endpoints (protected by middleware)
 	// WARNING: Currently unprotected - AdminAuthMiddleware is a placeholder
 	adminGroup := router.Group("/admin")
 	adminGroup.Use(middleware.AdminAuthMiddleware()) // TODO: Implement proper JWT validation
 	{
-		// Token management
-		adminGroup.POST("/tokens", tokenManagementHandler.CreateToken)
-		adminGroup.GET("/tokens", tokenManagementHandler.ListAllTokens)
-		adminGroup.GET("/tokens/active", tokenManagementHandler.ListActiveTokens)
-		adminGroup.GET("/tokens/statistics", tokenManagementHandler.GetStatistics)
-		adminGroup.POST("/tokens/cleanup", tokenManagementHandler.CleanupExpiredTokens)
-		adminGroup.GET("/tokens/:token", tokenManagementHandler.GetToken)
-		adminGroup.DELETE("/tokens/:token", tokenManagementHandler.DeleteToken)
+		// Device registration token management
+		adminGroup.POST("/registration-node-tokens", tokenManagementHandler.CreateToken)
+		adminGroup.GET("/registration-node-tokens", tokenManagementHandler.ListAllTokens)
+		adminGroup.GET("/registration-node-tokens/active", tokenManagementHandler.ListActiveTokens)
+		adminGroup.GET("/registration-node-tokens/statistics", tokenManagementHandler.GetStatistics)
+		adminGroup.POST("/registration-node-tokens/cleanup", tokenManagementHandler.CleanupExpiredTokens)
+		adminGroup.GET("/registration-node-tokens/:token", tokenManagementHandler.GetToken)
+		adminGroup.DELETE("/registration-node-tokens/:token", tokenManagementHandler.DeleteToken)
 
 		// TODO: Add admin auth endpoints here when implemented
 		// adminGroup.POST("/auth/request", adminAuthHandler.RequestLogin)
