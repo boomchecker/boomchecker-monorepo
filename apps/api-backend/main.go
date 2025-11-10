@@ -85,7 +85,13 @@ func main() {
 	}
 
 	// Initialize database
-	dbConfig := database.DefaultConfig("./data/boomchecker.db")
+	// Get database path from environment variable, fallback to default
+	dbPath := os.Getenv("DB_PATH")
+	if dbPath == "" {
+		dbPath = "./data/boomchecker.db"
+		log.Println("DB_PATH not set, using default: ./data/boomchecker.db")
+	}
+	dbConfig := database.DefaultConfig(dbPath)
 	db, err := database.InitDB(dbConfig)
 	if err != nil {
 		log.Fatalf("Failed to initialize database: %v", err)
