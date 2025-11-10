@@ -1,11 +1,12 @@
 
 #include "ring_buffer.h"
 
-#include <stdint.h>
+#include <assert.h>
 #include <stdlib.h>
 
 void rb_init(rb_struct *rb, int samples) {
   rb->data = (int16_t *)calloc(samples, sizeof(int16_t));
+  assert(rb->data != NULL);
   rb->size = samples;
   rb->head = 0;
 }

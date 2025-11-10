@@ -40,6 +40,7 @@ typedef struct {
 } dc_filter;
 
 static dc_filter dcfL = {0}, dcfR = {0};
+// used only from mic_reader_task
 
 static inline int16_t dc_block_sample(dc_filter *st, int16_t x) {
   int32_t xn = (int32_t)x;
@@ -81,6 +82,8 @@ void mic_init(const mic_config *cfg) {
       .auto_clear = true,
   };
 
+  // NOTE: I2S RX was returning zeros unless TX was also enabled, so we
+  // create+enable both channels.
   ESP_ERROR_CHECK(i2s_new_channel(&chan_cfg, &tx_channel, &rx_channel));
 
   i2s_std_slot_config_t slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(
@@ -110,6 +113,7 @@ void mic_init(const mic_config *cfg) {
   ESP_ERROR_CHECK(i2s_channel_init_std_mode(tx_channel, &std_cfg));
   ESP_ERROR_CHECK(i2s_channel_init_std_mode(rx_channel, &std_cfg));
 
+  // keep TX enabled – see note above
   ESP_ERROR_CHECK(i2s_channel_enable(tx_channel));
   ESP_ERROR_CHECK(i2s_channel_enable(rx_channel));
 
@@ -117,9 +121,9 @@ void mic_init(const mic_config *cfg) {
   dc_block_init(&dcfL, mic_cfg.sampling_freq, fc);
   dc_block_init(&dcfR, mic_cfg.sampling_freq, fc);
 
-  ESP_LOGI("MIC", "I2S initialized");
-  ESP_LOGI("MIC", " - Sampling frequency - %d Hz", mic_cfg.sampling_freq);
-  ESP_LOGI("MIC", " - Buffer size - %d samples", samples);
+  ESP_LOGI(TAG, "I2S initialized");
+  ESP_LOGI(TAG, " - Sampling frequency - %d Hz", mic_cfg.sampling_freq);
+  ESP_LOGI(TAG, " - Buffer size - %d samples", samples);
 }
 
 void mic_reader_task(void *arg) {
@@ -155,5 +159,5 @@ void mic_save_event(int16_t *out_left_mic, int16_t *out_right_mic) {
   rb_copy_tail(&rb_left, out_left_mic, 0, wanted);
   rb_copy_tail(&rb_right, out_right_mic, 0, wanted);
 
-  ESP_LOGI(TAG, "Event uložen (%d vzorků/kanál)", wanted);
+  ESP_LOGI(TAG, "Event saved (%d samples/channel)", wanted);
 }
