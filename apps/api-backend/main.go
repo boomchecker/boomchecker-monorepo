@@ -12,6 +12,29 @@ import (
 )
 
 func main() {
+	// Set Gin mode based on environment variable
+	// Default to release mode for production safety
+	ginMode := os.Getenv("GIN_MODE")
+	if ginMode == "" {
+		// If GIN_MODE not set, check APP_ENV or ENV
+		env := os.Getenv("APP_ENV")
+		if env == "" {
+			env = os.Getenv("ENV")
+		}
+
+		// Set to release mode unless explicitly in development
+		if env == "development" || env == "dev" {
+			gin.SetMode(gin.DebugMode)
+			log.Println("🔧 Running in DEBUG mode")
+		} else {
+			gin.SetMode(gin.ReleaseMode)
+			log.Println("🚀 Running in RELEASE mode")
+		}
+	} else {
+		gin.SetMode(ginMode)
+		log.Printf("🔧 Running in %s mode (from GIN_MODE)", ginMode)
+	}
+
 	// Initialize database
 	dbConfig := database.DefaultConfig("./data/boomchecker.db")
 	db, err := database.InitDB(dbConfig)
