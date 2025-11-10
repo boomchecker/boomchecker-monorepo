@@ -8,7 +8,8 @@ import (
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
-	_ "modernc.org/sqlite" // Use pure-Go SQLite driver
+
+	_ "github.com/mattn/go-sqlite3" // Use CGO SQLite driver for tests
 )
 
 // setupTestDB creates an in-memory SQLite database for testing
