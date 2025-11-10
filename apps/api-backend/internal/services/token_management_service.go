@@ -26,33 +26,33 @@ func NewTokenManagementService(tokenRepo *repositories.RegistrationTokenReposito
 
 // CreateTokenRequest contains the data needed to create a registration token
 type CreateTokenRequest struct {
-	ExpiresInHours   int     `json:"expires_in_hours" binding:"required,min=1"`
-	MaxUses          *int    `json:"max_uses,omitempty" binding:"omitempty,min=1"` // If not provided, defaults to 1
-	AuthorizedMAC    *string `json:"authorized_mac,omitempty"`
-	Description      *string `json:"description,omitempty"`
+	ExpiresInHours   int     `json:"expires_in_hours" binding:"required,min=1" example:"24" swaggertype:"integer" minimum:"1"`
+	MaxUses          *int    `json:"max_uses,omitempty" binding:"omitempty,min=1" example:"1" swaggertype:"integer" minimum:"1"` // If not provided, defaults to 1
+	AuthorizedMAC    *string `json:"authorized_mac,omitempty" example:"AA:BB:CC:DD:EE:FF"`
+	Description      *string `json:"description,omitempty" example:"Token for production nodes"`
 }
 
 // CreateTokenResponse contains the data returned after creating a token
 type CreateTokenResponse struct {
-	Token         string     `json:"token"`
-	ExpiresAt     time.Time  `json:"expires_at"`
-	MaxUses       *int       `json:"max_uses,omitempty"`
-	AuthorizedMAC *string    `json:"authorized_mac,omitempty"`
-	Description   *string    `json:"description,omitempty"`
-	CreatedAt     time.Time  `json:"created_at"`
+	Token         string     `json:"token" example:"a1b2c3d4-e5f6-7890-abcd-ef1234567890"`
+	ExpiresAt     string     `json:"expires_at" example:"2025-11-11T14:30:00Z"`
+	MaxUses       *int       `json:"max_uses,omitempty" example:"1"`
+	AuthorizedMAC *string    `json:"authorized_mac,omitempty" example:"AA:BB:CC:DD:EE:FF"`
+	Description   *string    `json:"description,omitempty" example:"Token for production nodes"`
+	CreatedAt     string     `json:"created_at" example:"2025-11-10T14:30:00Z"`
 }
 
 // TokenListResponse contains information about a token for listing
 type TokenListResponse struct {
-	Token         string     `json:"token"`
-	ExpiresAt     time.Time  `json:"expires_at"`
-	MaxUses       *int       `json:"max_uses,omitempty"`
-	UsedCount     int        `json:"used_count"`
-	AuthorizedMAC *string    `json:"authorized_mac,omitempty"`
-	Description   *string    `json:"description,omitempty"`
-	IsExpired     bool       `json:"is_expired"`
-	IsActive      bool       `json:"is_active"`
-	CreatedAt     time.Time  `json:"created_at"`
+	Token         string     `json:"token" example:"a1b2c3d4-e5f6-7890-abcd-ef1234567890"`
+	ExpiresAt     string     `json:"expires_at" example:"2025-11-11T14:30:00Z"`
+	MaxUses       *int       `json:"max_uses,omitempty" example:"1"`
+	UsedCount     int        `json:"used_count" example:"0"`
+	AuthorizedMAC *string    `json:"authorized_mac,omitempty" example:"AA:BB:CC:DD:EE:FF"`
+	Description   *string    `json:"description,omitempty" example:"Token for production nodes"`
+	IsExpired     bool       `json:"is_expired" example:"false"`
+	IsActive      bool       `json:"is_active" example:"true"`
+	CreatedAt     string     `json:"created_at" example:"2025-11-10T14:30:00Z"`
 }
 
 // CreateToken generates a new registration token
@@ -109,11 +109,11 @@ func (s *TokenManagementService) CreateToken(req *CreateTokenRequest) (*CreateTo
 
 	return &CreateTokenResponse{
 		Token:         token.Token,
-		ExpiresAt:     *token.ExpiresAt,
+		ExpiresAt:     token.ExpiresAt.UTC().Format(time.RFC3339),
 		MaxUses:       token.UsageLimit,
 		AuthorizedMAC: token.PreAuthorizedMacAddress,
 		Description:   req.Description,
-		CreatedAt:     token.CreatedAt,
+		CreatedAt:     token.CreatedAt.UTC().Format(time.RFC3339),
 	}, nil
 }
 
@@ -144,9 +144,9 @@ func (s *TokenManagementService) GetToken(tokenValue string) (*TokenListResponse
 		return nil, fmt.Errorf("token not found: %w", err)
 	}
 
-	expiresAt := time.Time{}
+	expiresAt := ""
 	if token.ExpiresAt != nil {
-		expiresAt = *token.ExpiresAt
+		expiresAt = token.ExpiresAt.UTC().Format(time.RFC3339)
 	}
 
 	return &TokenListResponse{
@@ -158,7 +158,7 @@ func (s *TokenManagementService) GetToken(tokenValue string) (*TokenListResponse
 		Description:   nil, // Model doesn't have Description field
 		IsExpired:     token.IsExpired(),
 		IsActive:      token.IsValid(),
-		CreatedAt:     token.CreatedAt,
+		CreatedAt:     token.CreatedAt.UTC().Format(time.RFC3339),
 	}, nil
 }
 
@@ -228,9 +228,9 @@ func (s *TokenManagementService) validateCreateTokenRequest(req *CreateTokenRequ
 func (s *TokenManagementService) convertToListResponse(tokens []*models.RegistrationToken) []*TokenListResponse {
 	response := make([]*TokenListResponse, len(tokens))
 	for i, token := range tokens {
-		expiresAt := time.Time{}
+		expiresAt := ""
 		if token.ExpiresAt != nil {
-			expiresAt = *token.ExpiresAt
+			expiresAt = token.ExpiresAt.UTC().Format(time.RFC3339)
 		}
 
 		response[i] = &TokenListResponse{
@@ -241,8 +241,8 @@ func (s *TokenManagementService) convertToListResponse(tokens []*models.Registra
 			AuthorizedMAC: token.PreAuthorizedMacAddress,
 			Description:   nil, // Model doesn't have Description field
 			IsExpired:     token.IsExpired(),
-			IsActive:      token.IsValid(),
-			CreatedAt:     token.CreatedAt,
+			IsActive:      token.IsActive(),
+			CreatedAt:     token.CreatedAt.UTC().Format(time.RFC3339),
 		}
 	}
 	return response
