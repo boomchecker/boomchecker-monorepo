@@ -27,7 +27,7 @@ func NewTokenManagementService(tokenRepo *repositories.RegistrationTokenReposito
 // CreateTokenRequest contains the data needed to create a registration token
 type CreateTokenRequest struct {
 	ExpiresInHours   int     `json:"expires_in_hours" binding:"required,min=1"`
-	MaxUses          *int    `json:"max_uses,omitempty" binding:"omitempty,min=1"`
+	MaxUses          *int    `json:"max_uses,omitempty" binding:"omitempty,min=1"` // If not provided, defaults to 1
 	AuthorizedMAC    *string `json:"authorized_mac,omitempty"`
 	Description      *string `json:"description,omitempty"`
 }
@@ -85,12 +85,19 @@ func (s *TokenManagementService) CreateToken(req *CreateTokenRequest) (*CreateTo
 		authorizedMAC = &normalized
 	}
 
+	// Set default max uses to 1 if not provided
+	maxUses := req.MaxUses
+	if maxUses == nil {
+		defaultMaxUses := 1
+		maxUses = &defaultMaxUses
+	}
+
 	// Create token model
 	token := &models.RegistrationToken{
 		ID:                      tokenID,
 		Token:                   tokenValue,
 		ExpiresAt:               &expiresAt,
-		UsageLimit:              req.MaxUses,
+		UsageLimit:              maxUses,
 		UsedCount:               0,
 		PreAuthorizedMacAddress: authorizedMAC,
 	}

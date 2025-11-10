@@ -41,7 +41,7 @@ type RegistrationRequest struct {
 type RegistrationResponse struct {
 	UUID       string `json:"uuid"`
 	JWTToken   string `json:"jwt_token"`
-	ExpiresIn  int64  `json:"expires_in"` // seconds until JWT expires
+	ExpiresAt  string `json:"expires_at"` // UTC timestamp when JWT expires (RFC3339 format)
 	IsNewNode  bool   `json:"is_new_node"`
 	MacAddress string `json:"mac_address"`
 }
@@ -124,7 +124,7 @@ func (s *NodeRegistrationService) handleNewRegistration(
 	}
 
 	// Generate JWT token for the node
-	jwtToken, expiresIn, err := s.generateNodeJWT(nodeUUID, jwtSecret)
+	jwtToken, expiresAt, err := s.generateNodeJWT(nodeUUID, jwtSecret)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate JWT: %w", err)
 	}
@@ -132,7 +132,7 @@ func (s *NodeRegistrationService) handleNewRegistration(
 	return &RegistrationResponse{
 		UUID:       nodeUUID,
 		JWTToken:   jwtToken,
-		ExpiresIn:  expiresIn,
+		ExpiresAt:  expiresAt,
 		IsNewNode:  true,
 		MacAddress: req.MacAddress,
 	}, nil
@@ -184,7 +184,7 @@ func (s *NodeRegistrationService) handleReRegistration(
 	}
 
 	// Generate new JWT token with existing secret
-	jwtToken, expiresIn, err := s.generateNodeJWT(existingNode.UUID, jwtSecret)
+	jwtToken, expiresAt, err := s.generateNodeJWT(existingNode.UUID, jwtSecret)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate JWT: %w", err)
 	}
@@ -192,7 +192,7 @@ func (s *NodeRegistrationService) handleReRegistration(
 	return &RegistrationResponse{
 		UUID:       existingNode.UUID,
 		JWTToken:   jwtToken,
-		ExpiresIn:  expiresIn,
+		ExpiresAt:  expiresAt,
 		IsNewNode:  false,
 		MacAddress: req.MacAddress,
 	}, nil
@@ -231,15 +231,18 @@ func (s *NodeRegistrationService) validateRegistrationRequest(req *RegistrationR
 }
 
 // generateNodeJWT creates a JWT token for a node
-// Returns the token string, expiration time in seconds, and any error
-func (s *NodeRegistrationService) generateNodeJWT(nodeUUID string, jwtSecret string) (string, int64, error) {
+// Returns the token string, expiration time as UTC string (RFC3339), and any error
+func (s *NodeRegistrationService) generateNodeJWT(nodeUUID string, jwtSecret string) (string, string, error) {
 	// JWT expires in 30 days
 	expiresIn := int64(30 * 24 * 60 * 60) // 30 days in seconds
 
-	token, expiresAt, err := crypto.GenerateNodeJWT(nodeUUID, jwtSecret, time.Duration(expiresIn)*time.Second)
+	token, expiresAtUnix, err := crypto.GenerateNodeJWT(nodeUUID, jwtSecret, time.Duration(expiresIn)*time.Second)
 	if err != nil {
-		return "", 0, err
+		return "", "", err
 	}
+
+	// Convert Unix timestamp to UTC RFC3339 string
+	expiresAt := time.Unix(expiresAtUnix, 0).UTC().Format(time.RFC3339)
 
 	return token, expiresAt, nil
 }

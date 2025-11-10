@@ -1,6 +1,7 @@
 package models
 
 import (
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
@@ -104,10 +105,10 @@ func (rt *RegistrationToken) IsValid() bool {
 // CanBeUsedForMac checks if the token can be used for a specific MAC address
 // Returns true if:
 // - PreAuthorizedMacAddress is NULL (no restriction)
-// - PreAuthorizedMacAddress matches the provided MAC
+// - PreAuthorizedMacAddress matches the provided MAC (case-insensitive)
 func (rt *RegistrationToken) CanBeUsedForMac(macAddress string) bool {
 	if rt.PreAuthorizedMacAddress == nil {
 		return true // No MAC restriction
 	}
-	return *rt.PreAuthorizedMacAddress == macAddress
+	return strings.EqualFold(*rt.PreAuthorizedMacAddress, macAddress)
 }

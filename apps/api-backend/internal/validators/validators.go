@@ -76,19 +76,20 @@ func ValidateMACAddress(mac string, fieldName string) error {
 }
 
 // NormalizeMACAddress converts MAC address to uppercase with colons
-// Handles formats: aa:bb:cc:dd:ee:ff, aa-bb-cc-dd-ee-ff, aabbccddeeff
+// Handles formats: aa:bb:cc:dd:ee:ff, aa-bb-cc-dd-ee-ff, aabbccddeeff, aabb.ccdd.eeff
 func NormalizeMACAddress(mac string) (string, error) {
 	if mac == "" {
 		return "", NewValidationError("mac_address", "MAC address is required")
 	}
 
-	// Remove common separators
-	mac = strings.ReplaceAll(mac, "-", ":")
-	mac = strings.ReplaceAll(mac, ".", ":")
+	// Remove common separators to get plain hex string
+	mac = strings.ReplaceAll(mac, ":", "")
+	mac = strings.ReplaceAll(mac, "-", "")
+	mac = strings.ReplaceAll(mac, ".", "")
 	mac = strings.ReplaceAll(mac, " ", "")
 
-	// If no colons, add them (for format aabbccddeeff)
-	if !strings.Contains(mac, ":") && len(mac) == 12 {
+	// If we have exactly 12 hex chars, add colons
+	if len(mac) == 12 {
 		parts := []string{}
 		for i := 0; i < len(mac); i += 2 {
 			parts = append(parts, mac[i:i+2])
