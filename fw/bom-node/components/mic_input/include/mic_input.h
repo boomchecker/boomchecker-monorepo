@@ -1,3 +1,5 @@
+#ifndef MIC_INPUT_H
+#define MIC_INPUT_H
 
 #include <stdint.h>
 
@@ -8,5 +10,7 @@ typedef struct {
 } mic_config;
 
 void mic_init(const mic_config *mic_cnfg);
-void mic_start_reading(void);
-void mic_save_event(int *out_left_mic, int *out_right_mic);
+void mic_reader_task(void *arg);
+void mic_save_event(int16_t *out_left_mic, int16_t *out_right_mic);
+
+#endif
