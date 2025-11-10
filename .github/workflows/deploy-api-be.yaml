@@ -17,6 +17,7 @@ env:
   AWS_BUCKET_KEY_NAME: ${{ secrets.AWS_BUCKET_KEY_NAME }}
   EC2_INSTANCE_ID: ${{ secrets.AWS_INSTANCE_ID }}
   API_PORT: 8080
+  JWT_ENCRYPTION_KEY: ${{ secrets.JWT_ENCRYPTION_KEY }}
 
 jobs:
   deploy-api:
@@ -58,15 +59,19 @@ jobs:
       - name: Build Go API binary
         working-directory: ./apps/api-backend
         run: |
-          echo "Building Go binary for Linux ARM64..."
-          GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -o api-backend -ldflags="-s -w" .
-          
+          echo "Building Go binary for Linux ARM64 with CGO..."
+          # Install cross-compilation tools for ARM64
+          sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu
+
+          # Build with CGO enabled for mattn/go-sqlite3
+          CC=aarch64-linux-gnu-gcc GOOS=linux GOARCH=arm64 CGO_ENABLED=1 go build -o api-backend -ldflags="-s -w" .
+
           echo "Verifying binary was created..."
           if [ ! -f api-backend ]; then
             echo "Build failed - binary not found"
             exit 1
           fi
-          
+
           echo "Binary info:"
           ls -lh api-backend
           file api-backend
@@ -90,20 +95,35 @@ jobs:
               "echo Starting deploy on EC2...",
               "sudo systemctl stop boomchecker-api || echo Service not running",
               "sudo mkdir -p /opt/boomchecker/backup",
+              "sudo mkdir -p /opt/boomchecker/data",
+              "sudo chmod 777 /opt/boomchecker/data",
+              "echo Verifying data directory permissions:",
+              "ls -la /opt/boomchecker/ | grep data",
               "if [ -f /opt/boomchecker/api-backend ]; then sudo cp /opt/boomchecker/api-backend /opt/boomchecker/backup/api-backend.backup; fi",
               "sudo aws s3 cp s3://${{ env.AWS_BUCKET_NAME }}/${{ env.AWS_BUCKET_KEY_NAME }} /opt/boomchecker/api-backend",
               "sudo chmod +x /opt/boomchecker/api-backend",
+              "echo Setting up environment variables...",
+              "echo \"GIN_MODE=release\" | sudo tee /opt/boomchecker/.env",
+              "echo \"APP_ENV=staging\" | sudo tee -a /opt/boomchecker/.env",
+              "echo \"DB_PATH=/opt/boomchecker/data/boomchecker.db\" | sudo tee -a /opt/boomchecker/.env",
+              "echo \"JWT_ENCRYPTION_KEY=${{ env.JWT_ENCRYPTION_KEY }}\" | sudo tee -a /opt/boomchecker/.env",
+              "echo Verifying environment setup:",
+              "cat /opt/boomchecker/.env",
+              "echo Checking disk space:",
+              "df -h /opt",
+              "echo Testing database file creation:",
+              "sudo touch /opt/boomchecker/data/test.db && sudo rm /opt/boomchecker/data/test.db && echo Database file creation test successful || echo Database file creation test FAILED",
+              "echo Checking systemd service configuration:",
+              "sudo systemctl cat boomchecker-api | grep -E User=|Group= || echo Service runs as root",
               "sudo systemctl start boomchecker-api",
-              "echo Waiting for service to start...",
-              "sleep 3",
-              "sudo systemctl is-active boomchecker-api || exit 1"
+              "echo Service start command issued successfully"
             ]' \
             --region ${{ env.AWS_REGION }} \
             --output text \
             --query 'Command.CommandId')
-          
+
           echo "Command ID: $COMMAND_ID"
-          
+
           echo "Waiting for command to complete..."
           aws ssm wait command-executed \
             --command-id "$COMMAND_ID" \
@@ -111,7 +131,7 @@ jobs:
             --region ${{ env.AWS_REGION }} \
             --cli-read-timeout 300 \
             --cli-connect-timeout 60
-          
+
           echo "Checking command result..."
           STATUS=$(aws ssm get-command-invocation \
             --command-id "$COMMAND_ID" \
@@ -119,9 +139,9 @@ jobs:
             --region ${{ env.AWS_REGION }} \
             --query 'Status' \
             --output text)
-          
+
           echo "Command status: $STATUS"
-          
+
           if [ "$STATUS" != "Success" ]; then
             echo "Deploy failed! Getting error details..."
             aws ssm get-command-invocation \
@@ -132,15 +152,15 @@ jobs:
               --output text
             exit 1
           fi
-          
-          echo "✅ Deploy successful!"
+
+          echo "Deploy successful!"
 
       - name: Wait and verify service status
         id: verify
         run: |
           echo "Waiting for service to be fully ready..."
-          sleep 5
-          
+          sleep 10
+
           echo "Verifying BoomChecker API health..."
           COMMAND_ID=$(aws ssm send-command \
             --instance-ids "${{ env.EC2_INSTANCE_ID }}" \
@@ -150,54 +170,55 @@ jobs:
               "echo Checking systemd service status:",
               "sudo systemctl status boomchecker-api --no-pager || true",
               "echo",
-              "echo Checking API health endpoint:",
-              "response=$(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:${{ env.API_PORT }}/ping)",
-              "echo \"HTTP Status: $response\"",
-              "if [ \"$response\" -ne 200 ]; then",
-              "  echo \"Health check failed! API not responding correctly\"",
-              "  exit 1",
-              "fi",
-              "echo \"API is healthy and responding\""
+              "echo Waiting for service to be fully active...",
+              "i=0; while [ $i -lt 30 ]; do if sudo systemctl is-active --quiet boomchecker-api; then echo Service is active after $i seconds; break; fi; if [ $i -eq 29 ]; then echo Timeout: Service did not become active; sudo journalctl -u boomchecker-api -n 30 --no-pager; exit 1; fi; i=$((i+1)); sleep 1; done",
+              "echo",
+              "echo Checking API health endpoint with retries:",
+              "i=0; while [ $i -lt 10 ]; do response=$(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:${{ env.API_PORT }}/ping); echo Attempt $((i+1)) - HTTP Status: $response; if [ \"$response\" = \"200\" ]; then echo API is healthy and responding!; exit 0; fi; i=$((i+1)); sleep 2; done",
+              "echo Health check failed after 10 attempts",
+              "echo Checking logs for errors:",
+              "sudo journalctl -u boomchecker-api -n 30 --no-pager",
+              "exit 1"
             ]' \
             --region ${{ env.AWS_REGION }} \
             --output text \
             --query 'Command.CommandId')
-          
+
           echo "Health check command ID: $COMMAND_ID"
-          
+
           aws ssm wait command-executed \
             --command-id "$COMMAND_ID" \
             --instance-id "${{ env.EC2_INSTANCE_ID }}" \
             --region ${{ env.AWS_REGION }}
-          
+
           STATUS=$(aws ssm get-command-invocation \
             --command-id "$COMMAND_ID" \
             --instance-id "${{ env.EC2_INSTANCE_ID }}" \
             --region ${{ env.AWS_REGION }} \
             --query 'Status' \
             --output text)
-          
+
           OUTPUT=$(aws ssm get-command-invocation \
             --command-id "$COMMAND_ID" \
             --instance-id "${{ env.EC2_INSTANCE_ID }}" \
             --region ${{ env.AWS_REGION }} \
             --query 'StandardOutputContent' \
             --output text)
-          
+
           echo "$OUTPUT"
-          
+
           if [ "$STATUS" != "Success" ]; then
             echo "Health check failed!"
             exit 1
           fi
-          
+
           echo "Deployment completed successfully and API is healthy!"
 
       - name: Rollback on failure
         if: failure() && steps.deploy.conclusion == 'failure' || steps.verify.conclusion == 'failure'
         run: |
-          echo "⚠️ Deployment or health check failed! Attempting rollback..."
-          
+          echo "Deployment or health check failed! Attempting rollback..."
+
           ROLLBACK_COMMAND_ID=$(aws ssm send-command \
             --instance-ids "${{ env.EC2_INSTANCE_ID }}" \
             --document-name "AWS-RunShellScript" \
@@ -218,12 +239,12 @@ jobs:
             --region ${{ env.AWS_REGION }} \
             --output text \
             --query 'Command.CommandId')
-          
+
           echo "Rollback command ID: $ROLLBACK_COMMAND_ID"
-          
+
           aws ssm wait command-executed \
             --command-id "$ROLLBACK_COMMAND_ID" \
             --instance-id "${{ env.EC2_INSTANCE_ID }}" \
             --region ${{ env.AWS_REGION }} || echo "Rollback command timed out"
-          
+
           echo "Deployment failed and rollback attempted. Please check the EC2 instance manually."

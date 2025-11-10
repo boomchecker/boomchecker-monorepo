@@ -1,0 +1,377 @@
+basePath: /
+definitions:
+  handlers.ErrorResponse:
+    properties:
+      error:
+        type: string
+      message:
+        type: string
+    type: object
+  models.HealthResponse:
+    properties:
+      service:
+        type: string
+      status:
+        type: string
+      timestamp:
+        type: string
+    type: object
+  services.CreateTokenRequest:
+    properties:
+      authorized_mac:
+        example: AA:BB:CC:DD:EE:FF
+        type: string
+      description:
+        example: Token for production nodes
+        type: string
+      expires_in_hours:
+        example: 24
+        minimum: 1
+        type: integer
+      max_uses:
+        description: If not provided, defaults to 1
+        example: 1
+        minimum: 1
+        type: integer
+    required:
+    - expires_in_hours
+    type: object
+  services.CreateTokenResponse:
+    properties:
+      authorized_mac:
+        example: AA:BB:CC:DD:EE:FF
+        type: string
+      created_at:
+        example: "2025-11-10T14:30:00Z"
+        type: string
+      description:
+        example: Token for production nodes
+        type: string
+      expires_at:
+        example: "2025-11-11T14:30:00Z"
+        type: string
+      max_uses:
+        example: 1
+        type: integer
+      token:
+        example: a1b2c3d4-e5f6-7890-abcd-ef1234567890
+        type: string
+    type: object
+  services.RegistrationRequest:
+    properties:
+      firmware_version:
+        example: 1.0.0
+        type: string
+      latitude:
+        example: 50.0755
+        type: number
+      longitude:
+        example: 14.4378
+        type: number
+      mac_address:
+        example: AA:BB:CC:DD:EE:FF
+        type: string
+      registration_token:
+        example: a1b2c3d4-e5f6-7890-abcd-ef1234567890
+        type: string
+    required:
+    - mac_address
+    - registration_token
+    type: object
+  services.RegistrationResponse:
+    properties:
+      expires_at:
+        description: UTC timestamp when JWT expires (RFC3339 format)
+        example: "2025-12-10T14:30:00Z"
+        type: string
+      is_new_node:
+        example: true
+        type: boolean
+      jwt_token:
+        example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        type: string
+      mac_address:
+        example: AA:BB:CC:DD:EE:FF
+        type: string
+      uuid:
+        example: 550e8400-e29b-41d4-a716-446655440000
+        type: string
+    type: object
+  services.TokenListResponse:
+    properties:
+      authorized_mac:
+        example: AA:BB:CC:DD:EE:FF
+        type: string
+      created_at:
+        example: "2025-11-10T14:30:00Z"
+        type: string
+      description:
+        example: Token for production nodes
+        type: string
+      expires_at:
+        example: "2025-11-11T14:30:00Z"
+        type: string
+      is_active:
+        example: true
+        type: boolean
+      is_expired:
+        example: false
+        type: boolean
+      max_uses:
+        example: 1
+        type: integer
+      token:
+        example: a1b2c3d4-e5f6-7890-abcd-ef1234567890
+        type: string
+      used_count:
+        example: 0
+        type: integer
+    type: object
+host: localhost:8080
+info:
+  contact:
+    email: support@boomchecker.com
+    name: API Support
+  description: REST API for BoomChecker IoT system - device registration and management
+    with JWT-based authentication
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+  termsOfService: https://boomchecker.com/terms
+  title: BoomChecker API
+  version: "1.0"
+paths:
+  /admin/registration-node-tokens:
+    get:
+      description: Return all registration tokens (active, expired, used)
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: List with tokens array and count
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - AdminAuth: []
+      summary: List all tokens
+      tags:
+      - admin
+    post:
+      consumes:
+      - application/json
+      description: Create new registration token with optional expiration, usage limit,
+        and MAC authorization
+      parameters:
+      - description: Token configuration
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/services.CreateTokenRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Token created
+          schema:
+            $ref: '#/definitions/services.CreateTokenResponse'
+        "400":
+          description: Invalid request or validation error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - AdminAuth: []
+      summary: Create registration token
+      tags:
+      - admin
+  /admin/registration-node-tokens/{token}:
+    delete:
+      description: Permanently remove registration token
+      parameters:
+      - description: Token value
+        in: path
+        name: token
+        required: true
+        type: string
+      responses:
+        "204":
+          description: Token deleted
+        "404":
+          description: Token not found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - AdminAuth: []
+      summary: Delete token
+      tags:
+      - admin
+    get:
+      description: Return details of specific registration token
+      parameters:
+      - description: Token value
+        in: path
+        name: token
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Token details
+          schema:
+            $ref: '#/definitions/services.TokenListResponse'
+        "404":
+          description: Token not found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - AdminAuth: []
+      summary: Get token details
+      tags:
+      - admin
+  /admin/registration-node-tokens/active:
+    get:
+      description: Return only non-expired tokens with remaining uses
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: List with tokens array and count
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - AdminAuth: []
+      summary: List active tokens
+      tags:
+      - admin
+  /admin/registration-node-tokens/cleanup:
+    post:
+      description: Remove all expired tokens from database
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Cleanup results with deleted count
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - AdminAuth: []
+      summary: Cleanup expired tokens
+      tags:
+      - admin
+  /admin/registration-node-tokens/statistics:
+    get:
+      description: Return statistics about registration tokens (total, active, expired
+        counts)
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Token statistics
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      security:
+      - AdminAuth: []
+      summary: Get token statistics
+      tags:
+      - admin
+  /nodes/register:
+    post:
+      consumes:
+      - application/json
+      description: Register a new node or re-register existing node using registration
+        token. Returns UUID and JWT for authentication.
+      parameters:
+      - description: Registration data with token and MAC address
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/services.RegistrationRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Re-registration successful
+          schema:
+            $ref: '#/definitions/services.RegistrationResponse'
+        "201":
+          description: New node registered
+          schema:
+            $ref: '#/definitions/services.RegistrationResponse'
+        "400":
+          description: Invalid request or validation error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "401":
+          description: Invalid, expired, or unauthorized token
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "403":
+          description: Node is revoked
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      summary: Register a new IoT device
+      tags:
+      - nodes
+  /ping:
+    get:
+      description: Simple health check endpoint
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Service is healthy
+          schema:
+            $ref: '#/definitions/models.HealthResponse'
+      summary: Health check
+      tags:
+      - health
+securityDefinitions:
+  AdminAuth:
+    description: Type "Bearer" followed by a space and JWT token for admin authentication
+    in: header
+    name: Authorization
+    type: apiKey
+  BearerAuth:
+    description: Type "Bearer" followed by a space and JWT token for node authentication
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"
