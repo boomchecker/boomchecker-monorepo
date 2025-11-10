@@ -6,12 +6,30 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/boomchecker/api-backend/internal/crypto"
 	"github.com/boomchecker/api-backend/internal/database"
 	"github.com/boomchecker/api-backend/internal/handlers"
 	"github.com/gin-gonic/gin"
+	"github.com/joho/godotenv"
 )
 
 func main() {
+	// Load .env file if it exists (development)
+	// In production, environment variables are set by systemd/docker
+	if err := godotenv.Load(); err != nil {
+		log.Println("No .env file found, using system environment variables")
+	} else {
+		log.Println("Loaded .env file")
+	}
+
+	// Validate encryption key is configured
+	if err := crypto.ValidateEncryptionKey(); err != nil {
+		log.Fatalf("Encryption key validation failed: %v\n"+
+			"Please set JWT_ENCRYPTION_KEY in .env or environment.\n"+
+			"Generate key with: go run scripts/generate_keys.go", err)
+	}
+	log.Println("Encryption key validated")
+
 	// Set Gin mode based on environment variable
 	// Default to release mode for production safety
 	ginMode := os.Getenv("GIN_MODE")
@@ -69,7 +87,7 @@ func main() {
 		}
 	}()
 
-	log.Println("🚀 Server started on http://localhost:8080")
+	log.Println("Server started on http://localhost:8080")
 	log.Println("Press Ctrl+C to shutdown")
 
 	// Wait for interrupt signal
