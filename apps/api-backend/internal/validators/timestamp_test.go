@@ -105,6 +105,8 @@ func TestIsInPast(t *testing.T) {
 	now := time.Now().UTC()
 	future := now.Add(1 * time.Hour)
 	past := now.Add(-1 * time.Hour)
+	// Use a timestamp slightly in the past to avoid timing issues
+	almostNow := now.Add(-1 * time.Millisecond)
 	
 	tests := []struct {
 		name      string
@@ -113,7 +115,7 @@ func TestIsInPast(t *testing.T) {
 	}{
 		{"past time", past, true},
 		{"future time", future, false},
-		{"current time (approximately)", now, false},
+		{"almost current time", almostNow, true},
 	}
 	
 	for _, tt := range tests {

@@ -329,7 +329,7 @@ func TestRegistrationTokenRepository_ForeignKey(t *testing.T) {
 		t.Fatalf("Create(token) error = %v", err)
 	}
 
-	// Verify foreign key relationship
+	// Verify soft reference relationship
 	found, err := tokenRepo.FindByToken(token.Token)
 	if err != nil {
 		t.Fatalf("FindByToken() error = %v", err)
@@ -338,19 +338,24 @@ func TestRegistrationTokenRepository_ForeignKey(t *testing.T) {
 		t.Error("PreAuthorizedMacAddress mismatch")
 	}
 
-	// Test that we cannot delete node while FK exists
-	if err := nodeRepo.HardDelete(node.UUID); err == nil {
-		t.Error("HardDelete(node) should fail due to foreign key constraint, got nil")
+	// Test that we CAN delete node even with token referencing it (soft reference, no FK constraint)
+	// This is expected behavior - token can reference a MAC that doesn't exist yet
+	if err := nodeRepo.HardDelete(node.UUID); err != nil {
+		t.Fatalf("HardDelete(node) should succeed (soft reference), got error: %v", err)
 	}
 
-	// Delete token first, then we can delete the node
+	// Token should still exist with the MAC address reference
+	tokenAfterDelete, err := tokenRepo.FindByToken(token.Token)
+	if err != nil {
+		t.Fatalf("FindByToken() after node delete error = %v", err)
+	}
+	if tokenAfterDelete.PreAuthorizedMacAddress == nil || *tokenAfterDelete.PreAuthorizedMacAddress != node.MacAddress {
+		t.Error("PreAuthorizedMacAddress should remain unchanged after node deletion")
+	}
+
+	// Cleanup
 	if err := tokenRepo.Delete(token.Token); err != nil {
 		t.Fatalf("Delete(token) error = %v", err)
-	}
-
-	// Now HardDelete should succeed
-	if err := nodeRepo.HardDelete(node.UUID); err != nil {
-		t.Fatalf("HardDelete(node) after deleting token error = %v", err)
 	}
 }
 
