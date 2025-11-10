@@ -2,6 +2,8 @@ package models
 
 import (
 	"time"
+
+	"gorm.io/gorm"
 )
 
 // RegistrationToken stores one-time or limited-use tokens for node registration.
@@ -53,7 +55,7 @@ func (RegistrationToken) TableName() string {
 }
 
 // BeforeCreate is a GORM hook that ensures timestamps are in UTC
-func (rt *RegistrationToken) BeforeCreate(tx interface{}) error {
+func (rt *RegistrationToken) BeforeCreate(tx *gorm.DB) error {
 	rt.CreatedAt = time.Now().UTC()
 	rt.UpdatedAt = time.Now().UTC()
 	if rt.ExpiresAt != nil {
@@ -64,7 +66,7 @@ func (rt *RegistrationToken) BeforeCreate(tx interface{}) error {
 }
 
 // BeforeUpdate is a GORM hook that ensures UpdatedAt is in UTC
-func (rt *RegistrationToken) BeforeUpdate(tx interface{}) error {
+func (rt *RegistrationToken) BeforeUpdate(tx *gorm.DB) error {
 	rt.UpdatedAt = time.Now().UTC()
 	if rt.ExpiresAt != nil {
 		utcTime := rt.ExpiresAt.UTC()

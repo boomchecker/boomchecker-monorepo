@@ -2,6 +2,8 @@ package models
 
 import (
 	"time"
+
+	"gorm.io/gorm"
 )
 
 // Node represents an IoT device registered in the system.
@@ -58,7 +60,7 @@ func (Node) TableName() string {
 }
 
 // BeforeCreate is a GORM hook that ensures timestamps are in UTC
-func (n *Node) BeforeCreate(tx interface{}) error {
+func (n *Node) BeforeCreate(tx *gorm.DB) error {
 	n.CreatedAt = time.Now().UTC()
 	n.UpdatedAt = time.Now().UTC()
 	if n.LastSeenAt != nil {
@@ -69,7 +71,7 @@ func (n *Node) BeforeCreate(tx interface{}) error {
 }
 
 // BeforeUpdate is a GORM hook that ensures UpdatedAt is in UTC
-func (n *Node) BeforeUpdate(tx interface{}) error {
+func (n *Node) BeforeUpdate(tx *gorm.DB) error {
 	n.UpdatedAt = time.Now().UTC()
 	if n.LastSeenAt != nil {
 		utcTime := n.LastSeenAt.UTC()
