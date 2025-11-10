@@ -4,7 +4,13 @@ REST API backend for BoomChecker IoT system providing device registration and ma
 
 ## API Endpoints
 
-See OpenAPI schema for detailed specifications.
+OpenAPI 3.0 documentation available at `/swagger/index.html` when server is running.
+
+To regenerate documentation after code changes:
+
+```bash
+swag init -g main.go --output ./docs
+```
 
 ## Architecture
 
@@ -43,6 +49,7 @@ apps/api-backend/
 ### Prerequisites
 
 - Go 1.24+
+- swag CLI for OpenAPI generation: `go install github.com/swaggo/swag/cmd/swag@latest`
 
 ### Installation
 
@@ -53,6 +60,9 @@ cd boomchecker-monorepo/apps/api-backend
 
 # Download dependencies
 go mod download
+
+# Generate OpenAPI documentation
+swag init -g main.go --output ./docs
 
 # Generate encryption key
 go run scripts/generate_keys.go
@@ -65,6 +75,8 @@ go run main.go
 ```
 
 Server runs on `http://localhost:8080`.
+
+OpenAPI documentation: `http://localhost:8080/swagger/index.html`
 
 ### Environment Variables
 
