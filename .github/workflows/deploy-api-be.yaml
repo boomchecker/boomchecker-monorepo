@@ -119,8 +119,6 @@ jobs:
               "echo \"ADMIN_EMAIL=${{ env.ADMIN_EMAIL }}\" | sudo tee -a /opt/boomchecker/.env",
               "echo \"AWS_SES_REGION=${{ env.AWS_SES_REGION }}\" | sudo tee -a /opt/boomchecker/.env",
               "echo \"AWS_SES_FROM_EMAIL=${{ env.AWS_SES_FROM_EMAIL }}\" | sudo tee -a /opt/boomchecker/.env",
-              "echo \"AWS_ACCESS_KEY_ID=${{ env.AWS_ACCESS_KEY_ID }}\" | sudo tee -a /opt/boomchecker/.env",
-              "echo \"AWS_SECRET_ACCESS_KEY=${{ env.AWS_SECRET_ACCESS_KEY }}\" | sudo tee -a /opt/boomchecker/.env",
               "echo Verifying environment setup:",
               "cat /opt/boomchecker/.env",
               "echo Checking disk space:",
