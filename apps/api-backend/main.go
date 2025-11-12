@@ -142,10 +142,19 @@ func main() {
 	registrationService := services.NewNodeRegistrationService(nodeRepo, tokenRepo)
 	tokenManagementService := services.NewTokenManagementService(tokenRepo)
 
+	// Initialize cleanup service for automatic token expiration
+	cleanupService := services.NewCleanupService(adminTokenRepo, tokenRepo)
+	cleanupService.Start()
+	log.Println("Automatic token cleanup service started (runs every 24 hours)")
+
+	// Ensure cleanup service is stopped on shutdown
+	defer cleanupService.Stop()
+
 	// Initialize handlers
 	nodeRegistrationHandler := handlers.NewNodeRegistrationHandler(registrationService)
 	tokenManagementHandler := handlers.NewTokenManagementHandler(tokenManagementService)
 	adminAuthHandler := handlers.NewAdminAuthHandler(adminAuthService)
+	cleanupHandler := handlers.NewCleanupHandler(cleanupService)
 
 	// Create a Gin router with default middleware (logger and recovery)
 	router := gin.Default()
@@ -180,6 +189,9 @@ func main() {
 		adminGroup.POST("/registration-node-tokens/cleanup", tokenManagementHandler.CleanupExpiredTokens)
 		adminGroup.GET("/registration-node-tokens/:token", tokenManagementHandler.GetToken)
 		adminGroup.DELETE("/registration-node-tokens/:token", tokenManagementHandler.DeleteToken)
+
+		// Token cleanup (admin + registration tokens)
+		adminGroup.POST("/tokens/cleanup", cleanupHandler.CleanupAllExpiredTokens)
 	}
 
 	// Start server on port 8080 in a goroutine
