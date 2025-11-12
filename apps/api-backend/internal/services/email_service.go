@@ -101,9 +101,14 @@ func (s *EmailService) sendEmail(ctx context.Context, toEmail, subject, htmlBody
 		},
 	}
 
-	_, err := s.client.SendEmail(ctx, input)
+	result, err := s.client.SendEmail(ctx, input)
 	if err != nil {
 		return fmt.Errorf("SES SendEmail failed: %w", err)
+	}
+
+	// Log successful send with MessageId for tracking
+	if result.MessageId != nil {
+		log.Printf("Email sent successfully! AWS SES MessageId: %s", *result.MessageId)
 	}
 
 	return nil
