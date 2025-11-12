@@ -104,7 +104,8 @@ func (r *AdminTokenRepository) MarkAsUsed(tokenHash string) error {
 // A token is valid if:
 // - It exists
 // - It hasn't expired
-// - It hasn't been used yet
+// Note: IsUsed field is for tracking only, not for validation
+// Admin tokens can be used multiple times during their 24-hour validity period
 func (r *AdminTokenRepository) ValidateToken(tokenHash string) (*models.AdminToken, error) {
 	if tokenHash == "" {
 		return nil, fmt.Errorf("token hash is required")
@@ -120,11 +121,7 @@ func (r *AdminTokenRepository) ValidateToken(tokenHash string) (*models.AdminTok
 		return nil, fmt.Errorf("token has expired")
 	}
 
-	// Check if already used
-	if token.IsUsed {
-		return nil, fmt.Errorf("token has already been used")
-	}
-
+	// Token is valid - IsUsed is only for tracking first use, not for preventing reuse
 	return token, nil
 }
 
