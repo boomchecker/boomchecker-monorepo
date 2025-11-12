@@ -111,6 +111,32 @@ func main() {
 	// Initialize repositories
 	nodeRepo := repositories.NewNodeRepository(db)
 	tokenRepo := repositories.NewRegistrationTokenRepository(db)
+	adminTokenRepo := repositories.NewAdminTokenRepository(db)
+
+	// Initialize email service for admin authentication
+	emailService, err := services.NewEmailService(&services.EmailConfig{
+		FromEmail: os.Getenv("AWS_SES_FROM_EMAIL"),
+		Region:    os.Getenv("AWS_SES_REGION"),
+	})
+	if err != nil {
+		log.Fatalf("Failed to initialize email service: %v\n"+
+			"Please ensure AWS_SES_FROM_EMAIL and AWS_SES_REGION are set in .env", err)
+	}
+
+	// Initialize admin authentication service
+	adminAuthService, err := services.NewAdminAuthService(
+		adminTokenRepo,
+		emailService,
+		&services.AdminAuthConfig{
+			JWTSecret:  os.Getenv("ADMIN_JWT_SECRET"),
+			AdminEmail: os.Getenv("ADMIN_EMAIL"),
+		},
+	)
+	if err != nil {
+		log.Fatalf("Failed to initialize admin auth service: %v\n"+
+			"Please ensure ADMIN_JWT_SECRET and ADMIN_EMAIL are set in .env", err)
+	}
+	log.Println("Admin authentication service initialized")
 
 	// Initialize services
 	registrationService := services.NewNodeRegistrationService(nodeRepo, tokenRepo)
@@ -119,6 +145,7 @@ func main() {
 	// Initialize handlers
 	nodeRegistrationHandler := handlers.NewNodeRegistrationHandler(registrationService)
 	tokenManagementHandler := handlers.NewTokenManagementHandler(tokenManagementService)
+	adminAuthHandler := handlers.NewAdminAuthHandler(adminAuthService)
 
 	// Create a Gin router with default middleware (logger and recovery)
 	router := gin.Default()
@@ -135,19 +162,15 @@ func main() {
 	// Register node registration endpoint (public)
 	router.POST("/nodes/register", nodeRegistrationHandler.RegisterNode)
 
-	// TODO: Admin Authentication - Email-based JWT login flow
-	// Current state: Admin endpoints are UNPROTECTED (middleware allows all requests)
-	// Required implementation:
-	//   1. POST /admin/auth/request - Admin provides email, receives JWT via email (24h validity)
-	//   2. Update middleware.AdminAuthMiddleware() to validate JWT from Authorization header
-	//   3. Configure email service (SMTP/SendGrid/etc) for sending login tokens
-	//   4. Add ADMIN_JWT_SECRET to .env (separate from node JWT encryption key)
-	// See internal/middleware/admin_auth.go for detailed implementation plan
+	// Register admin authentication endpoint (public - must be outside admin group)
+	// This endpoint allows admins to request a JWT token via email
+	router.POST("/admin/auth/request", adminAuthHandler.RequestToken)
 
-	// Register admin endpoints (protected by middleware)
-	// WARNING: Currently unprotected - AdminAuthMiddleware is a placeholder
+	// Register admin endpoints (protected by JWT authentication middleware)
+	// Admin must first request a token via POST /admin/auth/request
+	// Token is sent via email and must be included in Authorization header: Bearer <token>
 	adminGroup := router.Group("/admin")
-	adminGroup.Use(middleware.AdminAuthMiddleware()) // TODO: Implement proper JWT validation
+	adminGroup.Use(middleware.AdminAuthMiddleware(adminAuthService))
 	{
 		// Device registration token management
 		adminGroup.POST("/registration-node-tokens", tokenManagementHandler.CreateToken)
@@ -157,9 +180,6 @@ func main() {
 		adminGroup.POST("/registration-node-tokens/cleanup", tokenManagementHandler.CleanupExpiredTokens)
 		adminGroup.GET("/registration-node-tokens/:token", tokenManagementHandler.GetToken)
 		adminGroup.DELETE("/registration-node-tokens/:token", tokenManagementHandler.DeleteToken)
-
-		// TODO: Add admin auth endpoints here when implemented
-		// adminGroup.POST("/auth/request", adminAuthHandler.RequestLogin)
 	}
 
 	// Start server on port 8080 in a goroutine

@@ -126,6 +126,7 @@ func runMigrations(db *gorm.DB) error {
 	if err := db.AutoMigrate(
 		&models.Node{},
 		&models.RegistrationToken{},
+		&models.AdminToken{},
 	); err != nil {
 		return fmt.Errorf("AutoMigrate failed: %w", err)
 	}
@@ -153,6 +154,12 @@ func createCustomIndexes(db *gorm.DB) error {
 
 		// Index for expired token cleanup queries
 		"CREATE INDEX IF NOT EXISTS idx_registration_tokens_expires_at ON registration_tokens(expires_at);",
+
+		// Index for admin token rate limiting (finding last request by email)
+		"CREATE INDEX IF NOT EXISTS idx_admin_tokens_email_requested ON admin_tokens(email, requested_at DESC);",
+
+		// Index for expired admin token cleanup queries
+		"CREATE INDEX IF NOT EXISTS idx_admin_tokens_expires_at ON admin_tokens(expires_at);",
 	}
 
 	for _, indexSQL := range indexes {
