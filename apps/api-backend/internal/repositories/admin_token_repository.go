@@ -192,3 +192,25 @@ func (r *AdminTokenRepository) Count() (int64, error) {
 
 	return count, nil
 }
+
+// InvalidateAllForEmail invalidates all active tokens for a given email
+// This is called when a new token is requested to ensure only the latest token is valid
+func (r *AdminTokenRepository) InvalidateAllForEmail(email string) (int64, error) {
+	if email == "" {
+		return 0, fmt.Errorf("email is required")
+	}
+
+	now := time.Now().UTC()
+
+	// Set ExpiresAt to now for all active tokens (not expired yet)
+	result := r.db.Model(&models.AdminToken{}).
+		Where("email = ?", email).
+		Where("expires_at > ?", now).
+		Update("expires_at", now)
+
+	if result.Error != nil {
+		return 0, fmt.Errorf("failed to invalidate tokens: %w", result.Error)
+	}
+
+	return result.RowsAffected, nil
+}

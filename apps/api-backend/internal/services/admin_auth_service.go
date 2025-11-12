@@ -71,37 +71,25 @@ type TokenResponse struct {
 // RequestToken handles the complete admin token request flow
 // This includes:
 // 1. Validating the email is the authorized admin email
-// 2. Checking rate limiting (1 request per 24 hours)
+// 2. Invalidating all previous tokens for this email
 // 3. Generating a new JWT token
 // 4. Storing token hash in database
 // 5. Sending token via email
+// Note: When a new token is requested, all previous tokens for this email are invalidated
 func (s *AdminAuthService) RequestToken(ctx context.Context, req *TokenRequest) (*TokenResponse, error) {
 	// Step 1: Validate email is the authorized admin email
 	if req.Email != s.adminEmail {
 		return nil, fmt.Errorf("unauthorized: email is not authorized for admin access")
 	}
 
-	// Step 2: Check rate limiting
-	lastRequest, err := s.adminTokenRepo.GetLastRequestByEmail(req.Email)
+	// Step 2: Invalidate all previous tokens for this email
+	// This ensures only the latest token is valid
+	invalidatedCount, err := s.adminTokenRepo.InvalidateAllForEmail(req.Email)
 	if err != nil {
-		return nil, fmt.Errorf("failed to check rate limit: %w", err)
+		return nil, fmt.Errorf("failed to invalidate previous tokens: %w", err)
 	}
-
-	if lastRequest != nil {
-		if !models.CanRequestNewToken(lastRequest.RequestedAt) {
-			// Calculate when next request is allowed
-			nextAllowedAt := lastRequest.RequestedAt.Add(24 * time.Hour)
-			timeRemaining := time.Until(nextAllowedAt)
-			hoursRemaining := int(timeRemaining.Hours())
-			minutesRemaining := int(timeRemaining.Minutes()) % 60
-
-			return nil, fmt.Errorf(
-				"rate limit exceeded: you can request a new token in %dh %dm (last request was at %s)",
-				hoursRemaining,
-				minutesRemaining,
-				lastRequest.RequestedAt.Format("2006-01-02 15:04:05 MST"),
-			)
-		}
+	if invalidatedCount > 0 {
+		fmt.Printf("Invalidated %d previous token(s) for %s\n", invalidatedCount, req.Email)
 	}
 
 	// Step 3: Generate JWT token
