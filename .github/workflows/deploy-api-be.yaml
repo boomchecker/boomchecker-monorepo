@@ -25,8 +25,8 @@ env:
   AWS_SES_REGION: ${{ secrets.AWS_SES_REGION }}
   AWS_SES_FROM_EMAIL: ${{ secrets.AWS_SES_FROM_EMAIL }}
   # AWS credentials for SES (if not using EC2 IAM role)
-  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+  #AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+  #AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
 jobs:
   deploy-api:
