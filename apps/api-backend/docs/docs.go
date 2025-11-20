@@ -23,6 +23,64 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
+        "/admin/auth/request": {
+            "post": {
+                "description": "Request a JWT token for admin access. Token is sent via email and is valid for 24 hours. Rate limited to 1 request per 24 hours.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin-auth"
+                ],
+                "summary": "Request admin authentication token",
+                "parameters": [
+                    {
+                        "description": "Email address",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/services.TokenRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Token request successful, email sent",
+                        "schema": {
+                            "$ref": "#/definitions/services.TokenResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request format",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized email",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "429": {
+                        "description": "Rate limit exceeded",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/admin/registration-node-tokens": {
             "get": {
                 "security": [
@@ -544,6 +602,32 @@ const docTemplate = `{
                 "used_count": {
                     "type": "integer",
                     "example": 0
+                }
+            }
+        },
+        "services.TokenRequest": {
+            "type": "object",
+            "required": [
+                "email"
+            ],
+            "properties": {
+                "email": {
+                    "type": "string",
+                    "example": "admin@example.com"
+                }
+            }
+        },
+        "services.TokenResponse": {
+            "type": "object",
+            "properties": {
+                "expires_at": {
+                    "description": "UTC timestamp when token expires (RFC3339 format)",
+                    "type": "string",
+                    "example": "2025-11-13T12:00:00Z"
+                },
+                "message": {
+                    "type": "string",
+                    "example": "Admin token has been sent to your email"
                 }
             }
         }
