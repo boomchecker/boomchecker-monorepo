@@ -1,8 +1,8 @@
 {
-  "name": "API Backend Go Devcontainer",
+  "name": "SW Devcontainer",
   "dockerComposeFile": ["../compose.devcontainer.yml"],
-  "service": "api-backend-devcontainer",
-  "runServices": ["api-backend-devcontainer"],
+  "service": "sw-devcontainer",
+  "runServices": ["sw-devcontainer"],
   "workspaceFolder": "/workspace",
   "customizations": {
     "vscode": {
@@ -28,7 +28,8 @@
         "ms-azuretools.vscode-docker",
         "ms-vscode-remote.vscode-remote-extensionpack",
         "esbenp.prettier-vscode",
-        "gruntfuggly.todo-tree"
+        "gruntfuggly.todo-tree",
+        "openai.chatgpt"
       ]
     }
   }
