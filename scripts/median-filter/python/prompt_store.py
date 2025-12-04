@@ -7,7 +7,9 @@ from openai import OpenAI
 from pydantic import BaseModel, ValidationError
 
 ROOT = Path(__file__).resolve().parent.parent
-PREVIOUS_QUERIES_FILE = ROOT / "data" / "previous_queries.txt"
+DATA_DIR = ROOT / "data"
+PREVIOUS_QUERIES_FILE = DATA_DIR / "previous_queries.txt"
+RESPONSES_LOG = DATA_DIR / "openai_responses.jsonl"
 DEFAULT_PROMPT_ID = "pmpt_6931a981604c8193bb4dece7b4bb6e850f65a6ac4f7424e8"
 
 
@@ -16,8 +18,17 @@ def parse_queries(raw_text: str) -> list[str]:
     if type(raw_text) != str:
         print("Warning: raw_text is not a string: %s" % type(raw_text))
         return []
-    return queries = generate_queries()[0].split(",")
+    return generate_queries()[0].split(",")
 
+def ensure_files():
+    """Ensure prompt and data directories exist with a default prompt."""
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+    if not PREVIOUS_QUERIES_FILE.exists():
+        PREVIOUS_QUERIES_FILE.write_text("", encoding="utf-8")
+    
+    if not RESPONSES_LOG.exists():
+        RESPONSES_LOG.write_text("", encoding="utf-8")
 
 def get_recent_queries(limit: int = 200) -> list[str]:
     """
@@ -25,8 +36,6 @@ def get_recent_queries(limit: int = 200) -> list[str]:
     preserving recency (latest first).
     """
     ensure_files()
-    if not RESPONSES_LOG.exists():
-        return []
 
     seen = set()
     recent: list[str] = []
@@ -69,25 +78,6 @@ def log_openai_response(queries: list[str], model: str, prompt_id: str) -> dict:
     return record
 
 
-def create_previous_queries_file() -> Path:
-    """
-    Create a text file with all previous queries for uploading to OpenAI.
-    Returns the path to the created file.
-    """
-    ensure_files()
-    recent = get_recent_queries(limit=500)
-    
-    if recent:
-        content = "Previously suggested queries (do not repeat):\n\n" + "\n".join(
-            f"- {q}" for q in recent
-        )
-    else:
-        content = "No previous queries yet."
-    
-    PREVIOUS_QUERIES_FILE.write_text(content, encoding="utf-8")
-    return PREVIOUS_QUERIES_FILE
-
-
 def generate_queries(
     model: str = "gpt-4.1-mini",
     include_previous: bool = False,
@@ -114,56 +104,32 @@ def generate_queries(
     request: dict = {"model": model}
     if prompt_id:
         request["prompt"] = {"id": prompt_id}
-        # The remote prompt already contains the instructions, so send a lightweight trigger message.
-        request["input"] = [
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "input_text",
-                        "text": "Create the next batch of search queries.",
-                    }
-                ],
-            }
-        ]
-    else:
-        prompt = load_prompt(include_recent=include_previous)
-        request["input"] = [
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "input_text",
-                        "text": prompt,
-                    }
-                ],
-            }
-        ]
+
+    prompt = load_prompt(include_recent=include_previous)
+    request["input"] = [
+        {
+            "role": "user",
+            "content": [
+                {
+                    "type": "input_text",
+                    "text": prompt,
+                }
+            ],
+        }
+    ]
 
     response = client.responses.create(**request)
 
     output_text = (getattr(response, "output_text", None) or "").strip()
     if not output_text:
         raise RuntimeError("OpenAI returned empty output")
+
+    # Log the response
+    log_openai_response(parse_queries(output_text), model=model, prompt_id=prompt_id)
+
     return output_text.splitlines()
 
 
 if __name__ == "__main__":
-    import sys
-    
-    if len(sys.argv) > 1 and sys.argv[1] == "generate":
-        print("Generating queries from OpenAI...")
-        try:
-            queries = generate_queries()[0].split(",")
-            print(queries)
-        except Exception as e:
-            print(f"Error: {e}", file=sys.stderr)
-            sys.exit(1)
-    else:
-        print("Current prompt:")
-        print("-" * 60)
-        print(load_prompt())
-        print("-" * 60)
-        print("\nUsage:")
-        print("  python prompt_store.py          - Show current prompt")
-        print("  python prompt_store.py generate - Generate queries from OpenAI")
+    print(generate_queries())
+
