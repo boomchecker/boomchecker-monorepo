@@ -23,6 +23,8 @@
 
 static const char *TAG = "MIC";
 
+volatile bool detection_request = false;
+
 static mic_config mic_cfg;
 static rb_struct rb_left, rb_right;
 i2s_chan_handle_t rx_channel = NULL, tx_channel = NULL;
@@ -138,14 +140,40 @@ void mic_reader_task(void *arg) {
       int32_t sL32 = i2s_read_buffer[2 * i + 0];
       int32_t sR32 = i2s_read_buffer[2 * i + 1];
 
-      int16_t xL = int_shift(sL32);
-      int16_t xR = int_shift(sR32);
+      int16_t xL0 = int_shift(sL32);
+      int16_t xR0 = int_shift(sR32);
 
-      int16_t yL = dc_block_sample(&dcfL, xL);
-      int16_t yR = dc_block_sample(&dcfR, xR);
+      if (xL0 > 25000) {
+        xL0 = 25000;
+      }
+
+      if (xL0 < -25000) {
+        xL0 = -25000;
+      }
+
+      if (xR0 > 25000) {
+        xR0 = 25000;
+      }
+
+      if (xR0 < -25000) {
+        xR0 = -25000;
+      }
+
+      int16_t yL = xL0 + 3040;
+      int16_t yR = xR0 + 3504;
+
+      // int16_t xL = xL0 + 3040;
+      // int16_t xR = xR0 + 3504;
+      // int16_t yL = dc_block_sample(&dcfL, xL);
+      // int16_t yR = dc_block_sample(&dcfR, xR);
 
       rb_push(&rb_left, yL);
       rb_push(&rb_right, yR);
+
+      if ((i + 1) % 20 == 0) {
+        detection_request = true;
+        vTaskDelay(pdMS_TO_TICKS(1));
+      }
     }
   }
 }
@@ -159,5 +187,5 @@ void mic_save_event(int16_t *out_left_mic, int16_t *out_right_mic) {
   rb_copy_tail(&rb_left, out_left_mic, 0, wanted);
   rb_copy_tail(&rb_right, out_right_mic, 0, wanted);
 
-  ESP_LOGI(TAG, "Event saved (%d samples/channel)", wanted);
+  // ESP_LOGI(TAG, "Event saved (%d samples/channel)", wanted);
 }

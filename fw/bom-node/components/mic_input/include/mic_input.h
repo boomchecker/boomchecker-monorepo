@@ -4,6 +4,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+extern volatile bool detection_request;
+
 typedef struct {
   int sampling_freq; // [Hz]
   int pre_event_ms;  // [ms]

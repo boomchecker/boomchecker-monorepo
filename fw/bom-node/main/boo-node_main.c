@@ -4,12 +4,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "impulse_detection.h"
 #include "mic_input.h"
 #include "ring_buffer.h"
 
-#define SAMPLING_FREQUENCY 24000
-#define PRE_EVENT_MS 10
-#define POST_EVENT_MS 40
+#define SAMPLING_FREQUENCY 20000
+#define PRE_EVENT_MS 5
+#define POST_EVENT_MS 20
 
 static const char *TAG = "MAIN";
 
@@ -27,17 +28,33 @@ void app_main(void) {
   vTaskDelay(pdMS_TO_TICKS(1000));
 
   int duration_n = (PRE_EVENT_MS + POST_EVENT_MS) * SAMPLING_FREQUENCY / 1000;
+
+  impulse_detection_init(NULL);
+
   int16_t arrL[duration_n];
   int16_t arrR[duration_n];
 
   while (1) {
-    mic_save_event(arrL, arrR);
 
-    for (int i = 0; i < duration_n; i++) {
-      printf("%d %d\n", arrL[i], arrR[i]);
+    if (detection_request == true) {
+      mic_save_event(arrL, arrR);
+      bool detectedL = impulse_detect(arrL, duration_n);
+      bool detectedR = impulse_detect(arrR, duration_n);
+
+      if (detectedL || detectedR) {
+        ESP_LOGI(TAG, ">>> DETEKCE IMPULZU <<<");
+
+        for (int i = 0; i < duration_n; i++) {
+          printf("%d ", arrL[i]);
+        }
+        printf("\n");
+
+        for (int i = 0; i < duration_n; i++) {
+          printf("%d ", arrR[i]);
+        }
+        printf("\n");
+      }
+      detection_request = false;
     }
-    printf("---\n");
-
-    vTaskDelay(pdMS_TO_TICKS(1000));
   }
 }
