@@ -28,13 +28,16 @@ RUN /bin/bash -c "source $IDF_PATH/export.sh && python -m pip install esp-debug-
 # Source the ESP-IDF export script to update PATH
 RUN /bin/bash -c "source $IDF_PATH/export.sh"
 
-# Install Node.js (LTS) and pnpm (best-effort to avoid failing offline builds)
-RUN apt-get update && apt-get install -y nodejs npm || { echo "Warning: apt install nodejs/npm failed (likely no network). Install inside container when available."; true; } && \
-    npm install -g pnpm || { echo "Warning: npm install pnpm failed (likely no network). Install inside container when available."; true; }
+# Install Node.js (LTS) and pnpm
+RUN apt-get update && apt-get install -y nodejs npm && \
+    npm install -g pnpm && \
+    rm -rf /var/lib/apt/lists/*
 
-# Install Taskfile and Changesets CLI (best-effort)
-RUN curl -sL https://taskfile.dev/install.sh | sh -s -- -b /usr/local/bin || { echo "Warning: Taskfile install failed (likely no network). Install inside container when available."; true; }
-RUN npm install -g @changesets/cli || { echo "Warning: npm install @changesets/cli failed (likely no network). Install inside container when available."; true; }
+# Install Taskfile
+RUN curl --location https://taskfile.dev/install.sh | sh -s -- -b /usr/local/bin
+
+# Install Changesets CLI
+RUN npm install -g @changesets/cli
     
 # Set up PNPM storage to behave like on a local computer
 ENV PNPM_HOME="/pnpm-store"
