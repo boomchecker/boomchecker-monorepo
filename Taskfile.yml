@@ -9,6 +9,10 @@ includes:
     taskfile: ./apps/api-backend/Taskfile.yml
     dir: ./apps/api-backend
     optional: true
+  scripts:
+    taskfile: ./scripts/Taskfile.yml
+    dir: ./scripts
+    optional: true
 
 tasks:
   changeset:

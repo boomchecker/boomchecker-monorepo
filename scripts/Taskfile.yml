@@ -1,0 +1,7 @@
+version: "3"
+
+includes:
+  median-filter:
+    taskfile: ./median-filter/Taskfile.yml
+    dir: ./median-filter
+    optional: true
