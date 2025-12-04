@@ -155,11 +155,12 @@ def generate_queries(
 
     # Use hosted custom prompt if available, otherwise fall back to local prompt text.
     prompt_id = (os.environ.get("OPENAI_PROMPT_ID")).strip()
+    prompt_ver = (os.environ.get("OPENAI_PROMPT_VER")).strip()
     client = OpenAI(api_key=api_key)
 
     request: dict = {"model": model}
     if prompt_id:
-        request["prompt"] = {"id": prompt_id}
+        request["prompt"] = {"id": prompt_id, "version": prompt_ver}
 
     prompt = load_prompt(include_recent=include_previous)
     request["input"] = [
