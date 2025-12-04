@@ -37,7 +37,8 @@
         "ms-vscode.makefile-tools",
         "esbenp.prettier-vscode",
         "gruntfuggly.todo-tree",
-        "xaver.clang-format"
+        "xaver.clang-format",
+        "openai.chatgpt"
       ]
     }
   }
