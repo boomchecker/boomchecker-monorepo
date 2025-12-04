@@ -23,16 +23,15 @@ RUN apt update && apt install -y \
 RUN usermod -a -G dialout $(whoami) || true
 
 # Install ESP debugging dependencies
-RUN /bin/bash -c "source $IDF_PATH/export.sh && python -m pip install esp-debug-backend debugpy construct"
+RUN /bin/bash -c "source $IDF_PATH/export.sh && python -m pip install esp-debug-backend debugpy construct || { echo 'Warning: pip install for ESP debug deps failed (likely no network). Install inside the container when available.'; true; }"
 
 # Source the ESP-IDF export script to update PATH
 RUN /bin/bash -c "source $IDF_PATH/export.sh"
 
 # Install Node.js (LTS) and pnpm
-RUN curl -fsSL https://deb.nodesource.com/setup_lts.x | bash - && \
-    apt-get install -y nodejs && \
+RUN apt-get update && apt-get install -y nodejs npm && \
     npm install -g pnpm
-
+    
 # Set up PNPM storage to behave like on a local computer
 ENV PNPM_HOME="/pnpm-store"
 RUN mkdir -p $PNPM_HOME && \
