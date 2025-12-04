@@ -17,7 +17,13 @@ RUN apt update && apt install -y \
     valgrind \
     clang \
     clang-tidy \
-    clang-format
+    clang-format \
+    ca-certificates
+
+# Install Node.js LTS (v20) from NodeSource
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
+    apt-get install -y nodejs && \
+    rm -rf /var/lib/apt/lists/*
 
 # Add the default user to the dialout group for serial port access
 RUN usermod -a -G dialout $(whoami) || true
@@ -28,17 +34,15 @@ RUN /bin/bash -c "source $IDF_PATH/export.sh && python -m pip install esp-debug-
 # Source the ESP-IDF export script to update PATH
 RUN /bin/bash -c "source $IDF_PATH/export.sh"
 
-# Install Node.js (LTS) and pnpm
-RUN apt-get update && apt-get install -y nodejs npm && \
-    npm install -g pnpm && \
-    rm -rf /var/lib/apt/lists/*
+# Install pnpm
+RUN npm install -g pnpm
 
 # Install Taskfile
 RUN curl --location https://taskfile.dev/install.sh | sh -s -- -b /usr/local/bin
 
 # Install Changesets CLI
 RUN npm install -g @changesets/cli
-    
+
 # Set up PNPM storage to behave like on a local computer
 ENV PNPM_HOME="/pnpm-store"
 RUN mkdir -p $PNPM_HOME && \
