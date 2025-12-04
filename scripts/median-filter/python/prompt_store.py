@@ -7,18 +7,56 @@ from openai import OpenAI
 from pydantic import BaseModel, ValidationError
 
 ROOT = Path(__file__).resolve().parent.parent
+PYTHON_DIR = Path(__file__).resolve().parent
+
+DOTENV_PATH = PYTHON_DIR / ".env"
+
 DATA_DIR = ROOT / "data"
 PREVIOUS_QUERIES_FILE = DATA_DIR / "previous_queries.txt"
 RESPONSES_LOG = DATA_DIR / "openai_responses.jsonl"
-DEFAULT_PROMPT_ID = "pmpt_6931a981604c8193bb4dece7b4bb6e850f65a6ac4f7424e8"
+
+_ENV_LOADED = False
+
+
+def load_env() -> None:
+    """
+    Best-effort loader for the local `.env` file so the script can be run
+    standalone without exporting variables manually.
+    """
+    global _ENV_LOADED
+    if _ENV_LOADED:
+        return
+
+    try:
+        text = DOTENV_PATH.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        _ENV_LOADED = True
+        return
+    except OSError:
+        _ENV_LOADED = True
+        return
+
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        if not key or key in os.environ:
+            continue
+        value = value.strip().strip("\"'")
+        os.environ[key] = value
+
+    _ENV_LOADED = True
 
 
 def parse_queries(raw_text: str) -> list[str]:
     """Split raw OpenAI output into individual, non-empty queries."""
-    if type(raw_text) != str:
+    if not isinstance(raw_text, str):
         print("Warning: raw_text is not a string: %s" % type(raw_text))
         return []
-    return generate_queries()[0].split(",")
+    
+    return raw_text.replace(", ", ",").split(",")
 
 def ensure_files():
     """Ensure prompt and data directories exist with a default prompt."""
@@ -58,6 +96,25 @@ def get_recent_queries(limit: int = 200) -> list[str]:
     return recent
 
 
+def load_prompt(include_recent: bool = False) -> str:
+    """
+    Return the stored base prompt, optionally appending recent queries so the
+    model can avoid repeating them.
+    """
+    ensure_files()
+
+    base_prompt = ""
+
+    if include_recent:
+        recent = get_recent_queries(limit=200)
+        if recent:
+            previous = "\n".join(f"- {q}" for q in recent)
+            base_prompt = (
+                f"{base_prompt}\n\nPreviously suggested queries (do not repeat):\n{previous}"
+            )
+    return base_prompt
+
+
 def log_openai_response(queries: list[str], model: str, prompt_id: str) -> dict:
     """
     Store OpenAI response to JSONL with queries.
@@ -71,7 +128,7 @@ def log_openai_response(queries: list[str], model: str, prompt_id: str) -> dict:
         "prompt_id": prompt_id,
         "raw": raw_text,
         "queries": queries,
-        "queries_sha256": _hash(raw_text) if queries else None,
+        "queries_sha256": hash(raw_text) if queries else None,
     }
     with RESPONSES_LOG.open("a", encoding="utf-8") as f:
         f.write(json.dumps(record, ensure_ascii=False) + "\n")
@@ -87,6 +144,7 @@ def generate_queries(
     API and returns the raw text (split by lines). No structured parsing or file
     uploads so it is easier to iterate during development.
     """
+    load_env()
     ensure_files()
     api_key = os.environ.get("OPENAI_API_KEY")
     if not api_key:
@@ -96,9 +154,7 @@ def generate_queries(
         )
 
     # Use hosted custom prompt if available, otherwise fall back to local prompt text.
-    prompt_id = (
-        os.environ.get("OPENAI_PROMPT_ID") or DEFAULT_PROMPT_ID or ""
-    ).strip()
+    prompt_id = (os.environ.get("OPENAI_PROMPT_ID")).strip()
     client = OpenAI(api_key=api_key)
 
     request: dict = {"model": model}
@@ -124,12 +180,14 @@ def generate_queries(
     if not output_text:
         raise RuntimeError("OpenAI returned empty output")
 
-    # Log the response
-    log_openai_response(parse_queries(output_text), model=model, prompt_id=prompt_id)
+    parsed_response = parse_queries(output_text)
 
-    return output_text.splitlines()
+    # Log the response
+    log_openai_response(parsed_response, model=model, prompt_id=prompt_id)
+
+    return parsed_response
 
 
 if __name__ == "__main__":
-    print(generate_queries())
+    print(generate_queries(include_previous=True))
 
