@@ -1,8 +1,8 @@
 {
-  "name": "Felix FW ESP Devcontainer - NO ESP",
+  "name": "Felix FW ESP Devcontainer",
   "dockerComposeFile": ["../compose.devcontainer.yml"],
-  "service": "fw-esp-devcontainer-noesp",
-  "runServices": ["fw-esp-devcontainer-noesp"],
+  "service": "fw-devcontainer",
+  "runServices": ["fw-devcontainer"],
   "workspaceFolder": "/workspace",
   "customizations": {
     "vscode": {

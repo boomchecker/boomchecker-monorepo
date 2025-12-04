@@ -1,8 +1,8 @@
 {
-  "name": "API Backend Go Devcontainer",
+  "name": "SW Devcontainer",
   "dockerComposeFile": ["../compose.devcontainer.yml"],
-  "service": "api-backend-devcontainer",
-  "runServices": ["api-backend-devcontainer"],
+  "service": "sw-devcontainer",
+  "runServices": ["sw-devcontainer"],
   "workspaceFolder": "/workspace",
   "customizations": {
     "vscode": {
