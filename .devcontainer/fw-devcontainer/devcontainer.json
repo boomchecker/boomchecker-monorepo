@@ -1,5 +1,5 @@
 {
-  "name": "Felix FW ESP Devcontainer",
+  "name": "FW Devcontainer",
   "dockerComposeFile": ["../compose.devcontainer.yml"],
   "service": "fw-devcontainer",
   "runServices": ["fw-devcontainer"],
