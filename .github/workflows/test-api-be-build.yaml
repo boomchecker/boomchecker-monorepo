@@ -1,0 +1,69 @@
+name: Test API Backend Build
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'apps/api-backend/**'
+      - '.github/workflows/test-api-be-build.yaml'
+
+jobs:
+  test-build:
+    name: Test build and tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: ./apps/api-backend/go.mod
+          cache: true
+          cache-dependency-path: ./apps/api-backend/go.mod
+
+      - name: Download dependencies
+        working-directory: ./apps/api-backend
+        run: |
+          echo "Downloading Go dependencies..."
+          go mod download
+          go mod tidy
+          go mod verify
+
+      - name: Run tests
+        working-directory: ./apps/api-backend
+        run: |
+          echo "Running Go tests..."
+          go test -v ./...
+
+      - name: Build Go API binary
+        working-directory: ./apps/api-backend
+        run: |
+          echo "Building Go binary for Linux ARM64..."
+          GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -o api-backend -ldflags="-s -w" .
+          
+          echo "Verifying binary was created..."
+          if [ ! -f api-backend ]; then
+            echo "❌ Build failed - binary not found"
+            exit 1
+          fi
+          
+          echo "✅ Binary info:"
+          ls -lh api-backend
+          file api-backend
+
+      - name: Upload binary as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-backend-arm64
+          path: ./apps/api-backend/api-backend
+          retention-days: 7
+
+      - name: Build summary
+        run: |
+          echo "### ✅ Build Successful!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- Tests passed ✓" >> $GITHUB_STEP_SUMMARY
+          echo "- Binary built for Linux ARM64 ✓" >> $GITHUB_STEP_SUMMARY
+          echo "- Binary uploaded as artifact ✓" >> $GITHUB_STEP_SUMMARY

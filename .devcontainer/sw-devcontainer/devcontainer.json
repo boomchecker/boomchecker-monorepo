@@ -1,0 +1,36 @@
+{
+  "name": "SW Devcontainer",
+  "dockerComposeFile": ["../compose.devcontainer.yml"],
+  "service": "sw-devcontainer",
+  "runServices": ["sw-devcontainer"],
+  "workspaceFolder": "/workspace",
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "bash",
+        "go.toolsManagement.autoUpdate": true,
+        "go.useLanguageServer": true,
+        "go.lintTool": "golangci-lint",
+        "go.lintOnSave": "package",
+        "editor.formatOnSave": true,
+        "editor.formatOnPaste": true,
+        "go.formatTool": "gofmt",
+        "[go]": {
+          "editor.defaultFormatter": "golang.go",
+          "editor.codeActionsOnSave": {
+            "source.organizeImports": "explicit"
+          }
+        }
+      },
+      "extensions": [
+        "golang.go",
+        "github.vscode-pull-request-github",
+        "ms-azuretools.vscode-docker",
+        "ms-vscode-remote.vscode-remote-extensionpack",
+        "esbenp.prettier-vscode",
+        "gruntfuggly.todo-tree",
+        "openai.chatgpt"
+      ]
+    }
+  }
+}

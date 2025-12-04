@@ -1,0 +1,10 @@
+{
+  "name": "boomchecker-monorepo",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Boomchecker monorepo",
+  "workspaces": [
+    "apps/**",
+    "fw/**"
+  ]
+}

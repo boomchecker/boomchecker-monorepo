@@ -174,6 +174,15 @@ void mic_reader_task(void *arg) {
         detection_request = true;
         vTaskDelay(pdMS_TO_TICKS(1));
       }
+
+      int16_t xL = int_shift(sL32);
+      int16_t xR = int_shift(sR32);
+
+      int16_t yL = dc_block_sample(&dcfL, xL);
+      int16_t yR = dc_block_sample(&dcfR, xR);
+
+      rb_push(&rb_left, yL);
+      rb_push(&rb_right, yR);
     }
   }
 }
