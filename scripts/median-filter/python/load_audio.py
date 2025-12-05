@@ -122,9 +122,19 @@ def download_audio_segment(video_url: str) -> AudioSegment:
         return AudioSegment.from_file(downloaded_file)
 
 
+def _sanitize_filename(title: str, fallback: str = "audio_preview") -> str:
+    """Return filesystem-friendly stem derived from `title`."""
+    keep = [
+        c if (c.isalnum() or c in (" ", "-", "_")) else "_"
+        for c in title.strip()
+    ]
+    stem = "".join(keep).strip(" _") or fallback
+    return stem[:80]
+
+
 def _demo_search_and_download():
     """Simple helper to exercise search_youtube + download_audio_segment."""
-    sample_query = "median filter audio noise reduction"
+    sample_query = "clash of steel hammer impact sound"
     videos = search_youtube(sample_query, limit=20)
     print(f"Top {len(videos)} results for '{sample_query}':")
     for idx, video in enumerate(videos, 1):
@@ -143,23 +153,24 @@ def _demo_search_and_download():
         try:
             audio_segment = download_audio_segment(video["url"])
             chosen_video = video
-            break
+            print(f"  Downloaded '{video['title']}' successfully; stopping search.")
         except Exception as exc:  # pragma: no cover - network dependent
             last_error = exc
             print(f"  Failed to download '{video['title']}': {exc}")
 
-    if audio_segment is None or chosen_video is None:
-        raise RuntimeError(
-            "Unable to download audio for any search result"
-        ) from last_error
+        if audio_segment is None or chosen_video is None:
+            raise RuntimeError(
+                "Unable to download audio for any search result"
+            ) from last_error
 
-    output_path = Path(__file__).with_name("demo_audio.wav")
-    audio_segment.export(output_path, format="wav")
-    duration = audio_segment.duration_seconds
-    print(
-        f"Saved WAV preview to {output_path} ({duration:.1f}s) "
-        f"from '{chosen_video['title']}'."
-    )
+        safe_stem = _sanitize_filename(chosen_video["title"])
+        output_path = Path(__file__).with_name(f"{safe_stem}.wav")
+        audio_segment.export(output_path, format="wav")
+        duration = audio_segment.duration_seconds
+        print(
+            f"Saved WAV preview to {output_path} ({duration:.1f}s) "
+            f"from '{chosen_video['title']}'."
+        )
 
 
 if __name__ == "__main__":
