@@ -4,4 +4,4 @@ tasks:
   setup:
     desc: Install Python dependencies and ffmpeg for median-filter scripts
     cmds:
-      - ./setup.sh
+      - bash ./setup.sh
