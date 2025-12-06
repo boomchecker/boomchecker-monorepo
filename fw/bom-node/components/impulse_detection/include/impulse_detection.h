@@ -4,31 +4,41 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-/**
- * Struktura pro konfigurační parametry detekce.
- * Hodnoty odpovídají popisu v diplomce (Opocenský, 2021)
- */
+#ifndef TAP_COUNT
+#define TAP_COUNT 11
+#endif
+
+#ifndef TAP_SIZE
+#define TAP_SIZE 250
+#endif
+
+#ifndef DET_LEVEL
+#define DET_LEVEL 10000
+#endif
+
+#ifndef DET_RMS
+#define DET_RMS 2.0f
+#endif
+
+#ifndef DET_ENERGY
+#define DET_ENERGY 0.1f
+#endif
+
 typedef struct {
-  int num_taps;       // počet tapů (NumTaps)
-  int tap_size;       // délka jednoho tapu (TapSize)
-  float det_rms;      // násobek RMS prahu (DetRMS)
-  uint32_t det_level; // minimální hodnota (DetLevel)
-  float det_energy;   // poměr energií B/A (DetEnergy)
-} impulse_detection_params_t;
+  uint32_t taps[TAP_COUNT][TAP_SIZE];
+  uint32_t sorted_cols[TAP_SIZE][TAP_COUNT];
 
-/**
- * Inicializace detektoru s vlastní konfigurací
- * (pokud necháš NULL, použije se výchozí)
- */
-void impulse_detection_init(const impulse_detection_params_t *params);
+  uint16_t head;
+  uint16_t count;
+} impulse_detector;
 
-/**
- * Hlavní funkce pro detekci impulsu.
- * samples - pole int16_t vzorků (např. z jednoho mikrofonu)
- * num_samples - délka pole
- *
- * Vrací true, pokud byl detekován impuls.
- */
-bool impulse_detect(const int16_t *samples, int num_samples);
+extern impulse_detector detL;
+extern impulse_detector detR;
 
-#endif // IMPULSE_DETECTION_H
+void impulse_detection_init(impulse_detector *det);
+
+void impulse_add_tap(impulse_detector *det, const int16_t *samples);
+
+bool impulse_run_detection(impulse_detector *det);
+
+#endif

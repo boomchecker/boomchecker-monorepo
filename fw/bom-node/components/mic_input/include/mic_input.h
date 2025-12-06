@@ -1,15 +1,32 @@
 #ifndef MIC_INPUT_H
 #define MIC_INPUT_H
 
+#include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
 #include <stdbool.h>
 #include <stdint.h>
 
-extern volatile bool detection_request;
+#define I2S_BCLK_IO GPIO_NUM_19
+#define I2S_WS_IO GPIO_NUM_18
+#define I2S_DIN_IO GPIO_NUM_21
+
+#define DMA_DESC_NUM 14
+#define CHUNK_FRAMES 511
+#define READ_BUFFER_BYTES (CHUNK_FRAMES * 8)
+// 1 frame = L(32b) + R(32b) = 8 B
+
+#define DC_OFFSET_LEFT 3500
+#define DC_OFFSET_RIGHT 3000
+#define DC_BLOCK_FREQ_HZ 100
+
+extern SemaphoreHandle_t detection_semaphore;
 
 typedef struct {
   int sampling_freq; // [Hz]
   int pre_event_ms;  // [ms]
   int post_event_ms; // [ms]
+  int num_taps;
+  int tap_size;
 } mic_config;
 
 void mic_init(const mic_config *mic_cnfg);

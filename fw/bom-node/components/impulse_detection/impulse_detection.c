@@ -1,151 +1,211 @@
 #include "impulse_detection.h"
 #include <math.h>
-#include <stdlib.h>
 #include <string.h>
 
-/* --- INTERNÍ KONFIGURACE --- */
-
-static impulse_detection_params_t g_det = {
-    .num_taps = 25,      // odpovídá DP
-    .tap_size = 20,      // délka jednoho tapu
-    .det_rms = 15.0f,    // násobek RMS
-    .det_level = 100000, // minimální hodnota – lze doladit
-    .det_energy = 0.1f   // poměr energií B/A
-};
-
-void impulse_detection_init(const impulse_detection_params_t *params) {
-  if (params) {
-    g_det = *params;
-  }
-}
-
-/* --- INTERNÍ POMOCNÉ FUNKCE --- */
-
-static int cmp_u32(const void *a, const void *b) {
-  uint32_t va = *(const uint32_t *)a;
-  uint32_t vb = *(const uint32_t *)b;
-  if (va < vb)
-    return -1;
-  if (va > vb)
-    return 1;
-  return 0;
-}
-
-static uint32_t median_u32(uint32_t *data, int n) {
-  qsort(data, n, sizeof(uint32_t), cmp_u32);
-  if (n & 1)
-    return data[n / 2];
-  else
-    return (data[n / 2 - 1] + data[n / 2]) / 2;
-}
-
-/**
- * MedianFilter(P):
- * - P je pole výkonu S^2 (num_taps * tap_size)
- * - noise_out má délku tap_size
- */
-static void median_filter(const uint32_t *P, int num_taps, int tap_size,
-                          uint32_t *noise_out) {
-  uint32_t *tmp = malloc(num_taps * sizeof(uint32_t));
-  if (!tmp)
-    return;
-
-  for (int i = 0; i < tap_size; ++i) {
-    for (int t = 0; t < num_taps; ++t)
-      tmp[t] = P[t * tap_size + i];
-    noise_out[i] = median_u32(tmp, num_taps);
+static uint16_t remove_value_sorted(uint32_t *arr, uint16_t n, uint32_t val) {
+  uint16_t idx = n;
+  for (uint16_t i = 0; i < n; i++) {
+    if (arr[i] == val) {
+      idx = i;
+      break;
+    }
   }
 
-  free(tmp);
-}
-
-/* --- HLAVNÍ FUNKCE DETEKCE --- */
-
-bool impulse_detect(const int16_t *samples, int num_samples) {
-  const int num_taps = g_det.num_taps;
-  const int tap_size = g_det.tap_size;
-  const int used_samples = num_taps * tap_size;
-
-  if (num_samples < used_samples) {
-    // příliš málo dat
-    return false;
+  if (idx == n) {
+    if (n > 0)
+      return n - 1;
+    return 0;
   }
 
-  // 1) Výkon signálu
-  uint32_t *P = malloc(sizeof(uint32_t) * used_samples);
-  if (!P)
-    return false;
+  for (uint16_t i = idx; i + 1 < n; i++) {
+    arr[i] = arr[i + 1];
+  }
+  return n - 1;
+}
 
-  for (int i = 0; i < used_samples; ++i) {
+static uint16_t insert_value_sorted(uint32_t *arr, uint16_t n,
+                                    uint16_t capacity, uint32_t val) {
+  if (n >= capacity) {
+    return n;
+  }
+
+  uint16_t pos = 0;
+  while (pos < n && arr[pos] <= val)
+    pos++;
+
+  for (int i = (int)n; i > (int)pos; i--) {
+    arr[i] = arr[i - 1];
+  }
+  arr[pos] = val;
+  return n + 1;
+}
+
+static inline uint16_t oldest_index(const impulse_detector *det) {
+  if (det->count < TAP_COUNT)
+    return 0;
+  return (uint16_t)((det->head + 1) % TAP_COUNT);
+}
+
+static inline uint16_t tap_index_by_age_from_oldest(const impulse_detector *det,
+                                                    uint16_t age) {
+  uint16_t o = oldest_index(det);
+  return (uint16_t)((o + age) % TAP_COUNT);
+}
+
+static inline uint16_t middle_tap_index(const impulse_detector *det) {
+  uint16_t mid_age = (uint16_t)(TAP_COUNT / 2);
+  return tap_index_by_age_from_oldest(det, mid_age);
+}
+
+static inline uint32_t get_P_global(const impulse_detector *det, int32_t g) {
+  uint16_t age = (uint16_t)(g / TAP_SIZE);
+  uint16_t off = (uint16_t)(g % TAP_SIZE);
+  uint16_t tix = tap_index_by_age_from_oldest(det, age);
+  return det->taps[tix][off];
+}
+
+void impulse_detection_init(impulse_detector *det) {
+  memset(det, 0, sizeof(*det));
+  det->head = 0;
+  det->count = 0;
+}
+
+void impulse_add_tap(impulse_detector *det, const int16_t *samples) {
+  uint16_t write_idx;
+  if (det->count == 0) {
+    write_idx = 0;
+  } else {
+    write_idx = (uint16_t)((det->head + 1) % TAP_COUNT);
+  }
+
+  bool full = (det->count == TAP_COUNT);
+
+  for (uint16_t i = 0; i < TAP_SIZE; i++) {
+
+    uint32_t old_val = det->taps[write_idx][i];
     int32_t s = samples[i];
-    P[i] = (uint32_t)(s * s);
+    uint32_t new_val = (uint32_t)(s * s);
+
+    det->taps[write_idx][i] = new_val;
+
+    uint32_t *col = det->sorted_cols[i];
+
+    if (!full) {
+      col[det->count] = new_val;
+      uint16_t n = det->count;
+      int j = (int)n - 1;
+      while (j >= 0 && col[j] > new_val) {
+        col[j + 1] = col[j];
+        j--;
+      }
+      col[j + 1] = new_val;
+    } else {
+      uint16_t n = TAP_COUNT;
+      n = remove_value_sorted(col, n, old_val);
+      (void)insert_value_sorted(col, n, TAP_COUNT, new_val);
+    }
   }
 
-  // 2) Medianový filtr
-  uint32_t *Noise = malloc(sizeof(uint32_t) * tap_size);
-  uint32_t *Middle = malloc(sizeof(uint32_t) * tap_size);
-  if (!Noise || !Middle) {
-    free(P);
-    free(Noise);
-    free(Middle);
+  det->head = write_idx;
+  if (det->count < TAP_COUNT)
+    det->count++;
+}
+
+static inline uint32_t noise_median_at(const impulse_detector *det,
+                                       uint16_t i) {
+  return det->sorted_cols[i][TAP_COUNT / 2];
+}
+
+static void sort_insertion_u32(uint32_t *arr, uint16_t n) {
+  for (uint16_t i = 1; i < n; i++) {
+    uint32_t key = arr[i];
+    int j = (int)i - 1;
+    while (j >= 0 && arr[j] > key) {
+      arr[j + 1] = arr[j];
+      j--;
+    }
+    arr[j + 1] = key;
+  }
+}
+
+static uint32_t median_u32(uint32_t *arr, uint16_t n) {
+  if (n == 0)
+    return 0;
+  sort_insertion_u32(arr, n);
+  return arr[n / 2];
+}
+
+static uint16_t gather_window(const impulse_detector *det, int32_t start_g,
+                              int32_t end_g, uint32_t *out) {
+  uint16_t n = 0;
+  for (int32_t g = start_g; g < end_g; g++) {
+    out[n++] = get_P_global(det, g);
+  }
+  return n;
+}
+
+bool impulse_run_detection(impulse_detector *det) {
+  if (det->count < TAP_COUNT) {
     return false;
   }
 
-  median_filter(P, num_taps, tap_size, Noise);
+  uint16_t mid_idx = middle_tap_index(det);
+  const uint32_t *mid_tap = det->taps[mid_idx];
 
-  // 3) Střední tap minus šum
-  int mid = num_taps / 2;
-  for (int i = 0; i < tap_size; ++i) {
-    uint32_t val = P[mid * tap_size + i];
-    Middle[i] = (val > Noise[i]) ? (val - Noise[i]) : 0;
-  }
+  uint64_t sum_noise_sq = 0;
 
-  // 4) Najdi maximum
-  uint32_t Val = 0;
-  int pos_in_mid = 0;
-  for (int i = 0; i < tap_size; ++i) {
-    if (Middle[i] > Val) {
-      Val = Middle[i];
-      pos_in_mid = i;
-    }
-  }
-  int Pos = mid * tap_size + pos_in_mid;
+  uint32_t val = 0;
+  int32_t pos = -1;
+  uint32_t noise[TAP_SIZE];
 
-  // 5) RMS šumu
-  double sum_sq = 0.0;
-  for (int i = 0; i < tap_size; ++i)
-    sum_sq += (double)Noise[i] * (double)Noise[i];
-  double rms_noise = sqrt(sum_sq / tap_size);
+  for (uint16_t i = 0; i < TAP_SIZE; i++) {
+    noise[i] = noise_median_at(det, i);
 
-  bool result = false;
-
-  // 6) 1. podmínka
-  if (Val > g_det.det_level && Val > (uint32_t)(g_det.det_rms * rms_noise)) {
-    // 7) 2. podmínka – energie před/po
-    if (Pos - tap_size >= 0 && Pos + tap_size <= used_samples) {
-      uint32_t *tmp = malloc(sizeof(uint32_t) * tap_size);
-      if (!tmp) {
-        free(P);
-        free(Noise);
-        free(Middle);
-        return false;
-      }
-
-      memcpy(tmp, &P[Pos - tap_size], tap_size * sizeof(uint32_t));
-      uint32_t A = median_u32(tmp, tap_size);
-
-      memcpy(tmp, &P[Pos], tap_size * sizeof(uint32_t));
-      uint32_t B = median_u32(tmp, tap_size);
-
-      free(tmp);
-
-      if ((double)B > (double)A * g_det.det_energy)
-        result = true;
+    uint32_t diff = (mid_tap[i] > noise[i]) ? (mid_tap[i] - noise[i]) : 0;
+    if (diff > val) {
+      val = diff;
+      pos = i;
     }
   }
 
-  free(P);
-  free(Noise);
-  free(Middle);
-  return result;
+  if (pos < 0)
+    return false;
+
+  // first criterion
+  if (!(val > DET_LEVEL)) {
+    return false;
+  }
+
+  for (uint16_t i = 0; i < TAP_SIZE; i++) {
+    sum_noise_sq += (uint64_t)noise[i] * (uint64_t)noise[i];
+  }
+
+  float rms_noise = sqrtf((float)sum_noise_sq / (float)TAP_SIZE);
+
+  // second criterion
+  if ((float)val <= DET_RMS * rms_noise) {
+    return false;
+  }
+
+  uint16_t mid_age = (uint16_t)(TAP_COUNT / 2);
+  int32_t global_pos = (int32_t)mid_age * (int32_t)TAP_SIZE + pos;
+
+  uint32_t bufA[TAP_SIZE];
+  uint32_t bufB[TAP_SIZE];
+
+  uint16_t lenA =
+      gather_window(det, global_pos - (int32_t)TAP_SIZE, global_pos, bufA);
+
+  uint16_t lenB =
+      gather_window(det, global_pos, global_pos + (int32_t)TAP_SIZE, bufB);
+
+  uint32_t medA = median_u32(bufA, lenA);
+  uint32_t medB = median_u32(bufB, lenB);
+
+  // third criterion
+  if ((float)medB > (float)medA * DET_ENERGY) {
+    return true;
+  }
+
+  return false;
 }

@@ -7,31 +7,23 @@
 
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
 #include "freertos/task.h"
 
+#include "../impulse_detection/include/impulse_detection.h"
 #include <math.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-#define I2S_BCLK_IO GPIO_NUM_19
-#define I2S_WS_IO GPIO_NUM_18
-#define I2S_DIN_IO GPIO_NUM_21
-
-#define DC_BLOCK_FREQ_HZ 20
-
 static const char *TAG = "MIC";
 
-volatile bool detection_request = false;
+SemaphoreHandle_t detection_semaphore = NULL;
 
 static mic_config mic_cfg;
 static rb_struct rb_left, rb_right;
 i2s_chan_handle_t rx_channel = NULL, tx_channel = NULL;
-
-#define CHUNK_FRAMES 1024
-#define READ_BUFFER_BYTES (CHUNK_FRAMES * 8)
-// 1 frame = L(32b) + R(32b) = 8 B
 
 static int32_t i2s_read_buffer[CHUNK_FRAMES * 2];
 
@@ -55,7 +47,7 @@ static inline int16_t dc_block_sample(dc_filter *st, int16_t x) {
 static void dc_block_init(dc_filter *st, int fs, int fc_hz) {
   if (fc_hz <= 0)
     fc_hz = 20;
-  float R0 = expf(-2.0f * 3.14159265359f * (float)fc_hz / (float)fs);
+  float R0 = expf(-2.0f * 3.1416f * (float)fc_hz / (float)fs);
   int32_t R = (int32_t)(R0 * 32768.0f + 0.5f);
   if (R > 32767)
     R = 32767;
@@ -71,16 +63,20 @@ static inline int16_t int_shift(int32_t s) { return (int16_t)(s >> 16); }
 void mic_init(const mic_config *cfg) {
   mic_cfg = *cfg;
 
-  const int event_length_ms = mic_cfg.pre_event_ms + mic_cfg.post_event_ms;
-  const int samples = (mic_cfg.sampling_freq * event_length_ms) / 1000;
+  if (detection_semaphore == NULL) {
+    detection_semaphore = xSemaphoreCreateBinary();
+    configASSERT(detection_semaphore != NULL);
+  }
+
+  const int samples = mic_cfg.num_taps * mic_cfg.tap_size;
   rb_init(&rb_left, samples);
   rb_init(&rb_right, samples);
 
   i2s_chan_config_t chan_cfg = {
       .id = I2S_NUM_0,
       .role = I2S_ROLE_MASTER,
-      .dma_desc_num = 14,
-      .dma_frame_num = 1024,
+      .dma_desc_num = DMA_DESC_NUM,
+      .dma_frame_num = CHUNK_FRAMES,
       .auto_clear = true,
   };
 
@@ -130,71 +126,48 @@ void mic_init(const mic_config *cfg) {
 
 void mic_reader_task(void *arg) {
   size_t bytes_rec = 0;
+  int16_t tapL[mic_cfg.tap_size];
+  int16_t tapR[mic_cfg.tap_size];
 
   while (true) {
     i2s_channel_read(rx_channel, (void *)i2s_read_buffer, READ_BUFFER_BYTES,
                      &bytes_rec, portMAX_DELAY);
 
     const int n = bytes_rec / 8;
-    for (int i = 0; i < n; ++i) {
-      int32_t sL32 = i2s_read_buffer[2 * i + 0];
-      int32_t sR32 = i2s_read_buffer[2 * i + 1];
+    for (int i = 0; i < n; i++) {
+      int32_t sL32 = i2s_read_buffer[2 * i + 1];
+      int32_t sR32 = i2s_read_buffer[2 * i + 0];
 
       int16_t xL0 = int_shift(sL32);
       int16_t xR0 = int_shift(sR32);
 
-      if (xL0 > 25000) {
-        xL0 = 25000;
-      }
-
-      if (xL0 < -25000) {
-        xL0 = -25000;
-      }
-
-      if (xR0 > 25000) {
-        xR0 = 25000;
-      }
-
-      if (xR0 < -25000) {
-        xR0 = -25000;
-      }
-
-      int16_t yL = xL0 + 3040;
-      int16_t yR = xR0 + 3504;
-
-      // int16_t xL = xL0 + 3040;
-      // int16_t xR = xR0 + 3504;
-      // int16_t yL = dc_block_sample(&dcfL, xL);
-      // int16_t yR = dc_block_sample(&dcfR, xR);
-
-      rb_push(&rb_left, yL);
-      rb_push(&rb_right, yR);
-
-      if ((i + 1) % 20 == 0) {
-        detection_request = true;
-        vTaskDelay(pdMS_TO_TICKS(1));
-      }
-
-      int16_t xL = int_shift(sL32);
-      int16_t xR = int_shift(sR32);
+      int16_t xL = xL0 + DC_OFFSET_LEFT;
+      int16_t xR = xR0 + DC_OFFSET_RIGHT;
 
       int16_t yL = dc_block_sample(&dcfL, xL);
       int16_t yR = dc_block_sample(&dcfR, xR);
 
       rb_push(&rb_left, yL);
       rb_push(&rb_right, yR);
+
+      tapL[i % mic_cfg.tap_size] = yL;
+      tapR[i % mic_cfg.tap_size] = yR;
+
+      if ((i + 1) % mic_cfg.tap_size == 0) {
+
+        impulse_add_tap(&detL, &tapL[0]);
+        impulse_add_tap(&detR, &tapR[0]);
+
+        BaseType_t res = xSemaphoreGive(detection_semaphore);
+        (void)res;
+      }
     }
   }
 }
 
 void mic_save_event(int16_t *out_left_mic, int16_t *out_right_mic) {
-  const int pre_samples = (mic_cfg.sampling_freq * mic_cfg.pre_event_ms) / 1000;
-  const int post_samples =
-      (mic_cfg.sampling_freq * mic_cfg.post_event_ms) / 1000;
-  const int wanted = pre_samples + post_samples;
 
+  const int wanted = mic_cfg.num_taps * mic_cfg.tap_size;
   rb_copy_tail(&rb_left, out_left_mic, 0, wanted);
   rb_copy_tail(&rb_right, out_right_mic, 0, wanted);
-
-  // ESP_LOGI(TAG, "Event saved (%d samples/channel)", wanted);
 }
