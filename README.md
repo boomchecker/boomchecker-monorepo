@@ -7,7 +7,7 @@ Monorepo for research and development of acoustic detection units. Primary stack
 Tasks are tracked in repository issues. Use labels to flag priority and area, and capture acceptance criteria in the description.
 
 ### Commits
-Commits follow Conventional Commits (cheat sheet: https://gist.github.com/qoomon/5dfcdf8eec66a051ecd85625518cfd13). Keep scopes aligned with workspace names (e.g., `feat(api-backend): ...`), and keep PRs small and focused.
+Commits follow Conventional Commits ([cheat sheet](https://gist.github.com/qoomon/5dfcdf8eec66a051ecd85625518cfd13)). Keep scopes aligned with workspace names (e.g., `feat(api-backend): ...`), and keep PRs small and focused.
 
 ### Versioning
 We use Changesets; each package has its own version. Only projects in `apps/` and `fw/` are versioned. Add a changeset for user-facing changes, run `task changeset:version` before release branches, and let CI/publish pipelines consume the generated versions.
