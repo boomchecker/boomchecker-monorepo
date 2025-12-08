@@ -26,11 +26,11 @@ We use Changesets; each package has its own version. Only projects in `apps/` an
   - `task changeset:version` - apply pending changesets to package versions.
 
 ## Docker and development environment
-- Devcontainer compose file: `.devcontainer/compose.devcontainer.yml`.
-  - `fw-devcontainer`: ESP-IDF-based image prepared for firmware work (pnpm, Task, Changesets, Node 20).
-  - `sw-devcontainer`: Go 1.23 + Node 20 for backend/web services.
-- VS Code usage: open in WSL2, run `Remote-Containers: Reopen in Container`, and pick the service you need.
-- Manual start: `docker compose -f .devcontainer/compose.devcontainer.yml up -d sw-devcontainer` (or `fw-devcontainer`), then attach to the running container.
+Devcontainer is a prebuilt image plus VS Code configuration that pins toolchains, CLIs and dependencies so everyone develops in the same environment (no host drift, works the same on CI). We use two devcontainers at the moment.
+- `fw-devcontainer`: ESP-IDF-based image prepared for firmware work
+- `sw-devcontainer`: Go 1.23 + Node 20 for backend/web services.
+
+- VS Code usage: open in WSL2, run `Ctrl + Shift + P` and type `Remote-Containers: Reopen in Container`, and pick the service you need. The correct toolchains/extensions are baked in.
 
 ## Quick start
 1) Install Docker Desktop with the WSL2 backend.
