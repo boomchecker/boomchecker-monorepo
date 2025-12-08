@@ -1,0 +1,33 @@
+# Boomchecker Monorepo
+
+Monorepo for research and development of acoustic detection units. Primary stack is WSL2 + VS Code with pnpm workspaces and Docker devcontainers for consistent environments.
+
+## Workflow and rules
+- Tasks are tracked in this repository's issues.
+- Commits follow Conventional Commits (cheat sheet: https://gist.github.com/qoomon/5dfcdf8eec66a051ecd85625518cfd13).
+- Versioning uses Changesets; each package has its own version. Only projects in `apps/` and `fw/` are versioned.
+
+## Repository structure
+- `apps/` - backend (`api-backend`) and future front-end services.
+- `fw/` - firmware for the units and related tools.
+- `scripts/` - helper scripts for development (experiments, utilities).
+- `.devcontainer/` - Docker devcontainers: `fw-devcontainer` (ESP-IDF) and `sw-devcontainer` (Go/Node) for VS Code.
+
+## Taskfile
+- Root `Taskfile.yml` contains shared tasks and includes Taskfiles in `fw/` and `apps/api-backend/` when present.
+For example:
+  - `task -l` - list available tasks.
+  - `task changeset` - create a new changeset.
+  - `task changeset:version` - apply pending changesets to package versions.
+
+## Docker and development environment
+- Devcontainer compose file: `.devcontainer/compose.devcontainer.yml`.
+  - `fw-devcontainer`: ESP-IDF-based image prepared for firmware work (pnpm, Task, Changesets, Node 20).
+  - `sw-devcontainer`: Go 1.23 + Node 20 for backend/web services.
+- VS Code usage: open in WSL2, run `Remote-Containers: Reopen in Container`, and pick the service you need.
+- Manual start: `docker compose -f .devcontainer/compose.devcontainer.yml up -d sw-devcontainer` (or `fw-devcontainer`), then attach to the running container.
+
+## Quick start (WSL2)
+1) Install Docker Desktop with the WSL2 backend.
+2) Open the repo in VS Code and launch the appropriate devcontainer (fw or sw).
+4) Run `task setup` inside that container and start coding.
