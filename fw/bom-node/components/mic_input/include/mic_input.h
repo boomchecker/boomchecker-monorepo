@@ -19,7 +19,7 @@
 #define DC_OFFSET_RIGHT 3000
 #define DC_BLOCK_FREQ_HZ 100
 
-extern SemaphoreHandle_t detection_semaphore;
+extern bool detection_request;
 
 typedef struct {
   int sampling_freq; // [Hz]

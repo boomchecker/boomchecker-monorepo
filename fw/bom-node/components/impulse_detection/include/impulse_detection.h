@@ -5,11 +5,11 @@
 #include <stdint.h>
 
 #ifndef TAP_COUNT
-#define TAP_COUNT 11
+#define TAP_COUNT 31
 #endif
 
 #ifndef TAP_SIZE
-#define TAP_SIZE 250
+#define TAP_SIZE 30
 #endif
 
 #ifndef DET_LEVEL
@@ -17,11 +17,11 @@
 #endif
 
 #ifndef DET_RMS
-#define DET_RMS 2.0f
+#define DET_RMS 100
 #endif
 
 #ifndef DET_ENERGY
-#define DET_ENERGY 0.1f
+#define DET_ENERGY 0.4f
 #endif
 
 typedef struct {

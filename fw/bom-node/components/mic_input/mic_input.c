@@ -7,7 +7,6 @@
 
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
-#include "freertos/semphr.h"
 #include "freertos/task.h"
 
 #include "../impulse_detection/include/impulse_detection.h"
@@ -18,8 +17,6 @@
 #include <string.h>
 
 static const char *TAG = "MIC";
-
-SemaphoreHandle_t detection_semaphore = NULL;
 
 static mic_config mic_cfg;
 static rb_struct rb_left, rb_right;
@@ -34,7 +31,6 @@ typedef struct {
 } dc_filter;
 
 static dc_filter dcfL = {0}, dcfR = {0};
-// used only from mic_reader_task
 
 static inline int16_t dc_block_sample(dc_filter *st, int16_t x) {
   int32_t xn = (int32_t)x;
@@ -62,11 +58,6 @@ static inline int16_t int_shift(int32_t s) { return (int16_t)(s >> 16); }
 
 void mic_init(const mic_config *cfg) {
   mic_cfg = *cfg;
-
-  if (detection_semaphore == NULL) {
-    detection_semaphore = xSemaphoreCreateBinary();
-    configASSERT(detection_semaphore != NULL);
-  }
 
   const int samples = mic_cfg.num_taps * mic_cfg.tap_size;
   rb_init(&rb_left, samples);
@@ -135,6 +126,7 @@ void mic_reader_task(void *arg) {
 
     const int n = bytes_rec / 8;
     for (int i = 0; i < n; i++) {
+
       int32_t sL32 = i2s_read_buffer[2 * i + 1];
       int32_t sR32 = i2s_read_buffer[2 * i + 0];
 
@@ -147,19 +139,19 @@ void mic_reader_task(void *arg) {
       int16_t yL = dc_block_sample(&dcfL, xL);
       int16_t yR = dc_block_sample(&dcfR, xR);
 
-      rb_push(&rb_left, yL);
-      rb_push(&rb_right, yR);
-
       tapL[i % mic_cfg.tap_size] = yL;
       tapR[i % mic_cfg.tap_size] = yR;
 
-      if ((i + 1) % mic_cfg.tap_size == 0) {
+      if (((i + 1) % mic_cfg.tap_size == 0)) {
+
+        for (int j = 0; j < TAP_SIZE; j++) {
+          rb_push(&rb_left, tapL[j]);
+          rb_push(&rb_right, tapR[j]);
+        }
 
         impulse_add_tap(&detL, &tapL[0]);
         impulse_add_tap(&detR, &tapR[0]);
-
-        BaseType_t res = xSemaphoreGive(detection_semaphore);
-        (void)res;
+        detection_request = true;
       }
     }
   }

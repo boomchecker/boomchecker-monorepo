@@ -13,7 +13,7 @@ static uint16_t remove_value_sorted(uint32_t *arr, uint16_t n, uint32_t val) {
 
   if (idx == n) {
     if (n > 0)
-      return n - 1;
+      return n;
     return 0;
   }
 
@@ -190,17 +190,17 @@ bool impulse_run_detection(impulse_detector *det) {
   uint16_t mid_age = (uint16_t)(TAP_COUNT / 2);
   int32_t global_pos = (int32_t)mid_age * (int32_t)TAP_SIZE + pos;
 
-  uint32_t bufA[TAP_SIZE];
   uint32_t bufB[TAP_SIZE];
-
-  uint16_t lenA =
-      gather_window(det, global_pos - (int32_t)TAP_SIZE, global_pos, bufA);
+  uint32_t bufA[TAP_SIZE];
 
   uint16_t lenB =
       gather_window(det, global_pos, global_pos + (int32_t)TAP_SIZE, bufB);
 
-  uint32_t medA = median_u32(bufA, lenA);
+  uint16_t lenA =
+      gather_window(det, global_pos - (int32_t)TAP_SIZE, global_pos, bufA);
+
   uint32_t medB = median_u32(bufB, lenB);
+  uint32_t medA = median_u32(bufA, lenA);
 
   // third criterion
   if ((float)medB > (float)medA * DET_ENERGY) {
