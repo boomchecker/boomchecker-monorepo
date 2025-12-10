@@ -85,14 +85,18 @@ void app_main(void) {
         detectedL = false;
         detectedR = false;
 
-        for (int i = 0; i < wanted_window_length; i++) {
-          printf("%d ", arrL[wanted_window_start + i]);
+        if ((wanted_window_start >= 0) &&
+            (wanted_window_start + wanted_window_length <=
+             TAP_COUNT * TAP_SIZE)) {
+          for (int i = 0; i < wanted_window_length; i++) {
+            printf("%d ", arrL[wanted_window_start + i]);
+          }
+          printf("\n");
+          for (int i = 0; i < wanted_window_length; i++) {
+            printf("%d ", arrR[wanted_window_start + i]);
+          }
+          printf("\n");
         }
-        printf("\n");
-        for (int i = 0; i < wanted_window_length; i++) {
-          printf("%d ", arrR[wanted_window_start + i]);
-        }
-        printf("\n");
       }
     }
   }

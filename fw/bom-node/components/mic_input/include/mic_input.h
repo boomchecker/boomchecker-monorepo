@@ -15,6 +15,12 @@
 #define READ_BUFFER_BYTES (CHUNK_FRAMES * 8)
 // 1 frame = L(32b) + R(32b) = 8 B
 
+// DC offset correction values for left and right microphone channels.
+// Units: ADC counts.
+// These values were determined empirically by measuring the average DC bias
+// present on each channel during calibration with no input signal.
+// They are needed to remove the DC component from the microphone signal,
+// ensuring accurate audio processing and event detection.
 #define DC_OFFSET_LEFT 3500
 #define DC_OFFSET_RIGHT 3000
 #define DC_BLOCK_FREQ_HZ 100

@@ -12,9 +12,7 @@ static uint16_t remove_value_sorted(uint32_t *arr, uint16_t n, uint32_t val) {
   }
 
   if (idx == n) {
-    if (n > 0)
-      return n;
-    return 0;
+    return n;
   }
 
   for (uint16_t i = idx; i + 1 < n; i++) {
@@ -158,7 +156,7 @@ bool impulse_run_detection(impulse_detector *det) {
   int32_t pos = -1;
   uint32_t noise[TAP_SIZE];
 
-  for (uint16_t i = 0; i < TAP_SIZE; i++) {
+  for (int16_t i = 0; i < TAP_SIZE; i++) {
     noise[i] = noise_median_at(det, i);
 
     uint32_t diff = (mid_tap[i] > noise[i]) ? (mid_tap[i] - noise[i]) : 0;
@@ -172,7 +170,7 @@ bool impulse_run_detection(impulse_detector *det) {
     return false;
 
   // first criterion
-  if (!(val > DET_LEVEL)) {
+  if (val <= DET_LEVEL) {
     return false;
   }
 

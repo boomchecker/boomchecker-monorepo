@@ -9,7 +9,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
-#include "../impulse_detection/include/impulse_detection.h"
+#include "impulse_detection.h"
 #include <math.h>
 #include <stdbool.h>
 #include <stdio.h>
