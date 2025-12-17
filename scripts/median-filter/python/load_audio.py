@@ -191,6 +191,10 @@ def _demo_search_and_download():
         print("No videos found; aborting audio download demo.")
         return
 
+    # Create output directory once
+    output_dir = Path("./downloads")
+    output_dir.mkdir(parents=True, exist_ok=True)
+
     audio_segments: list[AudioSegment] = []
     metadatas: list[dict] = []
     downloaded_videos: list[Dict[str, str]] = []
@@ -201,20 +205,26 @@ def _demo_search_and_download():
         try:
             audio_segment, metadata = download_audio_segment(
                 video["url"], 
-                output_dir="./downloads"
+                output_dir=str(output_dir)
             )
             # Use video ID for filename
             video_id = metadata.get('id', 'unknown')
+            
+            # Save WAV immediately
+            wav_path = output_dir / f"{video_id}.wav"
+            audio_segment.export(wav_path, format="wav")
+            duration = audio_segment.duration_seconds
+            
+            # Save JSON with video ID name in same directory
+            json_path = output_dir / f"{video_id}.json"
+            with open(json_path, "w", encoding="utf-8") as f:
+                json.dump(metadata, f, indent=2, ensure_ascii=False)
+            
             audio_segments.append((audio_segment, video_id))
             metadatas.append(metadata)
             downloaded_videos.append(video)
             
-            # Save JSON with video ID name
-            json_path = Path("./downloads") / f"{video_id}.json"
-            with open(json_path, "w", encoding="utf-8") as f:
-                json.dump(metadata, f, indent=2, ensure_ascii=False)
-            
-            print(f"  Downloaded '{video['title']}' successfully.")
+            print(f"  Downloaded and saved: {wav_path.name} ({duration:.1f}s)")
         except Exception as exc:  # pragma: no cover - network dependent
             errors.append((video['title'], exc))
             print(f"  Failed to download '{video['title']}': {exc}")
@@ -226,13 +236,13 @@ def _demo_search_and_download():
         )
 
     print(f"\n{'='*60}")
-    print(f"Successfully downloaded {len(audio_segments)} audio files:")
+    print(f"Successfully downloaded {len(audio_segments)} audio files to {output_dir}:")
+    
     for idx, ((audio_seg, video_id), metadata) in enumerate(zip(audio_segments, metadatas), 1):
-        output_path = Path(__file__).with_name(f"{video_id}.wav")
-        audio_seg.export(output_path, format="wav")
+        wav_path = output_dir / f"{video_id}.wav"
         duration = audio_seg.duration_seconds
         print(
-            f"{idx:02d}. {output_path.name} ({duration:.1f}s) - "
+            f"{idx:02d}. {wav_path.name} ({duration:.1f}s) - "
             f"{metadata.get('title')} by {metadata.get('uploader')}"
         )
     
