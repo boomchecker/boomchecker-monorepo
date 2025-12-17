@@ -124,6 +124,9 @@ def search_youtube(query: str, limit: int = 20, max_length_s: Optional[int] = No
             
             # Get video length in seconds
             info = get_video_metadata_from_url(url)
+
+            if info.get("duration") > max_length_s:
+                continue
             
             results.append(
                 {
@@ -233,7 +236,7 @@ def _sanitize_filename(title: str, fallback: str = "audio_preview") -> str:
 def _demo_search_and_download():
     """Simple helper to exercise search_youtube + download_audio_segment."""
     sample_query = "clash of steel hammer impact sound"
-    videos = search_youtube(sample_query, limit=20, max_length_s=5)
+    videos = search_youtube(sample_query, limit=20, max_length_s=30)
     print(f"Top {len(videos)} results for '{sample_query}':")
     for idx, video in enumerate(videos, 1):
         print(f"{idx:02d}. {video['title']}\n    {video['url']} - {video['length']}")
