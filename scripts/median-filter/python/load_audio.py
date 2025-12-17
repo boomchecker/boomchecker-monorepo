@@ -81,12 +81,18 @@ def search_youtube(query: str, limit: int = 20, max_length_s: Optional[int] = No
                 if video_id:
                     url = f"https://www.youtube.com/watch?v={video_id}"
             
-            # Get video length in seconds
-            length = getattr(video, "length", None)
-            
-            # Skip video if it exceeds max_length_s
-            if max_length_s is not None and length is not None and length > max_length_s:
-                continue
+            # Try to get video length in seconds
+            # Note: accessing length may trigger additional API calls that can fail
+            length = None
+            if max_length_s is not None:
+                try:
+                    length = getattr(video, "length", None)
+                    # Skip video if it exceeds max_length_s
+                    if length is not None and length > max_length_s:
+                        continue
+                except Exception:
+                    # If we can't get length, include the video (safe default)
+                    pass
             
             results.append(
                 {
@@ -196,7 +202,7 @@ def _sanitize_filename(title: str, fallback: str = "audio_preview") -> str:
 def _demo_search_and_download():
     """Simple helper to exercise search_youtube + download_audio_segment."""
     sample_query = "clash of steel hammer impact sound"
-    videos = search_youtube(sample_query, limit=20)
+    videos = search_youtube(sample_query, limit=20, max_length_s=120)
     print(f"Top {len(videos)} results for '{sample_query}':")
     for idx, video in enumerate(videos, 1):
         print(f"{idx:02d}. {video['title']}\n    {video['url']}")
