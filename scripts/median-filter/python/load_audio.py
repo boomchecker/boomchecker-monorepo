@@ -7,6 +7,7 @@ Step 2: prototype YouTube scraping helpers (search, download, etc.).
 
 from __future__ import annotations
 
+import json
 import tempfile
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -86,10 +87,20 @@ def search_youtube(query: str, limit: int = 20) -> List[Dict[str, str]]:
     return results
 
 
-def download_audio_segment(video_url: str) -> AudioSegment:
+def download_audio_segment(video_url: str, output_dir: str | Path | None = None, filename_stem: str | None = None) -> tuple[AudioSegment, dict]:
     """
     Download the best available audio/best format using yt-dlp and return it as
     a pydub AudioSegment for further processing.
+    
+    Also saves metadata to a JSON file in output_dir (or current directory if None).
+    
+    Args:
+        video_url: YouTube video URL
+        output_dir: Directory to save metadata JSON (defaults to current directory)
+        filename_stem: Base filename for JSON file (defaults to video ID)
+    
+    Returns:
+        tuple: (AudioSegment, metadata_dict)
     """
     if not video_url:
         raise ValueError("video_url must not be empty")
@@ -133,7 +144,30 @@ def download_audio_segment(video_url: str) -> AudioSegment:
         if not downloaded_file.exists():
             raise RuntimeError("yt-dlp reported success but file not found")
 
-        return AudioSegment.from_file(downloaded_file)
+        # Extract relevant metadata
+        metadata = {
+            "id": info.get("id"),
+            "title": info.get("title"),
+            "uploader": info.get("uploader"),
+            "uploader_id": info.get("uploader_id"),
+            "channel": info.get("channel"),
+            "channel_id": info.get("channel_id"),
+            "duration": info.get("duration"),
+            "view_count": info.get("view_count"),
+            "like_count": info.get("like_count"),
+            "upload_date": info.get("upload_date"),
+            "description": info.get("description"),
+            "tags": info.get("tags"),
+            "categories": info.get("categories"),
+            "webpage_url": info.get("webpage_url"),
+            "thumbnail": info.get("thumbnail"),
+            "format": info.get("format"),
+            "ext": info.get("ext"),
+            "filesize": info.get("filesize"),
+        }
+
+        audio_segment = AudioSegment.from_file(downloaded_file)
+        return audio_segment, metadata
 
 
 def _sanitize_filename(title: str, fallback: str = "audio_preview") -> str:
@@ -158,33 +192,55 @@ def _demo_search_and_download():
         print("No videos found; aborting audio download demo.")
         return
 
-    audio_segment: Optional[AudioSegment] = None
-    chosen_video: Optional[Dict[str, str]] = None
-    last_error: Optional[Exception] = None
+    audio_segments: list[AudioSegment] = []
+    metadatas: list[dict] = []
+    downloaded_videos: list[Dict[str, str]] = []
+    errors: list[tuple[str, Exception]] = []
 
     for video in videos:
         print(f"\nAttempting download: {video['title']}")
         try:
-            audio_segment = download_audio_segment(video["url"])
-            chosen_video = video
-            print(f"  Downloaded '{video['title']}' successfully; stopping search.")
+            audio_segment, metadata = download_audio_segment(
+                video["url"], 
+                output_dir="./downloads"
+            )
+            # Use video ID for filename
+            video_id = metadata.get('id', 'unknown')
+            audio_segments.append((audio_segment, video_id))
+            metadatas.append(metadata)
+            downloaded_videos.append(video)
+            
+            # Save JSON with video ID name
+            json_path = Path("./downloads") / f"{video_id}.json"
+            with open(json_path, "w", encoding="utf-8") as f:
+                json.dump(metadata, f, indent=2, ensure_ascii=False)
+            
+            print(f"  Downloaded '{video['title']}' successfully.")
         except Exception as exc:  # pragma: no cover - network dependent
-            last_error = exc
+            errors.append((video['title'], exc))
             print(f"  Failed to download '{video['title']}': {exc}")
 
-        if audio_segment is None or chosen_video is None:
-            raise RuntimeError(
-                "Unable to download audio for any search result"
-            ) from last_error
-
-        safe_stem = _sanitize_filename(chosen_video["title"])
-        output_path = Path(__file__).with_name(f"{safe_stem}.wav")
-        audio_segment.export(output_path, format="wav")
-        duration = audio_segment.duration_seconds
-        print(
-            f"Saved WAV preview to {output_path} ({duration:.1f}s) "
-            f"from '{chosen_video['title']}'."
+    if not audio_segments:
+        raise RuntimeError(
+            f"Unable to download audio for any of {len(videos)} search results. "
+            f"Last error: {errors[-1][1] if errors else 'unknown'}"
         )
+
+    print(f"\n{'='*60}")
+    print(f"Successfully downloaded {len(audio_segments)} audio files:")
+    for idx, ((audio_seg, video_id), metadata) in enumerate(zip(audio_segments, metadatas), 1):
+        output_path = Path(__file__).with_name(f"{video_id}.wav")
+        audio_seg.export(output_path, format="wav")
+        duration = audio_seg.duration_seconds
+        print(
+            f"{idx:02d}. {output_path.name} ({duration:.1f}s) - "
+            f"{metadata.get('title')} by {metadata.get('uploader')}"
+        )
+    
+    if errors:
+        print(f"\nFailed to download {len(errors)} videos:")
+        for title, exc in errors:
+            print(f"  - {title}: {exc}")
 
 
 if __name__ == "__main__":
