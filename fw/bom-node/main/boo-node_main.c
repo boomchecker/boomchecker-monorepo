@@ -96,6 +96,9 @@ void app_main(void) {
             printf("%d ", arrR[wanted_window_start + i]);
           }
           printf("\n");
+        } else {
+          ESP_LOGE(TAG, "Window out of bounds: start=%d, length=%d, array size=%d",
+                   wanted_window_start, wanted_window_length, TAP_COUNT * TAP_SIZE);
         }
       }
     }

@@ -82,7 +82,7 @@ void impulse_add_tap(impulse_detector *det, const int16_t *samples) {
 
     uint32_t old_val = det->taps[write_idx][i];
     int32_t s = samples[i];
-    uint32_t new_val = (uint32_t)(s * s);
+    uint32_t new_val = (uint32_t)((int64_t)s * (int64_t)s);
 
     det->taps[write_idx][i] = new_val;
 

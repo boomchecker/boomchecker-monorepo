@@ -12,14 +12,17 @@
 #define TAP_SIZE 30
 #endif
 
+// DET_LEVEL: Threshold for the square of the amplitude (S^2). Increase to decrease sensitivity.
 #ifndef DET_LEVEL
 #define DET_LEVEL 10000
 #endif
 
+// DET_RMS: Multiplier for the RMS noise. Determines how much the impulse must exceed the ambient noise.
 #ifndef DET_RMS
 #define DET_RMS 100
 #endif
 
+// DET_ENERGY: Ratio of energy (median) after the pulse to energy before the pulse.
 #ifndef DET_ENERGY
 #define DET_ENERGY 0.4f
 #endif

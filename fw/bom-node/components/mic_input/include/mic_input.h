@@ -25,6 +25,7 @@
 #define DC_OFFSET_RIGHT 3000
 #define DC_BLOCK_FREQ_HZ 100
 
+// WARNING: This variable is accessed by both mic_reader_task and main loop without a lock.
 extern bool detection_request;
 
 typedef struct {
