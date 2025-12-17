@@ -40,11 +40,16 @@ def get_search_prompt() -> str:
     return load_prompt()
 
 
-def search_youtube(query: str, limit: int = 20) -> List[Dict[str, str]]:
+def search_youtube(query: str, limit: int = 20, max_length_s: Optional[int] = None) -> List[Dict[str, str]]:
     """
     Use pytube's lightweight search helper to pull back metadata for the first
     `limit` results. Returns dictionaries with title and watch_url that can be
     consumed by later scraping/downloading stages.
+    
+    Args:
+        query: Search query string
+        limit: Maximum number of videos to return
+        max_length_s: Optional maximum video length in seconds (e.g., 120 for 2 minutes)
     """
     if not query:
         return []
@@ -75,10 +80,19 @@ def search_youtube(query: str, limit: int = 20) -> List[Dict[str, str]]:
                 video_id = getattr(video, "video_id", "")
                 if video_id:
                     url = f"https://www.youtube.com/watch?v={video_id}"
+            
+            # Get video length in seconds
+            length = getattr(video, "length", None)
+            
+            # Skip video if it exceeds max_length_s
+            if max_length_s is not None and length is not None and length > max_length_s:
+                continue
+            
             results.append(
                 {
                     "title": title,
                     "url": url,
+                    "length": length,
                 }
             )
             if len(results) >= limit:
@@ -254,7 +268,3 @@ def _demo_search_and_download():
 
 if __name__ == "__main__":
     _demo_search_and_download()
-
-
-# Ensure prompt file exists at import time for convenience.
-ensure_files()
