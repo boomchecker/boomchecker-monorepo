@@ -1,6 +1,17 @@
 version: "3"
 
 tasks:
+  fix-ssh:
+    desc: Fix SSH permissions for mounted keys
+    cmds:
+      - |
+        echo "Fixing SSH permissions..."
+        chmod 700 /root/.ssh
+        chmod 600 /root/.ssh/config /root/.ssh/id_* 2>/dev/null || true
+        chmod 644 /root/.ssh/*.pub 2>/dev/null || true
+        chown -R root:root /root/.ssh 2>/dev/null || true
+        echo "✓ SSH permissions fixed"
+
   git-signing:
     desc: Configure SSH signing key for Git commits
     cmds:
@@ -22,3 +33,9 @@ tasks:
         echo "  Key: $SIGNING_KEY"
         echo "  Commits: signed"
         echo "  Tags: signed"
+
+  setup-all:
+    desc: Run all setup tasks
+    cmds:
+      - task: fix-ssh
+      - task: git-signing
