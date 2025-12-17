@@ -1,7 +1,7 @@
-# Start with the official Go image on Debian bookworm to get Python 3.11+
+# Start with the official Go image on Debian bookworm (has Python 3.11)
 FROM golang:1.23-bookworm
 
-# Install basic development tools
+# Install basic development tools including Python 3.11
 RUN apt-get update && apt-get install -y \
     git \
     curl \
