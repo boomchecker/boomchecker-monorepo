@@ -4,7 +4,7 @@ import hashlib
 import json
 import os
 from openai import OpenAI
-from pydantic import BaseModel, ValidationError
+from pydantic import ValidationError
 
 ROOT = Path(__file__).resolve().parent.parent
 PYTHON_DIR = Path(__file__).resolve().parent
@@ -51,12 +51,29 @@ def load_env() -> None:
 
 
 def parse_queries(raw_text: str) -> list[str]:
-    """Split raw OpenAI output into individual, non-empty queries."""
-    if not isinstance(raw_text, str):
-        print("Warning: raw_text is not a string: %s" % type(raw_text))
-        return []
-    
-    return raw_text.replace(", ", ",").split(",")
+    """  
+    Split raw OpenAI output into individual, non-empty queries.  
+
+    Tries to parse as a JSON array first. If that fails, splits by newlines.  
+    If queries are comma-separated, this will not handle queries containing commas.  
+    Prefer newline-separated or JSON array output for robustness.  
+    """  
+    if not isinstance(raw_text, str):  
+        print("Warning: raw_text is not a string: %s" % type(raw_text))  
+        return []  
+    # Try to parse as JSON array  
+    try:  
+        parsed = json.loads(raw_text)  
+        if isinstance(parsed, list):  
+            return [q for q in parsed if isinstance(q, str) and q.strip()]  
+    except Exception:  
+        pass  
+    # Fallback: split by newlines  
+    queries = [q.strip() for q in raw_text.splitlines() if q.strip()]  
+    if queries:  
+        return queries  
+    # Last resort: original comma splitting (deprecated, not robust)  
+    return [q for q in raw_text.replace(", ", ",").split(",") if q.strip()]  
 
 def ensure_files():
     """Ensure prompt and data directories exist with a default prompt."""
@@ -128,7 +145,7 @@ def log_openai_response(queries: list[str], model: str, prompt_id: str) -> dict:
         "prompt_id": prompt_id,
         "raw": raw_text,
         "queries": queries,
-        "queries_sha256": hash(raw_text) if queries else None,
+        "queries_sha256": hashlib.sha256(raw_text.encode("utf-8")).hexdigest() if queries else None,  
     }
     with RESPONSES_LOG.open("a", encoding="utf-8") as f:
         f.write(json.dumps(record, ensure_ascii=False) + "\n")
@@ -140,7 +157,7 @@ def generate_queries(
     include_previous: bool = False,
 ) -> list[str]:
     """
-    Ultra-simple helper that just sends the stored prompt to the OpenAI Responses
+    Ultra-simple helper that just sends the stored prompt to the OpenAI Chat Completions  
     API and returns the raw text (split by lines). No structured parsing or file
     uploads so it is easier to iterate during development.
     """
@@ -154,8 +171,8 @@ def generate_queries(
         )
 
     # Use hosted custom prompt if available, otherwise fall back to local prompt text.
-    prompt_id = (os.environ.get("OPENAI_PROMPT_ID")).strip()
-    prompt_ver = (os.environ.get("OPENAI_PROMPT_VER")).strip()
+    prompt_id = os.environ.get("OPENAI_PROMPT_ID", "").strip()  
+    prompt_ver = os.environ.get("OPENAI_PROMPT_VER", "").strip()  
     client = OpenAI(api_key=api_key)
 
     request: dict = {"model": model}
