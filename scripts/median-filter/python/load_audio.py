@@ -87,17 +87,16 @@ def search_youtube(query: str, limit: int = 20) -> List[Dict[str, str]]:
     return results
 
 
-def download_audio_segment(video_url: str, output_dir: str | Path | None = None, filename_stem: str | None = None) -> tuple[AudioSegment, dict]:
+def download_audio_segment(video_url: str, output_dir: str | Path | None = None) -> tuple[AudioSegment, dict]:
     """
     Download the best available audio/best format using yt-dlp and return it as
     a pydub AudioSegment for further processing.
     
-    Also saves metadata to a JSON file in output_dir (or current directory if None).
+    Also returns metadata dict.
     
     Args:
         video_url: YouTube video URL
         output_dir: Directory to save metadata JSON (defaults to current directory)
-        filename_stem: Base filename for JSON file (defaults to video ID)
     
     Returns:
         tuple: (AudioSegment, metadata_dict)
