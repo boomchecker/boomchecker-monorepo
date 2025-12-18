@@ -29,7 +29,8 @@
         "ms-vscode-remote.vscode-remote-extensionpack",
         "esbenp.prettier-vscode",
         "gruntfuggly.todo-tree",
-        "openai.chatgpt"
+        "openai.chatgpt",
+        "github.copilot-chat"
       ]
     }
   }
