@@ -1,0 +1,31 @@
+version: "3"
+
+tasks:
+  setup:
+    desc: Install Python dependencies and ffmpeg for median-filter scripts
+    cmds:
+      - bash ./setup.sh
+
+  load-audio:
+    desc: Run load_audio.py script
+    dir: python
+    cmds:
+      - ./venv/bin/python load_audio.py {{.CLI_ARGS}}
+
+  detect:
+    desc: Run detect.py script
+    dir: python
+    cmds:
+      - ./venv/bin/python detect.py {{.CLI_ARGS}}
+
+  benchmark:
+    desc: Run benchmark.py script
+    dir: python
+    cmds:
+      - ./venv/bin/python benchmark.py {{.CLI_ARGS}}
+
+  run:
+    desc: Run any Python script in venv
+    dir: python
+    cmds:
+      - ./venv/bin/python {{.CLI_ARGS}}

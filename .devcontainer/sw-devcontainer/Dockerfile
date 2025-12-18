@@ -1,7 +1,7 @@
-# Start with the official Go image
-FROM golang:1.23-bullseye
+# Start with the official Go image on Debian bookworm (has Python 3.11)
+FROM golang:1.23-bookworm
 
-# Install basic development tools
+# Install basic development tools including Python 3.11
 RUN apt-get update && apt-get install -y \
     git \
     curl \
@@ -9,7 +9,14 @@ RUN apt-get update && apt-get install -y \
     make \
     build-essential \
     ca-certificates \
+    python3 \
+    python3-pip \
+    python3-venv \
     && rm -rf /var/lib/apt/lists/*
+
+# Ensure `python` and `pip` commands are available
+RUN ln -sf /usr/bin/python3 /usr/local/bin/python && \
+    ln -sf /usr/bin/pip3 /usr/local/bin/pip
 
 # Install Node.js LTS (v20) from NodeSource
 RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \

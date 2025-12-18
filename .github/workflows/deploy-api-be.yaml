@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - main
+    paths:
+      - "apps/api-backend/**"
   workflow_dispatch:
 
 permissions:

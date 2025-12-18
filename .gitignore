@@ -13,6 +13,8 @@ dist
 
 # Python
 .venv
+venv
+__pycache__
 
 # Go
 *.exe
