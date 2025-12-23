@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.16)
 project(peak_detector C)
 
-set(CMAKE_C_STANDARD 99)
+set(CMAKE_C_STANDARD 11)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 add_library(peak SHARED
@@ -17,3 +17,19 @@ set_target_properties(peak PROPERTIES
     ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/build"
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/build"
 )
+
+enable_testing()
+
+add_executable(peak_tests
+    csrc/tests/peak_detector_test.c
+    third_party/Unity/src/unity.c
+)
+target_include_directories(peak_tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/csrc
+    ${CMAKE_CURRENT_SOURCE_DIR}/third_party/Unity/src
+)
+target_link_libraries(peak_tests PRIVATE peak)
+set_target_properties(peak_tests PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/build"
+)
+add_test(NAME peak_tests COMMAND peak_tests)
