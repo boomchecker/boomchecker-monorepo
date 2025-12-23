@@ -62,7 +62,7 @@ int detector_feed_block(struct detector_state *s, const int16_t *block,
 #ifdef PEAK_DETECTOR_TESTING
 // Test-only helpers to observe internals without exposing them in production.
 void peak_test_median_update(struct detector_state *s, uint16_t offset,
-                             int16_t value, uint16_t tap_idx, uint16_t gen);
+                             int16_t value, uint16_t tap_idx, uint32_t gen);
 int16_t peak_test_median_value(struct detector_state *s, uint16_t offset);
 #endif
 

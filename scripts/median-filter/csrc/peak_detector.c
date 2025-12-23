@@ -12,13 +12,13 @@
 struct heap_node {
   int16_t value;
   uint16_t tap_idx;
-  uint16_t gen;
+  uint32_t gen;
 };
 
 struct per_offset_median {
   struct heap_node *max_heap;
   struct heap_node *min_heap;
-  uint16_t *gen_per_tap; // length num_taps
+  uint32_t *gen_per_tap; // length num_taps
   size_t max_size;
   size_t min_size;
 };
@@ -47,7 +47,7 @@ struct detector_state {
   size_t sample_count;
 
   // generator
-  uint16_t current_gen;
+  uint32_t current_gen;
 };
 
 static size_t align_up(size_t v, size_t a) {
@@ -162,7 +162,7 @@ static inline int heap_cmp_min(const struct heap_node *a,
 }
 
 static inline bool heap_is_stale(const struct heap_node *n,
-                                 const uint16_t *gen_per_tap) {
+                                 const uint32_t *gen_per_tap) {
   return n->gen != gen_per_tap[n->tap_idx];
 }
 
@@ -181,7 +181,7 @@ static void heap_heapify(struct heap_node *heap, size_t size,
 }
 
 static void heap_compact(struct heap_node *heap, size_t *size,
-                         const uint16_t *gen_per_tap, bool is_max_heap) {
+                         const uint32_t *gen_per_tap, bool is_max_heap) {
   size_t write = 0;
   for (size_t read = 0; read < *size; ++read) {
     if (!heap_is_stale(&heap[read], gen_per_tap)) {
@@ -308,7 +308,7 @@ static int16_t median_value(struct per_offset_median *m, int16_t fallback) {
 }
 
 static void median_insert(struct per_offset_median *m, int16_t value,
-                          uint16_t tap_idx, uint16_t gen) {
+                          uint16_t tap_idx, uint32_t gen) {
   struct heap_node node = {.value = value, .tap_idx = tap_idx, .gen = gen};
 
   if (m->max_size == 0) {
@@ -325,7 +325,7 @@ static void median_insert(struct per_offset_median *m, int16_t value,
 }
 
 static void median_update_offset(struct per_offset_median *m, int16_t new_value,
-                                 uint16_t tap_idx, uint16_t gen) {
+                                 uint16_t tap_idx, uint32_t gen) {
   m->gen_per_tap[tap_idx] = gen;
   median_insert(m, new_value, tap_idx, gen);
   median_rebalance(m);
@@ -333,7 +333,7 @@ static void median_update_offset(struct per_offset_median *m, int16_t new_value,
 
 #ifdef PEAK_DETECTOR_TESTING
 void peak_test_median_update(struct detector_state *s, uint16_t offset,
-                             int16_t value, uint16_t tap_idx, uint16_t gen) {
+                             int16_t value, uint16_t tap_idx, uint32_t gen) {
   if (!s || offset >= s->tap_size) {
     return;
   }
