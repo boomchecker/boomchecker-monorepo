@@ -39,12 +39,58 @@ def get_search_prompt() -> str:
     """Return the base prompt used to ask OpenAI for search queries."""
     return load_prompt()
 
+def get_video_metadata_from_url(video_url: str) -> List:
+    if not video_url:
+        raise ValueError("video_url must not be empty")
+    if YoutubeDL is None or AudioSegment is None:
+        raise RuntimeError(
+            "Missing dependency. Install `yt-dlp` and `pydub` (plus ffmpeg) to download audio."
+        )
 
-def search_youtube(query: str, limit: int = 20) -> List[Dict[str, str]]:
+    with tempfile.TemporaryDirectory(prefix="yt-audio-") as tmpdir:
+        tmpdir_path = Path(tmpdir)
+        outtmpl = str(tmpdir_path / "%(id)s.%(ext)s")
+        ydl_opts = {
+            "format": "bestaudio/best",
+            "outtmpl": outtmpl,
+            "noplaylist": True,
+            "quiet": True,
+            "no_warnings": True,
+            "cachedir": False,
+            # Add user agent and other headers to avoid 403
+            "http_headers": {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "Accept-Language": "en-us,en;q=0.5",
+                "Sec-Fetch-Mode": "navigate",
+            },
+            # Use extractor args for YouTube
+            "extractor_args": {
+                "youtube": {
+                    "player_client": ["android", "web"],
+                    "player_skip": ["webpage", "configs"],
+                }
+            },
+        }
+        try:
+            with YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(video_url, download=False)
+        except Exception as exc:  # pragma: no cover - network dependent
+            raise RuntimeError(f"yt-dlp failed to download audio: {exc}") from exc
+            
+        return info
+
+
+def search_youtube(query: str, limit: int = 20, max_length_s: Optional[int] = None) -> List[Dict[str, str]]:
     """
     Use pytube's lightweight search helper to pull back metadata for the first
     `limit` results. Returns dictionaries with title and watch_url that can be
     consumed by later scraping/downloading stages.
+    
+    Args:
+        query: Search query string
+        limit: Maximum number of videos to return
+        max_length_s: Optional maximum video length in seconds (e.g., 120 for 2 minutes)
     """
     if not query:
         return []
@@ -75,10 +121,18 @@ def search_youtube(query: str, limit: int = 20) -> List[Dict[str, str]]:
                 video_id = getattr(video, "video_id", "")
                 if video_id:
                     url = f"https://www.youtube.com/watch?v={video_id}"
+            
+            # Get video length in seconds
+            info = get_video_metadata_from_url(url)
+
+            if info.get("duration") > max_length_s:
+                continue
+            
             results.append(
                 {
                     "title": title,
                     "url": url,
+                    "length": info.get("duration"),
                 }
             )
             if len(results) >= limit:
@@ -182,10 +236,10 @@ def _sanitize_filename(title: str, fallback: str = "audio_preview") -> str:
 def _demo_search_and_download():
     """Simple helper to exercise search_youtube + download_audio_segment."""
     sample_query = "clash of steel hammer impact sound"
-    videos = search_youtube(sample_query, limit=20)
+    videos = search_youtube(sample_query, limit=20, max_length_s=30)
     print(f"Top {len(videos)} results for '{sample_query}':")
     for idx, video in enumerate(videos, 1):
-        print(f"{idx:02d}. {video['title']}\n    {video['url']}")
+        print(f"{idx:02d}. {video['title']}\n    {video['url']} - {video['length']}")
 
     if not videos:
         print("No videos found; aborting audio download demo.")
@@ -254,7 +308,3 @@ def _demo_search_and_download():
 
 if __name__ == "__main__":
     _demo_search_and_download()
-
-
-# Ensure prompt file exists at import time for convenience.
-ensure_files()

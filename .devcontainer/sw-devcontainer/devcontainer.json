@@ -7,7 +7,15 @@
   "customizations": {
     "vscode": {
       "settings": {
-        "terminal.integrated.defaultProfile.linux": "bash",
+        "terminal.integrated.profiles.linux": {
+          "zsh": {
+            "path": "/bin/zsh"
+          },
+          "bash": {
+            "path": "/bin/bash"
+          }
+        },
+        "terminal.integrated.defaultProfile.linux": "zsh",
         "go.toolsManagement.autoUpdate": true,
         "go.useLanguageServer": true,
         "go.lintTool": "golangci-lint",
@@ -29,7 +37,8 @@
         "ms-vscode-remote.vscode-remote-extensionpack",
         "esbenp.prettier-vscode",
         "gruntfuggly.todo-tree",
-        "openai.chatgpt"
+        "openai.chatgpt",
+        "github.copilot-chat"
       ]
     }
   }
