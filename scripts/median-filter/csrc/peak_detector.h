@@ -5,22 +5,22 @@
 #include <stdint.h>
 
 // Median peak detector structures
-struct {
+struct median_detector_levels {
   int16_t det_level;
   int16_t det_rms;
   int16_t det_energy;
-} median_detector_levels;
+};
 
-struct {
+struct median_detector_cfg {
   uint8_t num_taps;
   uint16_t tap_size;
   struct median_detector_levels levels;
-} median_detector_cfg;
+};
 
-struct {
+struct detector_result {
   bool hit;
   int peak_index;
-} detector_result;
+};
 
 // forward declaration for online mode
 struct detector_state detector_state;
