@@ -37,4 +37,22 @@ target_link_libraries(peak_tests PRIVATE m)
 set_target_properties(peak_tests PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/build"
 )
+
+add_executable(peak_runner_tests
+    csrc/tests/peak_detector_runner_test.c
+    csrc/peak_detector.c
+    csrc/peak_detector_runner.c
+    third_party/Unity/src/unity.c
+)
+target_include_directories(peak_runner_tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/csrc
+    ${CMAKE_CURRENT_SOURCE_DIR}/third_party/Unity/src
+)
+target_compile_definitions(peak_runner_tests PRIVATE PEAK_DETECTOR_TESTING=1)
+target_link_libraries(peak_runner_tests PRIVATE m)
+set_target_properties(peak_runner_tests PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/build"
+)
+
 add_test(NAME peak_tests COMMAND peak_tests)
+add_test(NAME peak_runner_tests COMMAND peak_runner_tests)
