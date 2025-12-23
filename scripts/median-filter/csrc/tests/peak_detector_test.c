@@ -68,10 +68,49 @@ static void test_invalid_config(void) {
   TEST_ASSERT_EQUAL(PEAK_DET_ERR_CFG_UNINITIALIZED, st);
 }
 
+static void test_median_progression(void) {
+  struct median_detector_cfg cfg = {
+      .num_taps = 3,
+      .tap_size = 2,
+      .levels = {.det_level = 0, .det_rms = 0, .det_energy = 0},
+  };
+
+  size_t need = 0;
+  TEST_ASSERT_EQUAL(PEAK_DET_OK, detector_state_size(&cfg, &need));
+  uint8_t *buf = (uint8_t *)malloc(need);
+  TEST_ASSERT_NOT_NULL(buf);
+  struct detector_state *state = NULL;
+  TEST_ASSERT_EQUAL(PEAK_DET_OK, detector_init(buf, need, &cfg, &state));
+
+  // tap0
+  peak_test_median_update(state, 0, 0, 0, 1);
+  peak_test_median_update(state, 1, 1, 0, 1);
+  // tap1
+  peak_test_median_update(state, 0, 4, 1, 2);
+  peak_test_median_update(state, 1, 9, 1, 2);
+  // tap2
+  peak_test_median_update(state, 0, 16, 2, 3);
+  peak_test_median_update(state, 1, 25, 2, 3);
+
+  TEST_ASSERT_EQUAL_INT16(4, peak_test_median_value(state, 0));
+  TEST_ASSERT_EQUAL_INT16(9, peak_test_median_value(state, 1));
+
+  // overwrite tap0 with new block (lazy delete via new gen)
+  peak_test_median_update(state, 0, 36, 0, 4);
+  peak_test_median_update(state, 1, 49, 0, 4);
+
+  TEST_ASSERT_EQUAL_INT16(16, peak_test_median_value(state, 0));
+  TEST_ASSERT_EQUAL_INT16(25, peak_test_median_value(state, 1));
+
+  detector_deinit(state);
+  free(buf);
+}
+
 int main(void) {
   UNITY_BEGIN();
   RUN_TEST(test_state_size_and_init);
   RUN_TEST(test_buffer_too_small);
   RUN_TEST(test_invalid_config);
+  RUN_TEST(test_median_progression);
   return UNITY_END();
 }
