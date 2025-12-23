@@ -75,6 +75,20 @@ int detector_feed_block(struct detector_state *s, const int16_t *block,
                         int64_t block_start_offset,
                         struct detector_result *out);
 
+/**
+ * @brief Offline detekce nad celou nahrávkou (16bit).
+ *
+ * @param samples   vstupní pole vzorků
+ * @param n         počet vzorků
+ * @param cfg       konfigurace
+ * @param positions výstupní pole pro nalezené pozice (absolutní indexy)
+ * @param capacity  kapacita pole positions
+ * @return počet detekovaných pozic (>=0) nebo chybový kód (<0)
+ */
+int detect_recording_i16(const int16_t *samples, size_t n,
+                         const struct median_detector_cfg *cfg, int *positions,
+                         size_t capacity);
+
 #ifdef PEAK_DETECTOR_TESTING
 /// Test-only helper pro injektování do medianu.
 void peak_test_median_update(struct detector_state *s, uint16_t offset,

@@ -6,6 +6,7 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 add_library(peak SHARED
     csrc/peak_detector.c
+    csrc/peak_detector_runner.c
 )
 target_include_directories(peak PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/csrc
@@ -24,6 +25,7 @@ enable_testing()
 add_executable(peak_tests
     csrc/tests/peak_detector_test.c
     csrc/peak_detector.c
+    csrc/peak_detector_runner.c
     third_party/Unity/src/unity.c
 )
 target_include_directories(peak_tests PRIVATE
