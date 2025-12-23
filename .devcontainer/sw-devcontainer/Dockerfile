@@ -52,9 +52,12 @@ RUN mkdir -p $PNPM_HOME && \
     echo 'export PNPM_HOME=$PNPM_HOME' >> ~/.zshrc && \
     echo 'export PATH=$PNPM_HOME:$PATH' >> ~/.zshrc
 
-# Basic zsh prompt (fixes `1544f2741cc9#`)
-RUN echo 'autoload -Uz colors && colors' >> ~/.zshrc && \
-    echo 'PROMPT="%F{cyan}%n@%m%f:%F{yellow}%~%f %# "' >> ~/.zshrc
+# Install oh-my-zsh (non-interactive)
+RUN sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
+
+# Configure oh-my-zsh: theme + git plugin
+RUN sed -i 's/^ZSH_THEME=.*/ZSH_THEME="robbyrussell"/' ~/.zshrc && \
+    sed -i 's/^plugins=.*/plugins=(git)/' ~/.zshrc
 
 # Set environment variables
 ENV LANG=C.UTF-8
