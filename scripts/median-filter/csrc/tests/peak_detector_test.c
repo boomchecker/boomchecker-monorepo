@@ -82,25 +82,32 @@ static void test_median_progression(void) {
   struct detector_state *state = NULL;
   TEST_ASSERT_EQUAL(PEAK_DET_OK, detector_init(buf, need, &cfg, &state));
 
-  // tap0
-  peak_test_median_update(state, 0, 0, 0, 1);
-  peak_test_median_update(state, 1, 1, 0, 1);
-  // tap1
-  peak_test_median_update(state, 0, 4, 1, 2);
-  peak_test_median_update(state, 1, 9, 1, 2);
-  // tap2
-  peak_test_median_update(state, 0, 16, 2, 3);
-  peak_test_median_update(state, 1, 25, 2, 3);
+  int16_t blk0[2] = {0, 1};
+  int16_t blk1[2] = {4, 9};
+  int16_t blk2[2] = {16, 25};
+  int16_t blk3[2] = {36, 49};
+
+  struct detector_result res;
+  TEST_ASSERT_EQUAL(PEAK_DET_OK,
+                    detector_feed_block(state, blk0, 0, &res));
+  TEST_ASSERT_EQUAL(PEAK_DET_OK,
+                    detector_feed_block(state, blk1, 2, &res));
+  TEST_ASSERT_EQUAL(PEAK_DET_OK,
+                    detector_feed_block(state, blk2, 4, &res));
 
   TEST_ASSERT_EQUAL_INT16(4, peak_test_median_value(state, 0));
   TEST_ASSERT_EQUAL_INT16(9, peak_test_median_value(state, 1));
 
   // overwrite tap0 with new block (lazy delete via new gen)
-  peak_test_median_update(state, 0, 36, 0, 4);
-  peak_test_median_update(state, 1, 49, 0, 4);
+  TEST_ASSERT_EQUAL(PEAK_DET_OK,
+                    detector_feed_block(state, blk3, 6, &res));
 
   TEST_ASSERT_EQUAL_INT16(16, peak_test_median_value(state, 0));
   TEST_ASSERT_EQUAL_INT16(25, peak_test_median_value(state, 1));
+
+  // RMS should reflect current window: [36,49,4,9,16,25]
+  uint64_t expected_rms_acc = 1296u + 2401u + 16u + 81u + 256u + 625u;
+  TEST_ASSERT_EQUAL_UINT64(expected_rms_acc, peak_test_rms_acc(state));
 
   detector_deinit(state);
   free(buf);

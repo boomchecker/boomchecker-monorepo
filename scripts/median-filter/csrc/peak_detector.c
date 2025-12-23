@@ -92,8 +92,8 @@ enum peak_det_state detector_state_size(const struct median_detector_cfg *cfg,
     offset = align_up(offset, alignof(struct heap_node));
     offset += cfg->num_taps * sizeof(struct heap_node); // min_heap
 
-    offset = align_up(offset, alignof(uint16_t));
-    offset += cfg->num_taps * sizeof(uint16_t); // gen_per_tap
+    offset = align_up(offset, alignof(uint32_t));
+    offset += cfg->num_taps * sizeof(uint32_t); // gen_per_tap
   }
 
   offset = align_up(offset, alignof(uint32_t));
@@ -130,9 +130,9 @@ static void layout_state(void *mem_base, const struct median_detector_cfg *cfg,
     s->med[i].min_heap = (struct heap_node *)(base + offset);
     offset += cfg->num_taps * sizeof(struct heap_node);
 
-    offset = align_up(offset, alignof(uint16_t));
-    s->med[i].gen_per_tap = (uint16_t *)(base + offset);
-    offset += cfg->num_taps * sizeof(uint16_t);
+    offset = align_up(offset, alignof(uint32_t));
+    s->med[i].gen_per_tap = (uint32_t *)(base + offset);
+    offset += cfg->num_taps * sizeof(uint32_t);
   }
 
   offset = align_up(offset, alignof(uint32_t));
@@ -346,6 +346,13 @@ int16_t peak_test_median_value(struct detector_state *s, uint16_t offset) {
   }
   return median_value(&s->med[offset], 0);
 }
+
+uint64_t peak_test_rms_acc(const struct detector_state *s) {
+  if (!s) {
+    return 0;
+  }
+  return s->rms_acc;
+}
 #endif
 
 enum peak_det_state detector_init(void *mem, size_t mem_size,
@@ -405,7 +412,7 @@ void detector_reset(struct detector_state *s) {
   for (uint16_t i = 0; i < s->tap_size; ++i) {
     s->med[i].max_size = 0;
     s->med[i].min_size = 0;
-    memset(s->med[i].gen_per_tap, 0, s->num_taps * sizeof(uint16_t));
+    memset(s->med[i].gen_per_tap, 0, s->num_taps * sizeof(uint32_t));
   }
   s->write_tap = 0;
   s->current_gen = 1;
@@ -417,10 +424,44 @@ void detector_reset(struct detector_state *s) {
 int detector_feed_block(struct detector_state *s, const int16_t *block,
                         int64_t block_start_offset,
                         struct detector_result *out) {
-  (void)s;
-  (void)block;
-  (void)block_start_offset;
-  (void)out;
-  // TODO: implement median update and detection logic
-  return PEAK_DET_ERR_INVALID_ARG;
+  if (s == NULL || block == NULL) {
+    return PEAK_DET_ERR_INVALID_ARG;
+  }
+
+  size_t base = (size_t)s->write_tap * s->tap_size;
+  uint32_t gen = ++s->current_gen;
+
+  for (uint16_t i = 0; i < s->tap_size; ++i) {
+    size_t idx = base + i;
+    int16_t old = s->samples[idx];
+    int16_t val = block[i];
+
+    // RMS update
+    int32_t old32 = (int32_t)old;
+    int32_t val32 = (int32_t)val;
+    uint64_t old_sqr = (uint64_t)(old32 * old32);
+    uint64_t new_sqr = (uint64_t)(val32 * val32);
+    if (s->sqr_ring != NULL) {
+      s->rms_acc -= s->sqr_ring[idx];
+      s->sqr_ring[idx] = (uint32_t)new_sqr;
+      s->rms_acc += s->sqr_ring[idx];
+    } else {
+      s->rms_acc -= old_sqr;
+      s->rms_acc += new_sqr;
+    }
+
+    s->samples[idx] = val;
+    median_update_offset(&s->med[i], val, s->write_tap, gen);
+  }
+
+  s->write_tap = (uint8_t)((s->write_tap + 1) % s->num_taps);
+  s->sample_count += s->tap_size;
+  s->base_offset = block_start_offset;
+
+  if (out) {
+    out->hit = false;
+    out->peak_index = -1;
+  }
+
+  return PEAK_DET_OK;
 }
