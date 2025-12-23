@@ -44,7 +44,9 @@ RUN npm install -g @changesets/cli
 RUN useradd -ms /bin/zsh dev
 
 # Prepare Codex config dir so a mounted volume keeps history with correct ownership
-RUN mkdir -p /home/dev/.codex
+RUN mkdir -p /home/dev/.codex && \
+    chown dev:dev /home/dev/.codex && \
+    chmod 755 /home/dev/.codex
 
 USER dev
 
