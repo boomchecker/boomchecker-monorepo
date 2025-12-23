@@ -29,7 +29,18 @@
           "editor.codeActionsOnSave": {
             "source.organizeImports": "explicit"
           }
-        }
+        },
+        "editor.inlayHints.enabled": "on",
+        "[c]": {
+          "editor.defaultFormatter": "xaver.clang-format"
+        },
+        "[cpp]": {
+          "editor.defaultFormatter": "xaver.clang-format"
+        },
+        "C_Cpp.inlayHints.parameterNames.enabled": true,
+        "C_Cpp.inlayHints.parameterTypes.enabled": true,
+        "C_Cpp.errorSquiggles": "enabled",
+        "C_Cpp.intelliSenseEngine": "Default"
       },
       "extensions": [
         "golang.go",
