@@ -14,6 +14,8 @@ RUN apt-get update && apt-get install -y \
     python3-venv \
     zsh \
     clang-format \
+    cmake \
+    valgrind \
     && rm -rf /var/lib/apt/lists/*
 
 # Ensure `python` and `pip` commands are available
