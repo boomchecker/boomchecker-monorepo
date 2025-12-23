@@ -24,11 +24,11 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
     apt-get install -y nodejs && \
     rm -rf /var/lib/apt/lists/*
 
-# Install additional Go tools
-RUN go install github.com/go-delve/delve/cmd/dlv@latest && \
+# Install additional Go tools (versions pinned for Go 1.23 compatibility)
+RUN go install github.com/go-delve/delve/cmd/dlv@v1.23.0 && \
     go install golang.org/x/tools/gopls@v0.17.0 && \
-    go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest && \
-    go install honnef.co/go/tools/cmd/staticcheck@latest
+    go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.55.2 && \
+    go install honnef.co/go/tools/cmd/staticcheck@2023.1.6
 
 # Install pnpm
 RUN npm install -g pnpm
@@ -39,15 +39,22 @@ RUN curl --location https://taskfile.dev/install.sh | sh -s -- -b /usr/local/bin
 # Install Changesets CLI
 RUN npm install -g @changesets/cli
 
-# Set up PNPM storage to behave like on a local computer
-ENV PNPM_HOME="/pnpm-store"
+# Create dev user (minimal change, avoids root shell issues)
+RUN useradd -ms /bin/zsh dev
+
+USER dev
+
+# Set up PNPM storage
+ENV PNPM_HOME="/home/dev/.pnpm"
+ENV PATH="$PNPM_HOME:$PATH"
+
 RUN mkdir -p $PNPM_HOME && \
-    chown -R $(whoami) $PNPM_HOME && \
-    touch ~/.zshrc ~/.bashrc && \
-    echo "export PNPM_HOME=$PNPM_HOME" >> ~/.zshrc && \
-    echo "export PATH=\$PNPM_HOME:\$PATH" >> ~/.zshrc && \
-    echo "export PNPM_HOME=$PNPM_HOME" >> ~/.bashrc && \
-    echo "export PATH=\$PNPM_HOME:\$PATH" >> ~/.bashrc
+    echo 'export PNPM_HOME=$PNPM_HOME' >> ~/.zshrc && \
+    echo 'export PATH=$PNPM_HOME:$PATH' >> ~/.zshrc
+
+# Basic zsh prompt (fixes `1544f2741cc9#`)
+RUN echo 'autoload -Uz colors && colors' >> ~/.zshrc && \
+    echo 'PROMPT="%F{cyan}%n@%m%f:%F{yellow}%~%f %# "' >> ~/.zshrc
 
 # Set environment variables
 ENV LANG=C.UTF-8
