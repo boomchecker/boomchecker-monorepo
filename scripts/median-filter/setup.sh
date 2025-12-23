@@ -2,8 +2,16 @@
 set -euo pipefail
 
 echo "==> Setting up median-filter environment"
-apt-get update
-apt-get install python3-venv -y
+
+# Determine sudo prefix
+if [[ $(id -u) -ne 0 ]] && command -v sudo >/dev/null 2>&1; then
+    SUDO_PREFIX="sudo"
+else
+    SUDO_PREFIX=""
+fi
+
+$SUDO_PREFIX apt-get update
+$SUDO_PREFIX apt-get install python3-venv -y
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PYTHON_DIR="$SCRIPT_DIR/python"

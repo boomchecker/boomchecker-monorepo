@@ -13,6 +13,9 @@ RUN apt-get update && apt-get install -y \
     python3-pip \
     python3-venv \
     zsh \
+    clang-format \
+    cmake \
+    valgrind \
     && rm -rf /var/lib/apt/lists/*
 
 # Ensure `python` and `pip` commands are available
@@ -41,6 +44,11 @@ RUN npm install -g @changesets/cli
 
 # Create dev user (minimal change, avoids root shell issues)
 RUN useradd -ms /bin/zsh dev
+
+# Prepare Codex config dir so a mounted volume keeps history with correct ownership
+RUN mkdir -p /home/dev/.codex && \
+    chown dev:dev /home/dev/.codex && \
+    chmod 755 /home/dev/.codex
 
 USER dev
 

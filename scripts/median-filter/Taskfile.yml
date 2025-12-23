@@ -1,5 +1,11 @@
 version: "3"
 
+includes:
+  csrc:
+    taskfile: ./csrc/Taskfile.yml
+    dir: ./csrc
+    optional: true
+
 tasks:
   setup:
     desc: Install Python dependencies and ffmpeg for median-filter scripts
