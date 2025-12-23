@@ -3,6 +3,7 @@
 
 #include "peak_detector.h"
 
+#include <limits.h>
 #include <math.h>
 #include <stdalign.h>
 #include <stddef.h>
@@ -553,6 +554,15 @@ int detector_feed_block(struct detector_state *s, const int16_t *block,
   }
 
   out->hit = hit;
-  out->peak_index = hit ? (int)(middle_base + (size_t)peak_pos) : -1;
+  if (hit) {
+    // newest tap index je (write_tap + num_taps - 1) % num_taps
+    uint8_t newest = (uint8_t)((s->write_tap + s->num_taps - 1) % s->num_taps);
+    uint8_t delta =
+        (uint8_t)((newest + s->num_taps - middle_idx) % s->num_taps);
+    int64_t middle_start = block_start_offset - ((int64_t)delta * s->tap_size);
+    out->peak_index = (int)(middle_start + peak_pos);
+  } else {
+    out->peak_index = -1;
+  }
   return PEAK_DET_OK;
 }
