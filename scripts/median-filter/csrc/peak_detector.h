@@ -12,19 +12,21 @@ enum peak_det_state {
   PEAK_DET_ERR_INVALID_ARG = -202
 };
 
-// Median peak detector structures
+/** @brief Detekční prahy pro impulzní událost. */
 struct median_detector_levels {
   int16_t det_level;
   int16_t det_rms;
   int16_t det_energy;
 };
 
+/** @brief Konfigurace detektoru. */
 struct median_detector_cfg {
   uint8_t num_taps;
   uint16_t tap_size;
   struct median_detector_levels levels;
 };
 
+/** @brief Výsledek detekce po zpracování bloku. */
 struct detector_result {
   bool hit;
   int peak_index;
@@ -34,18 +36,24 @@ struct detector_result {
 struct detector_state;
 
 // Functions
-/*
- * Returns the required state size for the given configuration (aligned so
- * it can be stored in a uint8_t buffer).
+/**
+ * @brief Vrátí potřebnou velikost paměťového bloku pro stav podle konfigurace.
+ *
+ * @param cfg       konfigurace (nesmí být NULL)
+ * @param out_size  výstup: velikost v bajtech, zarovnaná pro interní struktury
+ * @return PEAK_DET_OK nebo chybový kód
  */
 enum peak_det_state detector_state_size(const struct median_detector_cfg *cfg,
                                         size_t *out_size);
 
-/*
- * Initializes state in the caller's buffer.
- * - mem: pointer to pre-allocated buffer
- * - mem_size: size of the buffer
- * Returns PEAK_DET_OK on success, <0 on error.
+/**
+ * @brief Inicializuje stav v uživatelem dodaném bufferu (bez malloc).
+ *
+ * @param mem       ukazatel na předalokovaný buffer
+ * @param mem_size  velikost bufferu v bajtech
+ * @param cfg       konfigurace
+ * @param out       výstup: ukazatel na inicializovaný stav uvnitř bufferu
+ * @return PEAK_DET_OK nebo chybový kód
  */
 enum peak_det_state detector_init(void *mem, size_t mem_size,
                                   const struct median_detector_cfg *cfg,
@@ -54,16 +62,26 @@ enum peak_det_state detector_init(void *mem, size_t mem_size,
 void detector_deinit(struct detector_state *s); // optional cleanup
 void detector_reset(struct detector_state *s);  // reset execution
 
-// Online processing of a block; block_start_offset = signal offset
+/**
+ * @brief Online zpracování jednoho tapu (bloku) vzorků.
+ *
+ * @param s                  interní stav
+ * @param block              vstupní vzorky délky tap_size
+ * @param block_start_offset logický offset signálu (pro zpětné určení polohy)
+ * @param out                výsledek detekce (může být NULL)
+ * @return PEAK_DET_OK nebo chybový kód
+ */
 int detector_feed_block(struct detector_state *s, const int16_t *block,
                         int64_t block_start_offset,
                         struct detector_result *out);
 
 #ifdef PEAK_DETECTOR_TESTING
-// Test-only helpers to observe internals without exposing them in production.
+/// Test-only helper pro injektování do medianu.
 void peak_test_median_update(struct detector_state *s, uint16_t offset,
                              int16_t value, uint16_t tap_idx, uint32_t gen);
+/// Test-only helper pro přečtení medianu na offsetu.
 int16_t peak_test_median_value(struct detector_state *s, uint16_t offset);
+/// Test-only helper pro přečtení RMS akumulátoru.
 uint64_t peak_test_rms_acc(const struct detector_state *s);
 #endif
 
