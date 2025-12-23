@@ -20,6 +20,7 @@
         "go.useLanguageServer": true,
         "go.lintTool": "golangci-lint",
         "go.lintOnSave": "package",
+        "clang-format.executable": "/usr/bin/clang-format",
         "editor.formatOnSave": true,
         "editor.formatOnPaste": true,
         "go.formatTool": "gofmt",
@@ -38,7 +39,8 @@
         "esbenp.prettier-vscode",
         "gruntfuggly.todo-tree",
         "openai.chatgpt",
-        "github.copilot-chat"
+        "github.copilot-chat",
+        "xaver.clang-format"
       ]
     }
   }
