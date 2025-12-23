@@ -40,7 +40,8 @@
         "gruntfuggly.todo-tree",
         "openai.chatgpt",
         "github.copilot-chat",
-        "xaver.clang-format"
+        "xaver.clang-format",
+        "ms-vscode.cpptools-extension-pack"
       ]
     }
   }
