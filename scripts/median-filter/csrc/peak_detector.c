@@ -166,6 +166,35 @@ static inline bool heap_is_stale(const struct heap_node *n,
   return n->gen != gen_per_tap[n->tap_idx];
 }
 
+static void heap_sift_down(struct heap_node *heap, size_t size, size_t idx,
+                           bool is_max_heap);
+
+static void heap_heapify(struct heap_node *heap, size_t size,
+                         bool is_max_heap) {
+  if (size == 0) {
+    return;
+  }
+  // iterate i = floor(size/2) - 1 down to 0 using size_t underflow pattern
+  for (size_t i = size / 2; i-- > 0;) {
+    heap_sift_down(heap, size, i, is_max_heap);
+  }
+}
+
+static void heap_compact(struct heap_node *heap, size_t *size,
+                         const uint16_t *gen_per_tap, bool is_max_heap) {
+  size_t write = 0;
+  for (size_t read = 0; read < *size; ++read) {
+    if (!heap_is_stale(&heap[read], gen_per_tap)) {
+      if (write != read) {
+        heap[write] = heap[read];
+      }
+      ++write;
+    }
+  }
+  *size = write;
+  heap_heapify(heap, *size, is_max_heap);
+}
+
 static void heap_sift_up(struct heap_node *heap, size_t idx, bool is_max_heap) {
   while (idx > 0) {
     size_t parent = (idx - 1) / 2;
@@ -247,11 +276,11 @@ static void heap_clean_top(struct per_offset_median *m, bool is_max_heap,
 }
 
 static void median_rebalance(struct per_offset_median *m) {
-  heap_clean_top(m, true, m->max_heap, &m->max_size);
-  heap_clean_top(m, false, m->min_heap, &m->min_size);
+  // nejprve vyčistit stale uvnitř hald (kompaktace + heapify)
+  heap_compact(m->max_heap, &m->max_size, m->gen_per_tap, true);
+  heap_compact(m->min_heap, &m->min_size, m->gen_per_tap, false);
 
   while (m->max_size < m->min_size) {
-    heap_clean_top(m, false, m->min_heap, &m->min_size);
     if (m->min_size == 0) {
       break;
     }
@@ -260,7 +289,6 @@ static void median_rebalance(struct per_offset_median *m) {
   }
 
   while (m->max_size > m->min_size + 1) {
-    heap_clean_top(m, true, m->max_heap, &m->max_size);
     if (m->max_size == 0) {
       break;
     }
@@ -272,7 +300,7 @@ static void median_rebalance(struct per_offset_median *m) {
 }
 
 static int16_t median_value(struct per_offset_median *m, int16_t fallback) {
-  heap_clean_top(m, true, m->max_heap, &m->max_size);
+  heap_compact(m->max_heap, &m->max_size, m->gen_per_tap, true);
   if (m->max_size == 0) {
     return fallback;
   }
