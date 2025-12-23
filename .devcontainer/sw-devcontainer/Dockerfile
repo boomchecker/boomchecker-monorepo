@@ -43,6 +43,9 @@ RUN npm install -g @changesets/cli
 # Create dev user (minimal change, avoids root shell issues)
 RUN useradd -ms /bin/zsh dev
 
+# Prepare Codex config dir so a mounted volume keeps history with correct ownership
+RUN mkdir -p /home/dev/.codex
+
 USER dev
 
 # Set up PNPM storage

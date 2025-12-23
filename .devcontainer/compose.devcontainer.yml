@@ -8,6 +8,8 @@ services:
       - ../:/workspace:cached
       # Mount SSH keys from WSL (read-write to allow proper permissions)
       - ${HOME}/.ssh:/root/.ssh
+      # Persist Codex config/history
+      - codex-data:/home/dev/.codex
     privileged: true
     cap_add:
       - SYS_PTRACE
@@ -24,8 +26,13 @@ services:
       - ../:/workspace:cached
       # Mount SSH keys from WSL (read-write to allow proper permissions)
       - ${HOME}/.ssh:/root/.ssh
+      # Persist Codex config/history
+      - codex-data:/home/dev/.codex
     cap_add:
       - SYS_PTRACE
     security_opt:
       - seccomp:unconfined
     command: sleep infinity
+
+volumes:
+  codex-data:
