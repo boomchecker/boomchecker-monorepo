@@ -177,6 +177,51 @@ static void test_big_median_progression(void) {
   free(buf);
 }
 
+static void test_detection_basic(void) {
+  // num_taps=5 => middle tap je index 2 (0 nejstarší), tap_size=3
+  struct median_detector_cfg cfg = {
+      .num_taps = 5,
+      .tap_size = 3,
+      .levels = {.det_level = 4, .det_rms = 1, .det_energy = 2},
+  };
+
+  size_t need = 0;
+  TEST_ASSERT_EQUAL(PEAK_DET_OK, detector_state_size(&cfg, &need));
+  uint8_t *buf = (uint8_t *)malloc(need);
+  TEST_ASSERT_NOT_NULL(buf);
+  struct detector_state *state = NULL;
+  TEST_ASSERT_EQUAL(PEAK_DET_OK, detector_init(buf, need, &cfg, &state));
+
+  int16_t tap0[3] = {1, 1, 1};
+  int16_t tap1[3] = {1, 1, 1};
+  int16_t tap2[3] = {1, 1, 1};
+  int16_t tap3[3] = {10, 1, 1}; // peak na pozici 0 v tapu 3
+  int16_t tap4[3] = {1, 1, 1};
+  int16_t tap5[3] = {1, 1, 1};
+
+  struct detector_result res;
+  TEST_ASSERT_EQUAL(PEAK_DET_OK, detector_feed_block(state, tap0, 0, &res));
+  TEST_ASSERT_FALSE(res.hit);
+  TEST_ASSERT_EQUAL(PEAK_DET_OK, detector_feed_block(state, tap1, 3, &res));
+  TEST_ASSERT_FALSE(res.hit);
+  TEST_ASSERT_EQUAL(PEAK_DET_OK, detector_feed_block(state, tap2, 6, &res));
+  TEST_ASSERT_FALSE(res.hit);
+  // middle tap je teď tap2 (index 2), vyhodnocuje se po dalším feedu
+  TEST_ASSERT_EQUAL(PEAK_DET_OK, detector_feed_block(state, tap3, 9, &res));
+  TEST_ASSERT_FALSE(res.hit);
+  TEST_ASSERT_EQUAL(PEAK_DET_OK, detector_feed_block(state, tap4, 12, &res));
+  TEST_ASSERT_FALSE(res.hit);
+  // posuň okno ještě jednou, middle tap bude index 3 s peakem
+  TEST_ASSERT_EQUAL(PEAK_DET_OK, detector_feed_block(state, tap5, 15, &res));
+  TEST_ASSERT_TRUE(res.hit);
+  TEST_ASSERT_EQUAL((int)(((cfg.num_taps / 2) + 1) % cfg.num_taps *
+                         cfg.tap_size),
+                    res.peak_index);
+
+  detector_deinit(state);
+  free(buf);
+}
+
 int main(void) {
   UNITY_BEGIN();
   RUN_TEST(test_state_size_and_init);
@@ -184,5 +229,6 @@ int main(void) {
   RUN_TEST(test_invalid_config);
   RUN_TEST(test_median_progression);
   RUN_TEST(test_big_median_progression);
+  RUN_TEST(test_detection_basic);
   return UNITY_END();
 }
