@@ -2,9 +2,15 @@
 #define PEAK_DETECTOR_H
 
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
-enum peak_det_state { PEAK_DET_OK = 0, PEAK_DET_ERR_CFG_UNINITIALIZED = -200 };
+enum peak_det_state {
+  PEAK_DET_OK = 0,
+  PEAK_DET_ERR_CFG_UNINITIALIZED = -200,
+  PEAK_DET_ERR_BUFFER_TOO_SMALL = -201,
+  PEAK_DET_ERR_INVALID_ARG = -202
+};
 
 // Median peak detector structures
 struct median_detector_levels {
@@ -24,7 +30,7 @@ struct detector_result {
   int peak_index;
 };
 
-// forward declaration for online mode
+// Forward declaration for opaque state
 struct detector_state;
 
 // Functions
@@ -39,12 +45,11 @@ enum peak_det_state detector_state_size(const struct median_detector_cfg *cfg,
  * Initializes state in the caller's buffer.
  * - mem: pointer to pre-allocated buffer
  * - mem_size: size of the buffer
- * - out: receives a valid pointer to state within the buffer
- * Return 0 on success, <0 on error (e.g. insufficient buffer).
+ * Returns PEAK_DET_OK on success, <0 on error.
  */
-int detector_init(void *mem, size_t mem_size,
-                  const struct median_detector_cfg *cfg,
-                  struct detector_state **out);
+enum peak_det_state detector_init(void *mem, size_t mem_size,
+                                  const struct median_detector_cfg *cfg,
+                                  struct detector_state **out);
 
 void detector_deinit(struct detector_state *s); // optional cleanup
 void detector_reset(struct detector_state *s);  // reset execution
