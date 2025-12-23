@@ -3,9 +3,11 @@
 
 #include "peak_detector.h"
 
+#include <math.h>
 #include <stdalign.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <stdlib.h>
 #include <string.h>
 
 // Internal structures for median over tap_size offsets and num_taps taps
@@ -354,6 +356,27 @@ uint64_t peak_test_rms_acc(const struct detector_state *s) {
   return s->rms_acc;
 }
 #endif
+// --- helpers -----------------------------------------------------------------
+
+static int cmp_int16(const void *a, const void *b) {
+  int16_t av = *(const int16_t *)a;
+  int16_t bv = *(const int16_t *)b;
+  return (av > bv) - (av < bv);
+}
+
+static int16_t median_of_slice(const int16_t *arr, size_t len) {
+  if (len == 0) {
+    return 0;
+  }
+  // simple copy + sort; len is at most tap_size
+  int16_t tmp[64];
+  if (len > sizeof(tmp) / sizeof(tmp[0])) {
+    len = sizeof(tmp) / sizeof(tmp[0]);
+  }
+  memcpy(tmp, arr, len * sizeof(int16_t));
+  qsort(tmp, len, sizeof(int16_t), cmp_int16);
+  return tmp[len / 2];
+}
 
 enum peak_det_state detector_init(void *mem, size_t mem_size,
                                   const struct median_detector_cfg *cfg,
@@ -463,5 +486,73 @@ int detector_feed_block(struct detector_state *s, const int16_t *block,
     out->peak_index = -1;
   }
 
+  // vyhodnocení detekce až když máme plné okno
+  size_t window_len = (size_t)s->num_taps * s->tap_size;
+  if (s->sample_count < window_len) {
+    return PEAK_DET_OK;
+  }
+
+  // middle tap index v kronologii od nejstaršího (write_tap je nejstarší)
+  uint8_t middle_idx =
+      (uint8_t)((s->write_tap + (s->num_taps / 2)) % s->num_taps);
+  size_t middle_base = (size_t)middle_idx * s->tap_size;
+
+  // Noise median per offset
+  int16_t middle_minus_noise = 0;
+  int16_t peak_val = INT16_MIN;
+  int peak_pos = -1;
+  for (uint16_t i = 0; i < s->tap_size; ++i) {
+    int16_t noise = median_value(&s->med[i], 0);
+    int16_t sample = s->samples[middle_base + i];
+    int32_t diff = (int32_t)sample - (int32_t)noise;
+    if (diff > peak_val) {
+      peak_val = (int16_t)diff;
+      peak_pos = i;
+      middle_minus_noise = noise; // not used further, kept for clarity
+    }
+  }
+
+  if (peak_pos < 0 || out == NULL) {
+    return PEAK_DET_OK;
+  }
+
+  double rms_noise = 0.0;
+  if (s->rms_acc > 0 && window_len > 0) {
+    double mean_sq = (double)s->rms_acc / (double)window_len;
+    rms_noise = sqrt(mean_sq);
+  }
+
+  bool hit = false;
+  if (peak_val > s->det_level &&
+      peak_val > (int32_t)s->det_rms * (int32_t)rms_noise) {
+    // Before = median z [pos : pos+tap_size) v middle tapu
+    size_t start_before = (size_t)peak_pos;
+    size_t end_before = start_before + s->tap_size;
+    if (end_before > s->tap_size) {
+      end_before = s->tap_size;
+    }
+    int16_t before_med = median_of_slice(
+        &s->samples[middle_base + start_before], end_before - start_before);
+
+    // After = median z [pos - tap_size : pos) v middle tapu
+    size_t start_after = (peak_pos >= s->tap_size) ? 0 : peak_pos;
+    if (peak_pos >= s->tap_size) {
+      start_after = peak_pos - s->tap_size;
+    } else {
+      start_after = 0;
+    }
+    size_t end_after = (size_t)peak_pos;
+    int16_t after_med = median_of_slice(&s->samples[middle_base + start_after],
+                                        end_after - start_after);
+
+    int64_t lhs = (int64_t)before_med;
+    int64_t rhs = (int64_t)after_med * (int64_t)s->det_energy;
+    if (lhs > rhs) {
+      hit = true;
+    }
+  }
+
+  out->hit = hit;
+  out->peak_index = hit ? (int)(middle_base + (size_t)peak_pos) : -1;
   return PEAK_DET_OK;
 }
