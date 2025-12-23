@@ -88,19 +88,15 @@ static void test_median_progression(void) {
   int16_t blk3[2] = {36, 49};
 
   struct detector_result res;
-  TEST_ASSERT_EQUAL(PEAK_DET_OK,
-                    detector_feed_block(state, blk0, 0, &res));
-  TEST_ASSERT_EQUAL(PEAK_DET_OK,
-                    detector_feed_block(state, blk1, 2, &res));
-  TEST_ASSERT_EQUAL(PEAK_DET_OK,
-                    detector_feed_block(state, blk2, 4, &res));
+  TEST_ASSERT_EQUAL(PEAK_DET_OK, detector_feed_block(state, blk0, 0, &res));
+  TEST_ASSERT_EQUAL(PEAK_DET_OK, detector_feed_block(state, blk1, 2, &res));
+  TEST_ASSERT_EQUAL(PEAK_DET_OK, detector_feed_block(state, blk2, 4, &res));
 
   TEST_ASSERT_EQUAL_INT16(4, peak_test_median_value(state, 0));
   TEST_ASSERT_EQUAL_INT16(9, peak_test_median_value(state, 1));
 
   // overwrite tap0 with new block (lazy delete via new gen)
-  TEST_ASSERT_EQUAL(PEAK_DET_OK,
-                    detector_feed_block(state, blk3, 6, &res));
+  TEST_ASSERT_EQUAL(PEAK_DET_OK, detector_feed_block(state, blk3, 6, &res));
 
   TEST_ASSERT_EQUAL_INT16(16, peak_test_median_value(state, 0));
   TEST_ASSERT_EQUAL_INT16(25, peak_test_median_value(state, 1));
@@ -113,11 +109,80 @@ static void test_median_progression(void) {
   free(buf);
 }
 
+static void test_big_median_progression(void) {
+  struct median_detector_cfg cfg = {
+      .num_taps = 5,
+      .tap_size = 20,
+      .levels = {.det_level = 0, .det_rms = 0, .det_energy = 0},
+  };
+
+  size_t need = 0;
+  TEST_ASSERT_EQUAL(PEAK_DET_OK, detector_state_size(&cfg, &need));
+  uint8_t *buf = (uint8_t *)malloc(need);
+  TEST_ASSERT_NOT_NULL(buf);
+  struct detector_state *state = NULL;
+  TEST_ASSERT_EQUAL(PEAK_DET_OK, detector_init(buf, need, &cfg, &state));
+
+  int16_t blk0[20];
+  int16_t blk1[20];
+  int16_t blk2[20];
+  int16_t blk3[20];
+  int16_t blk4[20];
+  int16_t blk5[20];
+
+  for (int i = 0; i < 20; ++i) {
+    blk0[i] = i * i;             // 0,1,4,9,16,...
+    blk1[i] = (i + 1) * (i + 1); // 1,4,9,16,25,...
+    blk2[i] = (i + 2) * (i + 2); // 4,9,16,25,36,...
+    blk3[i] = (i + 3) * (i + 3); // 9,16,25,36,49,...
+    blk4[i] = (i + 4) * (i + 4); // 16,25,36,49,64,...
+    blk5[i] = (i + 5) * (i + 5); // 25,36,49,64,81,...
+  }
+
+  struct detector_result res;
+  TEST_ASSERT_EQUAL(PEAK_DET_OK, detector_feed_block(state, blk0, 0, &res));
+  TEST_ASSERT_EQUAL(PEAK_DET_OK, detector_feed_block(state, blk1, 20, &res));
+  TEST_ASSERT_EQUAL(PEAK_DET_OK, detector_feed_block(state, blk2, 40, &res));
+  TEST_ASSERT_EQUAL(PEAK_DET_OK, detector_feed_block(state, blk3, 60, &res));
+  TEST_ASSERT_EQUAL(PEAK_DET_OK, detector_feed_block(state, blk4, 80, &res));
+
+  TEST_ASSERT_EQUAL_INT16(4, peak_test_median_value(state, 0));
+  TEST_ASSERT_EQUAL_INT16(9, peak_test_median_value(state, 1));
+  TEST_ASSERT_EQUAL_INT16(16, peak_test_median_value(state, 2));
+  TEST_ASSERT_EQUAL_INT16(25, peak_test_median_value(state, 3));
+  TEST_ASSERT_EQUAL_INT16(36, peak_test_median_value(state, 4));
+
+  // overwrite tap0 with new block (lazy delete via new gen)
+  TEST_ASSERT_EQUAL(PEAK_DET_OK, detector_feed_block(state, blk5, 100, &res));
+
+  TEST_ASSERT_EQUAL_INT16(9, peak_test_median_value(state, 0));
+  TEST_ASSERT_EQUAL_INT16(16, peak_test_median_value(state, 1));
+  TEST_ASSERT_EQUAL_INT16(25, peak_test_median_value(state, 2));
+  TEST_ASSERT_EQUAL_INT16(36, peak_test_median_value(state, 3));
+  TEST_ASSERT_EQUAL_INT16(49, peak_test_median_value(state, 4));
+
+  // RMS should reflect current window (tap0 overwritten): blk5 + blk4 + blk3 +
+  // blk2 + blk1
+  uint64_t expected_rms_acc = 0;
+  for (int i = 0; i < 20; ++i) {
+    expected_rms_acc += blk5[i] * blk5[i];
+    expected_rms_acc += blk4[i] * blk4[i];
+    expected_rms_acc += blk3[i] * blk3[i];
+    expected_rms_acc += blk2[i] * blk2[i];
+    expected_rms_acc += blk1[i] * blk1[i];
+  }
+  TEST_ASSERT_EQUAL_UINT64(expected_rms_acc, peak_test_rms_acc(state));
+
+  detector_deinit(state);
+  free(buf);
+}
+
 int main(void) {
   UNITY_BEGIN();
   RUN_TEST(test_state_size_and_init);
   RUN_TEST(test_buffer_too_small);
   RUN_TEST(test_invalid_config);
   RUN_TEST(test_median_progression);
+  RUN_TEST(test_big_median_progression);
   return UNITY_END();
 }
