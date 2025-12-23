@@ -22,13 +22,14 @@ enable_testing()
 
 add_executable(peak_tests
     csrc/tests/peak_detector_test.c
+    csrc/peak_detector.c
     third_party/Unity/src/unity.c
 )
 target_include_directories(peak_tests PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/csrc
     ${CMAKE_CURRENT_SOURCE_DIR}/third_party/Unity/src
 )
-target_link_libraries(peak_tests PRIVATE peak)
+target_compile_definitions(peak_tests PRIVATE PEAK_DETECTOR_TESTING=1)
 set_target_properties(peak_tests PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/build"
 )

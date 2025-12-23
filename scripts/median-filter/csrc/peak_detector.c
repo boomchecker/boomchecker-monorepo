@@ -18,7 +18,7 @@ struct heap_node {
 struct per_offset_median {
   struct heap_node *max_heap;
   struct heap_node *min_heap;
-  uint8_t *gen_per_tap; // length num_taps
+  uint16_t *gen_per_tap; // length num_taps
   size_t max_size;
   size_t min_size;
 };
@@ -92,8 +92,8 @@ enum peak_det_state detector_state_size(const struct median_detector_cfg *cfg,
     offset = align_up(offset, alignof(struct heap_node));
     offset += cfg->num_taps * sizeof(struct heap_node); // min_heap
 
-    offset = align_up(offset, alignof(uint8_t));
-    offset += cfg->num_taps * sizeof(uint8_t); // gen_per_tap
+    offset = align_up(offset, alignof(uint16_t));
+    offset += cfg->num_taps * sizeof(uint16_t); // gen_per_tap
   }
 
   offset = align_up(offset, alignof(uint32_t));
@@ -130,9 +130,9 @@ static void layout_state(void *mem_base, const struct median_detector_cfg *cfg,
     s->med[i].min_heap = (struct heap_node *)(base + offset);
     offset += cfg->num_taps * sizeof(struct heap_node);
 
-    offset = align_up(offset, alignof(uint8_t));
-    s->med[i].gen_per_tap = (uint8_t *)(base + offset);
-    offset += cfg->num_taps * sizeof(uint8_t);
+    offset = align_up(offset, alignof(uint16_t));
+    s->med[i].gen_per_tap = (uint16_t *)(base + offset);
+    offset += cfg->num_taps * sizeof(uint16_t);
   }
 
   offset = align_up(offset, alignof(uint32_t));
@@ -140,6 +140,185 @@ static void layout_state(void *mem_base, const struct median_detector_cfg *cfg,
 
   *state_out = s;
 }
+
+// --- heap helpers (per offset)
+// ------------------------------------------------
+
+static inline int heap_cmp_max(const struct heap_node *a,
+                               const struct heap_node *b) {
+  if (a->value != b->value) {
+    return (int)a->value - (int)b->value;
+  }
+  // tie-breaker: newer generation first
+  return (int)a->gen - (int)b->gen;
+}
+
+static inline int heap_cmp_min(const struct heap_node *a,
+                               const struct heap_node *b) {
+  if (a->value != b->value) {
+    return (int)b->value - (int)a->value;
+  }
+  return (int)b->gen - (int)a->gen;
+}
+
+static inline bool heap_is_stale(const struct heap_node *n,
+                                 const uint16_t *gen_per_tap) {
+  return n->gen != gen_per_tap[n->tap_idx];
+}
+
+static void heap_sift_up(struct heap_node *heap, size_t idx, bool is_max_heap) {
+  while (idx > 0) {
+    size_t parent = (idx - 1) / 2;
+    int cmp = is_max_heap ? heap_cmp_max(&heap[idx], &heap[parent])
+                          : heap_cmp_min(&heap[idx], &heap[parent]);
+    if (cmp <= 0) {
+      break;
+    }
+    struct heap_node tmp = heap[parent];
+    heap[parent] = heap[idx];
+    heap[idx] = tmp;
+    idx = parent;
+  }
+}
+
+static void heap_sift_down(struct heap_node *heap, size_t size, size_t idx,
+                           bool is_max_heap) {
+  while (true) {
+    size_t left = 2 * idx + 1;
+    size_t right = left + 1;
+    size_t best = idx;
+
+    if (left < size) {
+      int cmp = is_max_heap ? heap_cmp_max(&heap[left], &heap[best])
+                            : heap_cmp_min(&heap[left], &heap[best]);
+      if (cmp > 0) {
+        best = left;
+      }
+    }
+    if (right < size) {
+      int cmp = is_max_heap ? heap_cmp_max(&heap[right], &heap[best])
+                            : heap_cmp_min(&heap[right], &heap[best]);
+      if (cmp > 0) {
+        best = right;
+      }
+    }
+    if (best == idx) {
+      break;
+    }
+    struct heap_node tmp = heap[idx];
+    heap[idx] = heap[best];
+    heap[best] = tmp;
+    idx = best;
+  }
+}
+
+static void heap_push(struct heap_node *heap, size_t *size,
+                      struct heap_node node, bool is_max_heap) {
+  heap[*size] = node;
+  (*size)++;
+  heap_sift_up(heap, *size - 1, is_max_heap);
+}
+
+static struct heap_node heap_pop(struct heap_node *heap, size_t *size,
+                                 bool is_max_heap) {
+  struct heap_node top = heap[0];
+  (*size)--;
+  if (*size > 0) {
+    heap[0] = heap[*size];
+    heap_sift_down(heap, *size, 0, is_max_heap);
+  }
+  return top;
+}
+
+static struct heap_node *heap_top(struct heap_node *heap, size_t size) {
+  if (size == 0) {
+    return NULL;
+  }
+  return &heap[0];
+}
+
+static void heap_clean_top(struct per_offset_median *m, bool is_max_heap,
+                           struct heap_node *heap, size_t *size) {
+  struct heap_node *top = heap_top(heap, *size);
+  while (top && heap_is_stale(top, m->gen_per_tap)) {
+    (void)heap_pop(heap, size, is_max_heap);
+    top = heap_top(heap, *size);
+  }
+}
+
+static void median_rebalance(struct per_offset_median *m) {
+  heap_clean_top(m, true, m->max_heap, &m->max_size);
+  heap_clean_top(m, false, m->min_heap, &m->min_size);
+
+  while (m->max_size < m->min_size) {
+    heap_clean_top(m, false, m->min_heap, &m->min_size);
+    if (m->min_size == 0) {
+      break;
+    }
+    struct heap_node n = heap_pop(m->min_heap, &m->min_size, false);
+    heap_push(m->max_heap, &m->max_size, n, true);
+  }
+
+  while (m->max_size > m->min_size + 1) {
+    heap_clean_top(m, true, m->max_heap, &m->max_size);
+    if (m->max_size == 0) {
+      break;
+    }
+    struct heap_node n = heap_pop(m->max_heap, &m->max_size, true);
+    heap_push(m->min_heap, &m->min_size, n, false);
+  }
+
+  heap_clean_top(m, true, m->max_heap, &m->max_size);
+}
+
+static int16_t median_value(struct per_offset_median *m, int16_t fallback) {
+  heap_clean_top(m, true, m->max_heap, &m->max_size);
+  if (m->max_size == 0) {
+    return fallback;
+  }
+  return m->max_heap[0].value;
+}
+
+static void median_insert(struct per_offset_median *m, int16_t value,
+                          uint16_t tap_idx, uint16_t gen) {
+  struct heap_node node = {.value = value, .tap_idx = tap_idx, .gen = gen};
+
+  if (m->max_size == 0) {
+    heap_push(m->max_heap, &m->max_size, node, true);
+    return;
+  }
+
+  int16_t med = median_value(m, value);
+  if (value <= med) {
+    heap_push(m->max_heap, &m->max_size, node, true);
+  } else {
+    heap_push(m->min_heap, &m->min_size, node, false);
+  }
+}
+
+static void median_update_offset(struct per_offset_median *m, int16_t new_value,
+                                 uint16_t tap_idx, uint16_t gen) {
+  m->gen_per_tap[tap_idx] = gen;
+  median_insert(m, new_value, tap_idx, gen);
+  median_rebalance(m);
+}
+
+#ifdef PEAK_DETECTOR_TESTING
+void peak_test_median_update(struct detector_state *s, uint16_t offset,
+                             int16_t value, uint16_t tap_idx, uint16_t gen) {
+  if (!s || offset >= s->tap_size) {
+    return;
+  }
+  median_update_offset(&s->med[offset], value, tap_idx, gen);
+}
+
+int16_t peak_test_median_value(struct detector_state *s, uint16_t offset) {
+  if (!s || offset >= s->tap_size) {
+    return 0;
+  }
+  return median_value(&s->med[offset], 0);
+}
+#endif
 
 enum peak_det_state detector_init(void *mem, size_t mem_size,
                                   const struct median_detector_cfg *cfg,
@@ -198,7 +377,7 @@ void detector_reset(struct detector_state *s) {
   for (uint16_t i = 0; i < s->tap_size; ++i) {
     s->med[i].max_size = 0;
     s->med[i].min_size = 0;
-    memset(s->med[i].gen_per_tap, 0, s->num_taps * sizeof(uint8_t));
+    memset(s->med[i].gen_per_tap, 0, s->num_taps * sizeof(uint16_t));
   }
   s->write_tap = 0;
   s->current_gen = 1;
