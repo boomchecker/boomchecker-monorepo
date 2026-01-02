@@ -1,6 +1,17 @@
 version: "3"
 
+includes:
+  csrc:
+    taskfile: ./csrc/Taskfile.yml
+    dir: ./csrc
+    optional: true
+
 tasks:
+  default:
+    desc: Default tasks
+    cmds:
+      - task --list
+
   setup:
     desc: Install Python dependencies and ffmpeg for median-filter scripts
     cmds:
