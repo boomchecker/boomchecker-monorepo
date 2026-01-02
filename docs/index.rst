@@ -1,24 +1,24 @@
-Peak Detector Documentation
-===========================
+Boomchecker Monorepo Documentation
+==================================
 
-Overview
---------
-
-This site documents the median-based impulse detector implemented in
-``scripts/median-filter/csrc/peak_detector.c``. It combines algorithm notes and
-API reference generated from Doxygen via Breathe.
-
-Contents
---------
-
-.. toctree::
-   :maxdepth: 2
-   :caption: Guide
-
-   peak_detector_algorithm
+This site hosts documentation for every part of the Boomchecker monorepo: ESP-IDF
+firmware, Node.js apps/services, and supporting automation scripts. Use the
+sections below to dive into a specific domain.
 
 .. toctree::
    :maxdepth: 1
-   :caption: API Reference
+   :caption: Firmware (ESP-IDF, MCUs)
 
-   api
+   firmware/index
+
+.. toctree::
+   :maxdepth: 1
+   :caption: Node.js / Backend Apps
+
+   node/index
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Scripts & Tooling
+
+   scripts/index
