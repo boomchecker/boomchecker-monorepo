@@ -552,12 +552,11 @@ int detector_feed_block(struct detector_state *s, const int16_t *block,
         &s->samples[middle_base + start_before], end_before - start_before);
 
     // After = median z [pos - tap_size : pos) v middle tapu
-    size_t start_after = (peak_pos >= s->tap_size) ? 0 : peak_pos;
+    size_t start_after = 0;
     if (peak_pos >= s->tap_size) {
       start_after = peak_pos - s->tap_size;
-    } else {
-      start_after = 0;
     }
+
     size_t end_after = (size_t)peak_pos;
     int16_t after_med = median_of_slice(&s->samples[middle_base + start_after],
                                         end_after - start_after);
