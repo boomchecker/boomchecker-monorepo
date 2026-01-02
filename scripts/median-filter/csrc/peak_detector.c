@@ -1,5 +1,21 @@
-// Placeholder implementation for peak detector library.
-// TODO: add median filter / impulse detection implementation.
+/**
+ * @file peak_detector.c
+ * @brief Median-based impulse detector implementation.
+ *
+ * Algoritmus:
+ * 1. Data přicházejí po tap blocích (o délce @c tap_size), které se ukládají do
+ *    kruhového bufferu s @c num_taps položkami.
+ * 2. Pro každý offset v tapu se udržují dvě haldy (max/min) s lazy invalidací
+ *    přes @c gen_per_tap, takže median lze aktualizovat v O(log N) bez
+ *    mazání starých uzlů.
+ * 3. RMS akumulátor drží sumu čtverců pro celé okno, což umožňuje dynamický
+ *    práh @c det_rms * RMS.
+ * 4. Vyhodnocení probíhá nad "middle" tapem: hledá se největší deviation vůči
+ *    medianu šumu a pak se kontroluje energie before/after.
+ *
+ * Hlavní cíle: determinismus (žádné malloc), jednoduchá portace na embedded a
+ * auditovatelnost algoritmu.
+ */
 
 #include "peak_detector.h"
 
@@ -12,10 +28,16 @@
 #include <string.h>
 
 // Internal structures for median over tap_size offsets and num_taps taps
+/**
+ * @brief Uzly pro obousměrné haldy mediánu.
+ *
+ * @c tap_idx a @c gen umožňují označit prvek jako zastaralý bez přepisování
+ * haldy – při přesunu zapisovacího kurzoru se pro daný tap zvyšuje generace.
+ */
 struct heap_node {
-  int16_t value;
-  uint16_t tap_idx;
-  uint32_t gen;
+  int16_t value;   /**< Uložená vzorková hodnota. */
+  uint16_t tap_idx;/**< Z jakého tapu vzorek pochází. */
+  uint32_t gen;    /**< Generace tapu pro lazy invalidaci. */
 };
 
 struct per_offset_median {

@@ -24,3 +24,9 @@ tasks:
     cmds:
       - pnpm changeset version
     desc: Apply versions from pending changesets
+
+  docs:
+    desc: Build documentation (Doxygen + Sphinx)
+    cmds:
+      - doxygen Doxyfile
+      - sphinx-build -b html docs docs/_build
