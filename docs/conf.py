@@ -9,6 +9,7 @@ copyright = f"{current_year}, {author}"
 
 extensions = [
     "breathe",
+    "sphinxcontrib.mermaid",
 ]
 
 breathe_projects = {

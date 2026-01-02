@@ -25,11 +25,12 @@ RUN apt-get update && apt-get install -y \
 RUN ln -sf /usr/bin/python3 /usr/local/bin/python && \
     ln -sf /usr/bin/pip3 /usr/local/bin/pip
 
-# Documentation toolchain (Sphinx + Breathe + RTD theme) available globally
+# Documentation toolchain (Sphinx + Breathe + RTD theme + Mermaid) available globally
 RUN python3 -m pip install --no-cache-dir --break-system-packages \
     sphinx \
     breathe \
-    sphinx-rtd-theme
+    sphinx-rtd-theme \
+    sphinxcontrib-mermaid
 
 # Install Node.js LTS (v20) from NodeSource
 RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
