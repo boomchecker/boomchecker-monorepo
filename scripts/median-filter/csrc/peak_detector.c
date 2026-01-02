@@ -481,6 +481,8 @@ int detector_feed_block(struct detector_state *s, const int16_t *block,
     uint64_t new_sqr = (uint64_t)(val32 * val32);
     if (s->sqr_ring != NULL) {
       s->rms_acc -= s->sqr_ring[idx];
+      // Safe cast: max value for int16_t is 32767^2 =
+      // 1,073,741,824 < UINT32_MAX
       s->sqr_ring[idx] = (uint32_t)new_sqr;
       s->rms_acc += s->sqr_ring[idx];
     } else {
