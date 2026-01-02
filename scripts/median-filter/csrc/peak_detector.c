@@ -365,18 +365,32 @@ static int cmp_int16(const void *a, const void *b) {
   return (av > bv) - (av < bv);
 }
 
+// Maximum supported slice length for median calculation.
+// This limit exists to avoid dynamic allocation on embedded systems.
+// If tap_size exceeds this, consider increasing the buffer size.
+#define MEDIAN_SLICE_MAX_LEN 128
+
 static int16_t median_of_slice(const int16_t *arr, size_t len) {
   if (len == 0) {
     return 0;
   }
-  // simple copy + sort; len is at most tap_size
-  int16_t tmp[64];
-  if (len > sizeof(tmp) / sizeof(tmp[0])) {
-    len = sizeof(tmp) / sizeof(tmp[0]);
+
+  // For embedded systems, use fixed stack buffer to avoid malloc.
+  // If input exceeds buffer size, truncate and use only first N elements.
+  // This is acceptable since the function is only used for local
+  // before/after comparisons within a tap, not for global median.
+  int16_t tmp[MEDIAN_SLICE_MAX_LEN];
+  size_t actual_len = len;
+
+  if (len > MEDIAN_SLICE_MAX_LEN) {
+    // Truncate to max buffer size. This should rarely happen in practice
+    // as tap_size is typically much smaller (e.g., 16-32 samples).
+    actual_len = MEDIAN_SLICE_MAX_LEN;
   }
-  memcpy(tmp, arr, len * sizeof(int16_t));
-  qsort(tmp, len, sizeof(int16_t), cmp_int16);
-  return tmp[len / 2];
+
+  memcpy(tmp, arr, actual_len * sizeof(int16_t));
+  qsort(tmp, actual_len, sizeof(int16_t), cmp_int16);
+  return tmp[actual_len / 2];
 }
 
 enum peak_det_state detector_init(void *mem, size_t mem_size,
