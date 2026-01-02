@@ -7,6 +7,11 @@ includes:
     optional: true
 
 tasks:
+  default:
+    desc: Default tasks
+    cmds:
+      - task --list
+
   setup:
     desc: Install Python dependencies and ffmpeg for median-filter scripts
     cmds:
