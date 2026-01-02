@@ -1,6 +1,10 @@
 # VS code
 .vscode
 
+# Generated docs
+docs/_build
+docs/_doxygen
+
 # Build Outputs
 .next/
 out/

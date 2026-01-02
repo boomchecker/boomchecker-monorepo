@@ -12,6 +12,8 @@ RUN apt-get update && apt-get install -y \
     python3 \
     python3-pip \
     python3-venv \
+    doxygen \
+    graphviz \
     zsh \
     clang-format \
     cmake \
@@ -22,6 +24,13 @@ RUN apt-get update && apt-get install -y \
 # Ensure `python` and `pip` commands are available
 RUN ln -sf /usr/bin/python3 /usr/local/bin/python && \
     ln -sf /usr/bin/pip3 /usr/local/bin/pip
+
+# Documentation toolchain (Sphinx + Breathe + RTD theme + Mermaid) available globally
+RUN python3 -m pip install --no-cache-dir --break-system-packages \
+    sphinx \
+    breathe \
+    sphinx-rtd-theme \
+    sphinxcontrib-mermaid
 
 # Install Node.js LTS (v20) from NodeSource
 RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \

@@ -24,6 +24,9 @@ We use Changesets; each package has its own version. Only projects in `apps/` an
   - `task -l` - list available tasks.
   - `task changeset` - create a new changeset.
   - `task changeset:version` - apply pending changesets to package versions.
+  - `task docs` - generate Doxygen XML/HTML and Sphinx HTML docs into `docs/_build`.
+
+Generated documentation lives at `docs/_build/index.html` after running `task docs`.
 
 ## Docker and development environment
 Devcontainer is a prebuilt image plus VS Code configuration that pins toolchains, CLIs and dependencies so everyone develops in the same environment (no host drift, works the same on CI). We use two devcontainers at the moment.
