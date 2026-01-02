@@ -1,6 +1,9 @@
 # VS code
 .vscode
 
+# Generated docs
+docs/
+
 # Build Outputs
 .next/
 out/
