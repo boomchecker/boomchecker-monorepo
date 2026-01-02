@@ -27,6 +27,29 @@ tasks:
 
   docs:
     desc: Build documentation (Doxygen + Sphinx)
+    deps:
+      - docs:root
+      - docs:firmware
+      - docs:monorepo
+      - docs:scripts
+
+  docs:root:
+    desc: Build root landing page only
+    cmds:
+      - sphinx-build -b html docs docs/_build/html
+
+  docs:firmware:
+    desc: Build firmware documentation only
+    cmds:
+      - PROJECT=firmware sphinx-build -b html docs docs/_build/firmware/html
+
+  docs:monorepo:
+    desc: Build monorepo documentation only
+    cmds:
+      - PROJECT=monorepo sphinx-build -b html docs docs/_build/monorepo/html
+
+  docs:scripts:
+    desc: Build scripts documentation only (includes Doxygen)
     cmds:
       - doxygen Doxyfile
-      - sphinx-build -b html docs docs/_build
+      - PROJECT=scripts sphinx-build -b html docs docs/_build/scripts/html
