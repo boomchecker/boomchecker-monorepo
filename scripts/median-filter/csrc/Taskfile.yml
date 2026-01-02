@@ -1,6 +1,11 @@
 version: "3"
 
 tasks:
+  default:
+    desc: Default tasks
+    cmds:
+      - task --list
+
   build:
     desc: Build C library and Unity tests via CMake (requires cmake)
     dir: .
