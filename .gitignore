@@ -2,7 +2,8 @@
 .vscode
 
 # Generated docs
-docs/
+docs/_build
+docs/_doxygen
 
 # Build Outputs
 .next/
