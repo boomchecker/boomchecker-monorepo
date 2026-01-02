@@ -1,5 +1,5 @@
 # Start with the official Go image on Debian bookworm (has Python 3.11)
-FROM golang:1.23-bookworm
+FROM golang:1.24-bookworm
 
 # Install basic development tools including Python 3.11
 RUN apt-get update && apt-get install -y \
@@ -16,6 +16,7 @@ RUN apt-get update && apt-get install -y \
     clang-format \
     cmake \
     valgrind \
+    sudo \
     && rm -rf /var/lib/apt/lists/*
 
 # Ensure `python` and `pip` commands are available
@@ -44,6 +45,8 @@ RUN npm install -g @changesets/cli
 
 # Create dev user (minimal change, avoids root shell issues)
 RUN useradd -ms /bin/zsh dev
+# Allow dev user to sudo without password for package installs
+RUN usermod -aG sudo dev && echo "dev ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/dev
 
 # Prepare Codex config dir so a mounted volume keeps history with correct ownership
 RUN mkdir -p /home/dev/.codex && \
