@@ -12,32 +12,32 @@ Documentation Areas
       
       <div style="border: 2px solid #2980b9; border-radius: 8px; padding: 20px; background: #f8f9fa;">
          <h3 style="margin-top: 0; color: #2980b9;">
-            <a href="../firmware/html/index.html" style="text-decoration: none; color: inherit;">
+            <a href="firmware/index.html" style="text-decoration: none; color: inherit;">
                🔧 Firmware Documentation
             </a>
          </h3>
          <p>ESP-IDF firmware, embedded systems, and MCU development.</p>
-         <a href="../firmware/html/index.html" style="display: inline-block; margin-top: 10px; padding: 8px 16px; background: #2980b9; color: white; text-decoration: none; border-radius: 4px;">Browse Firmware Docs →</a>
+         <a href="firmware/index.html" style="display: inline-block; margin-top: 10px; padding: 8px 16px; background: #2980b9; color: white; text-decoration: none; border-radius: 4px;">Browse Firmware Docs →</a>
       </div>
 
       <div style="border: 2px solid #27ae60; border-radius: 8px; padding: 20px; background: #f8f9fa;">
          <h3 style="margin-top: 0; color: #27ae60;">
-            <a href="../monorepo/html/index.html" style="text-decoration: none; color: inherit;">
+            <a href="monorepo/index.html" style="text-decoration: none; color: inherit;">
                🌐 Monorepo tools & docs
             </a>
          </h3>
          <p>Documentation of the tool used in the Boomchecker monorepo.</p>
-         <a href="../monorepo/html/index.html" style="display: inline-block; margin-top: 10px; padding: 8px 16px; background: #27ae60; color: white; text-decoration: none; border-radius: 4px;">Browse Monorepo Docs →</a>
+         <a href="monorepo/index.html" style="display: inline-block; margin-top: 10px; padding: 8px 16px; background: #27ae60; color: white; text-decoration: none; border-radius: 4px;">Browse Monorepo Docs →</a>
       </div>
 
       <div style="border: 2px solid #e67e22; border-radius: 8px; padding: 20px; background: #f8f9fa;">
          <h3 style="margin-top: 0; color: #e67e22;">
-            <a href="../scripts/html/index.html" style="text-decoration: none; color: inherit;">
+            <a href="scripts/index.html" style="text-decoration: none; color: inherit;">
                🛠️ Scripts & Tooling
             </a>
          </h3>
          <p>Automation scripts, DSP utilities, and development tools.</p>
-         <a href="../scripts/html/index.html" style="display: inline-block; margin-top: 10px; padding: 8px 16px; background: #e67e22; color: white; text-decoration: none; border-radius: 4px;">Browse Scripts Docs →</a>
+         <a href="scripts/index.html" style="display: inline-block; margin-top: 10px; padding: 8px 16px; background: #e67e22; color: white; text-decoration: none; border-radius: 4px;">Browse Scripts Docs →</a>
       </div>
 
    </div>
