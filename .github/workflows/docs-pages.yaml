@@ -52,6 +52,9 @@ jobs:
           rsync -a docs/_build/monorepo/html/ docs/_site/monorepo/
           rsync -a docs/_build/scripts/html/ docs/_site/scripts/
 
+      - name: Set custom domain
+        run: echo "docs.boomchecker.cz" > docs/_site/CNAME
+
       - uses: actions/upload-pages-artifact@v3
         with:
           path: docs/_site
