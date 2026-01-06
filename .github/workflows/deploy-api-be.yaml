@@ -20,6 +20,15 @@ env:
   EC2_INSTANCE_ID: ${{ secrets.AWS_INSTANCE_ID }}
   API_PORT: 8080
   JWT_ENCRYPTION_KEY: ${{ secrets.JWT_ENCRYPTION_KEY }}
+  # Admin authentication secrets
+  ADMIN_JWT_SECRET: ${{ secrets.ADMIN_JWT_SECRET }}
+  ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
+  # AWS SES configuration for admin emails
+  AWS_SES_REGION: ${{ secrets.AWS_SES_REGION }}
+  AWS_SES_FROM_EMAIL: ${{ secrets.AWS_SES_FROM_EMAIL }}
+  # AWS credentials for SES (if not using EC2 IAM role)
+  #AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+  #AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
 jobs:
   deploy-api:
@@ -61,12 +70,11 @@ jobs:
       - name: Build Go API binary
         working-directory: ./apps/api-backend
         run: |
-          echo "Building Go binary for Linux ARM64 with CGO..."
-          # Install cross-compilation tools for ARM64
-          sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu
+          echo "Building Go binary for Linux ARM64 (pure-Go, no CGO)..."
 
-          # Build with CGO enabled for mattn/go-sqlite3
-          CC=aarch64-linux-gnu-gcc GOOS=linux GOARCH=arm64 CGO_ENABLED=1 go build -o api-backend -ldflags="-s -w" .
+          # Build with CGO disabled - using modernc.org/sqlite (pure-Go driver)
+          # This avoids cross-compilation complexity and builds faster
+          GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -o api-backend -ldflags="-s -w" .
 
           echo "Verifying binary was created..."
           if [ ! -f api-backend ]; then
@@ -109,6 +117,10 @@ jobs:
               "echo \"APP_ENV=staging\" | sudo tee -a /opt/boomchecker/.env",
               "echo \"DB_PATH=/opt/boomchecker/data/boomchecker.db\" | sudo tee -a /opt/boomchecker/.env",
               "echo \"JWT_ENCRYPTION_KEY=${{ env.JWT_ENCRYPTION_KEY }}\" | sudo tee -a /opt/boomchecker/.env",
+              "echo \"ADMIN_JWT_SECRET=${{ env.ADMIN_JWT_SECRET }}\" | sudo tee -a /opt/boomchecker/.env",
+              "echo \"ADMIN_EMAIL=${{ env.ADMIN_EMAIL }}\" | sudo tee -a /opt/boomchecker/.env",
+              "echo \"AWS_SES_REGION=${{ env.AWS_SES_REGION }}\" | sudo tee -a /opt/boomchecker/.env",
+              "echo \"AWS_SES_FROM_EMAIL=${{ env.AWS_SES_FROM_EMAIL }}\" | sudo tee -a /opt/boomchecker/.env",
               "echo Verifying environment setup:",
               "cat /opt/boomchecker/.env",
               "echo Checking disk space:",

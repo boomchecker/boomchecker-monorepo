@@ -2,74 +2,49 @@ package middleware
 
 import (
 	"net/http"
+	"strings"
 
+	"github.com/boomchecker/api-backend/internal/services"
 	"github.com/gin-gonic/gin"
 )
 
-// TODO: Implement proper admin authentication
-// Admin authentication flow:
-// 1. Admin requests login via POST /admin/auth/request
-//    - Provide email address
-//    - System generates a JWT token valid for 24 hours
-//    - Token is sent to admin's email
-// 2. Admin uses the JWT token from email for subsequent requests
-//    - Token is sent in Authorization header: "Bearer <token>"
-//    - Middleware validates JWT signature and expiration
-//    - JWT contains claims: email, role=admin, exp, iat
-// 3. Token expires after 24 hours, admin must request new login
-//
-// Implementation files needed:
-// - internal/services/admin_auth_service.go (email sending, JWT generation)
-// - internal/handlers/admin_auth_handler.go (POST /admin/auth/request endpoint)
-// - internal/models/admin.go (optional: admin user model if storing in DB)
-// - Update this middleware to validate JWT instead of dummy check
-//
-// Security considerations:
-// - JWT secret should be different from node JWT secrets (separate key in .env)
-// - Email service configuration (SMTP or service like SendGrid/Mailgun)
-// - Rate limiting on auth request endpoint to prevent email spam
-// - Token should be single-use or include additional security (CSRF token, IP binding)
-
-// AdminAuthMiddleware validates admin authentication
-// TEMPORARY: This is a placeholder that allows all requests through
-// In production, this MUST validate JWT tokens from email-based login
-func AdminAuthMiddleware() gin.HandlerFunc {
+// AdminAuthMiddleware validates admin authentication using JWT tokens
+// Tokens are obtained via POST /admin/auth/request and sent via email
+// They are valid for 24 hours and must be included in the Authorization header
+func AdminAuthMiddleware(adminAuthService *services.AdminAuthService) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// TODO: Replace this with proper JWT validation
-		// Expected flow:
-		// 1. Extract token from Authorization header
-		// 2. Validate JWT signature using admin JWT secret
-		// 3. Check expiration (max 24 hours)
-		// 4. Verify claims (role=admin, valid email)
-		// 5. If invalid, return 401 Unauthorized
-
-		// TEMPORARY: Allow all requests (INSECURE - for development only)
-		// Uncomment the following to enable placeholder auth check:
-		/*
+		// Step 1: Extract token from Authorization header
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
-			c.JSON(http.StatusUnauthorized, gin.H{
-				"error":   "Unauthorized",
-				"message": "Admin authentication required. Please request login token via email.",
-			})
-			c.Abort()
+			unauthorizedResponse(c, "Admin authentication required. Please request a login token via POST /admin/auth/request")
 			return
 		}
 
-		// In production, validate JWT here
-		// For now, just check if header exists
+		// Step 2: Validate Bearer token format
 		if !strings.HasPrefix(authHeader, "Bearer ") {
-			c.JSON(http.StatusUnauthorized, gin.H{
-				"error":   "Unauthorized",
-				"message": "Invalid authorization header format. Expected: Bearer <token>",
-			})
-			c.Abort()
+			unauthorizedResponse(c, "Invalid authorization header format. Expected: Bearer <token>")
 			return
 		}
-		*/
 
-		// TEMPORARY WARNING: Admin endpoints are currently UNPROTECTED
-		// This allows development/testing but is INSECURE for production
+		// Step 3: Extract token string
+		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+		if tokenString == "" {
+			unauthorizedResponse(c, "Token is required in Authorization header")
+			return
+		}
+
+		// Step 4: Validate JWT token using admin auth service
+		claims, err := adminAuthService.ValidateToken(tokenString)
+		if err != nil {
+			unauthorizedResponse(c, "Invalid or expired token: "+err.Error())
+			return
+		}
+
+		// Step 5: Store claims in context for use by handlers
+		c.Set("admin_email", claims.Email)
+		c.Set("admin_claims", claims)
+
+		// Token is valid, continue to next handler
 		c.Next()
 	}
 }
