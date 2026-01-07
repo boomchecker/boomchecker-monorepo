@@ -7,11 +7,20 @@
   "customizations": {
     "vscode": {
       "settings": {
-        "terminal.integrated.defaultProfile.linux": "bash",
+        "terminal.integrated.profiles.linux": {
+          "zsh": {
+            "path": "/bin/zsh"
+          },
+          "bash": {
+            "path": "/bin/bash"
+          }
+        },
+        "terminal.integrated.defaultProfile.linux": "zsh",
         "go.toolsManagement.autoUpdate": true,
         "go.useLanguageServer": true,
         "go.lintTool": "golangci-lint",
         "go.lintOnSave": "package",
+        "clang-format.executable": "/usr/bin/clang-format",
         "editor.formatOnSave": true,
         "editor.formatOnPaste": true,
         "go.formatTool": "gofmt",
@@ -20,7 +29,18 @@
           "editor.codeActionsOnSave": {
             "source.organizeImports": "explicit"
           }
-        }
+        },
+        "editor.inlayHints.enabled": "on",
+        "[c]": {
+          "editor.defaultFormatter": "xaver.clang-format"
+        },
+        "[cpp]": {
+          "editor.defaultFormatter": "xaver.clang-format"
+        },
+        "C_Cpp.inlayHints.parameterNames.enabled": true,
+        "C_Cpp.inlayHints.parameterTypes.enabled": true,
+        "C_Cpp.errorSquiggles": "enabled",
+        "C_Cpp.intelliSenseEngine": "Default"
       },
       "extensions": [
         "golang.go",
@@ -29,7 +49,10 @@
         "ms-vscode-remote.vscode-remote-extensionpack",
         "esbenp.prettier-vscode",
         "gruntfuggly.todo-tree",
-        "openai.chatgpt"
+        "openai.chatgpt",
+        "github.copilot-chat",
+        "xaver.clang-format",
+        "ms-vscode.cpptools-extension-pack"
       ]
     }
   }
