@@ -1,0 +1,21 @@
+dependencies:
+  idf:
+    source:
+      type: idf
+    version: 5.4.0
+  otadrive/otadrive_esp:
+    component_hash: b722c5d6aeb37b4fbe99f22cb0b8e9b319f88757684bca08c25f4ed735117740
+    dependencies:
+    - name: idf
+      require: private
+      version: '>=4.4.0'
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    version: 2.0.6
+direct_dependencies:
+- idf
+- otadrive/otadrive_esp
+manifest_hash: fed465dd89ab61312ea01bd526bcf6949ebf326b843cdee4c2d5555e7622e07a
+target: esp32
+version: 2.0.0
