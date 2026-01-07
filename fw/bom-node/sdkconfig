@@ -404,6 +404,25 @@ CONFIG_PARTITION_TABLE_MD5=y
 # end of Partition Table
 
 #
+# Boomchecker
+#
+
+#
+# OTA
+#
+CONFIG_OTA_CURRENT_VERSION="0.0.0"
+CONFIG_OTA_API_KEY=""
+# end of OTA
+
+#
+# WiFi
+#
+CONFIG_MIDDLEWARE_WIFI_SSID=""
+CONFIG_MIDDLEWARE_WIFI_PASSWORD=""
+# end of WiFi
+# end of Boomchecker
+
+#
 # Compiler options
 #
 CONFIG_COMPILER_OPTIMIZATION_DEBUG=y
@@ -1866,13 +1885,6 @@ CONFIG_WIFI_PROV_AUTOSTOP_TIMEOUT=30
 CONFIG_WIFI_PROV_STA_ALL_CHANNEL_SCAN=y
 # CONFIG_WIFI_PROV_STA_FAST_SCAN is not set
 # end of Wi-Fi Provisioning Manager
-
-#
-# OTA
-#
-CONFIG_OTA_CURRENT_VERSION="0.0.0"
-CONFIG_OTA_API_KEY=""
-# end of OTA
 
 #
 # OTAdrive Configuration
