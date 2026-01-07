@@ -1,5 +1,0 @@
-menu "Middleware"
-
-rsource "wifi/Kconfig"
-
-endmenu
