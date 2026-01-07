@@ -1,0 +1,20 @@
+version: "3"
+
+tasks:
+  build:
+    desc: Build ESP32 code
+    aliases: [b]
+    cmds:
+      - idf.py build
+
+  flash:
+    desc: Flash ESP32 code
+    aliases: [f]
+    cmds:
+      - idf.py flash
+
+  monitor:
+    desc: Monitor ESP32
+    aliases: [m]
+    cmds:
+      - idf.py monitor -p /dev/ttyUSB1
