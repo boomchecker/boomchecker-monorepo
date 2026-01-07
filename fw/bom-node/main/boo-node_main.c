@@ -11,6 +11,7 @@
 #include "impulse_detection.h"
 #include "mic_input.h"
 #include "ring_buffer.h"
+#include "ota.h"
 
 #ifndef SAMPLING_FREQUENCY
 #define SAMPLING_FREQUENCY 44100
@@ -33,6 +34,7 @@ int16_t arrL[TAP_COUNT * TAP_SIZE];
 int16_t arrR[TAP_COUNT * TAP_SIZE];
 
 void app_main(void) {
+  ota_init();
 
   mic_config mic_cfg = {
       .sampling_freq = SAMPLING_FREQUENCY,

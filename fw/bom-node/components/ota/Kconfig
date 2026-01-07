@@ -1,0 +1,15 @@
+menu "OTA"
+
+    config OTA_CURRENT_VERSION
+        string "Current firmware version"
+        default "0.0.0"
+        help
+            Current firmware version reported to OTAdrive.
+
+    config OTA_API_KEY
+        string "OTAdrive API key"
+        default ""
+        help
+            API key used for OTAdrive device authentication.
+
+endmenu
