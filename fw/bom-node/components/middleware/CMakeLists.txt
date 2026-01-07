@@ -4,7 +4,8 @@ idf_component_register(
         SRCS 
                 "middleware.c"
                 ${WIFI_SOURCES}
-        INCLUDE_DIRS "include"
+        INCLUDE_DIRS 
+                "include"
                 "wifi/include"
         REQUIRES 
                 esp_wifi 
