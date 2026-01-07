@@ -1,0 +1,15 @@
+menu "WiFi"
+
+    config MIDDLEWARE_WIFI_SSID
+        string "WiFi SSID"
+        default ""
+        help
+            SSID used for WiFi station connection.
+
+    config MIDDLEWARE_WIFI_PASSWORD
+        string "WiFi password"
+        default ""
+        help
+            Password used for WiFi station connection.
+
+endmenu
