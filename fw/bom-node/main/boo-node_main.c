@@ -1,4 +1,5 @@
 #include "esp_log.h"
+#include "esp_err.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
@@ -8,10 +9,12 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "middleware.h"
+
 #include "impulse_detection.h"
 #include "mic_input.h"
-#include "ring_buffer.h"
 #include "ota.h"
+#include "ring_buffer.h"
 
 #ifndef SAMPLING_FREQUENCY
 #define SAMPLING_FREQUENCY 44100
@@ -34,7 +37,17 @@ int16_t arrL[TAP_COUNT * TAP_SIZE];
 int16_t arrR[TAP_COUNT * TAP_SIZE];
 
 void app_main(void) {
-  ota_init();
+  esp_err_t err = middleware_init();
+  if (err != ESP_OK) {
+    ESP_LOGE(TAG, "Middleware init failed: %s", esp_err_to_name(err));
+  }
+
+  err = ota_init();
+  if (err != ESP_OK) {
+    ESP_LOGE(TAG, "OTA init failed: %s", esp_err_to_name(err));
+  } else {
+    ota_check_for_update();
+  }
 
   mic_config mic_cfg = {
       .sampling_freq = SAMPLING_FREQUENCY,
@@ -46,7 +59,7 @@ void app_main(void) {
 
   mic_init(&mic_cfg);
 
-  int wanted_window_start =
+  /*int wanted_window_start =
       ((TAP_COUNT * TAP_SIZE) / 2) - (PRE_EVENT_MS * SAMPLING_FREQUENCY / 1000);
   ESP_LOGI(TAG, "wws - %d", wanted_window_start);
 
@@ -65,11 +78,11 @@ void app_main(void) {
   detection_request = false;
 
   vTaskDelay(pdMS_TO_TICKS(200));
-  ESP_LOGI(TAG, "Initialization finished");
+  ESP_LOGI(TAG, "Initialization finished");*/
 
   while (1) {
     vTaskDelay(1);
-    if (detection_request) {
+    /*if (detection_request) {
 
       detection_request = false;
 
@@ -104,6 +117,6 @@ void app_main(void) {
               wanted_window_start, wanted_window_length, TAP_COUNT * TAP_SIZE);
         }
       }
-    }
+    }*/
   }
 }
