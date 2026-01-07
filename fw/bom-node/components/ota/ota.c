@@ -2,9 +2,9 @@
 #include <string.h>
 
 #include "esp_log.h"
-#include "otadrive_esp.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "otadrive_esp.h"
 
 #include "ota.h"
 
@@ -29,6 +29,10 @@ static void ota_check_task(void *arg) {
   case OTADRIVE_NewFirmwareExists:
     ESP_LOGI(TAG, "Update available: %s (%ld bytes), current %s", r.version,
              (long)r.size, otadrive_currentversion());
+    r = otadrive_updateFirmware(true);
+    if (r.code != OTADRIVE_Success) {
+      ESP_LOGE(TAG, "Firmware update failed (%d)", r.code);
+    }
     break;
   case OTADRIVE_AlreadyUpToDate:
     ESP_LOGI(TAG, "Firmware is up to date (%s)", otadrive_currentversion());
@@ -53,7 +57,7 @@ esp_err_t ota_check_for_update(void) {
     return ESP_ERR_INVALID_STATE;
   }
 
-  if (xTaskCreate(ota_check_task, "ota_check", 8192, NULL, 5,
+  if (xTaskCreate(ota_check_task, "ota_check", 12288, NULL, 5,
                   &s_ota_check_task) != pdPASS) {
     s_ota_check_task = NULL;
     return ESP_ERR_NO_MEM;
