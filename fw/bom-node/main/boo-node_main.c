@@ -1,5 +1,5 @@
-#include "esp_log.h"
 #include "esp_err.h"
+#include "esp_log.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
@@ -42,12 +42,14 @@ void app_main(void) {
     ESP_LOGE(TAG, "Middleware init failed: %s", esp_err_to_name(err));
   }
 
+#ifdef CONFIG_OTA_ENABLE
   err = ota_init();
   if (err != ESP_OK) {
     ESP_LOGE(TAG, "OTA init failed: %s", esp_err_to_name(err));
   } else {
     ota_check_for_update();
   }
+#endif
 
   mic_config mic_cfg = {
       .sampling_freq = SAMPLING_FREQUENCY,

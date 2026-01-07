@@ -1,6 +1,10 @@
 menu "Boomchecker"
 
     menu "OTA"
+        config OTA_ENABLE
+            bool "Enable or disable OTA check/update"
+            default n
+
         config OTA_CURRENT_VERSION
             string "Current firmware version"
             default "0.0.0"
