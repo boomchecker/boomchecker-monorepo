@@ -65,6 +65,9 @@ RUN echo "source /opt/esp/idf/export.sh > /dev/null 2>&1" >> /home/dev/.bashrc &
     echo "export PATH=\$PNPM_HOME:\$PATH" >> /home/dev/.bashrc && \
     chown -R dev:dev /home/dev/.bashrc
 
+# Grant dev user ownership of /pnpm-store directory
+RUN chown -R dev:dev /pnpm-store
+
 ENV LANG C.UTF-8
 ENV LC_ALL C.UTF-8
 
