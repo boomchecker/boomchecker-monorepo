@@ -52,9 +52,9 @@ RUN npm install -g @changesets/cli
 # Set up PNPM storage to behave like on a local computer
 ENV PNPM_HOME="/pnpm-store"
 RUN mkdir -p $PNPM_HOME && \
-    chown -R $(whoami) $PNPM_HOME && \
     echo "export PNPM_HOME=$PNPM_HOME" >> ~/.bashrc && \
-    echo "export PATH=\$PNPM_HOME:\$PATH" >> ~/.bashrc
+    echo "export PATH=\$PNPM_HOME:\$PATH" >> ~/.bashrc && \
+    chown -R dev:dev $PNPM_HOME
 
 # Ensure ESP-IDF environment variables are sourced in Bash
 RUN echo "source /opt/esp/idf/export.sh > /dev/null 2>&1" >> ~/.bashrc
