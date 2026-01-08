@@ -1,3 +1,25 @@
+/**
+ * @brief Start the impulse detection subsystem.
+ *
+ * This function configures and starts the impulse detector for both
+ * left and right channels. It:
+ *  - Reads the microphone configuration via mic_get_config().
+ *  - Computes the pre/post event window within the stored tap buffer.
+ *  - Initializes the internal impulse_detector instances.
+ *  - Registers impulse_detection_on_tap as the microphone tap callback.
+ *  - Starts the microphone stream using mic_start().
+ *  - Creates and pins the impulse_detection_task FreeRTOS task.
+ *
+ * Usage requirements:
+ *  - mic_init() must be called successfully before calling this function,
+ *    so that mic_get_config() returns a valid configuration.
+ *
+ * Side effects:
+ *  - Starts audio capture.
+ *  - Spawns a background task that continuously processes tap data and
+ *    logs when an impulse is detected.
+ */
+
 #include "detector.h"
 #include "median_detection.h"
 #include "mic_input.h"
