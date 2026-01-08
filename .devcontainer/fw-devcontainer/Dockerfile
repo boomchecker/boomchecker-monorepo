@@ -1,6 +1,12 @@
 # Start with the official ESP-IDF image
 FROM espressif/idf:v5.4
 
+# Create dev user with UID 1001 (avoid conflicts)
+RUN useradd -m -u 1001 -s /bin/bash dev && \
+    usermod -a -G dialout dev && \
+    mkdir -p /home/dev/.ssh && \
+    chown -R dev:dev /home/dev
+
 # Install dependencies required for QEMU, Zsh, and Oh My Zsh
 RUN apt update && apt install -y \
     wget \
