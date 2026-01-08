@@ -9,7 +9,6 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
-#include "impulse_detection.h"
 #include <math.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -21,6 +20,9 @@ static const char *TAG = "MIC";
 static mic_config mic_cfg;
 static rb_struct rb_left, rb_right;
 i2s_chan_handle_t rx_channel = NULL, tx_channel = NULL;
+static bool mic_initialized = false;
+static mic_tap_callback tap_cb = NULL;
+static void *tap_cb_ctx = NULL;
 
 static int32_t i2s_read_buffer[CHUNK_FRAMES * 2];
 
@@ -58,6 +60,7 @@ static inline int16_t int_shift(int32_t s) { return (int16_t)(s >> 16); }
 
 void mic_init(const mic_config *cfg) {
   mic_cfg = *cfg;
+  mic_initialized = true;
 
   const int samples = mic_cfg.num_taps * mic_cfg.tap_size;
   rb_init(&rb_left, samples);
@@ -115,6 +118,42 @@ void mic_init(const mic_config *cfg) {
   ESP_LOGI(TAG, " - Buffer size - %d samples", samples);
 }
 
+void mic_init_default(void) {
+  mic_config cfg = {
+      .sampling_freq = MIC_SAMPLING_FREQUENCY,
+      .pre_event_ms = MIC_PRE_EVENT_MS,
+      .post_event_ms = MIC_POST_EVENT_MS,
+      .num_taps = MIC_DEFAULT_NUM_TAPS,
+      .tap_size = MIC_DEFAULT_TAP_SIZE,
+  };
+
+  mic_init(&cfg);
+}
+
+void mic_start(void) {
+  if (!mic_initialized) {
+    ESP_LOGE(TAG, "mic_start called before mic_init");
+    return;
+  }
+
+  xTaskCreatePinnedToCore(mic_reader_task, "mic_reader",
+                          MIC_READER_TASK_STACK, NULL,
+                          MIC_READER_TASK_PRIORITY, NULL,
+                          MIC_READER_TASK_CORE);
+}
+
+const mic_config *mic_get_config(void) {
+  if (!mic_initialized) {
+    return NULL;
+  }
+  return &mic_cfg;
+}
+
+void mic_set_tap_callback(mic_tap_callback cb, void *ctx) {
+  tap_cb = cb;
+  tap_cb_ctx = ctx;
+}
+
 void mic_reader_task(void *arg) {
   size_t bytes_rec = 0;
   int16_t tapL[mic_cfg.tap_size];
@@ -144,14 +183,14 @@ void mic_reader_task(void *arg) {
 
       if (((i + 1) % mic_cfg.tap_size == 0)) {
 
-        for (int j = 0; j < TAP_SIZE; j++) {
+        for (int j = 0; j < mic_cfg.tap_size; j++) {
           rb_push(&rb_left, tapL[j]);
           rb_push(&rb_right, tapR[j]);
         }
 
-        impulse_add_tap(&detL, &tapL[0]);
-        impulse_add_tap(&detR, &tapR[0]);
-        detection_request = true;
+        if (tap_cb != NULL) {
+          tap_cb(&tapL[0], &tapR[0], tap_cb_ctx);
+        }
       }
     }
   }

@@ -57,9 +57,6 @@ typedef struct {
   uint16_t count;
 } impulse_detector;
 
-extern impulse_detector detL;
-extern impulse_detector detR;
-
 void impulse_detection_init(impulse_detector *det);
 
 void impulse_add_tap(impulse_detector *det, const int16_t *samples);

@@ -1,4 +1,5 @@
 #include "impulse_detection.h"
+
 #include <math.h>
 #include <string.h>
 

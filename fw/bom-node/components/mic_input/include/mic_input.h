@@ -38,11 +38,37 @@
 // features.
 #define DC_BLOCK_FREQ_HZ 100
 
-// NOTE: This variable is accessed from multiple tasks.
-// Proper synchronization (e.g., using a mutex or other FreeRTOS primitives) is
-// required when reading or writing to detection_request to ensure thread
-// safety.
-extern bool detection_request;
+#ifndef MIC_SAMPLING_FREQUENCY
+#define MIC_SAMPLING_FREQUENCY 44100
+#endif
+
+#ifndef MIC_PRE_EVENT_MS
+#define MIC_PRE_EVENT_MS 10
+#endif
+
+#ifndef MIC_POST_EVENT_MS
+#define MIC_POST_EVENT_MS 10
+#endif
+
+#ifndef MIC_DEFAULT_NUM_TAPS
+#define MIC_DEFAULT_NUM_TAPS 31
+#endif
+
+#ifndef MIC_DEFAULT_TAP_SIZE
+#define MIC_DEFAULT_TAP_SIZE 30
+#endif
+
+#ifndef MIC_READER_TASK_STACK
+#define MIC_READER_TASK_STACK 8192
+#endif
+
+#ifndef MIC_READER_TASK_PRIORITY
+#define MIC_READER_TASK_PRIORITY 5
+#endif
+
+#ifndef MIC_READER_TASK_CORE
+#define MIC_READER_TASK_CORE 0
+#endif
 
 typedef struct {
   int sampling_freq; // [Hz]
@@ -53,7 +79,14 @@ typedef struct {
 } mic_config;
 
 void mic_init(const mic_config *mic_cnfg);
+void mic_init_default(void);
+void mic_start(void);
+const mic_config *mic_get_config(void);
 void mic_reader_task(void *arg);
 void mic_save_event(int16_t *out_left_mic, int16_t *out_right_mic);
+
+typedef void (*mic_tap_callback)(const int16_t *tap_left,
+                                 const int16_t *tap_right, void *ctx);
+void mic_set_tap_callback(mic_tap_callback cb, void *ctx);
 
 #endif
