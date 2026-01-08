@@ -24,6 +24,10 @@ static int wanted_window_length = 0;
 static void impulse_detection_on_tap(const int16_t *tap_left,
                                      const int16_t *tap_right, void *ctx) {
   (void)ctx;
+  if (tap_left == NULL || tap_right == NULL) {
+    ESP_LOGE(TAG, "tap callback received NULL buffer");
+    return;
+  }
   impulse_add_tap(&detL, tap_left);
   impulse_add_tap(&detR, tap_right);
   if (detection_sem != NULL) {
