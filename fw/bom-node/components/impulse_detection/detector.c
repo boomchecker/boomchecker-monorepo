@@ -13,11 +13,13 @@
 
 static const char *TAG = "IMPULSE";
 
+enum { MAX_EVENT_SAMPLES = TAP_COUNT * TAP_SIZE };
+
 static impulse_detector detL;
 static impulse_detector detR;
 static SemaphoreHandle_t detection_sem = NULL;
-static int16_t arrL[TAP_COUNT * TAP_SIZE];
-static int16_t arrR[TAP_COUNT * TAP_SIZE];
+static int16_t arrL[MAX_EVENT_SAMPLES];
+static int16_t arrR[MAX_EVENT_SAMPLES];
 static int wanted_window_start = 0;
 static int wanted_window_length = 0;
 
@@ -61,7 +63,7 @@ static void impulse_detection_task(void *arg) {
       detectedL = false;
       detectedR = false;
 
-      const int arr_len = (int)(sizeof(arrL) / sizeof(arrL[0]));
+      const int arr_len = MAX_EVENT_SAMPLES;
       if ((wanted_window_start >= 0) &&
           (wanted_window_start + wanted_window_length <= arr_len)) {
         for (int i = 0; i < wanted_window_length; i++) {
@@ -87,6 +89,13 @@ void impulse_detector_start(void) {
     ESP_LOGE(TAG, "mic_get_config failed; call mic_init first");
     return;
   }
+  if ((cfg->num_taps != TAP_COUNT) || (cfg->tap_size != TAP_SIZE)) {
+    ESP_LOGE(TAG,
+             "mic config mismatch: num_taps=%d tap_size=%d "
+             "(expected %d/%d)",
+             cfg->num_taps, cfg->tap_size, TAP_COUNT, TAP_SIZE);
+    return;
+  }
 
   wanted_window_start = ((TAP_COUNT * TAP_SIZE) / 2) -
                         (cfg->pre_event_ms * cfg->sampling_freq / 1000);
@@ -109,6 +118,10 @@ void impulse_detector_start(void) {
   mic_set_tap_callback(impulse_detection_on_tap, NULL);
   mic_start();
 
-  xTaskCreatePinnedToCore(impulse_detection_task, "impulse_detection", 8192,
-                          NULL, 5, NULL, 0);
-}
+  BaseType_t task_result =
+      xTaskCreatePinnedToCore(impulse_detection_task, "impulse_detection",
+                              8192, NULL, 5, NULL, 0);
+  if (task_result != pdPASS) {
+    ESP_LOGE(TAG, "Failed to create impulse_detection task (error=%d)",
+            (int)task_result);
+  }
