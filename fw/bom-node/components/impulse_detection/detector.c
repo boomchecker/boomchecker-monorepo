@@ -4,6 +4,7 @@
 
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
 #include "freertos/task.h"
 
 #include <stdbool.h>
@@ -14,7 +15,7 @@ static const char *TAG = "IMPULSE";
 
 static impulse_detector detL;
 static impulse_detector detR;
-static bool detection_request = false;
+static SemaphoreHandle_t detection_sem = NULL;
 static int16_t arrL[TAP_COUNT * TAP_SIZE];
 static int16_t arrR[TAP_COUNT * TAP_SIZE];
 static int wanted_window_start = 0;
@@ -25,7 +26,9 @@ static void impulse_detection_on_tap(const int16_t *tap_left,
   (void)ctx;
   impulse_add_tap(&detL, tap_left);
   impulse_add_tap(&detR, tap_right);
-  detection_request = true;
+  if (detection_sem != NULL) {
+    xSemaphoreGive(detection_sem);
+  }
 }
 
 static void impulse_detection_task(void *arg) {
@@ -37,39 +40,38 @@ static void impulse_detection_task(void *arg) {
   ESP_LOGI(TAG, "Initialization finished");
 
   while (1) {
-    vTaskDelay(1);
-    if (detection_request) {
-      detection_request = false;
+    if (xSemaphoreTake(detection_sem, portMAX_DELAY) != pdTRUE) {
+      continue;
+    }
 
-      mic_save_event(arrL, arrR);
+    mic_save_event(arrL, arrR);
 
-      detectedL = impulse_run_detection(&detL);
+    detectedL = impulse_run_detection(&detL);
+    detectedR = false;
+    if (!detectedL) {
+      detectedR = impulse_run_detection(&detR);
+    }
+
+    if (detectedL || detectedR) {
+      ESP_LOGI(TAG, ">>> IMPULSE DETECTED <<<");
+      detectedL = false;
       detectedR = false;
-      if (!detectedL) {
-        detectedR = impulse_run_detection(&detR);
-      }
 
-      if (detectedL || detectedR) {
-        ESP_LOGI(TAG, ">>> IMPULSE DETECTED <<<");
-        detectedL = false;
-        detectedR = false;
-
-        const int arr_len = (int)(sizeof(arrL) / sizeof(arrL[0]));
-        if ((wanted_window_start >= 0) &&
-            (wanted_window_start + wanted_window_length <= arr_len)) {
-          for (int i = 0; i < wanted_window_length; i++) {
-            printf("%d ", arrL[wanted_window_start + i]);
-          }
-          printf("\n");
-          for (int i = 0; i < wanted_window_length; i++) {
-            printf("%d ", arrR[wanted_window_start + i]);
-          }
-          printf("\n");
-        } else {
-          ESP_LOGE(
-              TAG, "Window out of bounds: start=%d, length=%d, array size=%d",
-              wanted_window_start, wanted_window_length, arr_len);
+      const int arr_len = (int)(sizeof(arrL) / sizeof(arrL[0]));
+      if ((wanted_window_start >= 0) &&
+          (wanted_window_start + wanted_window_length <= arr_len)) {
+        for (int i = 0; i < wanted_window_length; i++) {
+          printf("%d ", arrL[wanted_window_start + i]);
         }
+        printf("\n");
+        for (int i = 0; i < wanted_window_length; i++) {
+          printf("%d ", arrR[wanted_window_start + i]);
+        }
+        printf("\n");
+      } else {
+        ESP_LOGE(
+            TAG, "Window out of bounds: start=%d, length=%d, array size=%d",
+            wanted_window_start, wanted_window_length, arr_len);
       }
     }
   }
@@ -93,7 +95,13 @@ void impulse_detector_start(void) {
   impulse_detection_init(&detL);
   impulse_detection_init(&detR);
 
-  detection_request = false;
+  if (detection_sem == NULL) {
+    detection_sem = xSemaphoreCreateBinary();
+    if (detection_sem == NULL) {
+      ESP_LOGE(TAG, "Failed to create detection semaphore");
+      return;
+    }
+  }
   mic_set_tap_callback(impulse_detection_on_tap, NULL);
   mic_start();
 
