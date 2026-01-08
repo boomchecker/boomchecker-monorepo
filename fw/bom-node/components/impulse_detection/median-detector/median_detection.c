@@ -1,4 +1,4 @@
-#include "impulse_detection.h"
+#include "median_detection.h"
 
 #include <math.h>
 #include <string.h>

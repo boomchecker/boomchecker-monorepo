@@ -11,7 +11,7 @@
 
 #include "middleware.h"
 
-#include "impulse_detection.h"
+#include "detector.h"
 #include "mic_input.h"
 #include "ota.h"
 #include "ring_buffer.h"

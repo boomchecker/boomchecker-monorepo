@@ -1,14 +1,14 @@
 #include "detector.h"
-#include "impulse_detection.h"
+#include "median_detection.h"
 #include "mic_input.h"
 
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
-#include <stdio.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include <stdio.h>
 
 static const char *TAG = "IMPULSE";
 
@@ -82,9 +82,8 @@ void impulse_detector_start(void) {
     return;
   }
 
-  wanted_window_start =
-      ((TAP_COUNT * TAP_SIZE) / 2) -
-      (cfg->pre_event_ms * cfg->sampling_freq / 1000);
+  wanted_window_start = ((TAP_COUNT * TAP_SIZE) / 2) -
+                        (cfg->pre_event_ms * cfg->sampling_freq / 1000);
   ESP_LOGI(TAG, "wws - %d", wanted_window_start);
 
   wanted_window_length =
