@@ -15,6 +15,7 @@ services:
       - SYS_PTRACE
     security_opt:
       - seccomp:unconfined
+    user: "1001"
     command: sleep infinity
 
   sw-devcontainer:
