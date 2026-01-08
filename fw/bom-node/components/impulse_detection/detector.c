@@ -86,17 +86,8 @@ static void impulse_detection_task(void *arg) {
       detectedR = false;
 
       const int arr_len = MAX_EVENT_SAMPLES;
-      if ((wanted_window_start >= 0) &&
-          (wanted_window_start + wanted_window_length <= arr_len)) {
-        for (int i = 0; i < wanted_window_length; i++) {
-          printf("%d ", arrL[wanted_window_start + i]);
-        }
-        printf("\n");
-        for (int i = 0; i < wanted_window_length; i++) {
-          printf("%d ", arrR[wanted_window_start + i]);
-        }
-        printf("\n");
-      } else {
+      if (!((wanted_window_start >= 0) &&
+            (wanted_window_start + wanted_window_length <= arr_len))) {
         ESP_LOGE(TAG,
                  "Window out of bounds: start=%d, length=%d, array size=%d",
                  wanted_window_start, wanted_window_length, arr_len);
