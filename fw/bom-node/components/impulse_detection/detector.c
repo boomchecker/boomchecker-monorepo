@@ -97,9 +97,9 @@ static void impulse_detection_task(void *arg) {
         }
         printf("\n");
       } else {
-        ESP_LOGE(
-            TAG, "Window out of bounds: start=%d, length=%d, array size=%d",
-            wanted_window_start, wanted_window_length, arr_len);
+        ESP_LOGE(TAG,
+                 "Window out of bounds: start=%d, length=%d, array size=%d",
+                 wanted_window_start, wanted_window_length, arr_len);
       }
     }
   }
@@ -119,7 +119,7 @@ void impulse_detector_start(void) {
     return;
   }
 
-  wanted_window_start = ((TAP_COUNT * TAP_SIZE) / 2) -
+  wanted_window_start = ((cfg->num_taps * cfg->tap_size) / 2) -
                         (cfg->pre_event_ms * cfg->sampling_freq / 1000);
   ESP_LOGI(TAG, "wws - %d", wanted_window_start);
 
@@ -140,10 +140,10 @@ void impulse_detector_start(void) {
   mic_set_tap_callback(impulse_detection_on_tap, NULL);
   mic_start();
 
-  BaseType_t task_result =
-      xTaskCreatePinnedToCore(impulse_detection_task, "impulse_detection",
-                              8192, NULL, 5, NULL, 0);
+  BaseType_t task_result = xTaskCreatePinnedToCore(
+      impulse_detection_task, "impulse_detection", 8192, NULL, 5, NULL, 0);
   if (task_result != pdPASS) {
     ESP_LOGE(TAG, "Failed to create impulse_detection task (error=%d)",
-            (int)task_result);
+             (int)task_result);
   }
+}
