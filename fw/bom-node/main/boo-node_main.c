@@ -33,7 +33,10 @@ void app_main(void) {
   }
 #endif
 
-  mic_init_default();
+  err = impulse_detector_start();
+  if (err != ESP_OK) {
+    ESP_LOGE(TAG, "Impulse detector start failed: %s", esp_err_to_name(err));
+  }
 
   while (1) {
     vTaskDelay(1);
