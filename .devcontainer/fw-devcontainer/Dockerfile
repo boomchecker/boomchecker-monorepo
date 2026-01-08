@@ -56,7 +56,7 @@ RUN mkdir -p $PNPM_HOME && \
     echo "export PNPM_HOME=$PNPM_HOME" >> ~/.bashrc && \
     echo "export PATH=\$PNPM_HOME:\$PATH" >> ~/.bashrc
 
-# Ensure ESP-IDF environment variables are sourced in Zsh
+# Ensure ESP-IDF environment variables are sourced in Bash
 RUN echo "source /opt/esp/idf/export.sh > /dev/null 2>&1" >> ~/.bashrc
 
 # Configure dev user with ESP-IDF environment
