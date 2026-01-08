@@ -54,9 +54,9 @@ static void impulse_detection_task(void *arg) {
         detectedL = false;
         detectedR = false;
 
+        const int arr_len = (int)(sizeof(arrL) / sizeof(arrL[0]));
         if ((wanted_window_start >= 0) &&
-            (wanted_window_start + wanted_window_length <=
-             TAP_COUNT * TAP_SIZE)) {
+            (wanted_window_start + wanted_window_length <= arr_len)) {
           for (int i = 0; i < wanted_window_length; i++) {
             printf("%d ", arrL[wanted_window_start + i]);
           }
@@ -68,7 +68,7 @@ static void impulse_detection_task(void *arg) {
         } else {
           ESP_LOGE(
               TAG, "Window out of bounds: start=%d, length=%d, array size=%d",
-              wanted_window_start, wanted_window_length, TAP_COUNT * TAP_SIZE);
+              wanted_window_start, wanted_window_length, arr_len);
         }
       }
     }
