@@ -5,6 +5,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 #include "freertos/semphr.h"
+#include "freertos/stream_buffer.h"
 #include "freertos/task.h"
 #include "mic_input.h"
 
@@ -19,6 +20,7 @@ static const char *TAG = "AUDIO_STREAM";
 #define STREAM_TASK_STACK   6144
 #define STREAM_TASK_PRIO    5
 #define STREAM_RETRY_MS     1000
+#define PULL_STREAM_BUFFER_BYTES 16384
 
 typedef struct {
   size_t bytes;
@@ -26,15 +28,25 @@ typedef struct {
 } audio_chunk_t;
 
 static QueueHandle_t s_queue = NULL;
+static StreamBufferHandle_t s_pull_stream = NULL;
 static TaskHandle_t s_task = NULL;
 static SemaphoreHandle_t s_cfg_mutex = NULL;
+static SemaphoreHandle_t s_pull_mutex = NULL;
 static audio_config_t s_config = {0};
-static volatile bool s_enabled = false;
+static volatile bool s_push_enabled = false;
+static volatile bool s_pull_enabled = false;
+static bool s_pull_in_use = false;
 static bool s_need_reconnect = false;
 static int s_tap_size = 0;
 static int s_sample_rate = 0;
 static audio_chunk_t s_accum_chunk = {0};
 static size_t s_accum_frames = 0;
+static volatile uint32_t s_tap_calls = 0;
+static volatile uint32_t s_stream_writes = 0;
+static volatile uint32_t s_accum_full = 0;
+static volatile uint32_t s_send_failed = 0;
+static volatile uint32_t s_read_calls = 0;
+static volatile uint32_t s_read_bytes = 0;
 
 static void write_le16(uint8_t *dst, uint16_t val) {
   dst[0] = (uint8_t)(val & 0xff);
@@ -48,16 +60,29 @@ static void write_le32(uint8_t *dst, uint32_t val) {
   dst[3] = (uint8_t)((val >> 24) & 0xff);
 }
 
-static bool audio_streamer_mode_ok(const char *mode) {
+static bool audio_streamer_mode_push(const char *mode) {
   if (mode == NULL) {
     return false;
   }
-  return (strcmp(mode, "http") == 0) || (strcmp(mode, "http_stream") == 0);
+  return (strcmp(mode, "push") == 0) || (strcmp(mode, "http") == 0) ||
+         (strcmp(mode, "http_push") == 0) ||
+         (strcmp(mode, "http_stream") == 0);
 }
 
-static bool audio_streamer_should_stream(const audio_config_t *cfg) {
-  return cfg->enabled && audio_streamer_mode_ok(cfg->mode) &&
+static bool audio_streamer_mode_pull(const char *mode) {
+  if (mode == NULL) {
+    return false;
+  }
+  return (strcmp(mode, "pull") == 0) || (strcmp(mode, "http_pull") == 0);
+}
+
+static bool audio_streamer_should_push(const audio_config_t *cfg) {
+  return cfg->enabled && audio_streamer_mode_push(cfg->mode) &&
          cfg->upload_url[0] != '\0';
+}
+
+static bool audio_streamer_should_pull(const audio_config_t *cfg) {
+  return cfg->enabled && audio_streamer_mode_pull(cfg->mode);
 }
 
 static void audio_streamer_build_wav_header(uint8_t *out, int sample_rate) {
@@ -86,7 +111,8 @@ static void audio_streamer_build_wav_header(uint8_t *out, int sample_rate) {
 static void audio_streamer_on_tap(const int16_t *tap_left,
                                   const int16_t *tap_right, void *ctx) {
   (void)ctx;
-  if (!s_enabled || s_queue == NULL || s_tap_size <= 0) {
+  s_tap_calls++;
+  if ((!s_push_enabled && !s_pull_enabled) || s_tap_size <= 0) {
     s_accum_frames = 0;
     return;
   }
@@ -97,12 +123,48 @@ static void audio_streamer_on_tap(const int16_t *tap_left,
     s_accum_frames++;
 
     if (s_accum_frames >= STREAM_CHUNK_FRAMES) {
+      s_accum_full++;
       s_accum_chunk.bytes = STREAM_CHUNK_FRAMES * 2 * sizeof(int16_t);
-      if (xQueueSend(s_queue, &s_accum_chunk, 0) != pdTRUE) {
-        // Drop chunk when queue is full to keep the mic reader unblocked.
+      if (s_push_enabled && s_queue) {
+        if (xQueueSend(s_queue, &s_accum_chunk, 0) != pdTRUE) {
+          // Drop chunk when queue is full to keep the mic reader unblocked.
+        }
+      }
+      if (s_pull_enabled && s_pull_stream) {
+        size_t sent = xStreamBufferSend(s_pull_stream, s_accum_chunk.data, 
+                                        s_accum_chunk.bytes, pdMS_TO_TICKS(10));
+        if (sent == s_accum_chunk.bytes) {
+          s_stream_writes++;
+        } else {
+          s_send_failed++;
+        }
       }
       s_accum_frames = 0;
     }
+  }
+}
+
+static void audio_streamer_debug_task(void *arg) {
+  (void)arg;
+  uint32_t last_tap = 0, last_writes = 0;
+  while (1) {
+    vTaskDelay(pdMS_TO_TICKS(5000));
+    uint32_t tap = s_tap_calls;
+    uint32_t writes = s_stream_writes;
+    uint32_t full = s_accum_full;
+    uint32_t failed = s_send_failed;
+    uint32_t reads = s_read_calls;
+    uint32_t read_bytes = s_read_bytes;
+    ESP_LOGI(TAG, "Stats: tap=%lu (+%lu), full=%lu (+%lu), writes=%lu (+%lu), failed=%lu (+%lu), reads=%lu (+%lu), read_bytes=%lu, pull=%d",
+             tap, tap - last_tap, 
+             full, full - last_writes,
+             writes, writes - last_writes, 
+             failed, failed - last_tap,
+             reads, reads - last_writes,
+             read_bytes,
+             s_pull_enabled);
+    last_tap = tap;
+    last_writes = full;
   }
 }
 
@@ -127,7 +189,7 @@ static void audio_streamer_task(void *arg) {
     bool need_reconnect = false;
     audio_streamer_copy_config(&cfg, &need_reconnect);
 
-    if (!audio_streamer_should_stream(&cfg)) {
+    if (!audio_streamer_should_push(&cfg)) {
       if (client) {
         esp_http_client_close(client);
         esp_http_client_cleanup(client);
@@ -213,12 +275,32 @@ void audio_streamer_init(void) {
     s_sample_rate = MIC_SAMPLING_FREQUENCY;
   }
 
+  ESP_LOGI(TAG, "Initializing audio streamer: tap_size=%d, sample_rate=%d", s_tap_size, s_sample_rate);
+
   s_cfg_mutex = xSemaphoreCreateMutex();
+  s_pull_mutex = xSemaphoreCreateBinary();
+  xSemaphoreGive(s_pull_mutex);
   s_queue = xQueueCreate(STREAM_QUEUE_LENGTH, sizeof(audio_chunk_t));
+  s_pull_stream = xStreamBufferCreate(PULL_STREAM_BUFFER_BYTES, 1);
+  
+  ESP_LOGI(TAG, "Created objects: mutex=%p, pull_mutex=%p, queue=%p, stream=%p",
+           (void*)s_cfg_mutex, (void*)s_pull_mutex, (void*)s_queue, (void*)s_pull_stream);
+  
+  if (!s_cfg_mutex || !s_pull_mutex || !s_queue || !s_pull_stream) {
+    ESP_LOGE(TAG, "Failed to create synchronization objects");
+  }
+  
+  static TaskHandle_t debug_task = NULL;
+  xTaskCreate(audio_streamer_debug_task, "audio_debug", 2048, NULL, 3, &debug_task);
+  
   audio_config_t cfg_init = audio_config_get();
   s_config = cfg_init;
-  s_enabled = audio_streamer_should_stream(&s_config);
+  s_push_enabled = audio_streamer_should_push(&s_config);
+  s_pull_enabled = audio_streamer_should_pull(&s_config);
   s_need_reconnect = true;
+
+  ESP_LOGI(TAG, "Audio config: mode=%s, enabled=%d, push=%d, pull=%d", 
+           s_config.mode, s_config.enabled, s_push_enabled, s_pull_enabled);
 
   mic_add_tap_callback(audio_streamer_on_tap, NULL);
 
@@ -231,14 +313,73 @@ void audio_streamer_apply_config(const audio_config_t *config) {
     return;
   }
 
-  if (xSemaphoreTake(s_cfg_mutex, portMAX_DELAY) == pdTRUE) {
+  if (xSemaphoreTake(s_cfg_mutex, pdMS_TO_TICKS(20)) == pdTRUE) {
     s_config = *config;
-    s_enabled = audio_streamer_should_stream(&s_config);
+    s_push_enabled = audio_streamer_should_push(&s_config);
+    s_pull_enabled = audio_streamer_should_pull(&s_config);
     s_need_reconnect = true;
+    
+    ESP_LOGI(TAG, "Config updated: mode=%s, enabled=%d, push=%d, pull=%d", 
+             s_config.mode, s_config.enabled, s_push_enabled, s_pull_enabled);
+    
     xSemaphoreGive(s_cfg_mutex);
+  } else {
+    ESP_LOGW(TAG, "Config update skipped (busy)");
+    return;
+  }
+
+  if (!s_pull_enabled && s_pull_stream) {
+    xStreamBufferReset(s_pull_stream);
   }
 
   if (s_task) {
     xTaskNotifyGive(s_task);
   }
+}
+
+bool audio_streamer_pull_enabled(void) {
+  return s_pull_enabled;
+}
+
+bool audio_streamer_pull_claim(void) {
+  if (!s_pull_mutex) {
+    return false;
+  }
+  if (xSemaphoreTake(s_pull_mutex, 0) != pdTRUE) {
+    return false;
+  }
+  if (s_pull_in_use) {
+    xSemaphoreGive(s_pull_mutex);
+    return false;
+  }
+  s_pull_in_use = true;
+  if (s_pull_stream) {
+    xStreamBufferReset(s_pull_stream);
+  }
+  xSemaphoreGive(s_pull_mutex);
+  return true;
+}
+
+void audio_streamer_pull_release(void) {
+  if (!s_pull_mutex) {
+    return;
+  }
+  if (xSemaphoreTake(s_pull_mutex, 0) == pdTRUE) {
+    s_pull_in_use = false;
+    xSemaphoreGive(s_pull_mutex);
+  }
+}
+
+size_t audio_streamer_pull_read(uint8_t *buf, size_t len, TickType_t timeout) {
+  if (!s_pull_stream || !buf || len == 0) {
+    return 0;
+  }
+  s_read_calls++;
+  size_t got = xStreamBufferReceive(s_pull_stream, buf, len, timeout);
+  s_read_bytes += got;
+  return got;
+}
+
+int audio_streamer_sample_rate(void) {
+  return s_sample_rate;
 }

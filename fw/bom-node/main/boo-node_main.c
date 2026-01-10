@@ -44,7 +44,9 @@ void app_main(void) {
 
   mic_init_default();
   audio_streamer_init();
-  impulse_detector_start();
+  mic_start();
+  // Impulse detection disabled to keep audio streaming responsive for now.
+  // impulse_detector_start();
 
   while (1) {
     vTaskDelay(1);

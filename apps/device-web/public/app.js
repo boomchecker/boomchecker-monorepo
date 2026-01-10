@@ -22,6 +22,9 @@ const apSsid = el('apSsid');
 const audioEnabled = el('audioEnabled');
 const audioMode = el('audioMode');
 const audioUrl = el('audioUrl');
+const audioStreamUrl = el('audioStreamUrl');
+const audioPushFields = el('audioPushFields');
+const audioPullFields = el('audioPullFields');
 const serverTarget = el('serverTarget');
 
 const statusError = el('statusError');
@@ -31,6 +34,8 @@ const connectError = el('connectError');
 const apError = el('apError');
 const audioError = el('audioError');
 const audioFormError = el('audioFormError');
+
+let deviceTarget = null;
 
 async function api(path, options = {}) {
   const res = await fetch(path, {
@@ -70,6 +75,23 @@ function renderStatusGrid(elm, items) {
 function setPill(elm, ok, okText, warnText) {
   elm.textContent = ok ? okText : warnText;
   elm.className = ok ? 'pill' : 'pill warn';
+}
+
+function buildStreamUrl() {
+  if (!deviceTarget) return '';
+  return `${deviceTarget.replace(/\/$/, '')}/api/v1/audio/stream.wav`;
+}
+
+function updateAudioModeView() {
+  if (!audioPushFields || !audioPullFields || !audioMode) {
+    return;
+  }
+  const isPull = audioMode.value === 'pull';
+  audioPushFields.classList.toggle('hidden', isPull);
+  audioPullFields.classList.toggle('hidden', !isPull);
+  if (audioStreamUrl) {
+    audioStreamUrl.value = buildStreamUrl() || 'Unknown';
+  }
 }
 
 async function loadConfig() {
@@ -184,18 +206,25 @@ async function loadAudio() {
   setLoading(audioLoading, true);
   try {
     const data = await api('/api/v1/audio');
+    const rawMode = data.mode || '';
+    const mode = rawMode === 'pull' || rawMode === 'push' ? rawMode : 'push';
+    audioMode.value = mode;
     audioEnabled.value = String(data.enabled ?? false);
-    audioMode.value = data.mode || '';
     audioUrl.value = data.uploadUrl || '';
+    updateAudioModeView();
+    const streamUrl = buildStreamUrl() || '—';
+    const urlRow = mode === 'pull'
+      ? { label: 'Stream URL', value: streamUrl }
+      : { label: 'Upload URL', value: data.uploadUrl || '—' };
     renderStatusGrid(audioStatus, [
       { label: 'Enabled', value: data.enabled ? 'Yes' : 'No' },
-      { label: 'Mode', value: data.mode || '—' },
-      { label: 'Upload URL', value: data.uploadUrl || '—' },
+      { label: 'Mode', value: mode.toUpperCase() },
+      urlRow,
     ]);
     renderStatusGrid(audioDetails, [
       { label: 'Enabled', value: data.enabled ? 'Yes' : 'No' },
-      { label: 'Mode', value: data.mode || '—' },
-      { label: 'Upload URL', value: data.uploadUrl || '—' },
+      { label: 'Mode', value: mode.toUpperCase() },
+      urlRow,
     ]);
   } catch (err) {
     setError(audioError, err);
@@ -227,8 +256,11 @@ async function saveAudio() {
 async function loadServerTarget() {
   try {
     const data = await api('/config');
+    deviceTarget = data.target;
     serverTarget.textContent = data.target;
+    updateAudioModeView();
   } catch (err) {
+    deviceTarget = null;
     serverTarget.textContent = 'Unknown';
   }
 }
@@ -240,6 +272,9 @@ el('scanWifi').addEventListener('click', scanWifi);
 el('connectWifi').addEventListener('click', connectWifi);
 el('saveAp').addEventListener('click', saveAp);
 el('saveAudio').addEventListener('click', saveAudio);
+if (audioMode) {
+  audioMode.addEventListener('change', updateAudioModeView);
+}
 el('refreshAll').addEventListener('click', async () => {
   await loadConfig();
   await loadWifiStatus();

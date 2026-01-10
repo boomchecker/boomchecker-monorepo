@@ -98,5 +98,16 @@ esp_err_t audio_config_set(const audio_config_t* config)
 bool audio_config_is_configured(void)
 {
     audio_config_load();
-    return s_audio_config.upload_url[0] != '\0';
+    if (strcmp(s_audio_config.mode, "pull") == 0)
+    {
+        return s_audio_config.enabled;
+    }
+    if ((strcmp(s_audio_config.mode, "push") == 0) ||
+        (strcmp(s_audio_config.mode, "http") == 0) ||
+        (strcmp(s_audio_config.mode, "http_push") == 0) ||
+        (strcmp(s_audio_config.mode, "http_stream") == 0))
+    {
+        return s_audio_config.upload_url[0] != '\0';
+    }
+    return false;
 }
