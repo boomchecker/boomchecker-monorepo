@@ -24,6 +24,7 @@ static void wifi_event_handler(void *arg, esp_event_base_t base, int32_t id,
                                void *data) {
   if (base == WIFI_EVENT && id == WIFI_EVENT_STA_DISCONNECTED) {
     s_got_ip = false;
+    set_wifi_connected(false);
     if (retry_count++ < 5) {
       esp_wifi_connect();
     } else {
@@ -36,15 +37,24 @@ static void wifi_event_handler(void *arg, esp_event_base_t base, int32_t id,
     if (s_connect_sema) {
       xSemaphoreGive(s_connect_sema);
     }
+    set_wifi_connected(true);
   }
 }
 
 void start_apsta_mode(void) {
+  wifi_set_ap_config(true, get_ap_ssid());
+}
+
+static void init_ap_netif(void) {
   // Customize AP IP address, gateway and netmask
   esp_netif_ip_info_t ip_info;
   esp_netif_t *ap_netif = esp_netif_create_default_wifi_ap();
 
-  // Customize AP IP address, gateway and netmask
+  if (!ap_netif) {
+    ESP_LOGE(TAG, "Failed to create AP netif");
+    return;
+  }
+
   IP4_ADDR(&ip_info.ip, 192, 168, 10, 10);
   IP4_ADDR(&ip_info.gw, 192, 168, 10, 10);
   IP4_ADDR(&ip_info.netmask, 255, 255, 255, 0);
@@ -52,26 +62,29 @@ void start_apsta_mode(void) {
   esp_netif_dhcps_stop(ap_netif);
   esp_netif_set_ip_info(ap_netif, &ip_info);
   esp_netif_dhcps_start(ap_netif);
+}
 
-  // Init Wi-Fi
-  esp_netif_create_default_wifi_sta(); // Default sta netif
-  wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
-  esp_wifi_init(&cfg);
+static esp_err_t apply_ap_config(bool enabled, const char *ssid) {
+  if (enabled) {
+    wifi_config_t ap_config = {
+        .ap = {.max_connection = 2, .authmode = WIFI_AUTH_OPEN}};
 
-  wifi_config_t ap_config = {.ap = {.ssid = "FELIX-MB",
-                                    .ssid_len = strlen("FELIX-MB"),
-                                    .password = "12345678",
-                                    .max_connection = 2,
-                                    .authmode = WIFI_AUTH_WPA_WPA2_PSK}};
-
-  if (strlen((const char *)ap_config.ap.password) == 0) {
+    strncpy((char *)ap_config.ap.ssid, ssid, sizeof(ap_config.ap.ssid) - 1);
+    ap_config.ap.ssid_len = strlen((const char *)ap_config.ap.ssid);
+    ap_config.ap.password[0] = '\0';
     ap_config.ap.authmode = WIFI_AUTH_OPEN;
+
+    esp_err_t err = esp_wifi_set_config(ESP_IF_WIFI_AP, &ap_config);
+    if (err != ESP_OK) {
+      return err;
+    }
   }
 
-  esp_wifi_set_mode(WIFI_MODE_APSTA);
-  esp_wifi_set_config(ESP_IF_WIFI_AP, &ap_config);
-  esp_wifi_start();
-  set_wifi_mode(WIFI_MODE_APSTA);
+  esp_err_t err = esp_wifi_set_mode(enabled ? WIFI_MODE_APSTA : WIFI_MODE_STA);
+  if (err == ESP_OK) {
+    set_wifi_mode(enabled ? WIFI_MODE_APSTA : WIFI_MODE_STA);
+  }
+  return err;
 }
 
 esp_err_t wifi_try_reconnect(void) {
@@ -159,13 +172,36 @@ esp_err_t wifi_scan_networks(wifi_scan_result_t *result) {
   return esp_wifi_scan_get_ap_records(&count, result->records);
 }
 
+esp_err_t wifi_set_ap_config(bool enabled, const char *ssid) {
+  if ((!ssid || ssid[0] == '\0') && enabled) {
+    return ESP_ERR_INVALID_ARG;
+  }
+
+  if (!ssid || ssid[0] == '\0') {
+    ssid = get_ap_ssid();
+  }
+
+  esp_err_t err = wifi_store_ap_config(enabled, ssid);
+  if (err != ESP_OK) {
+    return err;
+  }
+
+  return apply_ap_config(enabled, ssid);
+}
+
 void wifi_main_func(void) {
   esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID,
                                       wifi_event_handler, NULL, NULL);
   esp_event_handler_instance_register(IP_EVENT, ESP_EVENT_ANY_ID,
                                       wifi_event_handler, NULL, NULL);
 
-  start_apsta_mode();
+  init_ap_netif();
+  esp_netif_create_default_wifi_sta();
+  wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+  esp_wifi_init(&cfg);
+
+  apply_ap_config(is_ap_enabled(), get_ap_ssid());
+  esp_wifi_start();
 
   if (is_wifi_credentials_set()) {
     wifi_connect_with_credentials(get_wifi_credentials().ssid,
