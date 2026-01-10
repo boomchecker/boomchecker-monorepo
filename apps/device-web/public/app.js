@@ -81,11 +81,11 @@ async function loadAudioStats() {
     }
     
     renderStatusGrid(el('audioStats'), [
-      { label: 'Mic Callbacks/min', value: tapDelta.toLocaleString() },
-      { label: 'Stream Writes/min', value: writesDelta.toLocaleString() },
-      { label: 'Write Failures/min', value: failedDelta.toLocaleString() },
-      { label: 'Read Calls/min', value: readsDelta.toLocaleString() },
-      { label: 'Data Streamed/min', value: `${(bytesDelta / 1024).toFixed(1)} KB` },
+      { label: 'Mic Callbacks (last 60s)', value: tapDelta.toLocaleString() },
+      { label: 'Stream Writes (last 60s)', value: writesDelta.toLocaleString() },
+      { label: 'Write Failures (last 60s)', value: failedDelta.toLocaleString() },
+      { label: 'Read Calls (last 60s)', value: readsDelta.toLocaleString() },
+      { label: 'Data Streamed (last 60s)', value: `${(bytesDelta / 1024).toFixed(1)} KB` },
       { label: 'Status', value: stats.pullEnabled ? '✓ Active' : '✗ Inactive' },
     ]);
   } catch (err) {
