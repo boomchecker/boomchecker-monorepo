@@ -14,8 +14,10 @@ static void write_le32(uint8_t *dst, uint32_t val) {
     dst[3] = (uint8_t)((val >> 24) & 0xff);
 }
 
+enum { AUDIO_WAV_CHANNELS = 2 };
+
 void audio_wav_build_header(uint8_t *out, int sample_rate) {
-    const uint16_t num_channels = 2;
+    const uint16_t num_channels = AUDIO_WAV_CHANNELS;
     const uint16_t bits_per_sample = 16;
     const uint32_t byte_rate = sample_rate * num_channels * bits_per_sample / 8;
     const uint16_t block_align = num_channels * bits_per_sample / 8;
