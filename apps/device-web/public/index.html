@@ -157,10 +157,17 @@
       .status-row {
         display: flex;
         justify-content: space-between;
+        gap: 10px;
         padding: 8px 10px;
         border-radius: 10px;
         background: #f7f6f4;
         font-size: 14px;
+      }
+      .status-row strong {
+        max-width: 60%;
+        text-align: right;
+        overflow-wrap: anywhere;
+        word-break: break-word;
       }
       .pill {
         display: inline-block;
@@ -342,6 +349,32 @@
             </div>
             <div id="audioFormError" class="error"></div>
           </div>
+          <div class="card">
+            <h2>Audio Capture (ESP32)</h2>
+            <div class="row">
+              <label class="subtle" for="audioSampleRate">Sample Rate</label>
+              <select id="audioSampleRate">
+                <option value="8000">8 kHz</option>
+                <option value="11025">11.025 kHz</option>
+                <option value="16000">16 kHz</option>
+                <option value="22050">22.05 kHz</option>
+                <option value="32000">32 kHz</option>
+                <option value="44100">44.1 kHz</option>
+              </select>
+            </div>
+            <div class="row">
+              <label class="subtle" for="audioCaptureMode">Capture Mode</label>
+              <select id="audioCaptureMode" disabled>
+                <option value="continuous">Continuous</option>
+                <option value="event">Peak/Impulse</option>
+              </select>
+            </div>
+            <p class="subtle">Capture mode is planned but disabled for now.</p>
+            <div class="row">
+              <button id="saveCapture">Save Capture Settings</button>
+              <span id="audioCaptureLoading" class="loading hidden"><span class="spinner"></span>Saving</span>
+            </div>
+          </div>
           <div class="card" id="audioStatsCard">
             <h2>Live Statistics</h2>
             <div id="audioStats" class="status-grid">Loading...</div>
@@ -360,6 +393,14 @@
               <button id="refreshAll">Refresh All</button>
             </div>
             <p class="subtle">Use this after applying Wi‑Fi or AP changes.</p>
+          </div>
+          <div class="card">
+            <h2>Device</h2>
+            <div class="row">
+              <button id="rebootDevice" class="secondary">Reboot Device</button>
+              <span id="rebootLoading" class="loading hidden"><span class="spinner"></span>Rebooting</span>
+            </div>
+            <div id="rebootError" class="error"></div>
           </div>
         </div>
       </section>

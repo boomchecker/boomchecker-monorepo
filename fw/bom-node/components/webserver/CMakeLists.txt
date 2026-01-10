@@ -1,5 +1,5 @@
 # Glob all relevant source files
-file(GLOB_RECURSE API_SOURCES "api/*.c")
+file(GLOB_RECURSE API_SOURCES "api/*.c" "api/*/*.c" "api/*/*/*.c")
 file(GLOB_RECURSE WEB_SOURCES "*.c" "slre/*.c")
 
 idf_component_register(

@@ -144,30 +144,6 @@ static void audio_streamer_on_tap(const int16_t *tap_left,
   }
 }
 
-static void audio_streamer_debug_task(void *arg) {
-  (void)arg;
-  uint32_t last_tap = 0, last_writes = 0;
-  while (1) {
-    vTaskDelay(pdMS_TO_TICKS(5000));
-    uint32_t tap = s_tap_calls;
-    uint32_t writes = s_stream_writes;
-    uint32_t full = s_accum_full;
-    uint32_t failed = s_send_failed;
-    uint32_t reads = s_read_calls;
-    uint32_t read_bytes = s_read_bytes;
-    ESP_LOGI(TAG, "Stats: tap=%lu (+%lu), full=%lu (+%lu), writes=%lu (+%lu), failed=%lu (+%lu), reads=%lu (+%lu), read_bytes=%lu, pull=%d",
-             tap, tap - last_tap, 
-             full, full - last_writes,
-             writes, writes - last_writes, 
-             failed, failed - last_tap,
-             reads, reads - last_writes,
-             read_bytes,
-             s_pull_enabled);
-    last_tap = tap;
-    last_writes = full;
-  }
-}
-
 static void audio_streamer_copy_config(audio_config_t *out, bool *need_reconnect) {
   if (xSemaphoreTake(s_cfg_mutex, portMAX_DELAY) == pdTRUE) {
     *out = s_config;
@@ -289,9 +265,6 @@ void audio_streamer_init(void) {
   if (!s_cfg_mutex || !s_pull_mutex || !s_queue || !s_pull_stream) {
     ESP_LOGE(TAG, "Failed to create synchronization objects");
   }
-  
-  static TaskHandle_t debug_task = NULL;
-  xTaskCreate(audio_streamer_debug_task, "audio_debug", 2048, NULL, 3, &debug_task);
   
   audio_config_t cfg_init = audio_config_get();
   s_config = cfg_init;

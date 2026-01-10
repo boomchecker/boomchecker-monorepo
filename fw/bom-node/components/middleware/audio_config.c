@@ -7,6 +7,7 @@
 #define AUDIO_NVS_MODE      "mode"
 #define AUDIO_NVS_URL       "upload_url"
 #define AUDIO_NVS_ENABLED   "enabled"
+#define AUDIO_NVS_RATE      "sample_rate"
 
 static bool s_audio_config_initialized = false;
 static audio_config_t s_audio_config = {0};
@@ -22,6 +23,7 @@ static void audio_config_load(void)
     strncpy(s_audio_config.mode, "disabled", sizeof(s_audio_config.mode) - 1);
     s_audio_config.upload_url[0] = '\0';
     s_audio_config.enabled = false;
+    s_audio_config.sampling_rate = 44100;
 
     nvs_handle_t handle;
     if (nvs_open(AUDIO_NVS_NAMESPACE, NVS_READONLY, &handle) == ESP_OK)
@@ -42,6 +44,14 @@ static void audio_config_load(void)
         if (nvs_get_u8(handle, AUDIO_NVS_ENABLED, &enabled) == ESP_OK)
         {
             s_audio_config.enabled = enabled != 0;
+        }
+        int32_t rate = 0;
+        if (nvs_get_i32(handle, AUDIO_NVS_RATE, &rate) == ESP_OK)
+        {
+            if (rate > 0)
+            {
+                s_audio_config.sampling_rate = rate;
+            }
         }
 
         nvs_close(handle);
@@ -70,6 +80,7 @@ esp_err_t audio_config_set(const audio_config_t* config)
             sizeof(s_audio_config.upload_url) - 1);
     s_audio_config.upload_url[sizeof(s_audio_config.upload_url) - 1] = '\0';
     s_audio_config.enabled = config->enabled;
+    s_audio_config.sampling_rate = config->sampling_rate;
 
     nvs_handle_t handle;
     esp_err_t err = nvs_open(AUDIO_NVS_NAMESPACE, NVS_READWRITE, &handle);
@@ -86,6 +97,10 @@ esp_err_t audio_config_set(const audio_config_t* config)
     if (err == ESP_OK)
     {
         err = nvs_set_u8(handle, AUDIO_NVS_ENABLED, s_audio_config.enabled ? 1 : 0);
+    }
+    if (err == ESP_OK)
+    {
+        err = nvs_set_i32(handle, AUDIO_NVS_RATE, s_audio_config.sampling_rate);
     }
     if (err == ESP_OK)
     {

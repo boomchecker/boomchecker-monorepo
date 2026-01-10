@@ -14,6 +14,7 @@ const scanLoading = el('scanLoading');
 const connectLoading = el('connectLoading');
 const apLoading = el('apLoading');
 const audioSaveLoading = el('audioSaveLoading');
+const audioCaptureLoading = el('audioCaptureLoading');
 const ssidList = el('ssidList');
 const ssidInput = el('ssidInput');
 const passwordInput = el('passwordInput');
@@ -22,6 +23,7 @@ const apSsid = el('apSsid');
 const audioEnabled = el('audioEnabled');
 const audioMode = el('audioMode');
 const audioUrl = el('audioUrl');
+const audioSampleRate = el('audioSampleRate');
 const audioStreamUrl = el('audioStreamUrl');
 const audioPushFields = el('audioPushFields');
 const audioPullFields = el('audioPullFields');
@@ -34,6 +36,8 @@ const connectError = el('connectError');
 const apError = el('apError');
 const audioError = el('audioError');
 const audioFormError = el('audioFormError');
+const rebootLoading = el('rebootLoading');
+const rebootError = el('rebootError');
 
 let deviceTarget = null;
 let statsInterval = null;
@@ -275,11 +279,11 @@ async function saveAp() {
   }
 }
 
-async function loadAudio() {
+async function loadStreamConfig() {
   setError(audioError, null);
   setLoading(audioLoading, true);
   try {
-    const data = await api('/api/v1/audio');
+    const data = await api('/api/v1/audio/stream');
     const rawMode = data.mode || '';
     const mode = rawMode === 'pull' || rawMode === 'push' ? rawMode : 'push';
     if (audioMode) {
@@ -292,7 +296,7 @@ async function loadAudio() {
       audioUrl.value = data.uploadUrl || '';
     }
     updateAudioModeView();
-    
+
     if (mode === 'pull' && data.enabled) {
       startStatsPolling();
     } else {
@@ -314,11 +318,23 @@ async function loadAudio() {
   }
 }
 
-async function saveAudio() {
+async function loadCaptureSettings() {
+  try {
+    const data = await api('/api/v1/audio/settings');
+    if (audioSampleRate) {
+      audioSampleRate.value = String(data.samplingRate || 44100);
+    }
+  } catch (err) {
+    setError(audioError, err);
+  }
+}
+
+async function saveStreamConfig() {
   setError(audioFormError, null);
   setLoading(audioSaveLoading, true);
   try {
-    await api('/api/v1/audio', {
+    await new Promise(requestAnimationFrame);
+    await api('/api/v1/audio/stream', {
       method: 'POST',
       body: JSON.stringify({
         enabled: audioEnabled ? audioEnabled.value === 'true' : false,
@@ -326,11 +342,30 @@ async function saveAudio() {
         uploadUrl: audioUrl ? audioUrl.value.trim() : '',
       }),
     });
-    await loadAudio();
+    await loadStreamConfig();
   } catch (err) {
     setError(audioFormError, err);
   } finally {
     setLoading(audioSaveLoading, false);
+  }
+}
+
+async function saveCaptureSettings() {
+  setError(audioFormError, null);
+  setLoading(audioCaptureLoading, true);
+  try {
+    await new Promise(requestAnimationFrame);
+    await api('/api/v1/audio/settings', {
+      method: 'POST',
+      body: JSON.stringify({
+        samplingRate: audioSampleRate ? Number(audioSampleRate.value) : 44100,
+      }),
+    });
+    await loadCaptureSettings();
+  } catch (err) {
+    setError(audioFormError, err);
+  } finally {
+    setLoading(audioCaptureLoading, false);
   }
 }
 
@@ -350,13 +385,32 @@ async function loadServerTarget() {
   }
 }
 
+async function rebootDevice() {
+  if (!confirm('Reboot device now?')) {
+    return;
+  }
+  setError(rebootError, null);
+  setLoading(rebootLoading, true);
+  try {
+    await fetch('/api/v1/system/reboot', { method: 'POST' });
+    if (rebootError) {
+      rebootError.textContent = 'Rebooting...';
+    }
+  } catch (err) {
+    setError(rebootError, err);
+  } finally {
+    setLoading(rebootLoading, false);
+  }
+}
+
 el('refreshStatus').addEventListener('click', loadConfig);
 el('refreshWifi').addEventListener('click', loadWifiStatus);
-el('refreshAudio')?.addEventListener('click', loadAudio);
+el('refreshAudio')?.addEventListener('click', loadStreamConfig);
 el('scanWifi').addEventListener('click', scanWifi);
 el('connectWifi').addEventListener('click', connectWifi);
 el('saveAp').addEventListener('click', saveAp);
-el('saveAudio').addEventListener('click', saveAudio);
+el('saveAudio').addEventListener('click', saveStreamConfig);
+el('saveCapture')?.addEventListener('click', saveCaptureSettings);
 if (audioMode) {
   audioMode.addEventListener('change', updateAudioModeView);
 }
@@ -386,12 +440,15 @@ el('stopStream')?.addEventListener('click', () => {
 el('refreshAll').addEventListener('click', async () => {
   await loadConfig();
   await loadWifiStatus();
-  await loadAudio();
+  await loadStreamConfig();
+  await loadCaptureSettings();
 });
+el('rebootDevice')?.addEventListener('click', rebootDevice);
 
 loadConfig();
 loadWifiStatus();
-loadAudio();
+loadStreamConfig();
+loadCaptureSettings();
 if (serverTarget) {
   loadServerTarget();
 }

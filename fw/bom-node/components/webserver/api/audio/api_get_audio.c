@@ -15,7 +15,8 @@
 static const char* TAG = "GET_AUDIO";
 
 // Definition of handlers
-esp_err_t get_audio_config(httpd_req_t* req);
+esp_err_t get_audio_stream_config(httpd_req_t* req);
+esp_err_t get_audio_settings(httpd_req_t* req);
 esp_err_t get_audio_stream(httpd_req_t* req);
 esp_err_t get_audio_stats(httpd_req_t* req);
 
@@ -23,7 +24,8 @@ esp_err_t get_audio_stats(httpd_req_t* req);
 static const route_entry_t route_table[] = {
     {"^/api/v1/audio/stream\\.wav$", get_audio_stream},
     {"^/api/v1/audio/stats/?$", get_audio_stats},
-    {"^/api/v1/audio/?$", get_audio_config},
+    {"^/api/v1/audio/stream/?$", get_audio_stream_config},
+    {"^/api/v1/audio/settings/?$", get_audio_settings},
 };
 
 // Main handler for GET audio/* requests
@@ -34,13 +36,13 @@ esp_err_t api_get_audio(httpd_req_t* req) {
 }
 
 /**
- * GET /api/v1/audio
- * @summary Get audio configuration
+ * GET /api/v1/audio/stream
+ * @summary Get audio stream configuration
  * @tag Audio
- * @response 200 - Audio configuration
+ * @response 200 - Audio stream configuration
  * @response 500 - Internal error
  */
-esp_err_t get_audio_config(httpd_req_t* req) {
+esp_err_t get_audio_stream_config(httpd_req_t* req) {
     cJSON* root = cJSON_CreateObject();
     if (!root) {
         return httpd_resp_send_500(req);
@@ -50,6 +52,37 @@ esp_err_t get_audio_config(httpd_req_t* req) {
     cJSON_AddStringToObject(root, "mode", config.mode);
     cJSON_AddStringToObject(root, "uploadUrl", config.upload_url);
     cJSON_AddBoolToObject(root, "enabled", config.enabled);
+
+    const char* resp_str = cJSON_PrintUnformatted(root);
+    if (!resp_str) {
+        cJSON_Delete(root);
+        return httpd_resp_send_500(req);
+    }
+
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_send(req, resp_str, strlen(resp_str));
+
+    cJSON_Delete(root);
+    free((void*)resp_str);
+    return ESP_OK;
+}
+
+/**
+ * GET /api/v1/audio/settings
+ * @summary Get audio capture settings
+ * @tag Audio
+ * @response 200 - Audio capture settings
+ * @response 500 - Internal error
+ */
+esp_err_t get_audio_settings(httpd_req_t* req) {
+    cJSON* root = cJSON_CreateObject();
+    if (!root) {
+        return httpd_resp_send_500(req);
+    }
+
+    audio_config_t config = audio_config_get();
+    cJSON_AddNumberToObject(root, "samplingRate", config.sampling_rate);
+    cJSON_AddStringToObject(root, "captureMode", "continuous");
 
     const char* resp_str = cJSON_PrintUnformatted(root);
     if (!resp_str) {
