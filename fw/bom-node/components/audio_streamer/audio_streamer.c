@@ -254,8 +254,7 @@ void audio_streamer_init(void) {
   ESP_LOGI(TAG, "Initializing audio streamer: tap_size=%d, sample_rate=%d", s_tap_size, s_sample_rate);
 
   s_cfg_mutex = xSemaphoreCreateMutex();
-  s_pull_mutex = xSemaphoreCreateBinary();
-  xSemaphoreGive(s_pull_mutex);
+  s_pull_mutex = xSemaphoreCreateMutex();
   s_queue = xQueueCreate(STREAM_QUEUE_LENGTH, sizeof(audio_chunk_t));
   s_pull_stream = xStreamBufferCreate(PULL_STREAM_BUFFER_BYTES, 1);
   
@@ -320,7 +319,7 @@ bool audio_streamer_pull_claim(void) {
   if (!s_pull_mutex) {
     return false;
   }
-  if (xSemaphoreTake(s_pull_mutex, 0) != pdTRUE) {
+  if (xSemaphoreTake(s_pull_mutex, portMAX_DELAY) != pdTRUE) {
     return false;
   }
   if (s_pull_in_use) {
