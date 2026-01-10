@@ -187,8 +187,7 @@ esp_err_t get_audio_stream(httpd_req_t* req) {
     uint8_t header[44] = {0};
     build_wav_header(header, audio_streamer_sample_rate());
     if (httpd_resp_send_chunk(req, (const char*)header, sizeof(header)) != ESP_OK) {
-        audio_streamer_pull_release();
-        return ESP_FAIL;
+        goto cleanup;
     }
 
     uint8_t buf[512];
@@ -202,6 +201,7 @@ esp_err_t get_audio_stream(httpd_req_t* req) {
             break;
         }
     }
+cleanup:
     httpd_resp_send_chunk(req, NULL, 0);
     audio_streamer_pull_release();
     return ESP_OK;
