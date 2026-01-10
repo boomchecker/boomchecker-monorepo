@@ -15,3 +15,7 @@ void audio_capture_init(void) {
     };
     mic_init(&mic_cfg);
 }
+
+void audio_capture_start(void) {
+    mic_start();
+}

@@ -14,7 +14,6 @@
 
 #include "detector.h"
 #include "audio_capture.h"
-#include "mic_input.h"
 #include "audio_streamer.h"
 #include "ota.h"
 #include "ring_buffer.h"
@@ -45,7 +44,7 @@ void app_main(void) {
 
   audio_capture_init();
   audio_streamer_init();
-  mic_start();
+  audio_capture_start();
   // Impulse detection disabled to keep audio streaming responsive for now.
   // impulse_detector_start();
 
