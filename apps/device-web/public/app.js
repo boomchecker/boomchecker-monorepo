@@ -19,6 +19,7 @@ const ssidInput = el('ssidInput');
 const passwordInput = el('passwordInput');
 const apEnabled = el('apEnabled');
 const apSsid = el('apSsid');
+const audioEnabled = el('audioEnabled');
 const audioMode = el('audioMode');
 const audioUrl = el('audioUrl');
 const serverTarget = el('serverTarget');
@@ -183,13 +184,16 @@ async function loadAudio() {
   setLoading(audioLoading, true);
   try {
     const data = await api('/api/v1/audio');
+    audioEnabled.value = String(data.enabled ?? false);
     audioMode.value = data.mode || '';
     audioUrl.value = data.uploadUrl || '';
     renderStatusGrid(audioStatus, [
+      { label: 'Enabled', value: data.enabled ? 'Yes' : 'No' },
       { label: 'Mode', value: data.mode || '—' },
       { label: 'Upload URL', value: data.uploadUrl || '—' },
     ]);
     renderStatusGrid(audioDetails, [
+      { label: 'Enabled', value: data.enabled ? 'Yes' : 'No' },
       { label: 'Mode', value: data.mode || '—' },
       { label: 'Upload URL', value: data.uploadUrl || '—' },
     ]);
@@ -207,6 +211,7 @@ async function saveAudio() {
     await api('/api/v1/audio', {
       method: 'POST',
       body: JSON.stringify({
+        enabled: audioEnabled.value === 'true',
         mode: audioMode.value.trim(),
         uploadUrl: audioUrl.value.trim(),
       }),

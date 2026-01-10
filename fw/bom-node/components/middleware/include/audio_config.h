@@ -10,6 +10,7 @@ typedef struct
 {
     char mode[AUDIO_MODE_MAX_LEN];
     char upload_url[AUDIO_URL_MAX_LEN];
+    bool enabled;
 } audio_config_t;
 
 audio_config_t audio_config_get(void);

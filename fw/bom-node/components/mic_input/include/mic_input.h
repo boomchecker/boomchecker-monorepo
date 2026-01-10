@@ -88,5 +88,6 @@ void mic_save_event(int16_t *out_left_mic, int16_t *out_right_mic);
 typedef void (*mic_tap_callback)(const int16_t *tap_left,
                                  const int16_t *tap_right, void *ctx);
 void mic_set_tap_callback(mic_tap_callback cb, void *ctx);
+bool mic_add_tap_callback(mic_tap_callback cb, void *ctx);
 
 #endif

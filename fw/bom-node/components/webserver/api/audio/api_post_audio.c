@@ -8,6 +8,7 @@
 
 #include "api_post_audio.h"
 #include "audio_config.h"
+#include "audio_streamer.h"
 #include "slre.h"
 
 static const char* TAG = "POST_AUDIO";
@@ -63,19 +64,26 @@ esp_err_t post_audio_config(httpd_req_t* req) {
 
     const cJSON* mode = cJSON_GetObjectItem(root, "mode");
     const cJSON* upload_url = cJSON_GetObjectItem(root, "uploadUrl");
+    const cJSON* enabled = cJSON_GetObjectItem(root, "enabled");
     if (!cJSON_IsString(mode) || !cJSON_IsString(upload_url)) {
         cJSON_Delete(root);
         return send_json_error(req, TAG, WEBERR_BAD_REQUEST, "Missing required fields");
+    }
+    if (enabled && !cJSON_IsBool(enabled)) {
+        cJSON_Delete(root);
+        return send_json_error(req, TAG, WEBERR_BAD_REQUEST, "Invalid enabled field");
     }
 
     audio_config_t config = {0};
     strncpy(config.mode, mode->valuestring, sizeof(config.mode) - 1);
     strncpy(config.upload_url, upload_url->valuestring, sizeof(config.upload_url) - 1);
+    config.enabled = enabled ? cJSON_IsTrue(enabled) : false;
 
     if (audio_config_set(&config) != ESP_OK) {
         cJSON_Delete(root);
         return send_json_error(req, TAG, WEBERR_INTERNAL_ERR, "Failed to store audio config");
     }
+    audio_streamer_apply_config(&config);
 
     cJSON_Delete(root);
     httpd_resp_set_type(req, "application/json");

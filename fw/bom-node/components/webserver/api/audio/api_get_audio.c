@@ -40,6 +40,7 @@ esp_err_t get_audio_config(httpd_req_t* req) {
     audio_config_t config = audio_config_get();
     cJSON_AddStringToObject(root, "mode", config.mode);
     cJSON_AddStringToObject(root, "uploadUrl", config.upload_url);
+    cJSON_AddBoolToObject(root, "enabled", config.enabled);
 
     const char* resp_str = cJSON_PrintUnformatted(root);
     if (!resp_str) {

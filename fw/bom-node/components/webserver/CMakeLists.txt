@@ -23,6 +23,7 @@ idf_component_register(
         ota
         spiffs
         middleware
+        audio_streamer
 )
 
 spiffs_create_partition_image(website ../../generated FLASH_IN_PROJECT)

@@ -21,8 +21,10 @@ static mic_config mic_cfg;
 static rb_struct rb_left, rb_right;
 i2s_chan_handle_t rx_channel = NULL, tx_channel = NULL;
 static bool mic_initialized = false;
-static mic_tap_callback tap_cb = NULL;
-static void *tap_cb_ctx = NULL;
+#define MIC_TAP_MAX_CALLBACKS 4
+static mic_tap_callback tap_cbs[MIC_TAP_MAX_CALLBACKS] = {0};
+static void *tap_cb_ctxs[MIC_TAP_MAX_CALLBACKS] = {0};
+static int tap_cb_count = 0;
 
 static int32_t i2s_read_buffer[CHUNK_FRAMES * 2];
 
@@ -150,8 +152,25 @@ const mic_config *mic_get_config(void) {
 }
 
 void mic_set_tap_callback(mic_tap_callback cb, void *ctx) {
-  tap_cb = cb;
-  tap_cb_ctx = ctx;
+  tap_cb_count = 0;
+  if (cb != NULL) {
+    tap_cbs[0] = cb;
+    tap_cb_ctxs[0] = ctx;
+    tap_cb_count = 1;
+  }
+}
+
+bool mic_add_tap_callback(mic_tap_callback cb, void *ctx) {
+  if (cb == NULL) {
+    return false;
+  }
+  if (tap_cb_count >= MIC_TAP_MAX_CALLBACKS) {
+    return false;
+  }
+  tap_cbs[tap_cb_count] = cb;
+  tap_cb_ctxs[tap_cb_count] = ctx;
+  tap_cb_count++;
+  return true;
 }
 
 void mic_reader_task(void *arg) {
@@ -188,8 +207,10 @@ void mic_reader_task(void *arg) {
           rb_push(&rb_right, tapR[j]);
         }
 
-        if (tap_cb != NULL) {
-          tap_cb(&tapL[0], &tapR[0], tap_cb_ctx);
+        for (int k = 0; k < tap_cb_count; k++) {
+          if (tap_cbs[k]) {
+            tap_cbs[k](&tapL[0], &tapR[0], tap_cb_ctxs[k]);
+          }
         }
       }
     }

@@ -1,0 +1,10 @@
+idf_component_register(
+    SRCS
+        "audio_streamer.c"
+    INCLUDE_DIRS
+        "include"
+    REQUIRES
+        mic_input
+        middleware
+        esp_http_client
+)

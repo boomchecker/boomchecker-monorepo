@@ -14,6 +14,7 @@
 
 #include "detector.h"
 #include "mic_input.h"
+#include "audio_streamer.h"
 #include "ota.h"
 #include "ring_buffer.h"
 
@@ -42,6 +43,7 @@ void app_main(void) {
 #endif
 
   mic_init_default();
+  audio_streamer_init();
   impulse_detector_start();
 
   while (1) {
