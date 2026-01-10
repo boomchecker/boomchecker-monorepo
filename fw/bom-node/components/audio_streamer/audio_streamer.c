@@ -275,7 +275,9 @@ void audio_streamer_init(void) {
   ESP_LOGI(TAG, "Audio config: mode=%s, enabled=%d, push=%d, pull=%d", 
            s_config.mode, s_config.enabled, s_push_enabled, s_pull_enabled);
 
-  mic_add_tap_callback(audio_streamer_on_tap, NULL);
+  if (!mic_add_tap_callback(audio_streamer_on_tap, NULL)) {
+    ESP_LOGE(TAG, "Failed to add microphone tap callback; audio streaming may not receive data from the microphone");
+  }
 
   xTaskCreatePinnedToCore(audio_streamer_task, "audio_stream",
                           STREAM_TASK_STACK, NULL, STREAM_TASK_PRIO, &s_task, 0);
