@@ -2,6 +2,11 @@ const el = (id) => document.getElementById(id);
 
 const deviceStatus = el('deviceStatus');
 const wifiStatus = el('wifiStatus');
+const audioStatus = el('audioStatus');
+const apStatus = el('apStatus');
+const audioDetails = el('audioDetails');
+const devicePill = el('devicePill');
+const wifiPill = el('wifiPill');
 const ssidList = el('ssidList');
 const ssidInput = el('ssidInput');
 const passwordInput = el('passwordInput');
@@ -17,6 +22,7 @@ const scanError = el('scanError');
 const connectError = el('connectError');
 const apError = el('apError');
 const audioError = el('audioError');
+const audioFormError = el('audioFormError');
 
 async function api(path, options = {}) {
   const res = await fetch(path, {
@@ -38,11 +44,34 @@ function setError(elm, err) {
   elm.textContent = err ? err.message : '';
 }
 
+function renderStatusGrid(elm, items) {
+  elm.innerHTML = '';
+  items.forEach(({ label, value }) => {
+    const row = document.createElement('div');
+    row.className = 'status-row';
+    row.innerHTML = `<span>${label}</span><strong>${value}</strong>`;
+    elm.appendChild(row);
+  });
+}
+
+function setPill(elm, ok, okText, warnText) {
+  elm.textContent = ok ? okText : warnText;
+  elm.className = ok ? 'pill' : 'pill warn';
+}
+
 async function loadConfig() {
   setError(statusError, null);
   try {
     const data = await api('/api/v1/config');
-    deviceStatus.textContent = JSON.stringify(data, null, 2);
+    renderStatusGrid(deviceStatus, [
+      { label: 'Device Name', value: data.deviceName || 'Unknown' },
+      { label: 'Setup Done', value: data.isSetupDone ? 'Yes' : 'No' },
+      { label: 'Wi‑Fi Connected', value: data.wifiConnected ? 'Yes' : 'No' },
+      { label: 'Wi‑Fi Configured', value: data.wifiConfigured ? 'Yes' : 'No' },
+      { label: 'AP Enabled', value: data.apEnabled ? 'Yes' : 'No' },
+      { label: 'Audio Configured', value: data.audioConfigured ? 'Yes' : 'No' },
+    ]);
+    setPill(devicePill, data.isSetupDone, 'Ready', 'Needs setup');
   } catch (err) {
     setError(statusError, err);
   }
@@ -52,10 +81,21 @@ async function loadWifiStatus() {
   setError(wifiStatusError, null);
   try {
     const data = await api('/api/v1/wifi/status');
-    wifiStatus.textContent = JSON.stringify(data, null, 2);
+    renderStatusGrid(wifiStatus, [
+      { label: 'Connected', value: data.connected ? 'Yes' : 'No' },
+      { label: 'Configured', value: data.configured ? 'Yes' : 'No' },
+      { label: 'SSID', value: data.ssid || '—' },
+      { label: 'AP Enabled', value: data.apEnabled ? 'Yes' : 'No' },
+      { label: 'AP SSID', value: data.apSsid || '—' },
+    ]);
     apEnabled.value = String(data.apEnabled);
     apSsid.value = data.apSsid || '';
     ssidInput.value = data.ssid || '';
+    renderStatusGrid(apStatus, [
+      { label: 'AP Enabled', value: data.apEnabled ? 'Yes' : 'No' },
+      { label: 'AP SSID', value: data.apSsid || '—' },
+    ]);
+    setPill(wifiPill, data.connected, 'Connected', 'Offline');
   } catch (err) {
     setError(wifiStatusError, err);
   }
@@ -117,13 +157,21 @@ async function loadAudio() {
     const data = await api('/api/v1/audio');
     audioMode.value = data.mode || '';
     audioUrl.value = data.uploadUrl || '';
+    renderStatusGrid(audioStatus, [
+      { label: 'Mode', value: data.mode || '—' },
+      { label: 'Upload URL', value: data.uploadUrl || '—' },
+    ]);
+    renderStatusGrid(audioDetails, [
+      { label: 'Mode', value: data.mode || '—' },
+      { label: 'Upload URL', value: data.uploadUrl || '—' },
+    ]);
   } catch (err) {
     setError(audioError, err);
   }
 }
 
 async function saveAudio() {
-  setError(audioError, null);
+  setError(audioFormError, null);
   try {
     await api('/api/v1/audio', {
       method: 'POST',
@@ -132,8 +180,9 @@ async function saveAudio() {
         uploadUrl: audioUrl.value.trim(),
       }),
     });
+    await loadAudio();
   } catch (err) {
-    setError(audioError, err);
+    setError(audioFormError, err);
   }
 }
 
@@ -148,12 +197,30 @@ async function loadServerTarget() {
 
 el('refreshStatus').addEventListener('click', loadConfig);
 el('refreshWifi').addEventListener('click', loadWifiStatus);
+el('refreshAudio').addEventListener('click', loadAudio);
 el('scanWifi').addEventListener('click', scanWifi);
 el('connectWifi').addEventListener('click', connectWifi);
 el('saveAp').addEventListener('click', saveAp);
 el('saveAudio').addEventListener('click', saveAudio);
+el('refreshAll').addEventListener('click', async () => {
+  await loadConfig();
+  await loadWifiStatus();
+  await loadAudio();
+});
 
 loadConfig();
 loadWifiStatus();
 loadAudio();
 loadServerTarget();
+
+document.querySelectorAll('.tab').forEach((tab) => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach((t) => t.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach((panel) => panel.classList.remove('active'));
+    tab.classList.add('active');
+    const target = document.getElementById(tab.dataset.tab);
+    if (target) {
+      target.classList.add('active');
+    }
+  });
+});
