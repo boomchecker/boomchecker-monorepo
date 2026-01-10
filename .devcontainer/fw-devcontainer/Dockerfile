@@ -7,6 +7,7 @@ RUN apt update && apt install -y \
     xz-utils \
     git \
     curl \
+    rsync \
     libsdl2-2.0-0 \
     libgcrypt20 \
     libglib2.0-0 \
