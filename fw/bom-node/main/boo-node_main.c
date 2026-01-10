@@ -13,7 +13,7 @@
 #include "webserver.h"
 
 #include "detector.h"
-#include "audio_config.h"
+#include "audio_capture.h"
 #include "mic_input.h"
 #include "audio_streamer.h"
 #include "ota.h"
@@ -43,16 +43,7 @@ void app_main(void) {
   }
 #endif
 
-  audio_config_t audio_cfg = audio_config_get();
-  mic_config mic_cfg = {
-      .sampling_freq = audio_cfg.sampling_rate > 0 ? audio_cfg.sampling_rate
-                                                   : MIC_SAMPLING_FREQUENCY,
-      .pre_event_ms = MIC_PRE_EVENT_MS,
-      .post_event_ms = MIC_POST_EVENT_MS,
-      .num_taps = MIC_DEFAULT_NUM_TAPS,
-      .tap_size = MIC_DEFAULT_TAP_SIZE,
-  };
-  mic_init(&mic_cfg);
+  audio_capture_init();
   audio_streamer_init();
   mic_start();
   // Impulse detection disabled to keep audio streaming responsive for now.
