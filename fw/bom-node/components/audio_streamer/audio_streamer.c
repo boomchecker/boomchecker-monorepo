@@ -1,5 +1,6 @@
 #include "audio_streamer.h"
 
+#include "audio_wav.h"
 #include "esp_http_client.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
@@ -48,18 +49,6 @@ static volatile uint32_t s_send_failed = 0;
 static volatile uint32_t s_read_calls = 0;
 static volatile uint32_t s_read_bytes = 0;
 
-static void write_le16(uint8_t *dst, uint16_t val) {
-  dst[0] = (uint8_t)(val & 0xff);
-  dst[1] = (uint8_t)((val >> 8) & 0xff);
-}
-
-static void write_le32(uint8_t *dst, uint32_t val) {
-  dst[0] = (uint8_t)(val & 0xff);
-  dst[1] = (uint8_t)((val >> 8) & 0xff);
-  dst[2] = (uint8_t)((val >> 16) & 0xff);
-  dst[3] = (uint8_t)((val >> 24) & 0xff);
-}
-
 static bool audio_streamer_mode_push(const char *mode) {
   if (mode == NULL) {
     return false;
@@ -83,29 +72,6 @@ static bool audio_streamer_should_push(const audio_config_t *cfg) {
 
 static bool audio_streamer_should_pull(const audio_config_t *cfg) {
   return cfg->enabled && audio_streamer_mode_pull(cfg->mode);
-}
-
-static void audio_streamer_build_wav_header(uint8_t *out, int sample_rate) {
-  const uint16_t num_channels = 2;
-  const uint16_t bits_per_sample = 16;
-  const uint32_t byte_rate = sample_rate * num_channels * bits_per_sample / 8;
-  const uint16_t block_align = num_channels * bits_per_sample / 8;
-  const uint32_t data_size = 0xffffffff;
-  const uint32_t riff_size = data_size + 36;
-
-  memcpy(out, "RIFF", 4);
-  write_le32(out + 4, riff_size);
-  memcpy(out + 8, "WAVE", 4);
-  memcpy(out + 12, "fmt ", 4);
-  write_le32(out + 16, 16);
-  write_le16(out + 20, 1);
-  write_le16(out + 22, num_channels);
-  write_le32(out + 24, (uint32_t)sample_rate);
-  write_le32(out + 28, byte_rate);
-  write_le16(out + 32, block_align);
-  write_le16(out + 34, bits_per_sample);
-  memcpy(out + 36, "data", 4);
-  write_le32(out + 40, data_size);
 }
 
 static void audio_streamer_on_tap(const int16_t *tap_left,
@@ -214,7 +180,7 @@ static void audio_streamer_task(void *arg) {
       }
 
       uint8_t wav_header[44] = {0};
-      audio_streamer_build_wav_header(wav_header, s_sample_rate);
+      audio_wav_build_header(wav_header, s_sample_rate);
       int written = esp_http_client_write(client, (const char *)wav_header,
                                            sizeof(wav_header));
       if (written <= 0) {

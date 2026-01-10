@@ -5,6 +5,7 @@ idf_component_register(
                 "middleware.c"
                 "audio_capture.c"
                 "audio_config.c"
+                "audio_wav.c"
                 ${WIFI_SOURCES}
         INCLUDE_DIRS 
                 "include"
