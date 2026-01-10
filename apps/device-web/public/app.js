@@ -391,16 +391,43 @@ async function rebootDevice() {
   }
   setError(rebootError, null);
   setLoading(rebootLoading, true);
+  if (rebootError) {
+    rebootError.className = 'success';
+    rebootError.textContent = 'Rebooting... waiting for device.';
+  }
   try {
-    await fetch('/api/v1/system/reboot', { method: 'POST' });
-    if (rebootError) {
-      rebootError.textContent = 'Rebooting...';
-    }
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 1500);
+    await fetch('/api/v1/system/reboot', { method: 'POST', signal: controller.signal });
+    clearTimeout(timeout);
   } catch (err) {
-    setError(rebootError, err);
+    // Ignore network errors triggered by the reboot itself.
   } finally {
     setLoading(rebootLoading, false);
+    await waitForDevice();
   }
+}
+
+async function waitForDevice() {
+  if (!rebootError) return;
+  const start = Date.now();
+  const timeoutMs = 30000;
+  const intervalMs = 1000;
+  while (Date.now() - start < timeoutMs) {
+    try {
+      const res = await fetch('/api/v1/ping', { cache: 'no-store' });
+      if (res.ok) {
+        rebootError.className = 'success';
+        rebootError.textContent = 'Device is back online.';
+        return;
+      }
+    } catch (err) {
+      // Keep polling until timeout.
+    }
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
+  rebootError.className = 'error';
+  rebootError.textContent = 'Reboot timed out. Please refresh manually.';
 }
 
 el('refreshStatus').addEventListener('click', loadConfig);
