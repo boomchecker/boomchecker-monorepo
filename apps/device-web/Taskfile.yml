@@ -1,0 +1,11 @@
+version: "3"
+
+vars:
+  OUTPUT_DIR: ../../fw/bom-node/generated
+
+tasks:
+  build:
+    desc: Copy local UI into ESP-IDF generated folder
+    cmds:
+      - mkdir -p {{.OUTPUT_DIR}}
+      - rsync -a --delete public/ {{.OUTPUT_DIR}}/

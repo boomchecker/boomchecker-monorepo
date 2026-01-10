@@ -1,9 +1,17 @@
 version: "3"
 
+includes:
+  device-web:
+    taskfile: ../../apps/device-web/Taskfile.yml
+    dir: ../../apps/device-web
+    optional: true
+
 tasks:
   build:
     desc: Build ESP32 code
     aliases: [b]
+    deps:
+      - device-web:build
     cmds:
       - idf.py build
 
