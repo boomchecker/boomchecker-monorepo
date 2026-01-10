@@ -201,7 +201,6 @@ esp_err_t get_audio_stream(httpd_req_t* req) {
         if (httpd_resp_send_chunk(req, (const char*)buf, got) != ESP_OK) {
             break;
         }
-        vTaskDelay(pdMS_TO_TICKS(1));
     }
     httpd_resp_send_chunk(req, NULL, 0);
     audio_streamer_pull_release();
