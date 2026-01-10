@@ -383,3 +383,13 @@ size_t audio_streamer_pull_read(uint8_t *buf, size_t len, TickType_t timeout) {
 int audio_streamer_sample_rate(void) {
   return s_sample_rate;
 }
+
+void audio_streamer_get_stats(audio_streamer_stats_t *stats) {
+  if (!stats) return;
+  stats->tap_calls = s_tap_calls;
+  stats->stream_writes = s_stream_writes;
+  stats->send_failed = s_send_failed;
+  stats->read_calls = s_read_calls;
+  stats->read_bytes = s_read_bytes;
+  stats->pull_enabled = s_pull_enabled;
+}

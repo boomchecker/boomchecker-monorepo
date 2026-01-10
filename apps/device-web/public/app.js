@@ -36,6 +36,76 @@ const audioError = el('audioError');
 const audioFormError = el('audioFormError');
 
 let deviceTarget = null;
+let statsInterval = null;
+let statsHistory = [];
+const STATS_HISTORY_SIZE = 20; // 20 samples × 3s = 60s
+
+async function loadAudioStats() {
+  try {
+    const stats = await api('/api/v1/audio/stats');
+    
+    // Store current stats in history
+    statsHistory.push({
+      timestamp: Date.now(),
+      tapCalls: stats.tapCalls,
+      streamWrites: stats.streamWrites,
+      sendFailed: stats.sendFailed,
+      readCalls: stats.readCalls,
+      readBytes: stats.readBytes,
+    });
+    
+    // Keep only last 60 seconds of data
+    if (statsHistory.length > STATS_HISTORY_SIZE) {
+      statsHistory.shift();
+    }
+    
+    // Calculate deltas over last 60 seconds
+    let tapDelta = 0;
+    let writesDelta = 0;
+    let failedDelta = 0;
+    let readsDelta = 0;
+    let bytesDelta = 0;
+    
+    if (statsHistory.length >= 2) {
+      const oldest = statsHistory[0];
+      const newest = statsHistory[statsHistory.length - 1];
+      tapDelta = newest.tapCalls - oldest.tapCalls;
+      writesDelta = newest.streamWrites - oldest.streamWrites;
+      failedDelta = newest.sendFailed - oldest.sendFailed;
+      readsDelta = newest.readCalls - oldest.readCalls;
+      bytesDelta = newest.readBytes - oldest.readBytes;
+    }
+    
+    renderStatusGrid(el('audioStats'), [
+      { label: 'Mic Callbacks/min', value: tapDelta.toLocaleString() },
+      { label: 'Stream Writes/min', value: writesDelta.toLocaleString() },
+      { label: 'Write Failures/min', value: failedDelta.toLocaleString() },
+      { label: 'Read Calls/min', value: readsDelta.toLocaleString() },
+      { label: 'Data Streamed/min', value: `${(bytesDelta / 1024).toFixed(1)} KB` },
+      { label: 'Status', value: stats.pullEnabled ? '✓ Active' : '✗ Inactive' },
+    ]);
+  } catch (err) {
+    console.error('Failed to load stats:', err);
+    renderStatusGrid(el('audioStats'), [
+      { label: 'Error', value: 'Failed to load statistics' },
+    ]);
+  }
+}
+
+function startStatsPolling() {
+  if (statsInterval) return;
+  statsHistory = []; // Reset history
+  loadAudioStats();
+  statsInterval = setInterval(loadAudioStats, 3000);
+}
+
+function stopStatsPolling() {
+  if (statsInterval) {
+    clearInterval(statsInterval);
+    statsInterval = null;
+  }
+  statsHistory = [];
+}
 
 async function api(path, options = {}) {
   const res = await fetch(path, {
@@ -78,8 +148,9 @@ function setPill(elm, ok, okText, warnText) {
 }
 
 function buildStreamUrl() {
-  if (!deviceTarget) return '';
-  return `${deviceTarget.replace(/\/$/, '')}/api/v1/audio/stream.wav`;
+  // Use current page location if deviceTarget is not set
+  const baseUrl = deviceTarget || `${window.location.protocol}//${window.location.host}`;
+  return `${baseUrl.replace(/\/$/, '')}/api/v1/audio/stream.wav`;
 }
 
 function updateAudioModeView() {
@@ -212,20 +283,21 @@ async function loadAudio() {
     audioEnabled.value = String(data.enabled ?? false);
     audioUrl.value = data.uploadUrl || '';
     updateAudioModeView();
-    const streamUrl = buildStreamUrl() || '—';
-    const urlRow = mode === 'pull'
-      ? { label: 'Stream URL', value: streamUrl }
-      : { label: 'Upload URL', value: data.uploadUrl || '—' };
-    renderStatusGrid(audioStatus, [
-      { label: 'Enabled', value: data.enabled ? 'Yes' : 'No' },
-      { label: 'Mode', value: mode.toUpperCase() },
-      urlRow,
-    ]);
-    renderStatusGrid(audioDetails, [
-      { label: 'Enabled', value: data.enabled ? 'Yes' : 'No' },
-      { label: 'Mode', value: mode.toUpperCase() },
-      urlRow,
-    ]);
+    
+    if (mode === 'pull' && data.enabled) {
+      startStatsPolling();
+    } else {
+      stopStatsPolling();
+      const streamUrl = buildStreamUrl() || '—';
+      const urlRow = mode === 'pull'
+        ? { label: 'Stream URL', value: streamUrl }
+        : { label: 'Upload URL', value: data.uploadUrl || '—' };
+      renderStatusGrid(el('audioStats'), [
+        { label: 'Status', value: data.enabled ? 'Enabled' : 'Disabled' },
+        { label: 'Mode', value: mode.toUpperCase() },
+        urlRow,
+      ]);
+    }
   } catch (err) {
     setError(audioError, err);
   } finally {
@@ -275,6 +347,29 @@ el('saveAudio').addEventListener('click', saveAudio);
 if (audioMode) {
   audioMode.addEventListener('change', updateAudioModeView);
 }
+el('playStream')?.addEventListener('click', () => {
+  const player = el('audioPlayer');
+  const url = buildStreamUrl();
+  if (url && player) {
+    console.log('Starting audio stream from:', url);
+    player.src = url;
+    player.load();
+    player.play().catch(err => {
+      console.error('Failed to play stream:', err);
+      alert('Failed to play audio stream: ' + err.message);
+    });
+  } else {
+    alert('Stream URL not available');
+  }
+});
+el('stopStream')?.addEventListener('click', () => {
+  const player = el('audioPlayer');
+  if (player) {
+    player.pause();
+    player.src = '';
+    player.load();
+  }
+});
 el('refreshAll').addEventListener('click', async () => {
   await loadConfig();
   await loadWifiStatus();

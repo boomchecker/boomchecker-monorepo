@@ -13,3 +13,14 @@ bool audio_streamer_pull_claim(void);
 void audio_streamer_pull_release(void);
 size_t audio_streamer_pull_read(uint8_t *buf, size_t len, TickType_t timeout);
 int audio_streamer_sample_rate(void);
+
+typedef struct {
+  uint32_t tap_calls;
+  uint32_t stream_writes;
+  uint32_t send_failed;
+  uint32_t read_calls;
+  uint32_t read_bytes;
+  bool pull_enabled;
+} audio_streamer_stats_t;
+
+void audio_streamer_get_stats(audio_streamer_stats_t *stats);

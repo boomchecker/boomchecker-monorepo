@@ -219,8 +219,7 @@
         <p>Local UI for Wi‑Fi, AP, and audio configuration.</p>
         <div class="toolbar">
           <button class="tab active" data-tab="overview">Overview</button>
-          <button class="tab" data-tab="wifi">Wi‑Fi</button>
-          <button class="tab" data-tab="ap">Access Point</button>
+          <button class="tab" data-tab="wifi">Connection</button>
           <button class="tab" data-tab="audio">Audio</button>
           <button class="tab" data-tab="settings">Settings</button>
         </div>
@@ -290,30 +289,27 @@
             </div>
             <div id="connectError" class="error"></div>
           </div>
-        </div>
-      </section>
-
-      <section id="ap" class="panel">
-        <div class="grid">
           <div class="card">
             <h2>Access Point Settings</h2>
             <div class="row">
+              <label class="subtle" for="apEnabled">AP Enabled</label>
               <select id="apEnabled">
-                <option value="true">Enabled</option>
-                <option value="false">Disabled</option>
+                <option value="true">Yes</option>
+                <option value="false">No</option>
               </select>
             </div>
             <div class="row">
+              <label class="subtle" for="apSsid">AP SSID</label>
               <input id="apSsid" placeholder="AP SSID" />
             </div>
             <div class="row">
-              <button id="saveAp" class="secondary">Save AP</button>
+              <button id="saveAp" class="secondary">Save AP Settings</button>
               <span id="apLoading" class="loading hidden"><span class="spinner"></span>Saving</span>
             </div>
             <div id="apError" class="error"></div>
           </div>
           <div class="card">
-            <h2>Current AP State</h2>
+            <h2>Connection Status</h2>
             <div id="apStatus" class="status-grid">Loading...</div>
           </div>
         </div>
@@ -322,42 +318,50 @@
       <section id="audio" class="panel">
         <div class="grid">
           <div class="card">
-            <h2>Audio Config</h2>
+            <h2>Audio Configuration</h2>
+            <div class="row">
+              <label class="subtle" for="audioEnabled">Enabled</label>
+              <select id="audioEnabled">
+                <option value="true">Yes</option>
+                <option value="false">No</option>
+              </select>
+            </div>
             <div class="row">
               <label class="subtle" for="audioMode">Mode</label>
               <select id="audioMode">
                 <option value="push">PUSH (upload to server)</option>
-                <option value="pull">PULL (stream from device)</option>
-              </select>
-            </div>
-            <div class="row">
-              <label class="subtle" for="audioEnabled">State</label>
-              <select id="audioEnabled">
-                <option value="true">Enabled</option>
-                <option value="false">Disabled</option>
+                <option value="pull">PULL (HTTP stream)</option>
               </select>
             </div>
             <div id="audioPushFields">
               <div class="row">
                 <label class="subtle" for="audioUrl">Upload URL</label>
-                <input id="audioUrl" placeholder="Upload URL" />
+                <input id="audioUrl" placeholder="https://your-server.com/upload" />
               </div>
-              <p class="subtle">Used when PUSH is enabled.</p>
             </div>
             <div id="audioPullFields" class="hidden">
               <div class="row">
                 <label class="subtle" for="audioStreamUrl">Stream URL</label>
                 <input id="audioStreamUrl" readonly placeholder="Stream URL" />
               </div>
-              <p class="subtle">Open this URL in VLC/ffplay to listen.</p>
+              <div class="row">
+                <button id="playStream">▶ Play Stream</button>
+                <button id="stopStream">⏹ Stop Stream</button>
+              </div>
+              <audio id="audioPlayer" controls style="width: 100%; margin-top: 10px;"></audio>
             </div>
             <div class="row">
-              <button id="saveAudio">Save Audio</button>
+              <button id="saveAudio">Save Configuration</button>
               <span id="audioSaveLoading" class="loading hidden"><span class="spinner"></span>Saving</span>
             </div>
             <div id="audioFormError" class="error"></div>
-            <h3>Current Status</h3>
-            <div id="audioDetails" class="status-grid">Loading...</div>
+          </div>
+          <div class="card" id="audioStatsCard">
+            <h2>Live Statistics</h2>
+            <div id="audioStats" class="status-grid">Loading...</div>
+            <div class="row" style="margin-top: 10px;">
+              <span id="audioStatsLoading" class="loading hidden"><span class="spinner"></span>Updating</span>
+            </div>
           </div>
         </div>
       </section>
