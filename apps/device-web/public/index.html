@@ -179,6 +179,27 @@
         font-size: 13px;
         margin-top: 8px;
       }
+      .loading {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 13px;
+        color: var(--muted);
+      }
+      .loading.hidden {
+        display: none;
+      }
+      .spinner {
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        border: 2px solid #d7d2cb;
+        border-top-color: var(--accent);
+        animation: spin 0.8s linear infinite;
+      }
+      @keyframes spin {
+        to { transform: rotate(360deg); }
+      }
       .mono {
         font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
       }
@@ -210,6 +231,7 @@
             <div class="row">
               <button id="refreshStatus">Refresh</button>
               <span id="devicePill" class="pill">Loading</span>
+              <span id="deviceLoading" class="loading hidden"><span class="spinner"></span>Loading</span>
             </div>
             <div id="statusError" class="error"></div>
           </div>
@@ -219,6 +241,7 @@
             <div class="row">
               <button id="refreshWifi">Refresh</button>
               <span id="wifiPill" class="pill">Loading</span>
+              <span id="wifiLoading" class="loading hidden"><span class="spinner"></span>Loading</span>
             </div>
             <div id="wifiStatusError" class="error"></div>
           </div>
@@ -227,6 +250,7 @@
             <div id="audioStatus" class="status-grid">Loading...</div>
             <div class="row">
               <button id="refreshAudio">Refresh</button>
+              <span id="audioLoading" class="loading hidden"><span class="spinner"></span>Loading</span>
             </div>
             <div id="audioError" class="error"></div>
           </div>
@@ -244,6 +268,7 @@
             <h2>Scan Networks</h2>
             <div class="row">
               <button id="scanWifi">Scan</button>
+              <span id="scanLoading" class="loading hidden"><span class="spinner"></span>Scanning</span>
             </div>
             <ul id="ssidList" class="list"></ul>
             <div id="scanError" class="error"></div>
@@ -258,6 +283,7 @@
             </div>
             <div class="row">
               <button id="connectWifi">Connect</button>
+              <span id="connectLoading" class="loading hidden"><span class="spinner"></span>Connecting</span>
             </div>
             <div id="connectError" class="error"></div>
           </div>
@@ -279,6 +305,7 @@
             </div>
             <div class="row">
               <button id="saveAp" class="secondary">Save AP</button>
+              <span id="apLoading" class="loading hidden"><span class="spinner"></span>Saving</span>
             </div>
             <div id="apError" class="error"></div>
           </div>
@@ -301,6 +328,7 @@
             </div>
             <div class="row">
               <button id="saveAudio">Save Audio</button>
+              <span id="audioSaveLoading" class="loading hidden"><span class="spinner"></span>Saving</span>
             </div>
             <div id="audioFormError" class="error"></div>
           </div>

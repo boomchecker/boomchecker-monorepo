@@ -7,6 +7,13 @@ const apStatus = el('apStatus');
 const audioDetails = el('audioDetails');
 const devicePill = el('devicePill');
 const wifiPill = el('wifiPill');
+const deviceLoading = el('deviceLoading');
+const wifiLoading = el('wifiLoading');
+const audioLoading = el('audioLoading');
+const scanLoading = el('scanLoading');
+const connectLoading = el('connectLoading');
+const apLoading = el('apLoading');
+const audioSaveLoading = el('audioSaveLoading');
 const ssidList = el('ssidList');
 const ssidInput = el('ssidInput');
 const passwordInput = el('passwordInput');
@@ -44,6 +51,11 @@ function setError(elm, err) {
   elm.textContent = err ? err.message : '';
 }
 
+function setLoading(elm, loading) {
+  if (!elm) return;
+  elm.classList.toggle('hidden', !loading);
+}
+
 function renderStatusGrid(elm, items) {
   elm.innerHTML = '';
   items.forEach(({ label, value }) => {
@@ -61,6 +73,7 @@ function setPill(elm, ok, okText, warnText) {
 
 async function loadConfig() {
   setError(statusError, null);
+  setLoading(deviceLoading, true);
   try {
     const data = await api('/api/v1/config');
     renderStatusGrid(deviceStatus, [
@@ -74,11 +87,14 @@ async function loadConfig() {
     setPill(devicePill, data.isSetupDone, 'Ready', 'Needs setup');
   } catch (err) {
     setError(statusError, err);
+  } finally {
+    setLoading(deviceLoading, false);
   }
 }
 
 async function loadWifiStatus() {
   setError(wifiStatusError, null);
+  setLoading(wifiLoading, true);
   try {
     const data = await api('/api/v1/wifi/status');
     renderStatusGrid(wifiStatus, [
@@ -98,12 +114,15 @@ async function loadWifiStatus() {
     setPill(wifiPill, data.connected, 'Connected', 'Offline');
   } catch (err) {
     setError(wifiStatusError, err);
+  } finally {
+    setLoading(wifiLoading, false);
   }
 }
 
 async function scanWifi() {
   setError(scanError, null);
   ssidList.innerHTML = '';
+  setLoading(scanLoading, true);
   try {
     const data = await api('/api/v1/wifi/scan');
     data.ssids.forEach((ssid) => {
@@ -116,11 +135,14 @@ async function scanWifi() {
     });
   } catch (err) {
     setError(scanError, err);
+  } finally {
+    setLoading(scanLoading, false);
   }
 }
 
 async function connectWifi() {
   setError(connectError, null);
+  setLoading(connectLoading, true);
   try {
     await api('/api/v1/wifi/connect', {
       method: 'POST',
@@ -132,11 +154,14 @@ async function connectWifi() {
     await loadWifiStatus();
   } catch (err) {
     setError(connectError, err);
+  } finally {
+    setLoading(connectLoading, false);
   }
 }
 
 async function saveAp() {
   setError(apError, null);
+  setLoading(apLoading, true);
   try {
     await api('/api/v1/wifi/ap', {
       method: 'POST',
@@ -148,11 +173,14 @@ async function saveAp() {
     await loadWifiStatus();
   } catch (err) {
     setError(apError, err);
+  } finally {
+    setLoading(apLoading, false);
   }
 }
 
 async function loadAudio() {
   setError(audioError, null);
+  setLoading(audioLoading, true);
   try {
     const data = await api('/api/v1/audio');
     audioMode.value = data.mode || '';
@@ -167,11 +195,14 @@ async function loadAudio() {
     ]);
   } catch (err) {
     setError(audioError, err);
+  } finally {
+    setLoading(audioLoading, false);
   }
 }
 
 async function saveAudio() {
   setError(audioFormError, null);
+  setLoading(audioSaveLoading, true);
   try {
     await api('/api/v1/audio', {
       method: 'POST',
@@ -183,6 +214,8 @@ async function saveAudio() {
     await loadAudio();
   } catch (err) {
     setError(audioFormError, err);
+  } finally {
+    setLoading(audioSaveLoading, false);
   }
 }
 
