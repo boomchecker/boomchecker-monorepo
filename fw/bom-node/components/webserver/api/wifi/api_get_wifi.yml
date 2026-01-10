@@ -1,0 +1,21 @@
+components:
+  examples:
+    # WiFi search examples
+    WifiSearch200:
+      summary: Successful response for WiFi search
+      value:
+        ssids:
+          - SSID1
+          - SSID2
+          - SSID3
+
+  schemas:
+    # WiFi search response schema
+    WifiSearch:
+      type: object
+      properties:
+        ssids:
+          type: array
+          description: List of found WiFi networks
+          items:
+            type: string

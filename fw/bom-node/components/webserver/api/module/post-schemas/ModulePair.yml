@@ -1,0 +1,10 @@
+components:
+  schemas:
+    ModulePair:
+      type: object
+      properties:
+        timeout-seconds:
+          type: integer
+          description: Timeout in seconds
+          default: 60
+          minimum: 0

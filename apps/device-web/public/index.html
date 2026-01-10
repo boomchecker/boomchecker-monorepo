@@ -1,0 +1,356 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>BOM Node Local UI</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f8f2ea;
+        --bg-2: #f0f7f6;
+        --ink: #1d1d1b;
+        --muted: #5a5f66;
+        --accent: #1b6a5a;
+        --accent-2: #e67e22;
+        --card: #ffffff;
+        --border: #e2ded8;
+        --shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family: "Space Grotesk", "IBM Plex Sans", "Segoe UI", sans-serif;
+        color: var(--ink);
+        background:
+          radial-gradient(900px 500px at 15% 10%, #ffe7c7 0%, rgba(255, 231, 199, 0) 70%),
+          radial-gradient(600px 400px at 85% 5%, #d9f5ff 0%, rgba(217, 245, 255, 0) 70%),
+          linear-gradient(180deg, var(--bg) 0%, var(--bg-2) 100%);
+        min-height: 100vh;
+      }
+      main {
+        max-width: 1100px;
+        margin: 0 auto;
+        padding: 28px 20px 64px;
+      }
+      header {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        margin-bottom: 20px;
+      }
+      h1 {
+        margin: 0;
+        font-size: 32px;
+        letter-spacing: 0.4px;
+      }
+      p {
+        margin: 0;
+        color: var(--muted);
+      }
+      .toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 12px;
+      }
+      .tab {
+        border: 1px solid var(--border);
+        background: #fff;
+        color: var(--ink);
+        padding: 8px 14px;
+        border-radius: 999px;
+        cursor: pointer;
+        font-size: 14px;
+      }
+      .tab.active {
+        background: var(--ink);
+        color: #fff;
+        border-color: var(--ink);
+      }
+      .panel {
+        display: none;
+        animation: fadeIn 0.35s ease;
+      }
+      .panel.active {
+        display: block;
+      }
+      @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(6px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: 16px;
+      }
+      .card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 16px;
+        box-shadow: var(--shadow);
+      }
+      .card h2 {
+        margin: 0 0 12px;
+        font-size: 18px;
+      }
+      .card h3 {
+        margin: 0 0 8px;
+        font-size: 14px;
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+      }
+      .row {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+      .row + .row {
+        margin-top: 10px;
+      }
+      button {
+        background: var(--accent);
+        color: #fff;
+        border: none;
+        border-radius: 10px;
+        padding: 8px 14px;
+        cursor: pointer;
+      }
+      button.secondary {
+        background: #26323f;
+      }
+      input, select {
+        flex: 1;
+        padding: 8px 10px;
+        border-radius: 10px;
+        border: 1px solid var(--border);
+        font-family: inherit;
+      }
+      .list {
+        margin: 10px 0 0;
+        padding: 0;
+        list-style: none;
+        max-height: 180px;
+        overflow: auto;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+      }
+      .list li {
+        padding: 8px 10px;
+        border-bottom: 1px solid var(--border);
+        cursor: pointer;
+      }
+      .list li:last-child {
+        border-bottom: none;
+      }
+      .list li:hover {
+        background: #f7f6f4;
+      }
+      .status-grid {
+        display: grid;
+        gap: 10px;
+      }
+      .status-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 8px 10px;
+        border-radius: 10px;
+        background: #f7f6f4;
+        font-size: 14px;
+      }
+      .pill {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 999px;
+        background: #e8f5ef;
+        color: var(--accent);
+        font-size: 12px;
+      }
+      .pill.warn {
+        background: #fff0dd;
+        color: var(--accent-2);
+      }
+      .error {
+        color: #b00020;
+        font-size: 13px;
+        margin-top: 8px;
+      }
+      .loading {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 13px;
+        color: var(--muted);
+      }
+      .loading.hidden {
+        display: none;
+      }
+      .spinner {
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        border: 2px solid #d7d2cb;
+        border-top-color: var(--accent);
+        animation: spin 0.8s linear infinite;
+      }
+      @keyframes spin {
+        to { transform: rotate(360deg); }
+      }
+      .mono {
+        font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+      .subtle {
+        color: var(--muted);
+        font-size: 13px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>BOM Node Control Room</h1>
+        <p>Local UI for Wi‑Fi, AP, and audio configuration.</p>
+        <div class="toolbar">
+          <button class="tab active" data-tab="overview">Overview</button>
+          <button class="tab" data-tab="wifi">Wi‑Fi</button>
+          <button class="tab" data-tab="ap">Access Point</button>
+          <button class="tab" data-tab="audio">Audio</button>
+          <button class="tab" data-tab="settings">Settings</button>
+        </div>
+      </header>
+
+      <section id="overview" class="panel active">
+        <div class="grid">
+          <div class="card">
+            <h2>Device Snapshot</h2>
+            <div id="deviceStatus" class="status-grid">Loading...</div>
+            <div class="row">
+              <button id="refreshStatus">Refresh</button>
+              <span id="devicePill" class="pill">Loading</span>
+              <span id="deviceLoading" class="loading hidden"><span class="spinner"></span>Loading</span>
+            </div>
+            <div id="statusError" class="error"></div>
+          </div>
+          <div class="card">
+            <h2>Wi‑Fi Snapshot</h2>
+            <div id="wifiStatus" class="status-grid">Loading...</div>
+            <div class="row">
+              <button id="refreshWifi">Refresh</button>
+              <span id="wifiPill" class="pill">Loading</span>
+              <span id="wifiLoading" class="loading hidden"><span class="spinner"></span>Loading</span>
+            </div>
+            <div id="wifiStatusError" class="error"></div>
+          </div>
+          <div class="card">
+            <h2>Audio Snapshot</h2>
+            <div id="audioStatus" class="status-grid">Loading...</div>
+            <div class="row">
+              <button id="refreshAudio">Refresh</button>
+              <span id="audioLoading" class="loading hidden"><span class="spinner"></span>Loading</span>
+            </div>
+            <div id="audioError" class="error"></div>
+          </div>
+          <div class="card">
+            <h2>Server Target</h2>
+            <div id="serverTarget" class="status mono">Loading...</div>
+            <p class="subtle">Change with DEVICE_URL when running locally.</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="wifi" class="panel">
+        <div class="grid">
+          <div class="card">
+            <h2>Scan Networks</h2>
+            <div class="row">
+              <button id="scanWifi">Scan</button>
+              <span id="scanLoading" class="loading hidden"><span class="spinner"></span>Scanning</span>
+            </div>
+            <ul id="ssidList" class="list"></ul>
+            <div id="scanError" class="error"></div>
+          </div>
+          <div class="card">
+            <h2>Connect Wi‑Fi</h2>
+            <div class="row">
+              <input id="ssidInput" placeholder="SSID" />
+            </div>
+            <div class="row">
+              <input id="passwordInput" type="password" placeholder="Password" />
+            </div>
+            <div class="row">
+              <button id="connectWifi">Connect</button>
+              <span id="connectLoading" class="loading hidden"><span class="spinner"></span>Connecting</span>
+            </div>
+            <div id="connectError" class="error"></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="ap" class="panel">
+        <div class="grid">
+          <div class="card">
+            <h2>Access Point Settings</h2>
+            <div class="row">
+              <select id="apEnabled">
+                <option value="true">Enabled</option>
+                <option value="false">Disabled</option>
+              </select>
+            </div>
+            <div class="row">
+              <input id="apSsid" placeholder="AP SSID" />
+            </div>
+            <div class="row">
+              <button id="saveAp" class="secondary">Save AP</button>
+              <span id="apLoading" class="loading hidden"><span class="spinner"></span>Saving</span>
+            </div>
+            <div id="apError" class="error"></div>
+          </div>
+          <div class="card">
+            <h2>Current AP State</h2>
+            <div id="apStatus" class="status-grid">Loading...</div>
+          </div>
+        </div>
+      </section>
+
+      <section id="audio" class="panel">
+        <div class="grid">
+          <div class="card">
+            <h2>Audio Config</h2>
+            <div class="row">
+              <input id="audioMode" placeholder="Mode (e.g. http)" />
+            </div>
+            <div class="row">
+              <input id="audioUrl" placeholder="Upload URL" />
+            </div>
+            <div class="row">
+              <button id="saveAudio">Save Audio</button>
+              <span id="audioSaveLoading" class="loading hidden"><span class="spinner"></span>Saving</span>
+            </div>
+            <div id="audioFormError" class="error"></div>
+          </div>
+          <div class="card">
+            <h2>Audio Status</h2>
+            <div id="audioDetails" class="status-grid">Loading...</div>
+          </div>
+        </div>
+      </section>
+
+      <section id="settings" class="panel">
+        <div class="grid">
+          <div class="card">
+            <h2>Quick Actions</h2>
+            <div class="row">
+              <button id="refreshAll">Refresh All</button>
+            </div>
+            <p class="subtle">Use this after applying Wi‑Fi or AP changes.</p>
+          </div>
+        </div>
+      </section>
+    </main>
+    <script src="/app.js"></script>
+  </body>
+</html>

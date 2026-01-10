@@ -1,4 +1,5 @@
 #include "wifi.h"
+#include "wifi_config.h"
 
 #include "esp_event.h"
 #include "esp_netif.h"
@@ -31,4 +32,20 @@ esp_err_t wifi_init(void)
 
     wifi_main_func();
     return ESP_OK;
+}
+
+esp_err_t wifi_api_scan(wifi_scan_result_t *result)
+{
+    return wifi_scan_networks(result);
+}
+
+esp_err_t wifi_api_connect_and_store(const char *ssid, const char *password)
+{
+    esp_err_t err = wifi_connect_with_credentials(ssid, password);
+    if (err != ESP_OK)
+    {
+        return err;
+    }
+
+    return wifi_store_credentials(ssid, password);
 }
