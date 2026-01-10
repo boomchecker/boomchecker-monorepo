@@ -124,6 +124,7 @@ async function api(path, options = {}) {
 }
 
 function setError(elm, err) {
+  if (!elm) return;
   elm.textContent = err ? err.message : '';
 }
 
@@ -133,6 +134,7 @@ function setLoading(elm, loading) {
 }
 
 function renderStatusGrid(elm, items) {
+  if (!elm) return;
   elm.innerHTML = '';
   items.forEach(({ label, value }) => {
     const row = document.createElement('div');
@@ -143,6 +145,7 @@ function renderStatusGrid(elm, items) {
 }
 
 function setPill(elm, ok, okText, warnText) {
+  if (!elm) return;
   elm.textContent = ok ? okText : warnText;
   elm.className = ok ? 'pill' : 'pill warn';
 }
@@ -279,9 +282,15 @@ async function loadAudio() {
     const data = await api('/api/v1/audio');
     const rawMode = data.mode || '';
     const mode = rawMode === 'pull' || rawMode === 'push' ? rawMode : 'push';
-    audioMode.value = mode;
-    audioEnabled.value = String(data.enabled ?? false);
-    audioUrl.value = data.uploadUrl || '';
+    if (audioMode) {
+      audioMode.value = mode;
+    }
+    if (audioEnabled) {
+      audioEnabled.value = String(data.enabled ?? false);
+    }
+    if (audioUrl) {
+      audioUrl.value = data.uploadUrl || '';
+    }
     updateAudioModeView();
     
     if (mode === 'pull' && data.enabled) {
@@ -312,9 +321,9 @@ async function saveAudio() {
     await api('/api/v1/audio', {
       method: 'POST',
       body: JSON.stringify({
-        enabled: audioEnabled.value === 'true',
-        mode: audioMode.value.trim(),
-        uploadUrl: audioUrl.value.trim(),
+        enabled: audioEnabled ? audioEnabled.value === 'true' : false,
+        mode: audioMode ? audioMode.value.trim() : 'push',
+        uploadUrl: audioUrl ? audioUrl.value.trim() : '',
       }),
     });
     await loadAudio();
@@ -329,17 +338,21 @@ async function loadServerTarget() {
   try {
     const data = await api('/config');
     deviceTarget = data.target;
-    serverTarget.textContent = data.target;
+    if (serverTarget) {
+      serverTarget.textContent = data.target;
+    }
     updateAudioModeView();
   } catch (err) {
     deviceTarget = null;
-    serverTarget.textContent = 'Unknown';
+    if (serverTarget) {
+      serverTarget.textContent = 'Unknown';
+    }
   }
 }
 
 el('refreshStatus').addEventListener('click', loadConfig);
 el('refreshWifi').addEventListener('click', loadWifiStatus);
-el('refreshAudio').addEventListener('click', loadAudio);
+el('refreshAudio')?.addEventListener('click', loadAudio);
 el('scanWifi').addEventListener('click', scanWifi);
 el('connectWifi').addEventListener('click', connectWifi);
 el('saveAp').addEventListener('click', saveAp);
@@ -379,7 +392,9 @@ el('refreshAll').addEventListener('click', async () => {
 loadConfig();
 loadWifiStatus();
 loadAudio();
-loadServerTarget();
+if (serverTarget) {
+  loadServerTarget();
+}
 
 document.querySelectorAll('.tab').forEach((tab) => {
   tab.addEventListener('click', () => {
