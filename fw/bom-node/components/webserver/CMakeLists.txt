@@ -1,5 +1,5 @@
 # Glob all relevant source files
-file(GLOB_RECURSE API_SOURCES "api/*.c")
+file(GLOB API_SOURCES "api/**/*.c")
 file(GLOB_RECURSE WEB_SOURCES "*.c" "slre/*.c")
 
 idf_component_register(
@@ -23,6 +23,7 @@ idf_component_register(
         ota
         spiffs
         middleware
+        audio_streamer
 )
 
 spiffs_create_partition_image(website ../../generated FLASH_IN_PROJECT)

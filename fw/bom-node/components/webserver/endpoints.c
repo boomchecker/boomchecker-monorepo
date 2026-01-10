@@ -5,15 +5,18 @@
 
 #include "api_get_audio.h"
 #include "api_get_config.h"
+#include "api_get_system.h"
 #include "api_get_wifi.h"
 #include "api_post_audio.h"
+#include "api_post_system.h"
 #include "api_post_wifi.h"
 #include "handler_get_static.h"
 
 // API Handlers GET
 const route_entry_t route_table_api_get[] = {{"^/api/v1/wifi(/.*)?/?$", api_get_wifi},
                                              {"^/api/v1/audio(/.*)?/?$", api_get_audio},
-                                             {"^/api/v1/config(/.*)?/?$", api_get_config}};
+                                             {"^/api/v1/config(/.*)?/?$", api_get_config},
+                                             {"^/api/v1/ping/?$", api_get_system}};
 
 esp_err_t api_get_handler(httpd_req_t* req) {
     return route_request(req, route_table_api_get,
@@ -22,7 +25,8 @@ esp_err_t api_get_handler(httpd_req_t* req) {
 
 // API Handlers POST
 const route_entry_t route_table_api_post[] = {{"^/api/v1/wifi(/.*)?/?$", api_post_wifi},
-                                              {"^/api/v1/audio(/.*)?/?$", api_post_audio}};
+                                              {"^/api/v1/audio(/.*)?/?$", api_post_audio},
+                                              {"^/api/v1/system(/.*)?/?$", api_post_system}};
 
 esp_err_t api_post_handler(httpd_req_t* req) {
     return route_request(req, route_table_api_post,

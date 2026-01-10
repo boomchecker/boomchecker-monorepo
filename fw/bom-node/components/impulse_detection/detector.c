@@ -128,7 +128,7 @@ void impulse_detector_start(void) {
       return;
     }
   }
-  mic_set_tap_callback(impulse_detection_on_tap, NULL);
+  mic_add_tap_callback(impulse_detection_on_tap, NULL);
   mic_start();
 
   BaseType_t task_result = xTaskCreatePinnedToCore(

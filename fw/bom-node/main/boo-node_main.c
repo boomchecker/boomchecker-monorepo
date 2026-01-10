@@ -13,7 +13,8 @@
 #include "webserver.h"
 
 #include "detector.h"
-#include "mic_input.h"
+#include "audio_capture.h"
+#include "audio_streamer.h"
 #include "ota.h"
 #include "ring_buffer.h"
 
@@ -41,8 +42,11 @@ void app_main(void) {
   }
 #endif
 
-  mic_init_default();
-  impulse_detector_start();
+  audio_capture_init();
+  audio_streamer_init();
+  audio_capture_start();
+  // Impulse detection disabled to keep audio streaming responsive for now.
+  // impulse_detector_start();
 
   while (1) {
     vTaskDelay(1);
