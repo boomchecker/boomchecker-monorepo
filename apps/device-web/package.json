@@ -1,0 +1,9 @@
+{
+  "name": "device-web",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Minimal local UI for BOM node",
+  "scripts": {
+    "dev": "node server.js"
+  }
+}

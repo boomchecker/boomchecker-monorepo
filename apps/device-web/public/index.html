@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>BOM Node Local UI</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f5f0e9;
+        --card: #ffffff;
+        --accent: #0b6e4f;
+        --muted: #6b6b6b;
+        --ink: #222;
+        --shadow: 0 8px 28px rgba(0, 0, 0, 0.08);
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family: "Space Grotesk", "IBM Plex Sans", system-ui, sans-serif;
+        background: radial-gradient(circle at 10% 20%, #ffe7c7 0%, #f5f0e9 55%, #e8f0f3 100%);
+        color: var(--ink);
+      }
+      main {
+        max-width: 980px;
+        margin: 0 auto;
+        padding: 32px 16px 64px;
+      }
+      h1 {
+        margin: 0 0 8px;
+        font-size: 32px;
+      }
+      p {
+        margin: 0 0 16px;
+        color: var(--muted);
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 16px;
+      }
+      .card {
+        background: var(--card);
+        border-radius: 16px;
+        padding: 16px;
+        box-shadow: var(--shadow);
+      }
+      .card h2 {
+        margin: 0 0 8px;
+        font-size: 18px;
+      }
+      .row {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+      .row + .row {
+        margin-top: 8px;
+      }
+      button {
+        background: var(--accent);
+        color: #fff;
+        border: none;
+        border-radius: 10px;
+        padding: 8px 12px;
+        cursor: pointer;
+      }
+      button.secondary {
+        background: #2d3a4a;
+      }
+      input, select {
+        flex: 1;
+        padding: 8px;
+        border-radius: 10px;
+        border: 1px solid #ddd;
+      }
+      .list {
+        margin: 8px 0 0;
+        padding: 0;
+        list-style: none;
+        max-height: 180px;
+        overflow: auto;
+      }
+      .list li {
+        padding: 6px 8px;
+        border-bottom: 1px solid #eee;
+        cursor: pointer;
+      }
+      .list li:hover {
+        background: #f3f3f3;
+      }
+      .status {
+        font-size: 14px;
+        color: var(--muted);
+      }
+      .pill {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 999px;
+        background: #e8f5ef;
+        color: var(--accent);
+        font-size: 12px;
+      }
+      .error {
+        color: #b00020;
+        font-size: 13px;
+        margin-top: 8px;
+      }
+      .mono {
+        font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>BOM Node Local UI</h1>
+      <p>Minimal local control panel for Wi‑Fi, AP, and audio configuration.</p>
+      <div class="grid">
+        <section class="card">
+          <h2>Device Status</h2>
+          <div id="deviceStatus" class="status">Loading...</div>
+          <div class="row">
+            <button id="refreshStatus">Refresh</button>
+          </div>
+          <div id="statusError" class="error"></div>
+        </section>
+
+        <section class="card">
+          <h2>Wi‑Fi Status</h2>
+          <div id="wifiStatus" class="status">Loading...</div>
+          <div class="row">
+            <button id="refreshWifi">Refresh</button>
+          </div>
+          <div id="wifiStatusError" class="error"></div>
+        </section>
+
+        <section class="card">
+          <h2>Wi‑Fi Scan</h2>
+          <div class="row">
+            <button id="scanWifi">Scan</button>
+          </div>
+          <ul id="ssidList" class="list"></ul>
+          <div id="scanError" class="error"></div>
+        </section>
+
+        <section class="card">
+          <h2>Connect Wi‑Fi</h2>
+          <div class="row">
+            <input id="ssidInput" placeholder="SSID" />
+          </div>
+          <div class="row">
+            <input id="passwordInput" type="password" placeholder="Password" />
+          </div>
+          <div class="row">
+            <button id="connectWifi">Connect</button>
+          </div>
+          <div id="connectError" class="error"></div>
+        </section>
+
+        <section class="card">
+          <h2>Access Point</h2>
+          <div class="row">
+            <select id="apEnabled">
+              <option value="true">Enabled</option>
+              <option value="false">Disabled</option>
+            </select>
+          </div>
+          <div class="row">
+            <input id="apSsid" placeholder="AP SSID" />
+          </div>
+          <div class="row">
+            <button id="saveAp" class="secondary">Save AP</button>
+          </div>
+          <div id="apError" class="error"></div>
+        </section>
+
+        <section class="card">
+          <h2>Audio Config</h2>
+          <div class="row">
+            <input id="audioMode" placeholder="Mode (e.g. http)" />
+          </div>
+          <div class="row">
+            <input id="audioUrl" placeholder="Upload URL" />
+          </div>
+          <div class="row">
+            <button id="saveAudio">Save Audio</button>
+          </div>
+          <div id="audioError" class="error"></div>
+        </section>
+
+        <section class="card">
+          <h2>Server Target</h2>
+          <div id="serverTarget" class="status mono">Loading...</div>
+        </section>
+      </div>
+    </main>
+    <script src="/app.js"></script>
+  </body>
+</html>
