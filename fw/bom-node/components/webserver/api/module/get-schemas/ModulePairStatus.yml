@@ -1,0 +1,36 @@
+components:
+  examples:
+    # ModulePairStatus 200
+    ModulePairStatus200:
+      summary: Successful response for module pair status retrieval
+      value:
+        modules:
+          - NetworkID: "12345"
+            Type: "FelMOD-WL"
+            SN: "SN1234567890"
+          - NetworkID: "67890"
+            Type: "FelMOD-SW"
+            SN: "SN0987654321"
+        status: "OK"
+        timeout-countdown-sec: 23
+  
+  schemas:
+    ModulePairStatus:
+      type: object
+      properties:
+        modules:
+          type: array
+          items:
+            type: object
+            properties:
+              NetworkID:
+                type: string
+              Type:
+                type: string
+              SN:
+                type: string
+        status:
+          type: string
+        timeout-countdown-sec:
+          type: integer
+      

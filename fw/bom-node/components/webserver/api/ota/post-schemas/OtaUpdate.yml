@@ -1,0 +1,9 @@
+components:
+  schemas:
+    OtaUpdate:
+      type: object
+      properties:
+        version:
+          type: string
+          description: OTA version to be updated
+          example: 1.0.0

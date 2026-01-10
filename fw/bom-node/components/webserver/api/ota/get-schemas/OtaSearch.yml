@@ -1,0 +1,24 @@
+components:
+  examples:
+    # Ota 200
+    OtaSearch200:
+      summary: Successful response for OTA version retrieval
+      value:
+        version: 1.0.0
+        date: 2023-10-01
+      
+  schemas:
+    # Ota version
+    OtaSearch:
+      type: object
+      properties:
+        version:
+          type: string
+          description: Latest OTA version found on the server
+          example: 1.0.1
+        date:
+          type: string
+          description: Release date of the OTA version
+          example: 2023-10-01
+
+        

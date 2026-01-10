@@ -1,0 +1,44 @@
+components:
+  examples:
+    ConfigStatus200:
+      summary: Successful response for status of Felix-MB
+      value:
+        isSetupDone: true
+        deviceName: "Felix-MB-1"
+        wifiConfigured: true
+
+    WifiConfig200:
+      summary: Successful response for Wi-Fi configuration status
+      value:
+        wifiConfigured: true
+        wifiSSID: "MyWiFiNetwork"
+
+  schemas:
+    ConfigStatus:
+      type: object
+      properties:
+        isSetupDone:
+          type: boolean
+          description: Whether the Felix MB has completed its initial setup
+        deviceName:
+          type: string
+          description: Optional user-defined device name (can be empty or default)
+        wifiConfigured:
+          type: boolean
+          description: Indicates whether Wi-Fi has been successfully configured
+      required:
+        - isSetupDone
+        - wifiConfigured
+
+    WifiConfig:
+      type: object
+      properties:
+        wifiConfigured:
+          type: boolean
+          description: Indicates whether Wi-Fi has been successfully configured
+        wifiSSID:
+          type: string
+          description: The SSID of the configured Wi-Fi network
+      required:
+        - wifiConfigured
+        - wifiSSID

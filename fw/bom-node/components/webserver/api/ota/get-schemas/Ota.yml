@@ -1,0 +1,17 @@
+components:
+  examples:
+    # Ota 200
+    Ota200:
+      summary: Successful response for OTA version retrieval
+      value:
+        version: 1.0.0
+      
+  schemas:
+    # Ota version
+    Ota:
+      type: object
+      properties:
+        version:
+          type: string
+          description: OTA version
+          example: 1.0.0
