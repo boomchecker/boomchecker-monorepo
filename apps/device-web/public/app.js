@@ -434,13 +434,13 @@ async function waitForDevice() {
   rebootError.textContent = 'Reboot timed out. Please refresh manually.';
 }
 
-el('refreshStatus').addEventListener('click', loadConfig);
-el('refreshWifi').addEventListener('click', loadWifiStatus);
+el('refreshStatus')?.addEventListener('click', loadConfig);
+el('refreshWifi')?.addEventListener('click', loadWifiStatus);
 el('refreshAudio')?.addEventListener('click', loadStreamConfig);
-el('scanWifi').addEventListener('click', scanWifi);
-el('connectWifi').addEventListener('click', connectWifi);
-el('saveAp').addEventListener('click', saveAp);
-el('saveAudio').addEventListener('click', saveStreamConfig);
+el('scanWifi')?.addEventListener('click', scanWifi);
+el('connectWifi')?.addEventListener('click', connectWifi);
+el('saveAp')?.addEventListener('click', saveAp);
+el('saveAudio')?.addEventListener('click', saveStreamConfig);
 el('saveCapture')?.addEventListener('click', saveCaptureSettings);
 if (audioMode) {
   audioMode.addEventListener('change', updateAudioModeView);
@@ -468,7 +468,7 @@ el('stopStream')?.addEventListener('click', () => {
     player.load();
   }
 });
-el('refreshAll').addEventListener('click', async () => {
+el('refreshAll')?.addEventListener('click', async () => {
   await loadConfig();
   await loadWifiStatus();
   await loadStreamConfig();
