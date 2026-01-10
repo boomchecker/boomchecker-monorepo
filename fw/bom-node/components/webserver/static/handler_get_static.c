@@ -8,6 +8,8 @@
 
 #define BASE_PATH       "/storage"
 #define MAX_PATH_LENGTH 512
+#define BASE_PATH_LEN   (sizeof(BASE_PATH) - 1)
+#define URI_MAX_LEN     256
 
 static const char* TAG = "GET_STATIC";
 
@@ -48,9 +50,7 @@ static const char* get_mime_type(const char* filepath) {
 
 // --- Static file handler ---
 static esp_err_t get_static_file_handler(httpd_req_t* req) {
-    char filepath
-        [MAX_PATH_LENGTH + 20 + 1
-         + 5]; // 512 for path + 20 /storage/felix-local + 1 for null terminator + 5 for .gzip
+    char filepath[MAX_PATH_LENGTH + BASE_PATH_LEN + 4 + 1];
     const char* uri = req->uri;
 
     // Redirect root URI and everything without extension to index.html
@@ -59,13 +59,29 @@ static esp_err_t get_static_file_handler(httpd_req_t* req) {
         uri = "/index.html";
     }
 
-    snprintf(filepath, sizeof(filepath), "%s%s.gz", BASE_PATH, uri);
+    size_t uri_len = strnlen(uri, URI_MAX_LEN + 1);
+    if (uri_len > URI_MAX_LEN) {
+        httpd_resp_send_err(req, HTTPD_414_URI_TOO_LONG, "URI too long");
+        return ESP_FAIL;
+    }
+
+    if ((BASE_PATH_LEN + uri_len + 3 + 1) >= sizeof(filepath)) {
+        httpd_resp_send_err(req, HTTPD_414_URI_TOO_LONG, "URI too long");
+        return ESP_FAIL;
+    }
+
+    memcpy(filepath, BASE_PATH, BASE_PATH_LEN);
+    memcpy(filepath + BASE_PATH_LEN, uri, uri_len);
+    memcpy(filepath + BASE_PATH_LEN + uri_len, ".gz", 3);
+    filepath[BASE_PATH_LEN + uri_len + 3] = '\0';
     ESP_LOGI(TAG, "Serving file: %s", filepath);
 
     FILE* file = fopen(filepath, "r");
     if (!file) {
         ESP_LOGE(TAG, "Gzip file not found: %s, fallback to normal.", filepath);
-        snprintf(filepath, sizeof(filepath), "%s%s", BASE_PATH, uri);
+        memcpy(filepath, BASE_PATH, BASE_PATH_LEN);
+        memcpy(filepath + BASE_PATH_LEN, uri, uri_len);
+        filepath[BASE_PATH_LEN + uri_len] = '\0';
 
         file = fopen(filepath, "r");
         if (!file) {

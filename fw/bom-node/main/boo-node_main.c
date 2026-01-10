@@ -10,6 +10,7 @@
 #include <string.h>
 
 #include "middleware.h"
+#include "webserver.h"
 
 #include "detector.h"
 #include "mic_input.h"
@@ -19,9 +20,16 @@
 static const char *TAG = "MAIN";
 
 void app_main(void) {
+  httpd_handle_t server = NULL;
+
   esp_err_t err = middleware_init();
   if (err != ESP_OK) {
     ESP_LOGE(TAG, "Middleware init failed: %s", esp_err_to_name(err));
+  }
+
+  server = start_webserver();
+  if (!server) {
+    ESP_LOGE(TAG, "Webserver init failed");
   }
 
 #ifdef CONFIG_OTA_ENABLE
