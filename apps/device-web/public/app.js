@@ -42,7 +42,10 @@ const rebootError = el('rebootError');
 let deviceTarget = null;
 let statsInterval = null;
 let statsHistory = [];
-const STATS_HISTORY_SIZE = 20; // 20 samples × 3s = 60s
+// Audio stats polling configuration
+const STATS_POLL_INTERVAL_MS = 3000; // Must match the polling interval used in setInterval
+const STATS_HISTORY_WINDOW_MS = 60 * 1000; // Keep 60 seconds of history
+const STATS_HISTORY_SIZE = Math.ceil(STATS_HISTORY_WINDOW_MS / STATS_POLL_INTERVAL_MS);
 
 async function loadAudioStats() {
   try {
