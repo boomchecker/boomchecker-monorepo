@@ -3,6 +3,7 @@ file(GLOB_RECURSE WIFI_SOURCES "wifi/*.c")
 idf_component_register(
         SRCS 
                 "middleware.c"
+                "audio_config.c"
                 ${WIFI_SOURCES}
         INCLUDE_DIRS 
                 "include"
