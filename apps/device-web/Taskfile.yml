@@ -9,3 +9,8 @@ tasks:
     cmds:
       - mkdir -p {{.OUTPUT_DIR}}
       - rsync -a --delete public/ {{.OUTPUT_DIR}}/
+
+  run:
+    desc: Run local UI server
+    cmds:
+      - node server.js
