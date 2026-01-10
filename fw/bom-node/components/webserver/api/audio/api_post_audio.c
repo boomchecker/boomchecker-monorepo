@@ -73,9 +73,11 @@ esp_err_t post_audio_stream_config(httpd_req_t* req) {
         cJSON_Delete(root);
         return send_json_error(req, TAG, WEBERR_BAD_REQUEST, "Missing required fields");
     }
-    if (enabled && !cJSON_IsBool(enabled)) {
-        cJSON_Delete(root);
-        return send_json_error(req, TAG, WEBERR_BAD_REQUEST, "Invalid enabled field");
+    if (enabled) {
+        if (!cJSON_IsBool(enabled)) {
+            cJSON_Delete(root);
+            return send_json_error(req, TAG, WEBERR_BAD_REQUEST, "Invalid enabled field");
+        }
     }
 
     audio_config_t config = audio_config_get();
