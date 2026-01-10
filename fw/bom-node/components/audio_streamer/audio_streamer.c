@@ -337,7 +337,7 @@ void audio_streamer_pull_release(void) {
   if (!s_pull_mutex) {
     return;
   }
-  if (xSemaphoreTake(s_pull_mutex, 0) == pdTRUE) {
+  if (xSemaphoreTake(s_pull_mutex, portMAX_DELAY) == pdTRUE) {
     s_pull_in_use = false;
     xSemaphoreGive(s_pull_mutex);
   }
