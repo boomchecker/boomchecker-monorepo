@@ -422,7 +422,8 @@ async function waitForDevice() {
         return;
       }
     } catch (err) {
-      // Keep polling until timeout.
+      console.error('Error while pinging device during reboot wait:', err);
+      // Keep polling until timeout in case of transient errors.
     }
     await new Promise((resolve) => setTimeout(resolve, intervalMs));
   }
