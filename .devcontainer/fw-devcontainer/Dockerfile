@@ -53,6 +53,10 @@ RUN mkdir -p $PNPM_HOME && \
 # Ensure ESP-IDF environment variables are sourced in Zsh
 RUN echo "source /opt/esp/idf/export.sh > /dev/null 2>&1" >> ~/.bashrc
 
+# Make ESP-IDF available for all users and non-login shells
+RUN printf 'if [ -f /opt/esp/idf/export.sh ]; then . /opt/esp/idf/export.sh >/dev/null 2>&1; fi\n' > /etc/profile.d/esp-idf.sh && \
+    chmod 0644 /etc/profile.d/esp-idf.sh
+
 ENV LANG C.UTF-8
 ENV LC_ALL C.UTF-8
 
