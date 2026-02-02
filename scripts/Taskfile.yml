@@ -5,3 +5,9 @@ includes:
     taskfile: ./median-filter/Taskfile.yml
     dir: ./median-filter
     optional: true
+
+tasks:
+  benchmark:
+    desc: Run median-filter benchmark
+    cmds:
+      - task median-filter:benchmark
