@@ -11,7 +11,7 @@ import json
 import os
 import shutil
 from array import array
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable
 
@@ -185,7 +185,7 @@ def main() -> None:
     )
 
     run_config = {
-        "ts": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+        "ts": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "input_dir": str(input_dir),
         "output_dir": str(output_dir),
         "lib_path": str(args.lib_path),
