@@ -32,6 +32,8 @@ tasks:
   benchmark:
     desc: Run benchmark.py script
     dir: python
+    deps:
+      - csrc:build
     cmds:
       - ./venv/bin/python benchmark.py {{.CLI_ARGS}}
 
