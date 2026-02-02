@@ -6,6 +6,7 @@ Runs the C detector over downloaded WAVs, stores peak timestamps, and exports
 
 from __future__ import annotations
 
+import ctypes
 import argparse
 import json
 import os
@@ -14,8 +15,6 @@ from array import array
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable
-
-import ctypes
 
 try:
     from pydub import AudioSegment
