@@ -21,6 +21,17 @@ except ImportError:  # pragma: no cover
 
 try:
     from pydub import AudioSegment
+    from pydub import utils as pydub_utils
+    # Configure ffmpeg/ffprobe paths immediately after import
+    _venv_bin = Path(__file__).parent / "venv" / "bin"
+    _venv_ffmpeg = _venv_bin / "ffmpeg"
+    _venv_ffprobe = _venv_bin / "ffprobe"
+    if _venv_ffmpeg.exists():
+        AudioSegment.converter = str(_venv_ffmpeg)
+    if _venv_ffprobe.exists():
+        # Monkey-patch pydub's get_prober_name to return our ffprobe
+        _ffprobe_path = str(_venv_ffprobe)
+        pydub_utils.get_prober_name = lambda: _ffprobe_path
 except ImportError:  # pragma: no cover
     AudioSegment = None
 
@@ -73,8 +84,19 @@ def _configure_audio_binaries() -> None:
             "Missing dependency. Install `pydub` (plus ffmpeg) to decode audio."
         )
 
-    ffmpeg_bin = os.environ.get("FFMPEG_BINARY") or shutil.which("ffmpeg")
-    ffprobe_bin = os.environ.get("FFPROBE_BINARY") or shutil.which("ffprobe")
+    # Check venv bin directory first, then environment variable, then PATH
+    venv_bin = Path(__file__).parent / "venv" / "bin"
+    venv_ffmpeg = venv_bin / "ffmpeg"
+    venv_ffprobe = venv_bin / "ffprobe"
+    
+    ffmpeg_bin = (
+        str(venv_ffmpeg) if venv_ffmpeg.exists() 
+        else os.environ.get("FFMPEG_BINARY") or shutil.which("ffmpeg")
+    )
+    ffprobe_bin = (
+        str(venv_ffprobe) if venv_ffprobe.exists()
+        else os.environ.get("FFPROBE_BINARY") or shutil.which("ffprobe")
+    )
     if ffmpeg_bin:
         AudioSegment.converter = ffmpeg_bin
     if ffprobe_bin:

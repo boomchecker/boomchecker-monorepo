@@ -20,6 +20,8 @@ tasks:
   load-audio:
     desc: Run load_audio.py script
     dir: python
+    env:
+      PATH: "{{.ROOT_DIR}}/python/venv/bin:{{.PATH}}"
     cmds:
       - ./venv/bin/python load_audio.py {{.CLI_ARGS}}
 
