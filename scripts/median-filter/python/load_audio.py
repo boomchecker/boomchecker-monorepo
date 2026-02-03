@@ -115,7 +115,11 @@ def get_video_metadata_from_url(video_url: str) -> dict:
         return info
 
 
-def search_youtube(query: str, limit: int = 20, max_length_s: Optional[int] = None) -> List[Dict[str, str]]:
+def search_youtube(
+    query: str,
+    limit: int = 20,
+    max_length_s: Optional[int] = None,
+) -> List[Dict[str, str]]:
     """
     Use yt-dlp search to pull back metadata for the first `limit` results.
     Returns dictionaries with title and watch_url that can be consumed by later
@@ -157,6 +161,7 @@ def search_youtube(query: str, limit: int = 20, max_length_s: Optional[int] = No
                 url = f"https://www.youtube.com/watch?v={video_id}"
         results.append(
             {
+                "id": entry.get("id"),
                 "title": (entry.get("title") or "Untitled video").strip(),
                 "url": url,
                 "length": duration,
