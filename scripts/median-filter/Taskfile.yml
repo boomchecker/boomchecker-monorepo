@@ -23,6 +23,12 @@ tasks:
     cmds:
       - ./venv/bin/python load_audio.py {{.CLI_ARGS}}
 
+  auto-download:
+    desc: Run auto_download.py script
+    dir: python
+    cmds:
+      - ./venv/bin/python auto_download.py {{.CLI_ARGS}}
+
   detect:
     desc: Run detect.py script
     dir: python
