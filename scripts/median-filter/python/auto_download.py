@@ -16,6 +16,10 @@ def _day_dir(base_dir: Path) -> Path:
     return base_dir / day
 
 
+def _log(level: str, message: str) -> None:
+    print(f"[{level}] {message}")
+
+
 def _sanitize_filename(title: str, fallback: str = "audio_preview") -> str:
     keep = [
         c if (c.isalnum() or c in (" ", "-", "_")) else "_"
@@ -57,9 +61,14 @@ def _download_query(
     max_length_s: int,
     top_n: int,
 ) -> None:
-    results = search_youtube(query, limit=top_n, max_length_s=max_length_s)
+    _log("INFO", f"Query: {query}")
+    try:
+        results = search_youtube(query, limit=top_n, max_length_s=max_length_s)
+    except Exception as exc:
+        _log("WARN", f"Search failed: {exc}")
+        return
     if not results:
-        print(f"No results for query: {query}")
+        _log("INFO", "No results")
         return
 
     day_dir = _day_dir(output_dir)
@@ -68,18 +77,18 @@ def _download_query(
     for entry in results:
         entry_id = (entry.get("id") or "").strip()
         if entry_id and entry_id in existing_ids:
-            print(f"Skipping duplicate: {entry_id} ({entry.get('title')})")
+            _log("SKIP", f"Duplicate: {entry_id} ({entry.get('title')})")
             continue
 
         url = entry.get("url") or ""
         if not url:
-            print(f"Skipping entry without URL: {entry.get('title')}")
+            _log("SKIP", f"No URL: {entry.get('title')}")
             continue
 
         try:
             audio_segment, metadata = download_audio_segment(url, output_dir=str(day_dir))
         except Exception as exc:
-            print(f"Download failed: {entry.get('title')} - {exc}")
+            _log("WARN", f"Download failed: {entry.get('title')} - {exc}")
             continue
 
         video_id = metadata.get("id") or entry_id or _sanitize_filename(
@@ -94,7 +103,7 @@ def _download_query(
             json.dump(metadata, f, indent=2, ensure_ascii=False)
 
         existing_ids.add(video_id)
-        print(f"Saved: {wav_path.name} ({audio_segment.duration_seconds:.1f}s)")
+        _log("OK", f"Saved: {wav_path.name} ({audio_segment.duration_seconds:.1f}s)")
 
 
 def main(argv: list[str]) -> int:

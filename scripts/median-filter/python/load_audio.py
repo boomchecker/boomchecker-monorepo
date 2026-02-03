@@ -140,6 +140,7 @@ def search_youtube(
         return []
 
     ydl_opts = _build_ydl_opts()
+    ydl_opts["ignoreerrors"] = True
     try:
         with YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(f"ytsearch{limit}:{query}", download=False)
