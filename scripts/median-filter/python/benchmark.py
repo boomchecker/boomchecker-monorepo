@@ -9,28 +9,12 @@ from __future__ import annotations
 import ctypes
 import argparse
 import json
-import os
-import shutil
 from array import array
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable
 
-try:
-    from pydub import AudioSegment
-    from pydub import utils as pydub_utils
-    # Configure ffmpeg/ffprobe paths immediately after import
-    _venv_bin = Path(__file__).parent / "venv" / "bin"
-    _venv_ffmpeg = _venv_bin / "ffmpeg"
-    _venv_ffprobe = _venv_bin / "ffprobe"
-    if _venv_ffmpeg.exists():
-        AudioSegment.converter = str(_venv_ffmpeg)
-    if _venv_ffprobe.exists():
-        # Monkey-patch pydub's get_prober_name to return our ffprobe
-        _ffprobe_path = str(_venv_ffprobe)
-        pydub_utils.get_prober_name = lambda: _ffprobe_path
-except ImportError:  # pragma: no cover - helpful message if dependency missing
-    AudioSegment = None
+from audio_binaries import AudioSegment, configure_audio_binaries, prime_pydub_paths
 
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
@@ -39,6 +23,7 @@ DEFAULT_INPUT_DIR = PYTHON_DIR / "downloads"
 DEFAULT_OUTPUT_DIR = PYTHON_DIR / "benchmark_out"
 DEFAULT_LIB_PATH = ROOT_DIR / "build" / "libpeak.so"
 
+prime_pydub_paths(Path(__file__).parent)
 
 class MedianDetectorLevels(ctypes.Structure):
     _fields_ = [
@@ -57,42 +42,7 @@ class MedianDetectorCfg(ctypes.Structure):
 
 
 def _configure_audio_binaries() -> None:
-    if AudioSegment is None:
-        raise RuntimeError(
-            "Missing dependency. Install `pydub` (plus ffmpeg) to decode audio."
-        )
-
-    # Check venv bin directory first, then environment variable, then PATH
-    venv_bin = Path(__file__).parent / "venv" / "bin"
-    venv_ffmpeg = venv_bin / "ffmpeg"
-    venv_ffprobe = venv_bin / "ffprobe"
-    
-    ffmpeg_bin = (
-        str(venv_ffmpeg) if venv_ffmpeg.exists() 
-        else os.environ.get("FFMPEG_BINARY") or shutil.which("ffmpeg")
-    )
-    ffprobe_bin = (
-        str(venv_ffprobe) if venv_ffprobe.exists()
-        else os.environ.get("FFPROBE_BINARY") or shutil.which("ffprobe")
-    )
-    if ffmpeg_bin:
-        AudioSegment.converter = ffmpeg_bin
-    if ffprobe_bin:
-        # Already monkey-patched at import time, but update for consistency
-        pass
-
-    missing = []
-    if not ffmpeg_bin:
-        missing.append("ffmpeg")
-    if not ffprobe_bin:
-        missing.append("ffprobe")
-    if missing:
-        missing_list = ", ".join(missing)
-        raise RuntimeError(
-            f"Missing {missing_list}. Install ffmpeg (includes ffprobe) "
-            "or set FFMPEG_BINARY/FFPROBE_BINARY. "
-            "Try `task setup` from scripts/median-filter."
-        )
+    configure_audio_binaries(Path(__file__).parent)
 
 
 def _load_peak_lib(lib_path: Path) -> ctypes.CDLL:
