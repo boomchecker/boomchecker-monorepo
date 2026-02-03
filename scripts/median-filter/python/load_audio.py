@@ -8,8 +8,6 @@ Step 2: prototype YouTube scraping helpers (search, download, etc.).
 from __future__ import annotations
 
 import json
-import os
-import shutil
 import tempfile
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -19,13 +17,11 @@ try:
 except ImportError:  # pragma: no cover
     YoutubeDL = None
 
-try:
-    from pydub import AudioSegment
-except ImportError:  # pragma: no cover
-    AudioSegment = None
+from audio_binaries import AudioSegment, configure_audio_binaries, prime_pydub_paths
 
 from prompt_store import load_prompt, ensure_files  # local module
 
+prime_pydub_paths(Path(__file__).parent)
 
 def load_audio(path: str):
     """Stub for audio loading."""
@@ -68,30 +64,7 @@ def _build_ydl_opts(outtmpl: str | None = None) -> dict:
 
 
 def _configure_audio_binaries() -> None:
-    if AudioSegment is None:
-        raise RuntimeError(
-            "Missing dependency. Install `pydub` (plus ffmpeg) to decode audio."
-        )
-
-    ffmpeg_bin = os.environ.get("FFMPEG_BINARY") or shutil.which("ffmpeg")
-    ffprobe_bin = os.environ.get("FFPROBE_BINARY") or shutil.which("ffprobe")
-    if ffmpeg_bin:
-        AudioSegment.converter = ffmpeg_bin
-    if ffprobe_bin:
-        AudioSegment.ffprobe = ffprobe_bin
-
-    missing = []
-    if not ffmpeg_bin:
-        missing.append("ffmpeg")
-    if not ffprobe_bin:
-        missing.append("ffprobe")
-    if missing:
-        missing_list = ", ".join(missing)
-        raise RuntimeError(
-            f"Missing {missing_list}. Install ffmpeg (includes ffprobe) "
-            "or set FFMPEG_BINARY/FFPROBE_BINARY. "
-            "Try `task setup` from scripts/median-filter."
-        )
+    configure_audio_binaries(Path(__file__).parent)
 
 
 def get_video_metadata_from_url(video_url: str) -> dict:
