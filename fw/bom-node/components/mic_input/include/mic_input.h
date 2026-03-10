@@ -43,11 +43,11 @@
 #endif
 
 #ifndef MIC_PRE_EVENT_MS
-#define MIC_PRE_EVENT_MS 10
+#define MIC_PRE_EVENT_MS 2
 #endif
 
 #ifndef MIC_POST_EVENT_MS
-#define MIC_POST_EVENT_MS 10
+#define MIC_POST_EVENT_MS 8
 #endif
 
 #ifndef MIC_DEFAULT_NUM_TAPS

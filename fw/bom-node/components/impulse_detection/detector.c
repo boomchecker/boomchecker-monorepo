@@ -21,6 +21,7 @@
  */
 
 #include "detector.h"
+#include "angle_estimation.h"
 #include "median_detection.h"
 #include "mic_input.h"
 
@@ -82,6 +83,33 @@ static void impulse_detection_task(void *arg) {
 
     if (detectedL || detectedR) {
       ESP_LOGI(TAG, ">>> IMPULSE DETECTED <<<");
+
+      int16_t *arrL_cutted = &arrL[wanted_window_start];
+      int16_t *arrR_cutted = &arrR[wanted_window_start];
+      int cutted_len = wanted_window_length;
+
+      if (wanted_window_start < 0 ||
+          (wanted_window_start + cutted_len) > MAX_EVENT_SAMPLES) {
+        ESP_LOGE(TAG, "Window out of bounds! Using full buffer instead.");
+        arrL_cutted = arrL;
+        arrR_cutted = arrR;
+        cutted_len = MAX_EVENT_SAMPLES;
+      }
+
+      tdoa_estimation tdoa =
+          pbde_tdoa(arrL_cutted, arrR_cutted, wanted_window_length,
+                    MIC_SAMPLING_FREQUENCY);
+      // cross_corr_tdoa(arrL, arrR, MAX_EVENT_SAMPLES, MIC_SAMPLING_FREQUENCY);
+
+      float angle = calculate_aoa(tdoa);
+
+      ESP_LOGI(TAG, "Analysis:");
+      ESP_LOGI(TAG,
+               " -> Lag: %d samples "
+               "(%.3f ms)",
+               tdoa.lag_samples, tdoa.delay_ms);
+      ESP_LOGI(TAG, " -> ANGLE: %.1f degrees", angle);
+
       detectedL = false;
       detectedR = false;
 
@@ -89,7 +117,9 @@ static void impulse_detection_task(void *arg) {
       if (!((wanted_window_start >= 0) &&
             (wanted_window_start + wanted_window_length <= arr_len))) {
         ESP_LOGE(TAG,
-                 "Window out of bounds: start=%d, length=%d, array size=%d",
+                 "Window out of bounds: "
+                 "start=%d, length=%d, "
+                 "array size=%d",
                  wanted_window_start, wanted_window_length, arr_len);
       }
     }
@@ -132,7 +162,7 @@ void impulse_detector_start(void) {
   mic_start();
 
   BaseType_t task_result = xTaskCreatePinnedToCore(
-      impulse_detection_task, "impulse_detection", 8192, NULL, 5, NULL, 0);
+      impulse_detection_task, "impulse_detection", 4096, NULL, 9, NULL, 0);
   if (task_result != pdPASS) {
     ESP_LOGE(TAG, "Failed to create impulse_detection task (error=%d)",
              (int)task_result);
