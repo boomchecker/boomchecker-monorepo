@@ -7,8 +7,11 @@ from datetime import datetime
 from pathlib import Path
 from typing import Iterable
 
+from audio_binaries import prime_pydub_paths
 from load_audio import download_audio_segment, search_youtube
 from prompt_store import generate_queries
+
+prime_pydub_paths(Path(__file__).parent)
 
 
 def _day_dir(base_dir: Path) -> Path:
@@ -68,8 +71,18 @@ def _download_query(
         _log("WARN", f"Search failed: {exc}")
         return
     if not results:
-        _log("INFO", "No results")
+        if max_length_s:
+            _log("INFO", f"No results <= {max_length_s}s")
+        else:
+            _log("INFO", "No results")
         return
+    _log("INFO", f"Top {len(results)} results for '{query}':")
+    for idx, entry in enumerate(results, 1):
+        title = entry.get("title") or "Untitled"
+        length = entry.get("length")
+        url = entry.get("url") or ""
+        length_str = length if isinstance(length, int) else "unknown"
+        _log("INFO", f"{idx:02d}. {title}\n    {url} - {length_str}")
 
     day_dir = _day_dir(output_dir)
     day_dir.mkdir(parents=True, exist_ok=True)
@@ -110,7 +123,7 @@ def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(
         description="Continuously fetch queries and download short YouTube audio clips."
     )
-    parser.add_argument("--max-length-s", type=int, default=30)
+    parser.add_argument("--max-length-s", type=int, default=90)
     parser.add_argument("--top-n", type=int, default=10)
     parser.add_argument("--history-limit", type=int, default=300)
     parser.add_argument("--output-dir", type=Path, default=Path("./downloads"))
