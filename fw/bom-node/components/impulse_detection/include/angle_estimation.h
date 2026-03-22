@@ -14,6 +14,14 @@
 #define FFT_SIZE 128
 #endif
 
+#ifndef PBDE_F_MAX
+#define PBDE_F_MAX 7000.0f
+#endif
+
+#ifndef PBDE_F_MIN
+#define PBDE_F_MIN 1000.0f
+#endif
+
 #define TOTAL_SAMPLES (FFT_SIZE * 2)
 
 typedef struct {

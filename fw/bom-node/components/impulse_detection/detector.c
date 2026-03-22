@@ -110,6 +110,8 @@ static void impulse_detection_task(void *arg) {
                tdoa.lag_samples, tdoa.delay_ms);
       ESP_LOGI(TAG, " -> ANGLE: %.1f degrees", angle);
 
+      // vTaskDelay(pdMS_TO_TICKS(100));
+
       detectedL = false;
       detectedR = false;
 

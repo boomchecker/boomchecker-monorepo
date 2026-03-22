@@ -110,10 +110,12 @@ tdoa_estimation pbde_tdoa(const int16_t *signal1, const int16_t *signal2,
   dsps_bit_rev_fc32(fft_buffer1, FFT_SIZE);
   dsps_bit_rev_fc32(fft_buffer2, FFT_SIZE);
 
-  float total_cross_amplitude = 0.0f;
+  float max_cross_amplitude = 0.0f;
   float norm_weights[FFT_SIZE / 2];
-  float total_weight = 0.0f;
   float t_delay[FFT_SIZE / 2];
+
+  float prev_wrapped_phase = 0.0f;
+  float unwrapped_phase = 0.0f;
 
   for (int i = 1; i < FFT_SIZE / 2; i++) {
     float re1 = fft_buffer1[i * 2], im1 = fft_buffer1[i * 2 + 1];
@@ -122,37 +124,68 @@ tdoa_estimation pbde_tdoa(const int16_t *signal1, const int16_t *signal2,
     float phaseX = atan2f(im1, re1);
     float phaseY = atan2f(im2, re2);
     float diff = phaseX - phaseY;
+
     while (diff > M_PI)
       diff -= 2.0f * M_PI;
     while (diff < -M_PI)
       diff += 2.0f * M_PI;
 
-    double f = ((float)i / (float)FFT_SIZE) * (float)fs;
-    t_delay[i] = -diff / (2 * M_PI * f);
+    if (i == 1) {
+      unwrapped_phase = diff;
+    } else {
+      float phase_step = diff - prev_wrapped_phase;
 
-    // TODO: not sure with these operations
+      while (phase_step > M_PI)
+        phase_step -= 2.0f * M_PI;
+      while (phase_step < -M_PI)
+        phase_step += 2.0f * M_PI;
+
+      unwrapped_phase += phase_step;
+    }
+    prev_wrapped_phase = diff;
+
+    float f = ((float)i / (float)FFT_SIZE) * (float)fs;
+    t_delay[i] = -unwrapped_phase / (2.0f * M_PI * f);
+
     float amp1 = sqrtf(re1 * re1 + im1 * im1);
     float amp2 = sqrtf(re2 * re2 + im2 * im2);
     float amp = amp1 * amp2;
 
     norm_weights[i] = amp;
-    total_cross_amplitude += amp;
-  }
 
-  for (int i = 1; i < FFT_SIZE / 2; i++) {
-    // TODO: q - scaling function - now equals 1 for whole spectrum
-    norm_weights[i] = norm_weights[i] / total_cross_amplitude;
-    total_weight += norm_weights[i];
+    if (amp > max_cross_amplitude) {
+      max_cross_amplitude = amp;
+    }
   }
 
   float final_delay_sec = 0.0f;
-  for (int i = 1; i < FFT_SIZE / 2; i++) {
-    final_delay_sec += t_delay[i] * norm_weights[i];
+  float total_weight = 0.0f;
+
+  // definition of analytical bandwidth
+  float f_min = PBDE_F_MIN;
+  float f_max = PBDE_F_MAX;
+
+  int bin_min = (int)(f_min * FFT_SIZE / fs);
+  int bin_max = (int)(f_max * FFT_SIZE / fs);
+
+  if (bin_min < 1)
+    bin_min = 1;
+  if (bin_max >= FFT_SIZE / 2)
+    bin_max = FFT_SIZE / 2 - 1;
+
+  for (int i = bin_min; i <= bin_max; i++) {
+    // TODO: q - scaling function - now equals 1 for whole spectrum
+    float normalized_weight = norm_weights[i] / max_cross_amplitude;
+
+    final_delay_sec += t_delay[i] * normalized_weight;
+    total_weight += normalized_weight;
   }
+
   final_delay_sec = final_delay_sec / total_weight;
 
   res.delay_ms = final_delay_sec * 1000.0f;
   res.lag_samples = (int)roundf(final_delay_sec * fs);
+
   return res;
 }
 
