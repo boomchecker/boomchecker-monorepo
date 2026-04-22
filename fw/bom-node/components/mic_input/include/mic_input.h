@@ -43,11 +43,11 @@
 #endif
 
 #ifndef MIC_PRE_EVENT_MS
-#define MIC_PRE_EVENT_MS 2
+#define MIC_PRE_EVENT_MS 1.5f
 #endif
 
 #ifndef MIC_POST_EVENT_MS
-#define MIC_POST_EVENT_MS 8
+#define MIC_POST_EVENT_MS 8.5f
 #endif
 
 #ifndef MIC_DEFAULT_NUM_TAPS
@@ -71,9 +71,9 @@
 #endif
 
 typedef struct {
-  int sampling_freq; // [Hz]
-  int pre_event_ms;  // [ms]
-  int post_event_ms; // [ms]
+  int sampling_freq;   // [Hz]
+  float pre_event_ms;  // [ms]
+  float post_event_ms; // [ms]
   int num_taps;
   int tap_size;
 } mic_config;
