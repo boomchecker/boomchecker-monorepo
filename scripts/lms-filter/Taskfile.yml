@@ -1,0 +1,73 @@
+version: "3"
+
+vars:
+  CC: '{{default "cc" .CC}}'
+  BUILD_DIR: build
+  CONFIG_HEADER: build/generated/lms_config.h
+
+tasks:
+  default:
+    desc: List tasks
+    cmds:
+      - task --list
+
+  setup:
+    desc: Create Python venv and install dependencies
+    cmds:
+      - bash ./setup.sh
+
+  config:
+    desc: Generate C config header with esp-idf-kconfig kconfgen
+    cmds:
+      - mkdir -p build/generated
+      - ./python/venv/bin/python -m kconfgen --kconfig Kconfig --defaults sdkconfig.defaults --config sdkconfig --output header {{.CONFIG_HEADER}}
+
+  menuconfig:
+    desc: Run esp-idf-kconfig menuconfig
+    env:
+      KCONFIG_CONFIG: sdkconfig
+    cmds:
+      - cp -n sdkconfig.defaults sdkconfig || true
+      - ./python/venv/bin/python -m menuconfig Kconfig
+
+  kconfig:check:
+    desc: Check Kconfig formatting with esp-idf-kconfig kconfcheck
+    cmds:
+      - ./python/venv/bin/python -m kconfcheck Kconfig
+
+  build:
+    desc: Build the LMS shared library and C unit tests
+    deps:
+      - config
+    cmds:
+      - mkdir -p {{.BUILD_DIR}}
+      - '{{.CC}} -std=c11 -O2 -Wall -Wextra -Werror -fPIC -I csrc -I build/generated -shared csrc/lms_filter.c csrc/lms_filter_host.c -o {{.BUILD_DIR}}/liblms_filter.so'
+      - '{{.CC}} -std=c11 -O2 -Wall -Wextra -Werror -I csrc -I build/generated csrc/lms_filter.c csrc/tests/lms_filter_test.c -o {{.BUILD_DIR}}/lms_filter_tests'
+
+  test:c:
+    desc: Run C unit tests
+    deps:
+      - build
+    cmds:
+      - ./{{.BUILD_DIR}}/lms_filter_tests
+
+  test:py:
+    desc: Run Python integration test
+    deps:
+      - build
+    cmds:
+      - ./python/venv/bin/python python/test_integration.py
+
+  test:
+    desc: Run C and Python tests
+    cmds:
+      - task: kconfig:check
+      - task: test:c
+      - task: test:py
+
+  run:
+    desc: Build and run the synthetic LMS demo
+    deps:
+      - build
+    cmds:
+      - ./python/venv/bin/python python/lms_demo.py {{.CLI_ARGS}}
