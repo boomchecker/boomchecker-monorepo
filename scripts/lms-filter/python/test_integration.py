@@ -12,18 +12,19 @@ def main() -> None:
         output_dir=out_dir,
         fs=16000,
         duration_s=3.0,
-        sine_hz=440.0,
         seed=11,
         reference_gain=1.0,
         save_wav=False,
     )
-    if metrics["mse_cleaned"] >= metrics["mse_noisy"]:
+    if metrics["error_tail_mse"] >= metrics["primary_tail_mse"]:
         raise SystemExit(
-            f"Expected LMS to improve MSE, got noisy={metrics['mse_noisy']} "
-            f"cleaned={metrics['mse_cleaned']}"
+            f"Expected FXLMS residual tail MSE to improve, got "
+            f"primary={metrics['primary_tail_mse']} error={metrics['error_tail_mse']}"
         )
-    if metrics["snr_improvement_db"] <= 0.5:
-        raise SystemExit(f"Expected at least 0.5 dB SNR improvement, got {metrics['snr_improvement_db']}")
+    if metrics["attenuation_tail_db"] <= 0.5:
+        raise SystemExit(
+            f"Expected at least 0.5 dB tail attenuation, got {metrics['attenuation_tail_db']}"
+        )
     print("python integration: ok")
 
 

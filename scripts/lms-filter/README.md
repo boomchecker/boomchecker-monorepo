@@ -1,9 +1,9 @@
-# LMS Filter
+# FXLMS ANC Demo
 
-Prototype of a fixed-point classic LMS noise canceller for a future STM32H5
-port. The PC harness synthesizes a clean sine signal, drone-like reference
-noise, a delayed/FIR-filtered reference path, and a noisy microphone signal.
-The C code estimates the reference-path noise and returns the LMS error signal.
+Fixed-point filtered-x LMS active-noise-control demo for a future STM32H5 port.
+The PC harness synthesizes a drone-like reference signal `x[n]` and a primary
+path `P(z)` to create `d[n] = P(z)x[n]`. The C core runs the adaptive
+controller and demo secondary path.
 
 ## Workflow
 
@@ -18,9 +18,9 @@ Generated outputs are written under `build/` and `python/out/`.
 
 Useful tasks:
 
-- `task config`: generate `build/generated/lms_config.h` from `sdkconfig` or
+- `task config`: generate `build/generated/fxlms_config.h` from `sdkconfig` or
   `sdkconfig.defaults` using `python -m kconfgen` from `esp-idf-kconfig`.
-- `task menuconfig`: edit local LMS Kconfig values through the installed
+- `task menuconfig`: edit local FXLMS Kconfig values through the installed
   `esp-idf-kconfig` menuconfig UI.
 - `task kconfig:check`: validate `Kconfig` formatting with
   `python -m kconfcheck`.
@@ -28,51 +28,60 @@ Useful tasks:
 
 ## Signal Model
 
-The first-phase simulation uses a known reference signal and a noisy desired
-signal:
-
 ```text
-reference drone -> delay + short FIR -> disturbance
-clean sine + disturbance -> desired/noisy input
-LMS(reference, desired) -> cleaned/error output
+Python simulation:
+  x[n] -> P(z) -> d[n]
+
+C core:
+  x[n] -> G(z) -> y[n] -> C(z) -> secondary[n]
+  e[n] = d[n] - secondary[n]
+  x_filtered[n] = C_hat(z) * x[n]
+  G(z) update uses e[n] and x_filtered[n]
 ```
 
-The reference and desired arrays are converted to signed Q15 PCM before calling
-the C library. The clean sine is kept separately only for host-side metrics and
-plots; the LMS code never sees it.
+Mapping:
+
+- `P(z)`: Python primary path simulation, implemented as delay plus short FIR.
+- `G(z)`: adaptive FIR controller in C.
+- `C(z)`: fixed demo secondary path in C, applied only to `y[n]`.
+- `C_hat(z)`: fixed secondary-path estimate in C, used only for the filtered-x
+  adaptation branch.
+
+The main block API takes `reference_x[]` and `primary_d[]`, then returns
+`error_e[]`, `controller_y[]`, and `secondary_output[]`.
+
+All FIRs in this demo are documented and implemented newest-sample-first: tap
+`i` multiplies sample `n - i`. This convention is shared by the adaptive
+controller `G(z)`, secondary path `C(z)`, secondary-path estimate `C_hat(z)`,
+and Python primary path `P(z)`.
 
 ## Fixed-Point Model
 
 The public C API uses signed `int16_t` PCM centered around zero. Internally,
 FIR products are accumulated in wider integers and shifted back to Q15. The
 embedded-facing API is no-heap: callers allocate the state buffer returned by
-`lms_state_size()`.
+`fxlms_state_size()`.
 
-Classic LMS is sensitive to reference amplitude and the learning rate. Keep
-`--reference-gain` at `1.0` for the default demo so the simulated acoustic path
-stays representable by Q15 coefficients. Use `CONFIG_LMS_ADAPT_SHIFT` to make
-the effective update smaller than one Q15 learning-rate LSB.
-
-The effective coefficient update is:
+The controller update is:
 
 ```text
-delta_w = CONFIG_LMS_MU_Q15 * error * reference >> (30 + CONFIG_LMS_ADAPT_SHIFT)
+delta_g = CONFIG_FXLMS_MU_Q15 * error * filtered_x
+          >> (30 + CONFIG_FXLMS_ADAPT_SHIFT)
 ```
 
-Large reference amplitudes, many taps, and colored drone harmonics can make a
-plain LMS unstable. If the output starts to saturate, reduce
-`CONFIG_LMS_MU_Q15` or increase `CONFIG_LMS_ADAPT_SHIFT`.
+If the output saturates, reduce `CONFIG_FXLMS_MU_Q15` or increase
+`CONFIG_FXLMS_ADAPT_SHIFT`.
 
 ## Embedded Notes
 
 The functions in `csrc/lms_filter.h` are the intended STM32-facing API:
 
-- Call `lms_state_size()` once for the chosen config.
+- Call `fxlms_state_size()` once for the chosen config.
 - Allocate the returned number of bytes statically or from a controlled memory
   region.
-- Call `lms_init()` and feed DMA-sized blocks through `lms_process_block()`.
+- Call `fxlms_init()` and feed DMA-sized blocks through `fxlms_process_block()`.
 - Keep input PCM signed and centered around zero. If a peripheral path produces
-  offset binary samples, subtract the midpoint before calling the LMS code.
+  offset binary samples, subtract the midpoint before calling the FXLMS code.
 
-`lms_filter_i16()` is a host convenience wrapper for Python and is not the
+`fxlms_filter_i16()` is a host convenience wrapper for Python and is not the
 preferred embedded entry point because it allocates memory internally.

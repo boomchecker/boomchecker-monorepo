@@ -3,31 +3,32 @@
 #include <stdint.h>
 #include <stdlib.h>
 
-int lms_filter_i16(const int16_t *reference, const int16_t *desired,
-                   int16_t *cleaned, int16_t *estimated_noise, size_t n) {
-  if (reference == NULL || desired == NULL || cleaned == NULL) {
-    return LMS_ERR_INVALID_ARG;
+int fxlms_filter_i16(const int16_t *reference_x, const int16_t *primary_d,
+                     int16_t *error_e, int16_t *controller_y,
+                     int16_t *secondary_output, size_t n) {
+  if (reference_x == NULL || primary_d == NULL || error_e == NULL) {
+    return FXLMS_ERR_INVALID_ARG;
   }
 
-  struct lms_config cfg = lms_default_config();
+  struct fxlms_config cfg = fxlms_default_config();
   size_t needed = 0;
-  int st = lms_state_size(&cfg, &needed);
-  if (st != LMS_OK) {
+  int st = fxlms_state_size(&cfg, &needed);
+  if (st != FXLMS_OK) {
     return st;
   }
 
   void *mem = calloc(1, needed);
   if (mem == NULL) {
-    return LMS_ERR_BUFFER_TOO_SMALL;
+    return FXLMS_ERR_BUFFER_TOO_SMALL;
   }
 
-  struct lms_state *state = NULL;
-  st = lms_init(mem, needed, &cfg, &state);
-  if (st == LMS_OK) {
-    st = lms_process_block(state, reference, desired, cleaned, estimated_noise, n);
+  struct fxlms_state *state = NULL;
+  st = fxlms_init(mem, needed, &cfg, &state);
+  if (st == FXLMS_OK) {
+    st = fxlms_process_block(state, reference_x, primary_d, error_e,
+                             controller_y, secondary_output, n);
   }
 
   free(mem);
   return st;
 }
-

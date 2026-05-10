@@ -1,36 +1,34 @@
-menu "LMS filter"
+menu "FXLMS ANC demo"
 
-    config LMS_SAMPLE_RATE_HZ
+    config FXLMS_SAMPLE_RATE_HZ
         int "Sample rate"
         default 16000
         range 8000 48000
         help
             Default sample rate used by the PC simulation.
 
-    config LMS_TAPS
-        int "Number of LMS taps"
+    config FXLMS_TAPS
+        int "Number of adaptive controller taps"
         default 64
         range 1 512
         help
-            FIR length of the adaptive reference path model.
+            FIR length of the adaptive ANC controller G(z).
 
-    config LMS_MU_Q15
-        int "Classic LMS learning rate in Q15"
-        default 1
+    config FXLMS_MU_Q15
+        int "Filtered-x LMS learning rate in Q15"
+        default 64
         range 0 32767
         help
             Learning rate encoded as Q15. Smaller values improve stability.
 
-    config LMS_ADAPT_SHIFT
-        int "Extra LMS adaptation right shift"
-        default 20
+    config FXLMS_ADAPT_SHIFT
+        int "Extra FXLMS adaptation right shift"
+        default 0
         range 0 30
         help
-            Additional right shift applied to the weight update. This allows
-            effective learning rates smaller than one Q15 LSB while keeping
-            input/reference samples unscaled.
+            Additional right shift applied to the controller-weight update.
 
-    config LMS_OUTPUT_LIMIT
+    config FXLMS_OUTPUT_LIMIT
         int "Output saturation limit"
         default 32767
         range 1 32767
