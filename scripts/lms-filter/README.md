@@ -2,8 +2,9 @@
 
 Fixed-point filtered-x LMS active-noise-control demo for a future STM32H5 port.
 The PC harness synthesizes a drone-like reference signal `x[n]` and a primary
-path `P(z)` to create `d[n] = P(z)x[n]`. The C core runs the adaptive
-controller and demo secondary path.
+path `P(z)` to create drone noise at the microphone. Optionally, the harness
+can mix a wanted WAV signal into the microphone path so the C core suppresses
+the drone noise while leaving unrelated audio in the residual.
 
 ## Workflow
 
@@ -25,12 +26,17 @@ Useful tasks:
 - `task kconfig:check`: validate `Kconfig` formatting with
   `python -m kconfcheck`.
 - `task run -- --duration-s 5`: run the demo with custom Python arguments.
+- `task run -- --wanted-wav audio/tank-moving.wav --wanted-gain 0.35`: mix a
+  wanted WAV signal into the primary microphone signal.
 
 ## Signal Model
 
 ```text
 Python simulation:
-  x[n] -> P(z) -> d[n]
+  x[n] -> P(z) -> drone_primary[n]
+  wanted_wav[n] ----------+
+                          v
+  drone_primary[n] + wanted[n] -> d[n]
 
 C core:
   x[n] -> G(z) -> y[n] -> C(z) -> secondary[n]
@@ -42,6 +48,9 @@ C core:
 Mapping:
 
 - `P(z)`: Python primary path simulation, implemented as delay plus short FIR.
+- `wanted_wav[n]`: optional useful audio loaded with `--wanted-wav`; it is
+  converted to mono, resampled to `--fs`, cropped or zero-padded to
+  `--duration-s`, normalized, then scaled by `--wanted-gain`.
 - `G(z)`: adaptive FIR controller in C.
 - `C(z)`: fixed demo secondary path in C, applied only to `y[n]`.
 - `C_hat(z)`: fixed secondary-path estimate in C, used only for the filtered-x
@@ -49,6 +58,12 @@ Mapping:
 
 The main block API takes `reference_x[]` and `primary_d[]`, then returns
 `error_e[]`, `controller_y[]`, and `secondary_output[]`.
+
+When a wanted WAV is used, `error.wav` contains the wanted signal plus the
+remaining drone residual. The demo also writes `wanted.wav`, `drone_primary.wav`,
+and `noise_residual.wav`, where `noise_residual = error - wanted`. The
+`drone_attenuation_tail_db` metric is computed from that residual so it measures
+drone suppression instead of rewarding removal of the useful WAV signal.
 
 All FIRs in this demo are documented and implemented newest-sample-first: tap
 `i` multiplies sample `n - i`. This convention is shared by the adaptive

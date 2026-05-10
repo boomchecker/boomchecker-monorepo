@@ -12,6 +12,7 @@ import argparse
 import ctypes
 import json
 import os
+from math import gcd
 from pathlib import Path
 
 os.environ.setdefault(
@@ -24,8 +25,8 @@ matplotlib.use("Agg")
 
 import matplotlib.pyplot as plt
 import numpy as np
-from scipy.io.wavfile import write
-from scipy.signal import butter, lfilter
+from scipy.io.wavfile import read, write
+from scipy.signal import butter, lfilter, resample_poly
 
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
@@ -52,6 +53,51 @@ def normalize_audio(x: np.ndarray, peak: float = 0.85) -> np.ndarray:
     if max_val < 1e-12:
         return x.astype(np.float32)
     return (peak * x / max_val).astype(np.float32)
+
+
+def wav_to_float32(samples: np.ndarray) -> np.ndarray:
+    if np.issubdtype(samples.dtype, np.floating):
+        converted = np.nan_to_num(samples.astype(np.float32))
+    elif np.issubdtype(samples.dtype, np.unsignedinteger):
+        info = np.iinfo(samples.dtype)
+        midpoint = (float(info.max) + 1.0) / 2.0
+        converted = ((samples.astype(np.float32) - midpoint) / midpoint).astype(np.float32)
+    elif np.issubdtype(samples.dtype, np.signedinteger):
+        info = np.iinfo(samples.dtype)
+        peak = float(max(abs(info.min), info.max))
+        converted = (samples.astype(np.float32) / peak).astype(np.float32)
+    else:
+        raise TypeError(f"Unsupported WAV dtype: {samples.dtype}")
+
+    if converted.ndim > 1:
+        converted = converted.mean(axis=1)
+    return converted.astype(np.float32)
+
+
+def condition_wanted_wav(
+    wav_path: Path,
+    fs: int,
+    duration_s: float,
+    gain: float,
+    peak: float = 0.70,
+) -> np.ndarray:
+    source_fs, samples = read(wav_path)
+    wanted = wav_to_float32(samples)
+    if source_fs != fs:
+        sample_rate_gcd = gcd(source_fs, fs)
+        wanted = resample_poly(
+            wanted,
+            fs // sample_rate_gcd,
+            source_fs // sample_rate_gcd,
+        ).astype(np.float32)
+
+    target_samples = int(fs * duration_s)
+    if len(wanted) < target_samples:
+        wanted = np.pad(wanted, (0, target_samples - len(wanted)), mode="constant")
+    else:
+        wanted = wanted[:target_samples]
+
+    return (normalize_audio(wanted, peak=peak) * gain).astype(np.float32)
 
 
 def generate_rpm_profile(t: np.ndarray, rpm_base: float, rpm_variation: float) -> np.ndarray:
@@ -162,6 +208,7 @@ def plot_results(
     fs: int,
     reference_x: np.ndarray,
     primary_d: np.ndarray,
+    wanted: np.ndarray,
     controller_y: np.ndarray,
     secondary_output: np.ndarray,
     error_e: np.ndarray,
@@ -169,14 +216,27 @@ def plot_results(
 ) -> None:
     count = min(len(reference_x), int(seconds * fs))
     t = np.arange(count) / fs
-    fig, axes = plt.subplots(5, 1, figsize=(12, 9), sharex=True)
+    has_wanted = bool(np.max(np.abs(wanted)) > 1e-12)
+    row_count = 6 if has_wanted else 5
+    fig, axes = plt.subplots(
+        row_count,
+        1,
+        figsize=(12, 10 if has_wanted else 9),
+        sharex=True,
+    )
     series = [
         ("reference x[n]", reference_x),
         ("primary d[n] = P(z)x[n]", primary_d),
-        ("controller y[n] = G(z)x[n]", controller_y),
-        ("secondary C(z)y[n]", secondary_output),
-        ("error e[n] = d[n] - C(z)y[n]", error_e),
     ]
+    if has_wanted:
+        series.append(("wanted signal", wanted))
+    series.extend(
+        [
+            ("controller y[n] = G(z)x[n]", controller_y),
+            ("secondary C(z)y[n]", secondary_output),
+            ("error e[n] = d[n] - C(z)y[n]", error_e),
+        ]
+    )
     for ax, (title, values) in zip(axes, series):
         ax.plot(t, values[:count])
         ax.set_title(title)
@@ -188,16 +248,37 @@ def plot_results(
     plt.close(fig)
 
 
-def build_demo(fs: int, duration_s: float, seed: int) -> dict[str, np.ndarray]:
+def build_demo(
+    fs: int,
+    duration_s: float,
+    seed: int,
+    wanted_wav_path: Path | None = None,
+    wanted_gain: float = 0.35,
+) -> dict[str, np.ndarray]:
     reference = generate_drone_reference(fs=fs, duration_s=duration_s, seed=seed)
-    primary = apply_primary_path(reference, fs)
-    peak = max(float(np.max(np.abs(reference))), float(np.max(np.abs(primary))))
+    drone_primary = apply_primary_path(reference, fs)
+    if wanted_wav_path is None:
+        wanted = np.zeros_like(drone_primary)
+    else:
+        wanted = condition_wanted_wav(wanted_wav_path, fs, duration_s, wanted_gain)
+    primary = drone_primary + wanted
+
+    peak = max(
+        float(np.max(np.abs(reference))),
+        float(np.max(np.abs(drone_primary))),
+        float(np.max(np.abs(wanted))),
+        float(np.max(np.abs(primary))),
+    )
     if peak > 0.85:
         scale = 0.85 / peak
         reference = reference * scale
+        drone_primary = drone_primary * scale
+        wanted = wanted * scale
         primary = primary * scale
     return {
         "reference_x": reference.astype(np.float32),
+        "drone_primary": drone_primary.astype(np.float32),
+        "wanted": wanted.astype(np.float32),
         "primary_d": primary.astype(np.float32),
     }
 
@@ -209,21 +290,34 @@ def run_demo(
     duration_s: float = 4.0,
     seed: int = 7,
     reference_gain: float = 1.0,
+    wanted_wav_path: Path | None = None,
+    wanted_gain: float = 0.35,
     save_wav: bool = True,
 ) -> dict[str, float | str]:
     output_dir.mkdir(parents=True, exist_ok=True)
-    data = build_demo(fs=fs, duration_s=duration_s, seed=seed)
+    data = build_demo(
+        fs=fs,
+        duration_s=duration_s,
+        seed=seed,
+        wanted_wav_path=wanted_wav_path,
+        wanted_gain=wanted_gain,
+    )
     reference_q15 = to_q15(data["reference_x"] * reference_gain, peak=0.9)
     primary_q15 = to_q15(data["primary_d"], peak=0.9)
+    drone_primary_q15 = to_q15(data["drone_primary"], peak=0.9)
+    wanted_q15 = to_q15(data["wanted"], peak=0.9)
     error_q15, controller_q15, secondary_q15 = run_fxlms(
         lib_path, reference_q15, primary_q15
     )
 
     reference = from_q15(reference_q15)
     primary = from_q15(primary_q15)
+    drone_primary = from_q15(drone_primary_q15)
+    wanted = from_q15(wanted_q15)
     error = from_q15(error_q15)
     controller = from_q15(controller_q15)
     secondary = from_q15(secondary_q15)
+    noise_residual = error - wanted
 
     settle = min(len(primary) // 2, int(fs * 1.0))
     tail = slice(settle, None)
@@ -234,15 +328,25 @@ def run_demo(
         "error_tail_mse": mse(error[tail]),
         "attenuation_tail_db": 10.0
         * np.log10(max(mse(primary[tail]), 1e-20) / max(mse(error[tail]), 1e-20)),
+        "drone_primary_tail_mse": mse(drone_primary[tail]),
+        "noise_residual_tail_mse": mse(noise_residual[tail]),
+        "drone_attenuation_tail_db": 10.0
+        * np.log10(
+            max(mse(drone_primary[tail]), 1e-20)
+            / max(mse(noise_residual[tail]), 1e-20)
+        ),
     }
 
     plot_path = output_dir / "fxlms_demo.png"
-    plot_results(plot_path, fs, reference, primary, controller, secondary, error)
+    plot_results(plot_path, fs, reference, primary, wanted, controller, secondary, error)
 
     metrics_path = output_dir / "metrics.json"
     metrics_with_paths: dict[str, float | str] = dict(metrics)
     metrics_with_paths["plot_path"] = str(plot_path)
     metrics_with_paths["reference_gain"] = reference_gain
+    metrics_with_paths["wanted_gain"] = wanted_gain
+    if wanted_wav_path is not None:
+        metrics_with_paths["wanted_wav_path"] = str(wanted_wav_path)
     metrics_path.write_text(json.dumps(metrics_with_paths, indent=2), encoding="utf-8")
 
     if save_wav:
@@ -251,6 +355,14 @@ def run_demo(
         write(output_dir / "controller_y.wav", fs, controller_q15)
         write(output_dir / "secondary_output.wav", fs, secondary_q15)
         write(output_dir / "error.wav", fs, error_q15)
+        if wanted_wav_path is not None:
+            write(output_dir / "wanted.wav", fs, wanted_q15)
+            write(output_dir / "drone_primary.wav", fs, drone_primary_q15)
+            write(
+                output_dir / "noise_residual.wav",
+                fs,
+                to_q15(noise_residual, peak=0.9),
+            )
 
     return metrics_with_paths
 
@@ -263,6 +375,8 @@ def main() -> None:
     parser.add_argument("--duration-s", type=float, default=4.0)
     parser.add_argument("--seed", type=int, default=7)
     parser.add_argument("--reference-gain", type=float, default=1.0)
+    parser.add_argument("--wanted-wav", type=Path)
+    parser.add_argument("--wanted-gain", type=float, default=0.35)
     parser.add_argument("--no-wav", action="store_true")
     args = parser.parse_args()
 
@@ -273,6 +387,8 @@ def main() -> None:
         duration_s=args.duration_s,
         seed=args.seed,
         reference_gain=args.reference_gain,
+        wanted_wav_path=args.wanted_wav,
+        wanted_gain=args.wanted_gain,
         save_wav=not args.no_wav,
     )
     print(json.dumps(metrics, indent=2))
