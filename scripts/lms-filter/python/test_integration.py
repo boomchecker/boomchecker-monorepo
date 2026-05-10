@@ -83,7 +83,12 @@ def main() -> None:
             f"Expected WAV-mode at least 0.5 dB drone attenuation, "
             f"got {wav_metrics['drone_attenuation_tail_db']}"
         )
-    for filename in ("wanted.wav", "drone_primary.wav", "noise_residual.wav"):
+    for filename in (
+        "wanted.wav",
+        "drone_primary.wav",
+        "noise_residual.wav",
+        "fxlms_spectrum.png",
+    ):
         if not (test_root / "with_wanted_wav" / filename).exists():
             raise SystemExit(f"Expected WAV-mode output {filename} to be written")
     print("python integration: ok")

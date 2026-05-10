@@ -16,7 +16,7 @@ menu "FXLMS ANC demo"
 
     config FXLMS_MU_Q15
         int "Filtered-x LMS learning rate in Q15"
-        default 64
+        default 256
         range 0 32767
         help
             Learning rate encoded as Q15. Smaller values improve stability.

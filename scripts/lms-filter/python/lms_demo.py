@@ -26,7 +26,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.io.wavfile import read, write
-from scipy.signal import butter, lfilter, resample_poly
+from scipy.signal import butter, lfilter, resample_poly, welch
 
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
@@ -248,6 +248,55 @@ def plot_results(
     plt.close(fig)
 
 
+def spectrum_db(x: np.ndarray, fs: int) -> tuple[np.ndarray, np.ndarray]:
+    nperseg = min(4096, len(x))
+    if nperseg < 8:
+        freqs = np.fft.rfftfreq(len(x), d=1.0 / fs)
+        power = np.abs(np.fft.rfft(x)) ** 2
+        return freqs, 10.0 * np.log10(np.maximum(power, 1e-20))
+
+    freqs, psd = welch(
+        x,
+        fs=fs,
+        window="hann",
+        nperseg=nperseg,
+        noverlap=nperseg // 2,
+        scaling="density",
+    )
+    return freqs, 10.0 * np.log10(np.maximum(psd, 1e-20))
+
+
+def plot_spectrum_results(
+    out_path: Path,
+    fs: int,
+    drone_primary: np.ndarray,
+    noise_residual: np.ndarray,
+) -> None:
+    freqs, drone_db = spectrum_db(drone_primary, fs)
+    _, residual_db = spectrum_db(noise_residual, fs)
+    attenuation_db = drone_db - residual_db
+
+    fig, axes = plt.subplots(2, 1, figsize=(12, 8), sharex=True)
+    axes[0].plot(freqs, drone_db, label="drone before ANC")
+    axes[0].plot(freqs, residual_db, label="drone residual after ANC")
+    axes[0].set_ylabel("PSD [dB/Hz]")
+    axes[0].set_title("Drone noise spectrum")
+    axes[0].grid(True, alpha=0.25)
+    axes[0].legend(loc="best")
+
+    axes[1].plot(freqs, attenuation_db)
+    axes[1].axhline(0.0, color="black", linewidth=0.8, alpha=0.55)
+    axes[1].set_ylabel("Attenuation [dB]")
+    axes[1].set_xlabel("Frequency [Hz]")
+    axes[1].set_title("Frequency-dependent attenuation")
+    axes[1].grid(True, alpha=0.25)
+    axes[1].set_xlim(0, fs / 2)
+
+    fig.tight_layout()
+    fig.savefig(out_path, dpi=140)
+    plt.close(fig)
+
+
 def build_demo(
     fs: int,
     duration_s: float,
@@ -339,10 +388,18 @@ def run_demo(
 
     plot_path = output_dir / "fxlms_demo.png"
     plot_results(plot_path, fs, reference, primary, wanted, controller, secondary, error)
+    spectrum_path = output_dir / "fxlms_spectrum.png"
+    plot_spectrum_results(
+        spectrum_path,
+        fs,
+        drone_primary[tail],
+        noise_residual[tail],
+    )
 
     metrics_path = output_dir / "metrics.json"
     metrics_with_paths: dict[str, float | str] = dict(metrics)
     metrics_with_paths["plot_path"] = str(plot_path)
+    metrics_with_paths["spectrum_path"] = str(spectrum_path)
     metrics_with_paths["reference_gain"] = reference_gain
     metrics_with_paths["wanted_gain"] = wanted_gain
     if wanted_wav_path is not None:

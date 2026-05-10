@@ -65,6 +65,12 @@ and `noise_residual.wav`, where `noise_residual = error - wanted`. The
 `drone_attenuation_tail_db` metric is computed from that residual so it measures
 drone suppression instead of rewarding removal of the useful WAV signal.
 
+The demo writes two plots:
+
+- `fxlms_demo.png`: time-domain signals from the start of the run.
+- `fxlms_spectrum.png`: Welch PSD of `drone_primary` versus `noise_residual`
+  after the initial settling window, plus frequency-dependent attenuation in dB.
+
 All FIRs in this demo are documented and implemented newest-sample-first: tap
 `i` multiplies sample `n - i`. This convention is shared by the adaptive
 controller `G(z)`, secondary path `C(z)`, secondary-path estimate `C_hat(z)`,
