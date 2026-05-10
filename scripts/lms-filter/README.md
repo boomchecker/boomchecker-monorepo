@@ -68,6 +68,8 @@ drone suppression instead of rewarding removal of the useful WAV signal.
 The demo writes two plots:
 
 - `fxlms_demo.png`: time-domain signals from the start of the run.
+  By default it spans `0..0.15 s`; use `--plot-window 2` for `0..2 s` or
+  `--plot-window 1.5..2` for an explicit interval.
 - `fxlms_spectrum.png`: Welch PSD of `drone_primary` versus `noise_residual`
   after the initial settling window, plus frequency-dependent attenuation in dB.
 

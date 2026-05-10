@@ -32,6 +32,7 @@ from scipy.signal import butter, lfilter, resample_poly, welch
 ROOT_DIR = Path(__file__).resolve().parent.parent
 DEFAULT_LIB_PATH = ROOT_DIR / "build" / "liblms_filter.so"
 DEFAULT_OUTPUT_DIR = Path(__file__).resolve().parent / "out"
+DEFAULT_PLOT_WINDOW = (0.0, 0.15)
 
 
 def bandpass_noise(
@@ -203,6 +204,34 @@ def mse(x: np.ndarray) -> float:
     return float(np.mean(x.astype(np.float64) ** 2))
 
 
+def parse_plot_window(value: str) -> tuple[float, float]:
+    if ".." in value:
+        parts = value.split("..")
+        if len(parts) != 2:
+            raise argparse.ArgumentTypeError(
+                "Plot window must be a duration like '2' or an interval like '1.5..2'."
+            )
+        try:
+            start_s = float(parts[0])
+            end_s = float(parts[1])
+        except ValueError as exc:
+            raise argparse.ArgumentTypeError(
+                "Plot interval bounds must be numbers."
+            ) from exc
+    else:
+        try:
+            start_s = 0.0
+            end_s = float(value)
+        except ValueError as exc:
+            raise argparse.ArgumentTypeError("Plot duration must be a number.") from exc
+
+    if start_s < 0.0 or end_s <= start_s:
+        raise argparse.ArgumentTypeError(
+            "Plot window must satisfy 0 <= start < end."
+        )
+    return start_s, end_s
+
+
 def plot_results(
     out_path: Path,
     fs: int,
@@ -212,10 +241,15 @@ def plot_results(
     controller_y: np.ndarray,
     secondary_output: np.ndarray,
     error_e: np.ndarray,
-    seconds: float = 0.15,
+    plot_window: tuple[float, float] = DEFAULT_PLOT_WINDOW,
 ) -> None:
-    count = min(len(reference_x), int(seconds * fs))
-    t = np.arange(count) / fs
+    start_s, end_s = plot_window
+    start_idx = min(len(reference_x), int(start_s * fs))
+    end_idx = min(len(reference_x), int(end_s * fs))
+    if end_idx <= start_idx:
+        start_idx = 0
+        end_idx = min(len(reference_x), max(1, int(DEFAULT_PLOT_WINDOW[1] * fs)))
+    t = np.arange(start_idx, end_idx) / fs
     has_wanted = bool(np.max(np.abs(wanted)) > 1e-12)
     row_count = 6 if has_wanted else 5
     fig, axes = plt.subplots(
@@ -238,7 +272,7 @@ def plot_results(
         ]
     )
     for ax, (title, values) in zip(axes, series):
-        ax.plot(t, values[:count])
+        ax.plot(t, values[start_idx:end_idx])
         ax.set_title(title)
         ax.grid(True, alpha=0.25)
         ax.set_ylim(-1.05, 1.05)
@@ -341,6 +375,8 @@ def run_demo(
     reference_gain: float = 1.0,
     wanted_wav_path: Path | None = None,
     wanted_gain: float = 0.35,
+    plot_window: tuple[float, float] = DEFAULT_PLOT_WINDOW,
+    plot_duration_s: float | None = None,
     save_wav: bool = True,
 ) -> dict[str, float | str]:
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -387,7 +423,19 @@ def run_demo(
     }
 
     plot_path = output_dir / "fxlms_demo.png"
-    plot_results(plot_path, fs, reference, primary, wanted, controller, secondary, error)
+    if plot_duration_s is not None:
+        plot_window = (0.0, plot_duration_s)
+    plot_results(
+        plot_path,
+        fs,
+        reference,
+        primary,
+        wanted,
+        controller,
+        secondary,
+        error,
+        plot_window=plot_window,
+    )
     spectrum_path = output_dir / "fxlms_spectrum.png"
     plot_spectrum_results(
         spectrum_path,
@@ -402,6 +450,9 @@ def run_demo(
     metrics_with_paths["spectrum_path"] = str(spectrum_path)
     metrics_with_paths["reference_gain"] = reference_gain
     metrics_with_paths["wanted_gain"] = wanted_gain
+    metrics_with_paths["plot_start_s"] = plot_window[0]
+    metrics_with_paths["plot_end_s"] = plot_window[1]
+    metrics_with_paths["plot_duration_s"] = plot_window[1] - plot_window[0]
     if wanted_wav_path is not None:
         metrics_with_paths["wanted_wav_path"] = str(wanted_wav_path)
     metrics_path.write_text(json.dumps(metrics_with_paths, indent=2), encoding="utf-8")
@@ -434,6 +485,18 @@ def main() -> None:
     parser.add_argument("--reference-gain", type=float, default=1.0)
     parser.add_argument("--wanted-wav", type=Path)
     parser.add_argument("--wanted-gain", type=float, default=0.35)
+    parser.add_argument(
+        "--plot-window",
+        type=parse_plot_window,
+        default=DEFAULT_PLOT_WINDOW,
+        metavar="SECONDS|START..END",
+        help="Time-domain plot window. Examples: '2' or '1.5..2'.",
+    )
+    parser.add_argument(
+        "--plot-duration-s",
+        type=float,
+        help="Deprecated alias for --plot-window SECONDS.",
+    )
     parser.add_argument("--no-wav", action="store_true")
     args = parser.parse_args()
 
@@ -446,6 +509,8 @@ def main() -> None:
         reference_gain=args.reference_gain,
         wanted_wav_path=args.wanted_wav,
         wanted_gain=args.wanted_gain,
+        plot_window=args.plot_window,
+        plot_duration_s=args.plot_duration_s,
         save_wav=not args.no_wav,
     )
     print(json.dumps(metrics, indent=2))

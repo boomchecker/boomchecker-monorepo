@@ -5,7 +5,7 @@ from pathlib import Path
 import numpy as np
 from scipy.io.wavfile import write
 
-from lms_demo import DEFAULT_LIB_PATH, run_demo
+from lms_demo import DEFAULT_LIB_PATH, parse_plot_window, run_demo
 
 
 def assert_improves(metrics: dict[str, float | str], label: str) -> None:
@@ -70,6 +70,7 @@ def main() -> None:
         reference_gain=1.0,
         wanted_wav_path=fixture_path,
         wanted_gain=0.35,
+        plot_window=parse_plot_window("1.5..2"),
         save_wav=True,
     )
     if wav_metrics["noise_residual_tail_mse"] >= wav_metrics["drone_primary_tail_mse"]:
@@ -82,6 +83,11 @@ def main() -> None:
         raise SystemExit(
             f"Expected WAV-mode at least 0.5 dB drone attenuation, "
             f"got {wav_metrics['drone_attenuation_tail_db']}"
+        )
+    if wav_metrics["plot_start_s"] != 1.5 or wav_metrics["plot_end_s"] != 2.0:
+        raise SystemExit(
+            f"Expected plot window 1.5..2.0, got "
+            f"{wav_metrics['plot_start_s']}..{wav_metrics['plot_end_s']}"
         )
     for filename in (
         "wanted.wav",
