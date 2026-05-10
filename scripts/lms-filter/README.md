@@ -69,7 +69,8 @@ The demo writes two plots:
 
 - `fxlms_demo.png`: time-domain signals from the start of the run.
   By default it spans `0..0.15 s`; use `--plot-window 2` for `0..2 s` or
-  `--plot-window 1.5..2` for an explicit interval.
+  `--plot-window 1.5..2` for an explicit interval. In WAV mode it also includes
+  `wanted - error`, the signed deviation of the ANC output from the wanted audio.
 - `fxlms_spectrum.png`: Welch PSD of `drone_primary` versus `noise_residual`
   after the initial settling window, plus frequency-dependent attenuation in dB.
 

@@ -251,11 +251,11 @@ def plot_results(
         end_idx = min(len(reference_x), max(1, int(DEFAULT_PLOT_WINDOW[1] * fs)))
     t = np.arange(start_idx, end_idx) / fs
     has_wanted = bool(np.max(np.abs(wanted)) > 1e-12)
-    row_count = 6 if has_wanted else 5
+    row_count = 7 if has_wanted else 5
     fig, axes = plt.subplots(
         row_count,
         1,
-        figsize=(12, 10 if has_wanted else 9),
+        figsize=(12, 12 if has_wanted else 9),
         sharex=True,
     )
     series = [
@@ -264,6 +264,7 @@ def plot_results(
     ]
     if has_wanted:
         series.append(("wanted signal", wanted))
+        series.append(("wanted - error", wanted - error_e))
     series.extend(
         [
             ("controller y[n] = G(z)x[n]", controller_y),
