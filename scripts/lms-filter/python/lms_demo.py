@@ -1,5 +1,18 @@
 from __future__ import annotations
 
+"""Synthetic LMS demo and host-side test harness.
+
+The script creates the same signal topology expected by a reference-noise
+canceller:
+
+    reference drone signal -> simulated acoustic path -> additive disturbance
+    clean sine + disturbance -> desired/noisy microphone signal
+
+The C LMS library receives the reference and desired signal as signed Q15 PCM
+arrays. It returns the LMS error signal, which should approximate the clean
+input once the adaptive FIR has learned the reference path.
+"""
+
 import argparse
 import ctypes
 import json
@@ -26,6 +39,7 @@ DEFAULT_OUTPUT_DIR = Path(__file__).resolve().parent / "out"
 
 
 def bandpass_noise(num_samples: int, fs: int, low_hz: float, high_hz: float, gain: float) -> np.ndarray:
+    """Generate band-limited Gaussian noise for the turbulent drone component."""
     noise = np.random.randn(num_samples)
     high_hz = min(high_hz, 0.95 * fs / 2)
     b, a = butter(4, [low_hz / (fs / 2), high_hz / (fs / 2)], btype="bandpass")
@@ -33,6 +47,7 @@ def bandpass_noise(num_samples: int, fs: int, low_hz: float, high_hz: float, gai
 
 
 def normalize_audio(x: np.ndarray, peak: float = 0.9) -> np.ndarray:
+    """Scale a floating-point signal to the selected peak amplitude."""
     max_val = float(np.max(np.abs(x)))
     if max_val < 1e-12:
         return x.astype(np.float32)
@@ -40,6 +55,7 @@ def normalize_audio(x: np.ndarray, peak: float = 0.9) -> np.ndarray:
 
 
 def generate_rpm_profile(t: np.ndarray, rpm_base: float, rpm_variation: float) -> np.ndarray:
+    """Generate a slowly varying RPM profile with two throttle-like transients."""
     rpm = (
         rpm_base
         + rpm_variation * np.sin(2 * np.pi * 0.18 * t)
@@ -57,6 +73,13 @@ def generate_drone_sound(
     rpm_variation: float = 1500,
     propeller_blades: int = 2,
 ) -> np.ndarray:
+    """Synthesize a drone-like reference signal.
+
+    The result is not intended to be a physically exact drone model. It is a
+    deterministic-enough excitation source with tonal blade-pass harmonics,
+    vibration, turbulence, and RPM changes so the adaptive filter sees a more
+    realistic colored reference than white noise.
+    """
     num_samples = int(fs * duration_s)
     t = np.arange(num_samples) / fs
     rpm = generate_rpm_profile(t, rpm_base, rpm_variation)
@@ -84,6 +107,12 @@ def generate_drone_sound(
 
 
 def apply_reference_path(reference: np.ndarray, fs: int) -> np.ndarray:
+    """Apply the simulated acoustic path between reference sensor and mic.
+
+    The delay plus short FIR stands in for propagation delay and simple
+    frequency shaping. With the default 16 kHz sample rate, 2 ms is 32 samples,
+    so the default 64-tap LMS has enough memory to model the path.
+    """
     delay_samples = max(1, int(round(0.002 * fs)))
     path = np.array([0.70, -0.24, 0.16, 0.09, -0.05, 0.03], dtype=np.float32)
     delayed = np.pad(reference, (delay_samples, 0), mode="constant")[: len(reference)]
@@ -91,6 +120,7 @@ def apply_reference_path(reference: np.ndarray, fs: int) -> np.ndarray:
 
 
 def to_q15(x: np.ndarray, peak: float = 0.85) -> np.ndarray:
+    """Convert float audio to signed Q15 PCM, scaling down only if needed."""
     max_val = float(np.max(np.abs(x)))
     if max_val > peak:
         x = x * (peak / max_val)
@@ -98,10 +128,12 @@ def to_q15(x: np.ndarray, peak: float = 0.85) -> np.ndarray:
 
 
 def from_q15(x: np.ndarray) -> np.ndarray:
+    """Convert signed Q15 PCM back to float audio in approximately [-1, 1]."""
     return x.astype(np.float32) / 32768.0
 
 
 def load_lms_lib(lib_path: Path) -> ctypes.CDLL:
+    """Load the host shared library and describe the exported C ABI."""
     if not lib_path.exists():
         raise FileNotFoundError(f"LMS library not found: {lib_path}. Run `task build` first.")
     lib = ctypes.CDLL(str(lib_path))
@@ -112,6 +144,7 @@ def load_lms_lib(lib_path: Path) -> ctypes.CDLL:
 
 
 def run_lms(lib_path: Path, reference_q15: np.ndarray, desired_q15: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Run the C LMS host wrapper over full reference/desired arrays."""
     lib = load_lms_lib(lib_path)
     cleaned = np.zeros_like(desired_q15)
     estimated = np.zeros_like(desired_q15)
@@ -122,11 +155,13 @@ def run_lms(lib_path: Path, reference_q15: np.ndarray, desired_q15: np.ndarray) 
 
 
 def mse(a: np.ndarray, b: np.ndarray) -> float:
+    """Return mean squared error between two equal-length signals."""
     err = a.astype(np.float64) - b.astype(np.float64)
     return float(np.mean(err * err))
 
 
 def snr_db(clean: np.ndarray, observed: np.ndarray) -> float:
+    """Compute SNR using `clean` as the wanted signal reference."""
     signal_power = float(np.mean(clean.astype(np.float64) ** 2))
     noise_power = mse(clean, observed)
     return 10.0 * np.log10(signal_power / max(noise_power, 1e-20))
@@ -141,6 +176,7 @@ def plot_results(
     error: np.ndarray,
     seconds: float = 0.15,
 ) -> None:
+    """Write the four-panel diagnostic plot used by the first project phase."""
     count = min(len(clean), int(seconds * fs))
     t = np.arange(count) / fs
     fig, axes = plt.subplots(4, 1, figsize=(12, 8), sharex=True)
@@ -162,6 +198,7 @@ def plot_results(
 
 
 def build_demo(fs: int, duration_s: float, sine_hz: float, seed: int) -> dict[str, np.ndarray]:
+    """Build clean/reference/disturbance/noisy float signals for one run."""
     np.random.seed(seed)
     samples = int(fs * duration_s)
     t = np.arange(samples) / fs
@@ -193,6 +230,7 @@ def run_demo(
     reference_gain: float = 1.0,
     save_wav: bool = True,
 ) -> dict[str, float | str]:
+    """Run the full demo and persist plots, metrics, and optional WAV files."""
     output_dir.mkdir(parents=True, exist_ok=True)
     data = build_demo(fs=fs, duration_s=duration_s, sine_hz=sine_hz, seed=seed)
     reference_q15 = to_q15(data["reference"] * reference_gain, peak=0.9)

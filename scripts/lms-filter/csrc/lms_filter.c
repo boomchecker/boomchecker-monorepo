@@ -9,7 +9,9 @@
 struct lms_state {
   struct lms_config cfg;
   uint16_t pos;
+  /* Q15 adaptive FIR coefficients. */
   int16_t *weights;
+  /* Ring buffer with the newest reference sample at `pos`. */
   int16_t *history;
 };
 
@@ -103,6 +105,7 @@ int lms_process_sample(struct lms_state *state, int16_t reference,
   const uint16_t taps = state->cfg.taps;
   state->history[state->pos] = reference;
 
+  /* Estimate coupled noise y[n] = dot(weights, reference_history). */
   int64_t y_acc = 0;
   uint16_t hist_idx = state->pos;
   for (uint16_t i = 0; i < taps; ++i) {
@@ -113,6 +116,14 @@ int lms_process_sample(struct lms_state *state, int16_t reference,
   int16_t y = sat_i16((int32_t)(y_acc >> 15), state->cfg.output_limit);
   int16_t e = sat_i16((int32_t)desired - (int32_t)y, state->cfg.output_limit);
 
+  /*
+   * Classic LMS coefficient update in fixed-point form:
+   *
+   *   delta_w = mu_q15 * e_q15 * x_q15 >> (30 + adapt_shift)
+   *
+   * The first 30 bits compensate Q15*Q15*Q15 scaling. `adapt_shift` provides
+   * finer effective learning rates than the smallest non-zero Q15 mu value.
+   */
   hist_idx = state->pos;
   for (uint16_t i = 0; i < taps; ++i) {
     int64_t delta = (int64_t)state->cfg.mu_q15 * (int64_t)e *
