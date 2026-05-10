@@ -304,28 +304,44 @@ def spectrum_db(x: np.ndarray, fs: int) -> tuple[np.ndarray, np.ndarray]:
 def plot_spectrum_results(
     out_path: Path,
     fs: int,
+    wanted: np.ndarray,
+    primary_d: np.ndarray,
+    error_e: np.ndarray,
     drone_primary: np.ndarray,
     noise_residual: np.ndarray,
 ) -> None:
+    freqs, wanted_db = spectrum_db(wanted, fs)
+    _, primary_db = spectrum_db(primary_d, fs)
+    _, error_db = spectrum_db(error_e, fs)
     freqs, drone_db = spectrum_db(drone_primary, fs)
     _, residual_db = spectrum_db(noise_residual, fs)
     attenuation_db = drone_db - residual_db
+    primary_wanted_delta_db = np.abs(primary_db - wanted_db)
+    error_wanted_delta_db = np.abs(error_db - wanted_db)
 
-    fig, axes = plt.subplots(2, 1, figsize=(12, 8), sharex=True)
-    axes[0].plot(freqs, drone_db, label="drone before ANC")
-    axes[0].plot(freqs, residual_db, label="drone residual after ANC")
+    fig, axes = plt.subplots(3, 1, figsize=(12, 11), sharex=True)
+    axes[0].plot(freqs, wanted_db, label="wanted")
+    axes[0].plot(freqs, primary_db, label="noisy input")
+    axes[0].plot(freqs, error_db, label="ANC output")
     axes[0].set_ylabel("PSD [dB/Hz]")
-    axes[0].set_title("Drone noise spectrum")
+    axes[0].set_title("Wanted spectrum fit")
     axes[0].grid(True, alpha=0.25)
     axes[0].legend(loc="best")
 
-    axes[1].plot(freqs, attenuation_db)
-    axes[1].axhline(0.0, color="black", linewidth=0.8, alpha=0.55)
-    axes[1].set_ylabel("Attenuation [dB]")
-    axes[1].set_xlabel("Frequency [Hz]")
-    axes[1].set_title("Frequency-dependent attenuation")
+    axes[1].plot(freqs, primary_wanted_delta_db, label="abs(noisy input - wanted)")
+    axes[1].plot(freqs, error_wanted_delta_db, label="abs(ANC output - wanted)")
+    axes[1].set_ylabel("PSD distance [dB]")
+    axes[1].set_title("Distance from wanted spectrum")
     axes[1].grid(True, alpha=0.25)
-    axes[1].set_xlim(0, fs / 2)
+    axes[1].legend(loc="best")
+
+    axes[2].plot(freqs, attenuation_db)
+    axes[2].axhline(0.0, color="black", linewidth=0.8, alpha=0.55)
+    axes[2].set_ylabel("Attenuation [dB]")
+    axes[2].set_xlabel("Frequency [Hz]")
+    axes[2].set_title("Drone attenuation")
+    axes[2].grid(True, alpha=0.25)
+    axes[2].set_xlim(0, fs / 2)
 
     fig.tight_layout()
     fig.savefig(out_path, dpi=140)
@@ -441,6 +457,9 @@ def run_demo(
     plot_spectrum_results(
         spectrum_path,
         fs,
+        wanted[tail],
+        primary[tail],
+        error[tail],
         drone_primary[tail],
         noise_residual[tail],
     )

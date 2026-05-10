@@ -71,8 +71,9 @@ The demo writes two plots:
   By default it spans `0..0.15 s`; use `--plot-window 2` for `0..2 s` or
   `--plot-window 1.5..2` for an explicit interval. In WAV mode it also includes
   `wanted - error`, the signed deviation of the ANC output from the wanted audio.
-- `fxlms_spectrum.png`: Welch PSD of `drone_primary` versus `noise_residual`
-  after the initial settling window, plus frequency-dependent attenuation in dB.
+- `fxlms_spectrum.png`: Welch PSD after the initial settling window. It compares
+  `wanted`, noisy input, and ANC output spectra, then shows distance from
+  `wanted` before/after ANC and frequency-dependent drone attenuation in dB.
 
 All FIRs in this demo are documented and implemented newest-sample-first: tap
 `i` multiplies sample `n - i`. This convention is shared by the adaptive
