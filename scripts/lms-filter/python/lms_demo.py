@@ -168,6 +168,11 @@ def from_q15(x: np.ndarray) -> np.ndarray:
     return x.astype(np.float32) / 32768.0
 
 
+def sum_q15_channels(x: np.ndarray) -> np.ndarray:
+    summed = np.sum(x.astype(np.int32), axis=0)
+    return np.clip(summed, -32768, 32767).astype(np.int16)
+
+
 def load_fxlms_lib(lib_path: Path) -> ctypes.CDLL:
     if not lib_path.exists():
         raise FileNotFoundError(f"FXLMS library not found: {lib_path}. Run `task build` first.")
@@ -182,6 +187,17 @@ def load_fxlms_lib(lib_path: Path) -> ctypes.CDLL:
         ctypes.c_size_t,
     ]
     lib.fxlms_filter_i16.restype = ctypes.c_int
+    lib.fxlms_filter_multi_i16.argtypes = [
+        ptr_i16,
+        ptr_i16,
+        ctypes.c_uint8,
+        ctypes.c_uint8,
+        ptr_i16,
+        ptr_i16,
+        ptr_i16,
+        ctypes.c_size_t,
+    ]
+    lib.fxlms_filter_multi_i16.restype = ctypes.c_int
     return lib
 
 
@@ -197,6 +213,38 @@ def run_fxlms(
     )
     if status != 0:
         raise RuntimeError(f"fxlms_filter_i16 failed with status {status}")
+    return error, controller, secondary
+
+
+def run_fxlms_multi(
+    lib_path: Path,
+    references_q15: np.ndarray,
+    primary_q15: np.ndarray,
+    actuator_count: int,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    lib = load_fxlms_lib(lib_path)
+    references_q15 = np.ascontiguousarray(references_q15, dtype=np.int16)
+    primary_q15 = np.ascontiguousarray(primary_q15, dtype=np.int16)
+    if references_q15.ndim != 2:
+        raise ValueError("references_q15 must have shape (reference_count, samples)")
+    reference_count, sample_count = references_q15.shape
+    if primary_q15.shape != (sample_count,):
+        raise ValueError("primary_q15 length must match references_q15 samples")
+    error = np.zeros_like(primary_q15)
+    controller = np.zeros((actuator_count, sample_count), dtype=np.int16)
+    secondary = np.zeros((actuator_count, sample_count), dtype=np.int16)
+    status = lib.fxlms_filter_multi_i16(
+        references_q15.reshape(-1),
+        primary_q15,
+        reference_count,
+        actuator_count,
+        error,
+        controller.reshape(-1),
+        secondary.reshape(-1),
+        primary_q15.size,
+    )
+    if status != 0:
+        raise RuntimeError(f"fxlms_filter_multi_i16 failed with status {status}")
     return error, controller, secondary
 
 
@@ -230,6 +278,23 @@ def parse_plot_window(value: str) -> tuple[float, float]:
             "Plot window must satisfy 0 <= start < end."
         )
     return start_s, end_s
+
+
+def analysis_slice(
+    sample_count: int,
+    fs: int,
+    spectrum_window: tuple[float, float] | None = None,
+) -> tuple[slice, float, float]:
+    if spectrum_window is None:
+        settle = min(sample_count // 2, int(fs * 1.0))
+        return slice(settle, None), settle / fs, sample_count / fs
+
+    start_s, end_s = spectrum_window
+    start_idx = min(sample_count, int(start_s * fs))
+    end_idx = min(sample_count, int(end_s * fs))
+    if end_idx <= start_idx:
+        raise ValueError("--spectrum-window must overlap the generated signal")
+    return slice(start_idx, end_idx), start_idx / fs, end_idx / fs
 
 
 def plot_results(
@@ -275,6 +340,84 @@ def plot_results(
     for ax, (title, values) in zip(axes, series):
         ax.plot(t, values[start_idx:end_idx])
         ax.set_title(title)
+        ax.grid(True, alpha=0.25)
+        ax.set_ylim(-1.05, 1.05)
+    axes[-1].set_xlabel("Time [s]")
+    fig.tight_layout()
+    fig.savefig(out_path, dpi=140)
+    plt.close(fig)
+
+
+def plot_multichannel_results(
+    out_path: Path,
+    fs: int,
+    references: np.ndarray,
+    primary_d: np.ndarray,
+    wanted: np.ndarray,
+    controller_y: np.ndarray,
+    controller_sum: np.ndarray,
+    secondary_output: np.ndarray,
+    secondary_sum: np.ndarray,
+    error_e: np.ndarray,
+    plot_window: tuple[float, float] = DEFAULT_PLOT_WINDOW,
+) -> None:
+    start_s, end_s = plot_window
+    sample_count = len(primary_d)
+    start_idx = min(sample_count, int(start_s * fs))
+    end_idx = min(sample_count, int(end_s * fs))
+    if end_idx <= start_idx:
+        start_idx = 0
+        end_idx = min(sample_count, max(1, int(DEFAULT_PLOT_WINDOW[1] * fs)))
+    t = np.arange(start_idx, end_idx) / fs
+    has_wanted = bool(np.max(np.abs(wanted)) > 1e-12)
+    row_count = 7 if has_wanted else 5
+    fig, axes = plt.subplots(
+        row_count,
+        1,
+        figsize=(12, 13 if has_wanted else 10),
+        sharex=True,
+    )
+
+    row = 0
+    ax = axes[row]
+    for ref_idx, values in enumerate(references, start=1):
+        ax.plot(t, values[start_idx:end_idx], label=f"x{ref_idx}", alpha=0.62)
+    ax.set_title("reference channels x_i[n]")
+    ax.legend(loc="best", ncol=min(4, references.shape[0]))
+    row += 1
+
+    axes[row].plot(t, primary_d[start_idx:end_idx])
+    axes[row].set_title("primary d[n]")
+    row += 1
+
+    if has_wanted:
+        axes[row].plot(t, wanted[start_idx:end_idx])
+        axes[row].set_title("wanted signal")
+        row += 1
+        axes[row].plot(t, (wanted - error_e)[start_idx:end_idx])
+        axes[row].set_title("wanted - error")
+        row += 1
+
+    ax = axes[row]
+    for act_idx, values in enumerate(controller_y, start=1):
+        ax.plot(t, values[start_idx:end_idx], label=f"y{act_idx}", alpha=0.55)
+    ax.plot(t, controller_sum[start_idx:end_idx], color="black", linewidth=1.2, label="sum")
+    ax.set_title("controller outputs y_j[n]")
+    ax.legend(loc="best", ncol=min(5, controller_y.shape[0] + 1))
+    row += 1
+
+    ax = axes[row]
+    for act_idx, values in enumerate(secondary_output, start=1):
+        ax.plot(t, values[start_idx:end_idx], label=f"C{act_idx}y{act_idx}", alpha=0.55)
+    ax.plot(t, secondary_sum[start_idx:end_idx], color="black", linewidth=1.2, label="sum")
+    ax.set_title("secondary outputs C_j(z)y_j[n]")
+    ax.legend(loc="best", ncol=min(5, secondary_output.shape[0] + 1))
+    row += 1
+
+    axes[row].plot(t, error_e[start_idx:end_idx])
+    axes[row].set_title("error e[n]")
+
+    for ax in axes:
         ax.grid(True, alpha=0.25)
         ax.set_ylim(-1.05, 1.05)
     axes[-1].set_xlabel("Time [s]")
@@ -383,6 +526,290 @@ def build_demo(
     }
 
 
+def apply_motor_primary_path(reference_x: np.ndarray, fs: int, motor: int) -> np.ndarray:
+    delay_samples = max(1, int(round((0.0012 + 0.00018 * motor) * fs)))
+    paths = [
+        np.array([0.44, -0.13, 0.08, 0.045, -0.025, 0.015], dtype=np.float32),
+        np.array([0.39, -0.11, 0.09, 0.052, -0.030, 0.012], dtype=np.float32),
+        np.array([0.42, -0.15, 0.075, 0.040, -0.020, 0.017], dtype=np.float32),
+        np.array([0.36, -0.10, 0.070, 0.050, -0.024, 0.010], dtype=np.float32),
+    ]
+    delayed = np.pad(reference_x, (delay_samples, 0), mode="constant")[: len(reference_x)]
+    return lfilter(paths[motor], [1.0], delayed).astype(np.float32)
+
+
+def build_multimotor_demo(
+    fs: int,
+    duration_s: float,
+    seed: int,
+    motor_count: int = 4,
+) -> dict[str, np.ndarray]:
+    references = []
+    primaries = []
+    rpm_offsets = [-260.0, -80.0, 130.0, 310.0]
+    variation_scales = [0.92, 1.05, 0.98, 1.10]
+    gains = [1.00, 0.92, 0.88, 0.84]
+    for motor in range(motor_count):
+        reference = generate_drone_reference(
+            fs=fs,
+            duration_s=duration_s,
+            seed=seed + 101 * motor,
+            rpm_base=8800.0 + rpm_offsets[motor],
+            rpm_variation=1200.0 * variation_scales[motor],
+        )
+        reference = reference * gains[motor]
+        references.append(reference.astype(np.float32))
+        primaries.append(apply_motor_primary_path(reference, fs, motor))
+
+    reference_matrix = np.stack(references).astype(np.float32)
+    drone_primary = np.sum(np.stack(primaries), axis=0).astype(np.float32)
+    summed_reference = np.sum(reference_matrix, axis=0).astype(np.float32)
+    peak = max(
+        float(np.max(np.abs(reference_matrix))),
+        float(np.max(np.abs(summed_reference))),
+        float(np.max(np.abs(drone_primary))),
+    )
+    if peak > 0.85:
+        scale = 0.85 / peak
+        reference_matrix *= scale
+        summed_reference *= scale
+        drone_primary *= scale
+    return {
+        "references": reference_matrix,
+        "summed_reference": summed_reference,
+        "drone_primary": drone_primary,
+        "primary_d": drone_primary.copy(),
+    }
+
+
+def run_multichannel_comparison(
+    lib_path: Path = DEFAULT_LIB_PATH,
+    output_dir: Path = DEFAULT_OUTPUT_DIR / "multi",
+    fs: int = 16000,
+    duration_s: float = 4.0,
+    seed: int = 7,
+    save_wav: bool = True,
+) -> dict[str, float | str]:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    data = build_multimotor_demo(fs=fs, duration_s=duration_s, seed=seed)
+    primary_q15 = to_q15(data["primary_d"], peak=0.9)
+    drone_primary = from_q15(primary_q15)
+
+    sum_reference_q15 = to_q15(data["summed_reference"][np.newaxis, :], peak=0.9)
+    multi_references_q15 = to_q15(data["references"], peak=0.9)
+
+    sum_error_q15, _sum_controller_q15, sum_secondary_q15 = run_fxlms_multi(
+        lib_path, sum_reference_q15, primary_q15, actuator_count=4
+    )
+    multi_error_q15, _multi_controller_q15, multi_secondary_q15 = run_fxlms_multi(
+        lib_path, multi_references_q15, primary_q15, actuator_count=4
+    )
+
+    sum_error = from_q15(sum_error_q15)
+    multi_error = from_q15(multi_error_q15)
+    settle = min(len(drone_primary) // 2, int(fs * 1.0))
+    tail = slice(settle, None)
+    metrics: dict[str, float | str] = {
+        "multi_mode": "synthetic_4_motor_4_actuator",
+        "primary_tail_mse": mse(drone_primary[tail]),
+        "sum_first_tail_mse": mse(sum_error[tail]),
+        "multi_ref_tail_mse": mse(multi_error[tail]),
+        "sum_first_attenuation_tail_db": 10.0
+        * np.log10(max(mse(drone_primary[tail]), 1e-20) / max(mse(sum_error[tail]), 1e-20)),
+        "multi_ref_attenuation_tail_db": 10.0
+        * np.log10(
+            max(mse(drone_primary[tail]), 1e-20) / max(mse(multi_error[tail]), 1e-20)
+        ),
+        "reference_count": float(multi_references_q15.shape[0]),
+        "actuator_count": 4.0,
+    }
+
+    metrics_path = output_dir / "metrics.json"
+    metrics_with_paths: dict[str, float | str] = dict(metrics)
+    metrics_with_paths["metrics_path"] = str(metrics_path)
+    metrics_path.write_text(json.dumps(metrics_with_paths, indent=2), encoding="utf-8")
+
+    if save_wav:
+        write(output_dir / "primary_d.wav", fs, primary_q15)
+        write(output_dir / "sum_first_error.wav", fs, sum_error_q15)
+        write(output_dir / "multi_ref_error.wav", fs, multi_error_q15)
+        write(output_dir / "sum_first_secondary_sum.wav", fs, sum_q15_channels(sum_secondary_q15))
+        write(output_dir / "multi_ref_secondary_sum.wav", fs, sum_q15_channels(multi_secondary_q15))
+
+    return metrics_with_paths
+
+
+def build_multichannel_mode_demo(
+    fs: int,
+    duration_s: float,
+    seed: int,
+    reference_count: int,
+    wanted_wav_path: Path | None = None,
+    wanted_gain: float = 0.35,
+) -> dict[str, np.ndarray]:
+    data = build_multimotor_demo(
+        fs=fs,
+        duration_s=duration_s,
+        seed=seed,
+        motor_count=reference_count,
+    )
+    if wanted_wav_path is None:
+        wanted = np.zeros_like(data["drone_primary"])
+    else:
+        wanted = condition_wanted_wav(wanted_wav_path, fs, duration_s, wanted_gain)
+    primary = data["drone_primary"] + wanted
+    peak = max(
+        float(np.max(np.abs(data["references"]))),
+        float(np.max(np.abs(data["summed_reference"]))),
+        float(np.max(np.abs(data["drone_primary"]))),
+        float(np.max(np.abs(wanted))),
+        float(np.max(np.abs(primary))),
+    )
+    if peak > 0.85:
+        scale = 0.85 / peak
+        data["references"] *= scale
+        data["summed_reference"] *= scale
+        data["drone_primary"] *= scale
+        wanted *= scale
+        primary *= scale
+    data["wanted"] = wanted.astype(np.float32)
+    data["primary_d"] = primary.astype(np.float32)
+    return data
+
+
+def run_multichannel_mode(
+    mode: str,
+    lib_path: Path = DEFAULT_LIB_PATH,
+    output_dir: Path = DEFAULT_OUTPUT_DIR,
+    fs: int = 16000,
+    duration_s: float = 4.0,
+    seed: int = 7,
+    reference_count: int = 4,
+    actuator_count: int = 4,
+    wanted_wav_path: Path | None = None,
+    wanted_gain: float = 0.35,
+    plot_window: tuple[float, float] = DEFAULT_PLOT_WINDOW,
+    spectrum_window: tuple[float, float] | None = None,
+    plot_duration_s: float | None = None,
+    save_wav: bool = True,
+) -> dict[str, float | str]:
+    if mode not in {"sum-first", "miso"}:
+        raise ValueError(f"Unsupported multi-channel mode: {mode}")
+    if reference_count < 1 or reference_count > 4:
+        raise ValueError("--reference-count must be in range 1..4")
+    if actuator_count < 1 or actuator_count > 4:
+        raise ValueError("--actuator-count must be in range 1..4")
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    data = build_multichannel_mode_demo(
+        fs=fs,
+        duration_s=duration_s,
+        seed=seed,
+        reference_count=reference_count,
+        wanted_wav_path=wanted_wav_path,
+        wanted_gain=wanted_gain,
+    )
+    primary_q15 = to_q15(data["primary_d"], peak=0.9)
+    drone_primary_q15 = to_q15(data["drone_primary"], peak=0.9)
+    wanted_q15 = to_q15(data["wanted"], peak=0.9)
+    if mode == "sum-first":
+        references_q15 = to_q15(data["summed_reference"][np.newaxis, :], peak=0.9)
+    else:
+        references_q15 = to_q15(data["references"], peak=0.9)
+
+    error_q15, controller_q15, secondary_q15 = run_fxlms_multi(
+        lib_path, references_q15, primary_q15, actuator_count=actuator_count
+    )
+
+    primary = from_q15(primary_q15)
+    drone_primary = from_q15(drone_primary_q15)
+    wanted = from_q15(wanted_q15)
+    error = from_q15(error_q15)
+    references = from_q15(references_q15)
+    controller = from_q15(controller_q15)
+    secondary = from_q15(secondary_q15)
+    secondary_sum_q15 = sum_q15_channels(secondary_q15)
+    secondary_sum = from_q15(secondary_sum_q15)
+    controller_sum_q15 = sum_q15_channels(controller_q15)
+    controller_sum = from_q15(controller_sum_q15)
+    noise_residual = error - wanted
+
+    tail, spectrum_start_s, spectrum_end_s = analysis_slice(
+        len(primary), fs, spectrum_window
+    )
+    metrics = {
+        "mode": mode,
+        "reference_count": float(references_q15.shape[0]),
+        "actuator_count": float(actuator_count),
+        "primary_tail_mse": mse(primary[tail]),
+        "error_tail_mse": mse(error[tail]),
+        "attenuation_tail_db": 10.0
+        * np.log10(max(mse(primary[tail]), 1e-20) / max(mse(error[tail]), 1e-20)),
+        "drone_primary_tail_mse": mse(drone_primary[tail]),
+        "noise_residual_tail_mse": mse(noise_residual[tail]),
+        "drone_attenuation_tail_db": 10.0
+        * np.log10(
+            max(mse(drone_primary[tail]), 1e-20)
+            / max(mse(noise_residual[tail]), 1e-20)
+        ),
+    }
+
+    if plot_duration_s is not None:
+        plot_window = (0.0, plot_duration_s)
+    plot_path = output_dir / "fxlms_demo.png"
+    plot_multichannel_results(
+        plot_path,
+        fs,
+        references,
+        primary,
+        wanted,
+        controller,
+        controller_sum,
+        secondary,
+        secondary_sum,
+        error,
+        plot_window=plot_window,
+    )
+    spectrum_path = output_dir / "fxlms_spectrum.png"
+    plot_spectrum_results(
+        spectrum_path,
+        fs,
+        wanted[tail],
+        primary[tail],
+        error[tail],
+        drone_primary[tail],
+        noise_residual[tail],
+    )
+
+    metrics_path = output_dir / "metrics.json"
+    metrics_with_paths: dict[str, float | str] = dict(metrics)
+    metrics_with_paths["plot_path"] = str(plot_path)
+    metrics_with_paths["spectrum_path"] = str(spectrum_path)
+    metrics_with_paths["wanted_gain"] = wanted_gain
+    metrics_with_paths["plot_start_s"] = plot_window[0]
+    metrics_with_paths["plot_end_s"] = plot_window[1]
+    metrics_with_paths["plot_duration_s"] = plot_window[1] - plot_window[0]
+    metrics_with_paths["spectrum_start_s"] = spectrum_start_s
+    metrics_with_paths["spectrum_end_s"] = spectrum_end_s
+    metrics_with_paths["spectrum_duration_s"] = spectrum_end_s - spectrum_start_s
+    if wanted_wav_path is not None:
+        metrics_with_paths["wanted_wav_path"] = str(wanted_wav_path)
+    metrics_path.write_text(json.dumps(metrics_with_paths, indent=2), encoding="utf-8")
+
+    if save_wav:
+        write(output_dir / "primary_d.wav", fs, primary_q15)
+        write(output_dir / "reference.wav", fs, references_q15[0])
+        write(output_dir / "controller_y.wav", fs, controller_sum_q15)
+        write(output_dir / "secondary_output.wav", fs, secondary_sum_q15)
+        write(output_dir / "error.wav", fs, error_q15)
+        write(output_dir / "drone_primary.wav", fs, drone_primary_q15)
+        if wanted_wav_path is not None:
+            write(output_dir / "wanted.wav", fs, wanted_q15)
+            write(output_dir / "noise_residual.wav", fs, to_q15(noise_residual, peak=0.9))
+
+    return metrics_with_paths
+
+
 def run_demo(
     lib_path: Path = DEFAULT_LIB_PATH,
     output_dir: Path = DEFAULT_OUTPUT_DIR,
@@ -393,6 +820,7 @@ def run_demo(
     wanted_wav_path: Path | None = None,
     wanted_gain: float = 0.35,
     plot_window: tuple[float, float] = DEFAULT_PLOT_WINDOW,
+    spectrum_window: tuple[float, float] | None = None,
     plot_duration_s: float | None = None,
     save_wav: bool = True,
 ) -> dict[str, float | str]:
@@ -421,8 +849,9 @@ def run_demo(
     secondary = from_q15(secondary_q15)
     noise_residual = error - wanted
 
-    settle = min(len(primary) // 2, int(fs * 1.0))
-    tail = slice(settle, None)
+    tail, spectrum_start_s, spectrum_end_s = analysis_slice(
+        len(primary), fs, spectrum_window
+    )
     metrics = {
         "primary_mse": mse(primary),
         "error_mse": mse(error),
@@ -473,6 +902,9 @@ def run_demo(
     metrics_with_paths["plot_start_s"] = plot_window[0]
     metrics_with_paths["plot_end_s"] = plot_window[1]
     metrics_with_paths["plot_duration_s"] = plot_window[1] - plot_window[0]
+    metrics_with_paths["spectrum_start_s"] = spectrum_start_s
+    metrics_with_paths["spectrum_end_s"] = spectrum_end_s
+    metrics_with_paths["spectrum_duration_s"] = spectrum_end_s - spectrum_start_s
     if wanted_wav_path is not None:
         metrics_with_paths["wanted_wav_path"] = str(wanted_wav_path)
     metrics_path.write_text(json.dumps(metrics_with_paths, indent=2), encoding="utf-8")
@@ -506,11 +938,30 @@ def main() -> None:
     parser.add_argument("--wanted-wav", type=Path)
     parser.add_argument("--wanted-gain", type=float, default=0.35)
     parser.add_argument(
+        "--mode",
+        choices=("siso", "sum-first", "miso"),
+        default="siso",
+        help="Processing mode. SISO uses the original one-reference demo.",
+    )
+    parser.add_argument("--reference-count", type=int, default=4)
+    parser.add_argument("--actuator-count", type=int, default=4)
+    parser.add_argument(
+        "--multi-channel-comparison",
+        action="store_true",
+        help="Run the synthetic 4-motor/4-actuator sum-first vs multi-ref comparison.",
+    )
+    parser.add_argument(
         "--plot-window",
         type=parse_plot_window,
         default=DEFAULT_PLOT_WINDOW,
         metavar="SECONDS|START..END",
         help="Time-domain plot window. Examples: '2' or '1.5..2'.",
+    )
+    parser.add_argument(
+        "--spectrum-window",
+        type=parse_plot_window,
+        metavar="SECONDS|START..END",
+        help="Spectrum/metrics analysis window. Defaults to the post-settling tail.",
     )
     parser.add_argument(
         "--plot-duration-s",
@@ -520,19 +971,47 @@ def main() -> None:
     parser.add_argument("--no-wav", action="store_true")
     args = parser.parse_args()
 
-    metrics = run_demo(
-        lib_path=args.lib_path,
-        output_dir=args.output_dir,
-        fs=args.fs,
-        duration_s=args.duration_s,
-        seed=args.seed,
-        reference_gain=args.reference_gain,
-        wanted_wav_path=args.wanted_wav,
-        wanted_gain=args.wanted_gain,
-        plot_window=args.plot_window,
-        plot_duration_s=args.plot_duration_s,
-        save_wav=not args.no_wav,
-    )
+    if args.multi_channel_comparison:
+        metrics = run_multichannel_comparison(
+            lib_path=args.lib_path,
+            output_dir=args.output_dir,
+            fs=args.fs,
+            duration_s=args.duration_s,
+            seed=args.seed,
+            save_wav=not args.no_wav,
+        )
+    elif args.mode in {"sum-first", "miso"}:
+        metrics = run_multichannel_mode(
+            mode=args.mode,
+            lib_path=args.lib_path,
+            output_dir=args.output_dir,
+            fs=args.fs,
+            duration_s=args.duration_s,
+            seed=args.seed,
+            reference_count=args.reference_count,
+            actuator_count=args.actuator_count,
+            wanted_wav_path=args.wanted_wav,
+            wanted_gain=args.wanted_gain,
+            plot_window=args.plot_window,
+            spectrum_window=args.spectrum_window,
+            plot_duration_s=args.plot_duration_s,
+            save_wav=not args.no_wav,
+        )
+    else:
+        metrics = run_demo(
+            lib_path=args.lib_path,
+            output_dir=args.output_dir,
+            fs=args.fs,
+            duration_s=args.duration_s,
+            seed=args.seed,
+            reference_gain=args.reference_gain,
+            wanted_wav_path=args.wanted_wav,
+            wanted_gain=args.wanted_gain,
+            plot_window=args.plot_window,
+            spectrum_window=args.spectrum_window,
+            plot_duration_s=args.plot_duration_s,
+            save_wav=not args.no_wav,
+        )
     print(json.dumps(metrics, indent=2))
 
 

@@ -65,6 +65,14 @@
 #endif
 #endif
 
+#ifndef CONFIG_FXLMS_MAX_REFERENCES
+#define CONFIG_FXLMS_MAX_REFERENCES 4
+#endif
+
+#ifndef CONFIG_FXLMS_MAX_ACTUATORS
+#define CONFIG_FXLMS_MAX_ACTUATORS 4
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -79,6 +87,10 @@ enum fxlms_status {
 struct fxlms_config {
   /** Number of adaptive FIR taps in G(z). */
   uint16_t taps;
+  /** Number of reference inputs. `0` is treated as legacy SISO `1`. */
+  uint8_t reference_count;
+  /** Number of actuator/controller outputs. `0` is treated as legacy SISO `1`. */
+  uint8_t actuator_count;
   /** Learning rate in Q15. `0` disables adaptation and leaves G(z) fixed. */
   int16_t mu_q15;
   /** Extra right shift on the fixed-point controller-weight update. */
@@ -98,6 +110,17 @@ struct fxlms_sample_result {
   int16_t error;
 };
 
+struct fxlms_multi_sample_result {
+  /** Per-actuator adaptive controller outputs y_j[n]. */
+  int16_t controller_y[CONFIG_FXLMS_MAX_ACTUATORS];
+  /** Per-actuator demo secondary path outputs C_j(z) * y_j[n]. */
+  int16_t secondary_output[CONFIG_FXLMS_MAX_ACTUATORS];
+  /** Sum of all per-actuator secondary outputs. */
+  int16_t secondary_sum;
+  /** Residual error e[n] = d[n] - sum_j C_j(z)y_j[n]. */
+  int16_t error;
+};
+
 struct fxlms_config fxlms_default_config(void);
 
 int fxlms_state_size(const struct fxlms_config *cfg, size_t *out_size);
@@ -110,10 +133,27 @@ int fxlms_reset(struct fxlms_state *state);
 int fxlms_process_sample(struct fxlms_state *state, int16_t reference_x,
                          int16_t primary_d, struct fxlms_sample_result *out);
 
+int fxlms_process_multi_sample(struct fxlms_state *state,
+                               const int16_t *reference_x, int16_t primary_d,
+                               struct fxlms_multi_sample_result *out);
+
 int fxlms_process_block(struct fxlms_state *state, const int16_t *reference_x,
                         const int16_t *primary_d, int16_t *error_e,
                         int16_t *controller_y, int16_t *secondary_output,
                         size_t n);
+
+/**
+ * Multi-channel block API.
+ *
+ * `reference_x` is channel-major: reference r sample i is at
+ * `reference_x[r * n + i]`. Optional `controller_y` and `secondary_output`
+ * are also channel-major by actuator.
+ */
+int fxlms_process_multi_block(struct fxlms_state *state,
+                              const int16_t *reference_x,
+                              const int16_t *primary_d, int16_t *error_e,
+                              int16_t *controller_y,
+                              int16_t *secondary_output, size_t n);
 
 /**
  * Host convenience wrapper that allocates state and processes one array.
@@ -123,11 +163,23 @@ int fxlms_filter_i16(const int16_t *reference_x, const int16_t *primary_d,
                      int16_t *error_e, int16_t *controller_y,
                      int16_t *secondary_output, size_t n);
 
+int fxlms_filter_multi_i16(const int16_t *reference_x, const int16_t *primary_d,
+                           uint8_t reference_count, uint8_t actuator_count,
+                           int16_t *error_e, int16_t *controller_y,
+                           int16_t *secondary_output, size_t n);
+
 #ifdef FXLMS_TESTING
 int fxlms_test_set_controller_tap(struct fxlms_state *state, uint16_t tap,
                                   int16_t value);
+int fxlms_test_set_multi_controller_tap(struct fxlms_state *state,
+                                        uint8_t actuator, uint8_t reference,
+                                        uint16_t tap, int16_t value);
 int fxlms_test_set_secondary_path(const int16_t *coeffs, size_t n);
 int fxlms_test_set_secondary_estimate(const int16_t *coeffs, size_t n);
+int fxlms_test_set_actuator_secondary_path(uint8_t actuator,
+                                           const int16_t *coeffs, size_t n);
+int fxlms_test_set_actuator_secondary_estimate(uint8_t actuator,
+                                               const int16_t *coeffs, size_t n);
 #endif
 
 #ifdef __cplusplus

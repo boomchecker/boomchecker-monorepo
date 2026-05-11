@@ -5,7 +5,13 @@ from pathlib import Path
 import numpy as np
 from scipy.io.wavfile import write
 
-from lms_demo import DEFAULT_LIB_PATH, parse_plot_window, run_demo
+from lms_demo import (
+    DEFAULT_LIB_PATH,
+    parse_plot_window,
+    run_demo,
+    run_multichannel_mode,
+    run_multichannel_comparison,
+)
 
 
 def assert_improves(metrics: dict[str, float | str], label: str) -> None:
@@ -97,6 +103,66 @@ def main() -> None:
     ):
         if not (test_root / "with_wanted_wav" / filename).exists():
             raise SystemExit(f"Expected WAV-mode output {filename} to be written")
+
+    multi_metrics = run_multichannel_comparison(
+        lib_path=DEFAULT_LIB_PATH,
+        output_dir=test_root / "multi_channel",
+        fs=16000,
+        duration_s=3.0,
+        seed=11,
+        save_wav=True,
+    )
+    if multi_metrics["sum_first_tail_mse"] >= multi_metrics["primary_tail_mse"]:
+        raise SystemExit(
+            f"Expected sum-first multi-actuator mode to improve, got "
+            f"primary={multi_metrics['primary_tail_mse']} "
+            f"sum_first={multi_metrics['sum_first_tail_mse']}"
+        )
+    if multi_metrics["multi_ref_tail_mse"] >= multi_metrics["primary_tail_mse"]:
+        raise SystemExit(
+            f"Expected multi-reference mode to improve, got "
+            f"primary={multi_metrics['primary_tail_mse']} "
+            f"multi_ref={multi_metrics['multi_ref_tail_mse']}"
+        )
+    for filename in (
+        "sum_first_error.wav",
+        "multi_ref_error.wav",
+        "metrics.json",
+    ):
+        if not (test_root / "multi_channel" / filename).exists():
+            raise SystemExit(f"Expected multi-channel output {filename} to be written")
+
+    miso_metrics = run_multichannel_mode(
+        mode="miso",
+        lib_path=DEFAULT_LIB_PATH,
+        output_dir=test_root / "miso_mode",
+        fs=16000,
+        duration_s=3.0,
+        seed=11,
+        reference_count=4,
+        actuator_count=4,
+        wanted_wav_path=fixture_path,
+        wanted_gain=0.1,
+        plot_window=parse_plot_window("0..3"),
+        spectrum_window=parse_plot_window("1..2"),
+        save_wav=True,
+    )
+    if miso_metrics["noise_residual_tail_mse"] >= miso_metrics["drone_primary_tail_mse"]:
+        raise SystemExit(
+            f"Expected MISO mode drone residual to improve, got "
+            f"drone={miso_metrics['drone_primary_tail_mse']} "
+            f"residual={miso_metrics['noise_residual_tail_mse']}"
+        )
+    if miso_metrics["plot_start_s"] != 0.0 or miso_metrics["plot_end_s"] != 3.0:
+        raise SystemExit(
+            f"Expected MISO plot window 0..3, got "
+            f"{miso_metrics['plot_start_s']}..{miso_metrics['plot_end_s']}"
+        )
+    if miso_metrics["spectrum_start_s"] != 1.0 or miso_metrics["spectrum_end_s"] != 2.0:
+        raise SystemExit(
+            f"Expected MISO spectrum window 1..2, got "
+            f"{miso_metrics['spectrum_start_s']}..{miso_metrics['spectrum_end_s']}"
+        )
     print("python integration: ok")
 
 

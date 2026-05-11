@@ -72,8 +72,13 @@ All demo parameters are passed after `task run --`.
 | `--reference-gain GAIN` | `1.0` | Gain applied to the drone reference `x[n]` before it enters the C FXLMS core. |
 | `--wanted-wav PATH` | unset | Optional useful audio to preserve. Without it, the demo runs drone-only. |
 | `--wanted-gain GAIN` | `0.35` | Gain applied after normalizing the wanted WAV. Increase it to make the useful signal louder relative to the drone. |
+| `--mode MODE` | `siso` | Processing mode: `siso`, `sum-first`, or `miso`. |
+| `--reference-count N` | `4` | Number of synthetic motor references for `sum-first` and `miso`; valid range is 1..4. |
+| `--actuator-count N` | `4` | Number of actuator outputs for `sum-first` and `miso`; valid range is 1..4. |
 | `--plot-window WINDOW` | `0..0.15` | Time-domain plot window for `fxlms_demo.png`. Accepts either a duration like `2` or an interval like `1.5..2`. |
+| `--spectrum-window WINDOW` | post-settling tail | Window used for `fxlms_spectrum.png` and tail metrics. Accepts the same format as `--plot-window`. |
 | `--plot-duration-s SEC` | unset | Deprecated alias for `--plot-window SEC`, kept for old commands. |
+| `--multi-channel-comparison` | false | Run the synthetic 4-motor/4-actuator comparison instead of the SISO demo. |
 | `--no-wav` | false | Skip writing WAV artifacts. Plots and metrics are still written. |
 
 Examples:
@@ -91,8 +96,18 @@ task run -- --wanted-wav audio/tank-moving.wav --duration-s 10 --plot-window 2
 # Plot only the 1.5..2.0 s interval.
 task run -- --wanted-wav audio/tank-moving.wav --duration-s 10 --plot-window 1.5..2
 
+# Plot and analyze a sparse event window, such as a gunshot.
+task run -- --wanted-wav audio/gunshot-vs-firecracker.wav --duration-s 10 --plot-window 5..6 --spectrum-window 5..6
+
 # Put outputs somewhere else.
 task run -- --output-dir /tmp/fxlms-run --wanted-wav audio/tank-moving.wav
+
+# Compare summed-reference and multi-reference 4-actuator FxLMS modes.
+task run -- --multi-channel-comparison --output-dir python/out/multi
+
+# Run only one multi-channel mode.
+task run -- --mode miso --reference-count 4 --actuator-count 4
+task run -- --mode sum-first --reference-count 4 --actuator-count 4
 ```
 
 ## Signal Model
@@ -188,6 +203,11 @@ wanted WAV used. It does not set the time window shown in `fxlms_demo.png`; use
 | `drone_primary.wav` | WAV mode only | Drone component at the microphone before ANC. |
 | `noise_residual.wav` | WAV mode only | `error - wanted`, used to measure remaining drone. |
 
+In multi-channel comparison mode the output directory instead contains
+`sum_first_error.wav`, `multi_ref_error.wav`, per-mode secondary sums, and a
+`metrics.json` comparing tail MSE/attenuation for summed-reference and
+multi-reference modes.
+
 ## Plot Interpretation
 
 `fxlms_demo.png` includes:
@@ -225,9 +245,32 @@ Important `metrics.json` fields:
   suppression metric in WAV mode.
 - `plot_start_s`, `plot_end_s`, `plot_duration_s`: time window used for
   `fxlms_demo.png`.
+- `spectrum_start_s`, `spectrum_end_s`, `spectrum_duration_s`: time window used
+  for `fxlms_spectrum.png` and tail metrics.
 
 The settling window is `min(total_samples / 2, 1 second)`. Spectral plots and
-tail metrics use the samples after that point.
+tail metrics use the samples after that point unless `--spectrum-window` is set.
+
+## Multi-Channel Prototype
+
+The C core supports up to 4 references and 4 actuator outputs with one error
+microphone. The adaptive controller is a matrix of FIR filters: each actuator
+output is the sum of one adaptive FIR per reference. The per-actuator secondary
+path outputs are then summed into the single residual error signal.
+
+The legacy SISO API remains valid. New code can set `reference_count` and
+`actuator_count` in `struct fxlms_config`, then call
+`fxlms_process_multi_block()`. Multi-channel reference, controller, and
+secondary buffers are channel-major: channel `c`, sample `i` is stored at
+`buffer[c * n + i]`.
+
+The Python comparison mode generates four similar but non-identical synthetic
+motors and runs:
+
+- `sum-first`: four motor references are summed before FxLMS, then drive four
+  actuator filters.
+- `multi-ref`: all four references are kept separate and drive the full 4x4
+  controller matrix.
 
 ## Configuration
 

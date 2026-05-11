@@ -54,6 +54,14 @@ static void test_state_size_rejects_bad_config(void) {
 
   cfg.taps = 0;
   ASSERT_EQ_INT(FXLMS_ERR_INVALID_CONFIG, fxlms_state_size(&cfg, &size));
+
+  cfg = fxlms_default_config();
+  cfg.reference_count = 5;
+  ASSERT_EQ_INT(FXLMS_ERR_INVALID_CONFIG, fxlms_state_size(&cfg, &size));
+
+  cfg = fxlms_default_config();
+  cfg.actuator_count = 5;
+  ASSERT_EQ_INT(FXLMS_ERR_INVALID_CONFIG, fxlms_state_size(&cfg, &size));
 }
 
 static void test_error_is_primary_minus_secondary_path_output(void) {
@@ -217,6 +225,90 @@ static void test_block_api_outputs_all_streams(void) {
   free(mem);
 }
 
+static void test_multi_channel_sums_actuator_outputs(void) {
+  const int16_t secondary_a[4] = {32767, 0, 0, 0};
+  const int16_t secondary_b[4] = {16384, 0, 0, 0};
+  const int16_t estimate[4] = {32767, 0, 0, 0};
+  ASSERT_EQ_INT(FXLMS_OK, fxlms_test_set_actuator_secondary_path(0, secondary_a, 4));
+  ASSERT_EQ_INT(FXLMS_OK, fxlms_test_set_actuator_secondary_path(1, secondary_b, 4));
+  ASSERT_EQ_INT(FXLMS_OK,
+                fxlms_test_set_actuator_secondary_estimate(0, estimate, 4));
+  ASSERT_EQ_INT(FXLMS_OK,
+                fxlms_test_set_actuator_secondary_estimate(1, estimate, 4));
+
+  struct fxlms_config cfg = {.taps = 1,
+                             .reference_count = 2,
+                             .actuator_count = 2,
+                             .mu_q15 = 0,
+                             .adapt_shift = 0,
+                             .output_limit = 32767};
+  uint8_t *mem = NULL;
+  struct fxlms_state *state = make_state(&cfg, &mem);
+  ASSERT_EQ_INT(FXLMS_OK,
+                fxlms_test_set_multi_controller_tap(state, 0, 0, 0, 16384));
+  ASSERT_EQ_INT(FXLMS_OK,
+                fxlms_test_set_multi_controller_tap(state, 0, 1, 0, 8192));
+  ASSERT_EQ_INT(FXLMS_OK,
+                fxlms_test_set_multi_controller_tap(state, 1, 0, 0, 4096));
+  ASSERT_EQ_INT(FXLMS_OK,
+                fxlms_test_set_multi_controller_tap(state, 1, 1, 0, 2048));
+
+  const int16_t refs[2] = {12000, 8000};
+  struct fxlms_multi_sample_result res;
+  ASSERT_EQ_INT(FXLMS_OK, fxlms_process_multi_sample(state, refs, 20000, &res));
+
+  int16_t y0 = (int16_t)(q15_mul(16384, refs[0]) + q15_mul(8192, refs[1]));
+  int16_t y1 = (int16_t)(q15_mul(4096, refs[0]) + q15_mul(2048, refs[1]));
+  int16_t sec0 = q15_mul(32767, y0);
+  int16_t sec1 = q15_mul(16384, y1);
+  ASSERT_EQ_INT(y0, res.controller_y[0]);
+  ASSERT_EQ_INT(y1, res.controller_y[1]);
+  ASSERT_EQ_INT(sec0, res.secondary_output[0]);
+  ASSERT_EQ_INT(sec1, res.secondary_output[1]);
+  ASSERT_EQ_INT((int16_t)(sec0 + sec1), res.secondary_sum);
+  ASSERT_EQ_INT(20000 - res.secondary_sum, res.error);
+  free(mem);
+}
+
+static void test_multi_block_uses_channel_major_buffers(void) {
+  const int16_t secondary[4] = {32767, 0, 0, 0};
+  const int16_t estimate[4] = {32767, 0, 0, 0};
+  ASSERT_EQ_INT(FXLMS_OK, fxlms_test_set_actuator_secondary_path(0, secondary, 4));
+  ASSERT_EQ_INT(FXLMS_OK, fxlms_test_set_actuator_secondary_estimate(0, estimate, 4));
+
+  struct fxlms_config cfg = {.taps = 1,
+                             .reference_count = 2,
+                             .actuator_count = 1,
+                             .mu_q15 = 0,
+                             .adapt_shift = 0,
+                             .output_limit = 32767};
+  uint8_t *mem = NULL;
+  struct fxlms_state *state = make_state(&cfg, &mem);
+  ASSERT_EQ_INT(FXLMS_OK,
+                fxlms_test_set_multi_controller_tap(state, 0, 0, 0, 16384));
+  ASSERT_EQ_INT(FXLMS_OK,
+                fxlms_test_set_multi_controller_tap(state, 0, 1, 0, 8192));
+
+  const int16_t refs[6] = {
+      100, 200, 300,
+      1000, 2000, 3000,
+  };
+  const int16_t primary[3] = {0, 0, 0};
+  int16_t error[3] = {0};
+  int16_t y[3] = {0};
+  int16_t secondary_out[3] = {0};
+  ASSERT_EQ_INT(FXLMS_OK, fxlms_process_multi_block(state, refs, primary, error,
+                                                    y, secondary_out, 3));
+  for (int i = 0; i < 3; ++i) {
+    int16_t expected_y =
+        (int16_t)(q15_mul(16384, refs[i]) + q15_mul(8192, refs[3 + i]));
+    ASSERT_EQ_INT(expected_y, y[i]);
+    ASSERT_EQ_INT(q15_mul(32767, expected_y), secondary_out[i]);
+    ASSERT_EQ_INT(-secondary_out[i], error[i]);
+  }
+  free(mem);
+}
+
 int main(void) {
   test_state_size_rejects_bad_config();
   test_error_is_primary_minus_secondary_path_output();
@@ -225,6 +317,8 @@ int main(void) {
   test_newest_sample_first_fir_indexing();
   test_reset_clears_buffers_and_weights();
   test_block_api_outputs_all_streams();
+  test_multi_channel_sums_actuator_outputs();
+  test_multi_block_uses_channel_major_buffers();
   puts("fxlms_filter_tests: ok");
   return 0;
 }
