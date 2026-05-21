@@ -1,0 +1,22 @@
+version: "3"
+
+includes:
+  fw:
+    taskfile: ./fw/Taskfile.yml
+    dir: ./fw
+    optional: true
+  api:
+    taskfile: ./apps/api-backend/Taskfile.yml
+    dir: ./apps/api-backend
+    optional: true
+
+tasks:
+  changeset:
+    cmds:
+      - pnpm changeset
+    desc: Create a new changeset
+
+  changeset:version:
+    cmds:
+      - pnpm changeset version
+    desc: Apply versions from pending changesets

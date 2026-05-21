@@ -1,0 +1,6 @@
+{
+  "name": "fw-bom-node",
+  "version": "0.0.1",
+  "private": true,
+  "description": "BOM Node Firmware (ESP32)"
+}

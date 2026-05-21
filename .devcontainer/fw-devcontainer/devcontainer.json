@@ -1,8 +1,8 @@
 {
-  "name": "Felix FW ESP Devcontainer - NO ESP",
+  "name": "FW Devcontainer",
   "dockerComposeFile": ["../compose.devcontainer.yml"],
-  "service": "fw-esp-devcontainer-noesp",
-  "runServices": ["fw-esp-devcontainer-noesp"],
+  "service": "fw-devcontainer",
+  "runServices": ["fw-devcontainer"],
   "workspaceFolder": "/workspace",
   "customizations": {
     "vscode": {
@@ -37,7 +37,8 @@
         "ms-vscode.makefile-tools",
         "esbenp.prettier-vscode",
         "gruntfuggly.todo-tree",
-        "xaver.clang-format"
+        "xaver.clang-format",
+        "openai.chatgpt"
       ]
     }
   }
