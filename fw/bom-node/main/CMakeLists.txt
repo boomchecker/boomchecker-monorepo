@@ -1,3 +1,14 @@
-idf_component_register(SRCS "boo-node_main.c"
-                       INCLUDE_DIRS "."
-                       REQUIRES mic_input)
+idf_component_register(
+    SRCS 
+        "boo-node_main.c"
+    INCLUDE_DIRS
+        "."
+    REQUIRES
+        mic_input
+        impulse_detection
+        esp_timer
+        ota
+        middleware
+        webserver
+        audio_streamer
+)

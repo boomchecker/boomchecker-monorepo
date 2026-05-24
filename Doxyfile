@@ -1,0 +1,22 @@
+# Doxygen configuration for peak_detector module
+PROJECT_NAME           = "peak_detector"
+OUTPUT_DIRECTORY       = docs/_doxygen
+GENERATE_XML           = YES
+XML_OUTPUT             = xml
+GENERATE_LATEX         = NO
+GENERATE_HTML          = YES
+FILE_PATTERNS          = *.c \
+                         *.h
+INPUT                  = scripts/median-filter/csrc/peak_detector.c \
+                         scripts/median-filter/csrc/peak_detector.h
+RECURSIVE              = NO
+OPTIMIZE_OUTPUT_FOR_C  = YES
+EXTRACT_STATIC         = YES
+EXTRACT_ALL            = YES
+JAVADOC_AUTOBRIEF      = YES
+WARN_IF_UNDOCUMENTED   = YES
+WARN_IF_DOC_ERROR      = YES
+QUIET                  = NO
+WARN_LOGFILE           = docs/_doxygen/doxygen_warnings.log
+FULL_PATH_NAMES        = YES
+STRIP_FROM_PATH        = scripts/median-filter/csrc

@@ -1,0 +1,35 @@
+menu "Boomchecker"
+
+    menu "OTA"
+        config OTA_ENABLE
+            bool "Enable or disable OTA check/update"
+            default n
+
+        config OTA_CURRENT_VERSION
+            string "Current firmware version"
+            default "0.0.0"
+            help
+                Current firmware version reported to OTAdrive.
+
+        config OTA_API_KEY
+            string "OTAdrive API key"
+            default ""
+            help
+                API key used for OTAdrive device authentication.
+    endmenu
+
+    menu "WiFi"
+        config MIDDLEWARE_WIFI_SSID
+            string "WiFi SSID"
+            default ""
+            help
+                SSID used for WiFi station connection.
+
+        config MIDDLEWARE_WIFI_PASSWORD
+            string "WiFi password"
+            default ""
+            help
+                Password used for WiFi station connection.
+    endmenu
+
+endmenu

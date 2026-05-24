@@ -1,0 +1,46 @@
+version: "3"
+
+includes:
+  csrc:
+    taskfile: ./csrc/Taskfile.yml
+    dir: ./csrc
+    optional: true
+
+tasks:
+  default:
+    desc: Default tasks
+    cmds:
+      - task --list
+
+  setup:
+    desc: Install Python dependencies and ffmpeg for median-filter scripts
+    cmds:
+      - bash ./setup.sh
+
+  load-audio:
+    desc: Run load_audio.py script
+    dir: python
+    env:
+      PATH: "{{.ROOT_DIR}}/python/venv/bin:{{.PATH}}"
+    cmds:
+      - ./venv/bin/python load_audio.py {{.CLI_ARGS}}
+
+  detect:
+    desc: Run detect.py script
+    dir: python
+    cmds:
+      - ./venv/bin/python detect.py {{.CLI_ARGS}}
+
+  benchmark:
+    desc: Run benchmark.py script
+    dir: python
+    deps:
+      - csrc:build
+    cmds:
+      - ./venv/bin/python benchmark.py {{.CLI_ARGS}}
+
+  run:
+    desc: Run any Python script in venv
+    dir: python
+    cmds:
+      - ./venv/bin/python {{.CLI_ARGS}}

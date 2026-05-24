@@ -6,11 +6,16 @@ services:
     volumes:
       # Mount the root folder that contains .git
       - ../:/workspace:cached
+      # Mount SSH keys from WSL (read-write to allow proper permissions)
+      - ${HOME}/.ssh:/root/.ssh
+      # Persist Codex config/history
+      - codex-data:/home/dev/.codex
     privileged: true
     cap_add:
       - SYS_PTRACE
     security_opt:
       - seccomp:unconfined
+    user: "1001"
     command: sleep infinity
 
   sw-devcontainer:
@@ -20,8 +25,15 @@ services:
     volumes:
       # Mount the root folder that contains .git
       - ../:/workspace:cached
+      # Mount SSH keys from WSL (read-write to allow proper permissions)
+      - ${HOME}/.ssh:/root/.ssh
+      # Persist Codex config/history
+      - codex-data:/home/dev/.codex
     cap_add:
       - SYS_PTRACE
     security_opt:
       - seccomp:unconfined
     command: sleep infinity
+
+volumes:
+  codex-data:

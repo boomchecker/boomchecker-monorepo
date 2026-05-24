@@ -1,6 +1,10 @@
 # VS code
 .vscode
 
+# Generated docs
+docs/_build
+docs/_doxygen
+
 # Build Outputs
 .next/
 out/
@@ -13,6 +17,8 @@ dist
 
 # Python
 .venv
+venv
+__pycache__
 
 # Go
 *.exe
