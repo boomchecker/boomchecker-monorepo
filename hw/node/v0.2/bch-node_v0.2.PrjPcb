@@ -68,23 +68,6 @@ GenerateClassCluster=0
 DocumentUniqueId=EKHPFWSM
 
 [Document2]
-DocumentPath=power.SchDoc
-AnnotationEnabled=1
-AnnotateStartValue=1
-AnnotationIndexControlEnabled=0
-AnnotateSuffix=
-AnnotateScope=All
-AnnotateOrder=5
-DoLibraryUpdate=1
-DoDatabaseUpdate=1
-ClassGenCCAutoEnabled=1
-ClassGenCCAutoRoomEnabled=0
-ClassGenNCAutoScope=None
-DItemRevisionGUID=
-GenerateClassCluster=0
-DocumentUniqueId=YZWMLBAF
-
-[Document3]
 DocumentPath=mcu.SchDoc
 AnnotationEnabled=1
 AnnotateStartValue=1
@@ -101,7 +84,7 @@ DItemRevisionGUID=
 GenerateClassCluster=0
 DocumentUniqueId=YKCWKOMY
 
-[Document4]
+[Document3]
 DocumentPath=gps.SchDoc
 AnnotationEnabled=1
 AnnotateStartValue=1
@@ -118,7 +101,7 @@ DItemRevisionGUID=
 GenerateClassCluster=0
 DocumentUniqueId=XNKFEZBI
 
-[Document5]
+[Document4]
 DocumentPath=lora.SchDoc
 AnnotationEnabled=1
 AnnotateStartValue=1
@@ -134,6 +117,23 @@ ClassGenNCAutoScope=None
 DItemRevisionGUID=
 GenerateClassCluster=0
 DocumentUniqueId=KKLQVYIJ
+
+[Document5]
+DocumentPath=power.SchDoc
+AnnotationEnabled=1
+AnnotateStartValue=1
+AnnotationIndexControlEnabled=0
+AnnotateSuffix=
+AnnotateScope=All
+AnnotateOrder=5
+DoLibraryUpdate=1
+DoDatabaseUpdate=1
+ClassGenCCAutoEnabled=1
+ClassGenCCAutoRoomEnabled=0
+ClassGenNCAutoScope=None
+DItemRevisionGUID=
+GenerateClassCluster=0
+DocumentUniqueId=YZWMLBAF
 
 [Document6]
 DocumentPath=imu.SchDoc
@@ -254,15 +254,34 @@ DItemRevisionGUID=
 GenerateClassCluster=0
 DocumentUniqueId=
 
+[Document13]
+DocumentPath=OutJob.OutJob
+AnnotationEnabled=1
+AnnotateStartValue=1
+AnnotationIndexControlEnabled=0
+AnnotateSuffix=
+AnnotateScope=All
+AnnotateOrder=-1
+DoLibraryUpdate=1
+DoDatabaseUpdate=1
+ClassGenCCAutoEnabled=1
+ClassGenCCAutoRoomEnabled=0
+ClassGenNCAutoScope=None
+DItemRevisionGUID=
+GenerateClassCluster=0
+DocumentUniqueId=
+
 [ProjectVariant1]
 UniqueId=ce101761-10fe-4fe4-becb-190e6b908eea
 Description=node
 AllowFabrication=0
 ParameterCount=0
-VariationCount=3
+VariationCount=5
 Variation1=Designator=R1|UniqueId=\WWVQEOYE\TKQCMFKD|Kind=1|AlternatePart=
 Variation2=Designator=J2|UniqueId=\WWVQEOYE\GYECOTKJ|Kind=1|AlternatePart=
 Variation3=Designator=C8|UniqueId=\WWVQEOYE\GKESQKSW|Kind=1|AlternatePart=
+Variation4=Designator=R19|UniqueId=\EYTJMWFC\GPHKXZKU|Kind=0|AlternatePart=
+Variation5=Designator=R20|UniqueId=\EYTJMWFC\ZYRQMHJM|Kind=1|AlternatePart=
 ParamVariationCount=0
 
 [Parameter1]
@@ -1260,10 +1279,34 @@ UpdateToLatestRevision=1
 PartTypes=0
 ComponentLibIdentifierKind0=Library Name And Type
 ComponentLibraryIdentifier0=bch-lib.SchLib
-ComponentDesignItemID0=ER+NTCGS163JF103FT7
-ComponentSymbolReference0=ER+NTCGS163JF103FT7
+ComponentDesignItemID0=ECK+100n16V
+ComponentSymbolReference0=ECK+100n16V
 ComponentUpdate0=1
 ComponentIsDeviceSheet0=0
+ComponentLibIdentifierKind1=Library Name And Type
+ComponentLibraryIdentifier1=bch-lib.SchLib
+ComponentDesignItemID1=ECK+10u10V
+ComponentSymbolReference1=ECK+10u10V
+ComponentUpdate1=1
+ComponentIsDeviceSheet1=0
+ComponentLibIdentifierKind2=Library Name And Type
+ComponentLibraryIdentifier2=bch-lib.SchLib
+ComponentDesignItemID2=EMCU+E22-900M22S
+ComponentSymbolReference2=EMCU+E22-900M22S
+ComponentUpdate2=1
+ComponentIsDeviceSheet2=0
+ComponentLibIdentifierKind3=Library Name And Type
+ComponentLibraryIdentifier3=bch-lib.SchLib
+ComponentDesignItemID3=ER+10K
+ComponentSymbolReference3=ER+10K
+ComponentUpdate3=1
+ComponentIsDeviceSheet3=0
+ComponentLibIdentifierKind4=Library Name And Type
+ComponentLibraryIdentifier4=resonect.SchLib
+ComponentDesignItemID4=ER+33R
+ComponentSymbolReference4=ER+33R
+ComponentUpdate4=1
+ComponentIsDeviceSheet4=0
 FullReplace=1
 UpdateDesignatorLock=1
 UpdatePartIDLock=1
@@ -1304,8 +1347,20 @@ ParameterUpdate11=1
 ModelTypeGroup0=PCBLIB
 ModelTypeUpdate0=1
 ModelType0=PCBLIB
-ModelName0=THRMC1608X90N
+ModelName0=C0603
 ModelUpdate0=1
+ModelType1=PCBLIB
+ModelName1=CAPC1608X95N
+ModelUpdate1=1
+ModelType2=PCBLIB
+ModelName2=E22-900M22S
+ModelUpdate2=1
+ModelType3=PCBLIB
+ModelName3=RESC1608X50N
+ModelUpdate3=1
+ModelType4=PCBLIB
+ModelName4=RESC1608X55N
+ModelUpdate4=1
 
 [DatabaseUpdateOptions]
 SelectedOnly=0
