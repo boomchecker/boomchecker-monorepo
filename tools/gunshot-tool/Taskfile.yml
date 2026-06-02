@@ -1,0 +1,32 @@
+version: "3"
+
+vars:
+  PYTHON: '{{if eq OS "windows"}}venv/Scripts/python{{else}}venv/bin/python{{end}}'
+  PIP: '{{if eq OS "windows"}}venv/Scripts/pip{{else}}venv/bin/pip{{end}}'
+
+tasks:
+  default:
+    desc: Show available tasks
+    cmds:
+      - task --list
+
+  venv:
+    desc: Create Python virtual environment
+    cmds:
+      - python -m venv venv
+    status:
+      - '{{.PYTHON}} --version'
+
+  install:
+    desc: Install dependencies into venv
+    deps: [venv]
+    cmds:
+      - '{{.PIP}} install -r requirements.txt'
+    sources:
+      - requirements.txt
+
+  run:
+    desc: Create venv, install deps and run the Streamlit app
+    deps: [install]
+    cmds:
+      - '{{.PYTHON}} -m streamlit run app.py'
