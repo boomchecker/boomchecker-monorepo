@@ -4,6 +4,7 @@ idf_component_register(
         SRCS 
                 "detector.c"
                 ${MEDIAN_SOURCES}
+                "angle_estimation.c"
         INCLUDE_DIRS 
                 "include"
                 "median-detector/include"
@@ -13,4 +14,6 @@ idf_component_register(
             log
             esp_system
             mic_input 
+            esp_timer
+            esp-dsp
 )
