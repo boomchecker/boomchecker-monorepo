@@ -10,25 +10,18 @@ from __future__ import annotations
 import json
 import tempfile
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
-
-try:
-    from pytube import Search
-except ImportError:  # pragma: no cover - helpful message if dependency missing
-    Search = None
+from typing import Dict, List, Optional
 
 try:
     from yt_dlp import YoutubeDL
 except ImportError:  # pragma: no cover
     YoutubeDL = None
 
-try:
-    from pydub import AudioSegment
-except ImportError:  # pragma: no cover
-    AudioSegment = None
+from audio_binaries import AudioSegment, configure_audio_binaries, prime_pydub_paths
 
 from prompt_store import load_prompt, ensure_files  # local module
 
+prime_pydub_paths(Path(__file__).parent)
 
 def load_audio(path: str):
     """Stub for audio loading."""
@@ -39,39 +32,53 @@ def get_search_prompt() -> str:
     """Return the base prompt used to ask OpenAI for search queries."""
     return load_prompt()
 
-def get_video_metadata_from_url(video_url: str) -> List:
+def _build_ydl_opts(outtmpl: str | None = None) -> dict:
+    opts = {
+        "format": "bestaudio/best",
+        "noplaylist": True,
+        "quiet": True,
+        "no_warnings": True,
+        "cachedir": False,
+        # Add user agent and other headers to avoid 403
+        "http_headers": {
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/120.0.0.0 Safari/537.36"
+            ),
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "en-us,en;q=0.5",
+            "Sec-Fetch-Mode": "navigate",
+        },
+        # Use extractor args for YouTube
+        "extractor_args": {
+            "youtube": {
+                "player_client": ["android", "web"],
+                "player_skip": ["webpage", "configs"],
+            }
+        },
+    }
+    if outtmpl:
+        opts["outtmpl"] = outtmpl
+    return opts
+
+
+def _configure_audio_binaries() -> None:
+    configure_audio_binaries(Path(__file__).parent)
+
+
+def get_video_metadata_from_url(video_url: str) -> dict:
     if not video_url:
         raise ValueError("video_url must not be empty")
-    if YoutubeDL is None or AudioSegment is None:
+    if YoutubeDL is None:
         raise RuntimeError(
-            "Missing dependency. Install `yt-dlp` and `pydub` (plus ffmpeg) to download audio."
+            "Missing dependency. Install `yt-dlp` to fetch video metadata."
         )
 
     with tempfile.TemporaryDirectory(prefix="yt-audio-") as tmpdir:
         tmpdir_path = Path(tmpdir)
         outtmpl = str(tmpdir_path / "%(id)s.%(ext)s")
-        ydl_opts = {
-            "format": "bestaudio/best",
-            "outtmpl": outtmpl,
-            "noplaylist": True,
-            "quiet": True,
-            "no_warnings": True,
-            "cachedir": False,
-            # Add user agent and other headers to avoid 403
-            "http_headers": {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-                "Accept-Language": "en-us,en;q=0.5",
-                "Sec-Fetch-Mode": "navigate",
-            },
-            # Use extractor args for YouTube
-            "extractor_args": {
-                "youtube": {
-                    "player_client": ["android", "web"],
-                    "player_skip": ["webpage", "configs"],
-                }
-            },
-        }
+        ydl_opts = _build_ydl_opts(outtmpl=outtmpl)
         try:
             with YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(video_url, download=False)
@@ -83,9 +90,9 @@ def get_video_metadata_from_url(video_url: str) -> List:
 
 def search_youtube(query: str, limit: int = 20, max_length_s: Optional[int] = None) -> List[Dict[str, str]]:
     """
-    Use pytube's lightweight search helper to pull back metadata for the first
-    `limit` results. Returns dictionaries with title and watch_url that can be
-    consumed by later scraping/downloading stages.
+    Use yt-dlp search to pull back metadata for the first `limit` results.
+    Returns dictionaries with title and watch_url that can be consumed by later
+    scraping/downloading stages.
     
     Args:
         query: Search query string
@@ -94,49 +101,42 @@ def search_youtube(query: str, limit: int = 20, max_length_s: Optional[int] = No
     """
     if not query:
         return []
-    if Search is None:
+    if YoutubeDL is None:
         raise RuntimeError(
-            "pytube is not installed. Run `pip install pytube` inside the devcontainer."
+            "yt-dlp is not installed. Run `pip install yt-dlp` inside the devcontainer."
         )
     if limit <= 0:
         return []
 
-    search = Search(query)
+    ydl_opts = _build_ydl_opts()
+    try:
+        with YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(f"ytsearch{limit}:{query}", download=False)
+    except Exception as exc:  # pragma: no cover - network dependent
+        raise RuntimeError(f"yt-dlp search failed: {exc}") from exc
+
+    entries = info.get("entries") or []
     results: List[Dict[str, str]] = []
-    consumed = 0
-
-    while len(results) < limit:
-        # Ensure we have fresh results before consuming.
-        if consumed >= len(search.results):
-            if getattr(search, "has_more_results", False):
-                search.get_next_results()
-            else:
-                break
-
-        for video in search.results[consumed:]:
-            consumed += 1
-            title = getattr(video, "title", "").strip() or "Untitled video"
-            url = getattr(video, "watch_url", None) or getattr(video, "watch_url", "")
-            if not url:
-                video_id = getattr(video, "video_id", "")
-                if video_id:
-                    url = f"https://www.youtube.com/watch?v={video_id}"
-            
-            # Get video length in seconds
-            info = get_video_metadata_from_url(url)
-
-            if info.get("duration") > max_length_s:
-                continue
-            
-            results.append(
-                {
-                    "title": title,
-                    "url": url,
-                    "length": info.get("duration"),
-                }
-            )
-            if len(results) >= limit:
-                break
+    for entry in entries:
+        if not entry:
+            continue
+        duration = entry.get("duration")
+        if max_length_s is not None and duration is not None and duration > max_length_s:
+            continue
+        url = entry.get("webpage_url") or entry.get("url") or ""
+        if not url:
+            video_id = entry.get("id", "")
+            if video_id:
+                url = f"https://www.youtube.com/watch?v={video_id}"
+        results.append(
+            {
+                "title": (entry.get("title") or "Untitled video").strip(),
+                "url": url,
+                "length": duration,
+            }
+        )
+        if len(results) >= limit:
+            break
 
     return results
 
@@ -161,32 +161,12 @@ def download_audio_segment(video_url: str, output_dir: str | Path | None = None)
         raise RuntimeError(
             "Missing dependency. Install `yt-dlp` and `pydub` (plus ffmpeg) to download audio."
         )
+    _configure_audio_binaries()
 
     with tempfile.TemporaryDirectory(prefix="yt-audio-") as tmpdir:
         tmpdir_path = Path(tmpdir)
         outtmpl = str(tmpdir_path / "%(id)s.%(ext)s")
-        ydl_opts = {
-            "format": "bestaudio/best",
-            "outtmpl": outtmpl,
-            "noplaylist": True,
-            "quiet": True,
-            "no_warnings": True,
-            "cachedir": False,
-            # Add user agent and other headers to avoid 403
-            "http_headers": {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-                "Accept-Language": "en-us,en;q=0.5",
-                "Sec-Fetch-Mode": "navigate",
-            },
-            # Use extractor args for YouTube
-            "extractor_args": {
-                "youtube": {
-                    "player_client": ["android", "web"],
-                    "player_skip": ["webpage", "configs"],
-                }
-            },
-        }
+        ydl_opts = _build_ydl_opts(outtmpl=outtmpl)
         try:
             with YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(video_url, download=True)
