@@ -73,6 +73,14 @@
 #define CONFIG_FXLMS_MAX_ACTUATORS 4
 #endif
 
+#if CONFIG_FXLMS_MAX_REFERENCES < 1 || CONFIG_FXLMS_MAX_REFERENCES > 4
+#error "CONFIG_FXLMS_MAX_REFERENCES must be in range 1..4"
+#endif
+
+#if CONFIG_FXLMS_MAX_ACTUATORS < 1 || CONFIG_FXLMS_MAX_ACTUATORS > 4
+#error "CONFIG_FXLMS_MAX_ACTUATORS must be in range 1..4"
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif

@@ -50,6 +50,8 @@ tasks:
       - build
     cmds:
       - ./{{.BUILD_DIR}}/lms_filter_tests
+      - '{{.CC}} -std=c11 -O2 -Wall -Wextra -Werror -DFXLMS_TESTING -DCONFIG_FXLMS_MAX_REFERENCES=2 -DCONFIG_FXLMS_MAX_ACTUATORS=2 -I csrc -I build/generated csrc/lms_filter.c csrc/tests/lms_filter_test.c -o {{.BUILD_DIR}}/lms_filter_tests_max2'
+      - ./{{.BUILD_DIR}}/lms_filter_tests_max2
 
   test:py:
     desc: Run Python integration test

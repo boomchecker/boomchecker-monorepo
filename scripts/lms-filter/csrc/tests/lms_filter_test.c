@@ -270,6 +270,39 @@ static void test_multi_channel_sums_actuator_outputs(void) {
   free(mem);
 }
 
+static void test_multi_reference_controller_saturates_after_sum(void) {
+  const int16_t secondary[4] = {32767, 0, 0, 0};
+  const int16_t estimate[4] = {32767, 0, 0, 0};
+  ASSERT_EQ_INT(FXLMS_OK,
+                fxlms_test_set_actuator_secondary_path(0, secondary, 4));
+  ASSERT_EQ_INT(FXLMS_OK,
+                fxlms_test_set_actuator_secondary_estimate(0, estimate, 4));
+
+  struct fxlms_config cfg = {.taps = 1,
+                             .reference_count = 2,
+                             .actuator_count = 1,
+                             .mu_q15 = 0,
+                             .adapt_shift = 0,
+                             .output_limit = 10000};
+  uint8_t *mem = NULL;
+  struct fxlms_state *state = make_state(&cfg, &mem);
+  ASSERT_EQ_INT(FXLMS_OK,
+                fxlms_test_set_multi_controller_tap(state, 0, 0, 0, 32767));
+  ASSERT_EQ_INT(FXLMS_OK,
+                fxlms_test_set_multi_controller_tap(state, 0, 1, 0, -24576));
+
+  const int16_t refs[2] = {30000, 30000};
+  struct fxlms_multi_sample_result res;
+  ASSERT_EQ_INT(FXLMS_OK, fxlms_process_multi_sample(state, refs, 0, &res));
+
+  int expected_y = q15_mul(32767, refs[0]) + q15_mul(-24576, refs[1]);
+  ASSERT_TRUE(expected_y > -10000 && expected_y < 10000);
+  ASSERT_EQ_INT(expected_y, res.controller_y[0]);
+  ASSERT_EQ_INT(q15_mul(32767, (int16_t)expected_y), res.secondary_output[0]);
+  ASSERT_EQ_INT(-res.secondary_output[0], res.error);
+  free(mem);
+}
+
 static void test_multi_block_uses_channel_major_buffers(void) {
   const int16_t secondary[4] = {32767, 0, 0, 0};
   const int16_t estimate[4] = {32767, 0, 0, 0};
@@ -318,6 +351,7 @@ int main(void) {
   test_reset_clears_buffers_and_weights();
   test_block_api_outputs_all_streams();
   test_multi_channel_sums_actuator_outputs();
+  test_multi_reference_controller_saturates_after_sum();
   test_multi_block_uses_channel_major_buffers();
   puts("fxlms_filter_tests: ok");
   return 0;

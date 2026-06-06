@@ -21,18 +21,30 @@ enum {
 static FXLMS_PATH_CONST int16_t
     k_secondary_path[CONFIG_FXLMS_MAX_ACTUATORS][FXLMS_SECONDARY_TAPS] = {
         {20316, -5898, 3932, 1638},
+#if CONFIG_FXLMS_MAX_ACTUATORS >= 2
         {19005, -5243, 3604, 1966},
+#endif
+#if CONFIG_FXLMS_MAX_ACTUATORS >= 3
         {20971, -6553, 3277, 1311},
+#endif
+#if CONFIG_FXLMS_MAX_ACTUATORS >= 4
         {18350, -4588, 4259, 983},
+#endif
 };
 
 static FXLMS_PATH_CONST int16_t
     k_secondary_path_estimate[CONFIG_FXLMS_MAX_ACTUATORS]
                              [FXLMS_SECONDARY_ESTIMATE_TAPS] = {
         {18022, -4915, 2949, 1311},
+#if CONFIG_FXLMS_MAX_ACTUATORS >= 2
         {17039, -4424, 2621, 1475},
+#endif
+#if CONFIG_FXLMS_MAX_ACTUATORS >= 3
         {18678, -5407, 2458, 1147},
+#endif
+#if CONFIG_FXLMS_MAX_ACTUATORS >= 4
         {16384, -3932, 3277, 819},
+#endif
 };
 
 struct fxlms_state {
@@ -82,9 +94,21 @@ static bool valid_config(const struct fxlms_config *cfg) {
          cfg->output_limit > 0;
 }
 
+static int32_t fir_q15_raw(const int16_t *coeffs, const int16_t *history,
+                           uint16_t newest_pos, uint16_t history_len,
+                           uint16_t taps);
+
 static int16_t fir_q15(const int16_t *coeffs, const int16_t *history,
                        uint16_t newest_pos, uint16_t history_len,
                        uint16_t taps, int16_t limit) {
+  int32_t raw =
+      fir_q15_raw(coeffs, history, newest_pos, history_len, taps);
+  return sat_i16(raw, limit);
+}
+
+static int32_t fir_q15_raw(const int16_t *coeffs, const int16_t *history,
+                           uint16_t newest_pos, uint16_t history_len,
+                           uint16_t taps) {
   int64_t acc = 0;
   uint16_t hist_idx = newest_pos;
   for (uint16_t i = 0; i < taps; ++i) {
@@ -92,7 +116,7 @@ static int16_t fir_q15(const int16_t *coeffs, const int16_t *history,
     hist_idx = (hist_idx == 0U) ? (uint16_t)(history_len - 1U)
                                 : (uint16_t)(hist_idx - 1U);
   }
-  return sat_i16((int32_t)(acc >> 15), limit);
+  return (int32_t)(acc >> 15);
 }
 
 static int32_t shift_trunc_i64(int64_t value, uint8_t shift) {
@@ -254,9 +278,9 @@ int fxlms_process_multi_sample(struct fxlms_state *state,
     int32_t controller_acc = 0;
     for (uint8_t r = 0; r < reference_count; ++r) {
       controller_acc +=
-          fir_q15(&state->weights_g[controller_index(state, a, r, 0)],
-                  &state->reference_history[reference_index(state, r, 0)],
-                  state->pos, taps, taps, state->cfg.output_limit);
+          fir_q15_raw(&state->weights_g[controller_index(state, a, r, 0)],
+                      &state->reference_history[reference_index(state, r, 0)],
+                      state->pos, taps, taps);
     }
     int16_t controller_y = sat_i16(controller_acc, state->cfg.output_limit);
     state->secondary_history[(size_t)a * FXLMS_SECONDARY_TAPS +
