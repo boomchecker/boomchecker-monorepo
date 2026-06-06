@@ -72,3 +72,15 @@ tasks:
         rsync -a docs/_build/firmware/html/ docs/_build/html/firmware/
         rsync -a docs/_build/monorepo/html/ docs/_build/html/monorepo/
         rsync -a docs/_build/scripts/html/ docs/_build/html/scripts/
+
+  latex:setup:
+    desc: Install LaTeX packages needed to build reports
+    cmds:
+      - |
+        set -euo pipefail
+        if ! command -v apt-get >/dev/null 2>&1; then
+          echo "apt-get not found; install TeX Live with pdflatex, bibtex, babel-czech, and recommended LaTeX packages."
+          exit 1
+        fi
+        sudo apt-get update
+        sudo apt-get install -y texlive-latex-base texlive-latex-recommended texlive-latex-extra texlive-lang-czechslovak texlive-fonts-recommended
