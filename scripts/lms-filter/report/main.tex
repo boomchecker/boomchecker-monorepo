@@ -32,7 +32,7 @@ email TBD}}
 \maketitle
 
 \begin{abstract}
-Palubní mikrofon dronu je při záznamu akustických impulzních událostí výrazně zatížen vlastním hlukem pohonné soustavy. Tento pracovní report popisuje návrh a softwarovou implementaci aktivního potlačení hluku založenou na algoritmu filtered-x least mean square (FxLMS). Referenční signály jsou odvozeny od syntetických motorových stop, zatímco adaptivní filtr se učí minimalizovat reziduální hluk v chybovém mikrofonním signálu. Report shrnuje princip FxLMS, mapování algoritmu na fixed-point Q15 implementaci v jazyce C a experimentální metodiku pro simulované SISO, sum-first a MISO režimy. Výsledková část je v této verzi připravena jako strukturovaný placeholder pro následné doplnění grafů a metrik.
+Palubní mikrofon dronu měří kromě okolních událostí i vlastní hluk motorů a vrtulí. U krátkých impulzních signálů, například výstřelu, může tato složka zhoršit poměr signálu k rušení natolik, že jednoduchý detektor pracuje s nespolehlivým vstupem. Tento text navrhuje a popisuje simulovanou implementaci aktivního potlačení hluku založenou na algoritmu filtered-x least mean square (FxLMS). Reference pocházejí ze syntetických motorových stop a adaptivní filtr minimalizuje reziduální hluk v chybovém mikrofonním signálu. Text uvádí rovnice FxLMS, převod algoritmu do Q15 fixed-point C kódu a metodiku pro SISO, sum-first a MISO režimy. Kvantitativní výsledky budou doplněny po finálním vygenerování grafů a metrik.
 \end{abstract}
 
 \begin{IEEEkeywords}
@@ -40,57 +40,57 @@ active noise control, FxLMS, adaptive filtering, drone acoustics, impulsní akus
 \end{IEEEkeywords}
 
 \section{Úvod}
-Dron vytváří výraznou periodickou a širokopásmovou akustickou stopu způsobenou motory, vrtulemi a prouděním vzduchu. Pokud je mikrofon umístěn přímo na dronu, vlastní hluk platformy může zakrývat vzdálené impulzní události, například výstřel nebo jiný krátký akustický signál. Cílem této práce je připravit signálové zpracování, které potlačí předvídatelnou složku hluku dronu a zlepší podmínky pro následnou detekci událostí.
+Dron vytváří periodickou i širokopásmovou akustickou složku. Motorové otáčky, vrtule a proudění vzduchu se do palubního mikrofonu dostávají přímo z konstrukce i přes vzduch. Mikrofon proto neměří jen okolí, ale také vlastní platformu. U impulzních událostí je to problém: událost může být krátká, vzdálená a spektrálně překrytá hlukem pohonu.
 
-Aktivní potlačení hluku (ANC) využívá sekundární zdroj zvuku k vytvoření protifázové složky na zvoleném místě prostoru \cite{elliott1993active,kuo1996anc}. V klasickém adaptivním nastavení se používá referenční signál korelovaný s rušením a adaptivní filtr odhaduje vhodný řídicí signál. Pro ANC je však nutné zohlednit sekundární akustickou cestu mezi reproduktorem a mikrofonem; proto se místo základního LMS používá filtered-x LMS (FxLMS) \cite{burgess1981duct,widrow1985adaptive}.
+Aktivní potlačení hluku (ANC) používá řízený sekundární zdroj zvuku a snaží se v chybovém místě snížit akustický tlak rušení \cite{elliott1993active,kuo1996anc}. Feedforward varianta potřebuje referenci korelovanou s rušením. U dronu může taková reference vzniknout z motorových signálů, odhadovaných otáček nebo ze senzorů umístěných blízko pohonu. Základní LMS však pro ANC nestačí, protože řídicí signál se do chybového mikrofonu dostane přes sekundární akustickou cestu. Algoritmus filtered-x LMS (FxLMS) proto v adaptační větvi používá referenci filtrovanou odhadem této cesty \cite{burgess1981duct,widrow1985adaptive}. Moderní práce řeší i varianty se sníženou výpočetní náročností a rychlejší konvergencí \cite{ramos2021modified}.
 
-Tento report se zaměřuje na první, simulačně ověřitelný krok: potlačení vlastního hluku dronu v palubním mikrofonu pomocí referencí z motorů. Dlouhodobým cílem je také směrové maskování zvukové stopy dronu pomocí reproduktorů umístěných na platformě. Současná implementace však ještě neobsahuje geometrický akustický model, pole reproduktorů ani měření reálného směrového vyzařování, a proto je tento směr popsán pouze jako budoucí práce.
+První krok v této práci je užší než plné prostorové ANC. Simulujeme potlačení vlastního hluku dronu v jednom mikrofonním kanálu a hodnotíme, zda výstup lépe zachovává užitečný impulzní signál. Směrové maskování zvukové stopy pomocí reproduktorů na dronu zůstává navazující úloha. Současný model nemá souřadnice zdrojů, směrové vyzařování ani měření reálných akustických cest, takže z něj nelze odvozovat účinnost ve zvoleném směru prostoru.
 
 \section{Princip FxLMS}
-Základní ANC model předpokládá referenci $x[n]$, primární cestu $P(z)$ mezi zdrojem rušení a mikrofonem, adaptivní řídicí filtr $G(z)$ a sekundární cestu $C(z)$ mezi aktuátorem a mikrofonem. Primární signál v mikrofonu je
+Základní feedforward ANC model pracuje s referencí $x[n]$, primární cestou $P(z)$ mezi zdrojem rušení a mikrofonem, adaptivním řídicím filtrem $G(z)$ a sekundární cestou $C(z)$ mezi aktuátorem a mikrofonem. Primární signál v mikrofonu zapíšeme jako
 \begin{equation}
   d[n] = P(z)x[n] + s[n],
 \end{equation}
-kde $s[n]$ reprezentuje užitečný signál, který nemá být potlačen. Adaptivní řídicí filtr generuje
+kde $s[n]$ označuje užitečný signál. Řídicí filtr generuje
 \begin{equation}
   y[n] = \sum_{i=0}^{L-1} g_i[n]x[n-i],
 \end{equation}
-a tento signál po průchodu sekundární cestou vytvoří odrušovací složku $c_y[n] = C(z)y[n]$. Chybový signál je potom
+Po průchodu sekundární cestou vznikne odrušovací složka $c_y[n] = C(z)y[n]$. Chybový signál je
 \begin{equation}
   e[n] = d[n] - c_y[n].
 \end{equation}
 
-Protože změna vah $g_i[n]$ se do chybového mikrofonu projeví až přes sekundární cestu, FxLMS nepoužívá v adaptační větvi přímo $x[n]$, ale filtrovanou referenci
+Změna vah $g_i[n]$ se v mikrofonu projeví až přes sekundární cestu. FxLMS proto v adaptační větvi nepoužívá přímo $x[n]$, ale filtrovanou referenci
 \begin{equation}
   x_f[n] = \hat{C}(z)x[n],
 \end{equation}
-kde $\hat{C}(z)$ je odhad sekundární cesty. Aktualizace vah má tvar
+kde $\hat{C}(z)$ je odhad sekundární cesty. Aktualizace vah je
 \begin{equation}
   g_i[n+1] = g_i[n] + \mu e[n]x_f[n-i],
   \label{eq:fxlms_update}
 \end{equation}
-kde $\mu$ řídí rychlost učení a stabilitu adaptace. V implementaci je tato rovnice převedena do Q15 fixed-point aritmetiky a doplněna saturací výstupu i vah.
+kde $\mu$ nastavuje rychlost učení. V implementaci se tato rovnice počítá ve fixed-point aritmetice Q15 se saturací výstupu i vah.
 
 \section{Implementace}
-Implementace je umístěna v modulu \code{scripts/lms-filter}. Python vrstva generuje syntetickou akustickou scénu, připravuje WAV signály, spouští sdílenou C knihovnu a ukládá metriky a grafy. C jádro implementuje fixed-point FxLMS filtr bez interní alokace haldy; velikost stavu je určena konfigurací a alokaci v hostitelském wrapperu řeší pouze demonstrační API.
+Kód je v modulu \code{scripts/lms-filter}. Python generuje syntetickou scénu, připravuje WAV soubory, volá sdílenou C knihovnu a ukládá grafy s metrikami. C jádro obsahuje fixed-point FxLMS filtr. Samotné jádro nealokuje haldu; volající předá stavový buffer o velikosti vypočtené z konfigurace. Hostitelský wrapper používá alokaci jen pro demonstrační API.
 
 \subsection{SISO režim}
-SISO varianta používá jednu referenci a jeden aktuátor. Slouží jako základní ověření algoritmu a jako nejjednodušší interpretovatelný baseline. Konfigurace odpovídá jednomu adaptivnímu FIR filtru $G(z)$, jedné historii reference, jedné sekundární cestě $C(z)$ a jednomu odhadu $\hat{C}(z)$.
+SISO varianta používá jednu referenci a jeden aktuátor. Je to základní baseline s jedním adaptivním FIR filtrem $G(z)$, jednou historií reference, jednou sekundární cestou $C(z)$ a jedním odhadem $\hat{C}(z)$.
 
 \subsection{Sum-first a MISO režimy}
-Pro více motorových referencí implementace rozlišuje dva režimy. V režimu \emph{sum-first} se syntetické reference jednotlivých motorů nejdříve sečtou a C jádro dostane pouze jeden referenční kanál. Při čtyřech aktuátorech tedy vzniknou čtyři adaptivní filtry.
+Pro více motorových referencí používáme dva režimy. V režimu \emph{sum-first} Python nejdříve sečte syntetické reference jednotlivých motorů. C jádro potom dostane jeden referenční kanál. Se čtyřmi aktuátory tedy běží čtyři adaptivní filtry.
 
-V režimu \emph{MISO} vstupuje do C jádra plná matice referencí. Pro $R$ referencí a $A$ aktuátorů se alokuje $A \times R$ adaptivních FIR filtrů. Při konfiguraci \code{--reference-count 4 --actuator-count 4} jde o 16 samostatných sad vah. Výstup každého aktuátoru je součtem příspěvků všech referencí pro daný aktuátor:
+V režimu \emph{MISO} vstupuje do C jádra plná matice referencí. Pro $R$ referencí a $A$ aktuátorů se alokuje $A \times R$ adaptivních FIR filtrů. Konfigurace \code{--reference-count 4 --actuator-count 4} tedy vytvoří 16 sad vah. Výstup aktuátoru $a$ je součet příspěvků všech referencí:
 \begin{equation}
   y_a[n] = \sum_{r=0}^{R-1}\sum_{i=0}^{L-1} g_{a,r,i}[n]x_r[n-i].
 \end{equation}
-Sekundární výstupy aktuátorů se následně sčítají do jedné odrušovací složky v chybovém mikrofonu. Všechny adaptivní cesty se učí ze stejného chybového signálu $e[n]$, ale každá používá odpovídající filtrovanou referenci přes odhad sekundární cesty daného aktuátoru.
+Sekundární výstupy aktuátorů se sčítají do jedné odrušovací složky v chybovém mikrofonu. Všechny adaptivní cesty se učí ze stejného chybového signálu $e[n]$. Každá cesta ale používá filtrovanou referenci přes odhad sekundární cesty daného aktuátoru.
 
 \subsection{Fixed-point aritmetika}
-Veřejné vzorky a koeficienty jsou reprezentovány jako \code{int16\_t} ve stylu Q15. Výpočet FIR používá akumulaci v širším integer typu a následný posun o 15 bitů. Aktualizace vah podle \eqref{eq:fxlms_update} kombinuje learning rate \code{mu\_q15}, chybový vzorek a filtrovanou referenci; výsledek je škálován pravým posunem a saturován do rozsahu \code{int16\_t}. Při multi-channel konfiguraci hostitelský wrapper snižuje learning rate na čtvrtinu, aby snížil riziko nestability při větším počtu adaptivních cest.
+Veřejné vzorky a koeficienty mají typ \code{int16\_t} ve stylu Q15. FIR výpočet akumuluje v širším integer typu a výsledek posouvá o 15 bitů. Aktualizace vah podle \eqref{eq:fxlms_update} násobí \code{mu\_q15}, chybový vzorek a filtrovanou referenci; výsledek se škáluje pravým posunem a saturuje do rozsahu \code{int16\_t}. Hostitelský wrapper při multi-channel konfiguraci dělí learning rate čtyřmi, aby adaptace nezačínala s příliš velkým krokem pro větší počet cest.
 
 \section{Experimentální metodika}
-Experimenty jsou zatím čistě simulační. Python harness vytváří syntetický hluk dronu z více motorových referencí s odlišnými otáčkami, gainy, zpožděními a FIR primárními cestami. Volitelný užitečný WAV signál je normalizován, zkrácen nebo doplněn na délku simulace a přičten k primárnímu mikrofonnímu signálu. Výstupem FxLMS je chybový signál, který by měl obsahovat užitečný signál a co nejmenší reziduální složku dronu.
+Experimenty v této verzi používají simulaci. Python vytváří hluk dronu z více motorových referencí s různými otáčkami, gainy, zpožděními a FIR primárními cestami. Užitečný WAV signál se normalizuje, zkrátí nebo doplní na délku simulace a přičte k primárnímu mikrofonnímu signálu. Výstup FxLMS je chybový signál. V ideálním případě v něm zůstane užitečná událost a klesne složka korelovaná s motory.
 
 Pro první sadu výsledků je připraven scénář s impulzním audio souborem \code{audio/gunshot-vs-firecracker.wav}. Referenční běh pro MISO konfiguraci je:
 \begin{quote}
@@ -103,14 +103,14 @@ task run --\\
 --actuator-count 4
 \end{quote}
 
-Hlavní metriky budou převzaty z \code{metrics.json}. Důležité jsou zejména MSE primárního signálu, MSE chybového signálu, MSE reziduálního dronového hluku a útlum dronu v decibelech:
+Hlavní metriky budou převzaty z \code{metrics.json}: MSE primárního signálu, MSE chybového signálu, MSE reziduálního dronového hluku a útlum dronu v decibelech:
 \begin{equation}
   A_{\mathrm{drone}} = 10\log_{10}\frac{\mathrm{MSE}(d_{\mathrm{drone}})}{\mathrm{MSE}(e-s)}.
 \end{equation}
-Tato metrika netvrdí hotovou detekci výstřelu. Slouží jako proxy ukazatel, zda filtr zlepšuje podmínky pro následný detektor impulzních událostí.
+Tato metrika není metrika detekce výstřelu. Měří pouze to, zda filtr snížil složku vlastního hluku dronu v okně, ve kterém chceme později spouštět detektor impulzních událostí.
 
 \section{Připravená výsledková část}
-Tabulka~\ref{tab:metrics_placeholder} ukazuje plánovaný tvar výsledkové tabulky. Hodnoty budou doplněny po finálním vygenerování experimentálních artefaktů.
+Tabulka~\ref{tab:metrics_placeholder} má plánovaný tvar výsledkové tabulky. Hodnoty budou doplněny po vygenerování finálních experimentálních artefaktů.
 
 \begin{table}[htbp]
 \caption{Plánované metriky pro porovnání konfigurací}
@@ -129,27 +129,27 @@ MISO & 4 & 4 & TBD \\
 
 \begin{figure}[htbp]
 \centering
-\placeholder{Placeholder pro časový průběh: wanted, noisy input, ANC output a residual v okně 5..6 s.}
+\placeholder{Místo pro časový průběh: wanted, noisy input, ANC output a residual v okně 5..6 s.}
 \caption{Plánovaný časový graf impulzní události před a po FxLMS filtraci.}
 \label{fig:time_placeholder}
 \end{figure}
 
 \begin{figure}[htbp]
 \centering
-\placeholder{Placeholder pro PSD graf: noisy input, wanted, ANC output a frekvenční útlum dronu.}
+\placeholder{Místo pro PSD graf: noisy input, wanted, ANC output a frekvenční útlum dronu.}
 \caption{Plánované spektrální porovnání před a po FxLMS filtraci.}
 \label{fig:spectrum_placeholder}
 \end{figure}
 
 \section{Diskuze a budoucí práce}
-Současný model reprezentuje akustické cesty pomocí pevných FIR filtrů a ručně zvolených zpoždění. Neobsahuje explicitní souřadnice motorů, mikrofonů a reproduktorů, výpočet zpoždění z rychlosti zvuku, směrové charakteristiky ani odrazy. Proto nelze z aktuálních výsledků odvozovat prostorový beampattern ani účinnost směrového maskování zvukové stopy dronu.
+Současný model reprezentuje akustické cesty pevnými FIR filtry a ručně zvolenými zpožděními. Neobsahuje souřadnice motorů, mikrofonů a reproduktorů, výpočet zpoždění z rychlosti zvuku, směrové charakteristiky ani odrazy. Z aktuálních výsledků proto nepůjde odvozovat prostorový beampattern ani účinnost směrového maskování zvukové stopy dronu.
 
-Pro rozšíření směrem ke směrovému maskování bude potřeba doplnit geometrický model dronu a okolního prostoru. Každý motor, reproduktor a mikrofon by měl mít definovanou pozici; primární a sekundární cesty by měly být generovány z vzdálenosti, útlumu, propagation delay a případně jednoduchého modelu odrazů. Teprve nad tímto modelem půjde formulovat úlohu, ve které reproduktory potlačují nebo maskují akustickou stopu ve zvoleném směru a zároveň nezesilují nežádoucí složky v jiných směrech.
+Směrové maskování vyžaduje geometrický model dronu a okolního prostoru. Každý motor, reproduktor a mikrofon musí mít definovanou pozici. Primární a sekundární cesty pak mohou vznikat ze vzdálenosti, útlumu, propagation delay a jednoduchého modelu odrazů. Nad takovým modelem půjde formulovat úlohu, ve které reproduktory snižují nebo maskují akustickou stopu ve zvoleném směru a současně kontrolují energii vyzařovanou jinam.
 
-Dalším krokem pro detekci impulzních událostí je přidat downstream detektor a vyhodnotit citlivost před a po FxLMS filtraci. V první fázi stačí jednoduchý detektor založený na krátkodobé energii nebo spektrální změně, později lze přejít na robustnější klasifikátor.
+Pro detekci impulzních událostí je další krok jednodušší: přidat detektor a změřit jeho chování před a po FxLMS filtraci. První verze může používat krátkodobou energii nebo spektrální změnu. Až poté má smysl přejít na klasifikátor.
 
 \section{Závěr}
-Report popsal pracovní implementaci FxLMS filtru pro potlačení vlastního hluku dronu v simulovaném palubním mikrofonu. Současný kód podporuje SISO, sum-first a MISO režimy a v multi-channel konfiguraci vytváří plnou matici adaptivních filtrů mezi motorovými referencemi a aktuátory. Připravená metodika umožňuje doplnit reprodukovatelné grafy a metriky pro scénáře s impulzním užitečným signálem. Prostorové směrové maskování zůstává navazující úlohou, která vyžaduje explicitní geometrický a akustický model.
+Text shrnul implementaci FxLMS filtru pro potlačení vlastního hluku dronu v simulovaném palubním mikrofonu. Kód podporuje SISO, sum-first a MISO režimy. Multi-channel konfigurace vytváří matici adaptivních filtrů mezi motorovými referencemi a aktuátory. Připravená metodika počítá s doplněním grafů a metrik pro scénáře s impulzním užitečným signálem. Směrové maskování zůstává oddělená navazující úloha, protože vyžaduje geometrický a akustický model prostoru.
 
 \bibliographystyle{ieeetr}
 \bibliography{references}
