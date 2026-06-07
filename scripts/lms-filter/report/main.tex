@@ -34,7 +34,7 @@ maxamart@fel.cvut.cz}}
 \maketitle
 
 \begin{abstract}
-Palubní mikrofon zachycuje spolu s~okolními zvuky také hluk motorů a~vrtulí. Tato složka může u~krátkých impulzních událostí, například výstřelu, výrazně snížit poměr signálu k~rušení. Práce popisuje simulaci aktivního potlačení hluku algoritmem filtered-x least mean squares (FxLMS). Reference vznikají z~řídicích signálů motorů, takže systém nepotřebuje referenční mikrofony. Adaptivní filtr používá normalizovaný krok, jehož jmenovatel tvoří součet výkonů filtrovaných referencí ve všech kanálech. Jedna hodnota rychlosti učení proto vyhovuje konfiguracím SISO, sum-first i~MISO bez ručního přepočtu podle počtu kanálů. Algoritmus je implementován v~jazyce C s~aritmetikou Q15. V~simulovaném scénáři potlačil vlastní hluk dronu o~21{,}3 až 24{,}5\,dB; rozdíl mezi SISO a~maticovou konfigurací 4$\times$4 činil přibližně 3\,dB.
+Palubní mikrofon zachycuje spolu s~okolními zvuky také hluk motorů a~vrtulí. Tato složka může u~krátkých impulzních událostí, například výstřelu, výrazně snížit poměr signálu k~rušení. Práce popisuje simulaci aktivního potlačení hluku algoritmem filtered-x least mean squares (FxLMS). Reference vznikají z~řídicích signálů motorů, takže systém nepotřebuje referenční mikrofony. Adaptivní filtr používá normalizovaný krok, jehož jmenovatel tvoří součet výkonů filtrovaných referencí ve všech kanálech. Jedna hodnota rychlosti učení proto vyhovuje konfiguracím SISO, sum-first i~MISO bez ručního přepočtu podle počtu kanálů. Algoritmus je implementován v~jazyce C s~aritmetikou Q15. Ve čtyřmotorovém scénáři dosáhla konfigurace MISO 4$\times$4 útlumu 21{,}3\,dB, zatímco sum-first se stejnými čtyřmi motorovými referencemi dosáhl 6{,}7\,dB. SISO v~samostatném jednomotorovém scénáři dosáhlo 24{,}5\,dB, tuto hodnotu však nelze přímo porovnávat s~vícemotorovými konfiguracemi.
 \end{abstract}
 
 \begin{IEEEkeywords}
@@ -56,12 +56,12 @@ Výkonovou spektrální hustotu (PSD) jsme pro každou nahrávku vypočítali We
 
 Dronové nahrávky mají pod 1\,kHz průměrnou PSD o~10 až 15\,dB vyšší než nahrávky bez dronu. Úzká spektrální maxima odpovídají BPF a~jejím harmonickým. U~malých UAV se dvěma až čtyřmi listy a~otáčkami 3\,000 až 9\,000~min$^{-1}$ leží BPF přibližně mezi 100 a~600\,Hz.
 
-Nad 1\,kHz se průměry obou tříd přibližují. Nahrávky bez dronu jsou v~tomto pásmu rozptýlenější, protože pocházejí z~odlišných prostředí a~obsahují například výstřely, pouliční hluk nebo zvuky přírody. Pracovní pásmo ANC jsme proto omezili na 1\,kHz. Tato hranice zahrnuje hlavní rozdíl mezi třídami a~současně omezuje vliv fázových chyb, které by na vyšších frekvencích mohly rušení zesílit. Podobné systémy se obvykle soustředí na stovky hertzů \cite{kuo1996anc,ramos2024dronenoise}.
+Nad 1\,kHz se průměry obou tříd přibližují. Nahrávky bez dronu jsou v~tomto pásmu rozptýlenější, protože pocházejí z~odlišných prostředí a~obsahují například výstřely, pouliční hluk nebo zvuky přírody. ANC rotačních strojů se však obvykle soustředí na nižší frekvence, kde leží BPF a~její hlavní harmonické \cite{kuo1996anc,ramos2024dronenoise}.
 
 \begin{figure}[htbp]
   \centering
   \includegraphics[width=\columnwidth]{figures/dads_average_spectrum.png}
-  \caption{Střední PSD pro dronové ($n=163\,591$, červeně) a~ne-dronové ($n=14\,868$, modře) nahrávky z~datasetu DADS. Pásma odpovídají 25.–75.~percentilu přes nahrávky. Modrý region označuje ANC pracovní pásmo (0–1\,kHz).}
+  \caption{Střední PSD pro dronové ($n=163\,591$, červeně) a~ne-dronové ($n=14\,868$, modře) nahrávky z~datasetu DADS. Pásma odpovídají 25.–75.~percentilu přes nahrávky.}
   \label{fig:dads_spectrum}
 \end{figure}
 
@@ -178,29 +178,29 @@ Soubor \code{metrics.json} obsahuje střední kvadratické chyby primárního si
 přičemž obě střední kvadratické chyby se počítají ve~vyhodnocovacím okně 5--6\,s (parametr \code{--spectrum-window}), tedy po~odeznění počátečního přechodového děje. Metrika vyjadřuje pouze potlačení vlastního hluku, úspěšnost detekce výstřelu nehodnotí.
 
 \subsection{Výpočet spektra}
-Spektrální vyhodnocení na~obr.~\ref{fig:spectrum_result} probíhá na témže okně 5--6\,s. Výkonové spektrální hustoty počítáme Welchovou metodou (Hannovo okno 4096 vzorků, 50\,\% překryv), čímž průměrujeme přes několik segmentů. Křivky jsou pro čitelnost vyhlazeny 1/12oktávovým klouzavým průměrem a~vyneseny na~logaritmické frekvenční ose. Útlum v~závislosti na~frekvenci $A(f)=\mathrm{PSD}_{d_{\mathrm{drone}}}(f)-\mathrm{PSD}_{e-s}(f)$ vykreslujeme přes celé pásmo: zeleně frekvence, kde regulátor energii potlačuje, červeně frekvence, kde ji naopak přidává. Na~frekvencích bez dronové energie (pod základní BPF a~nad horní hranicí pracovního pásma) regulátor vkládá slabý anti-hluk; ověřili jsme, že reziduum tam odpovídá výstupu sekundárních cest, jde tedy o~reálně vstříknutou energii, nikoli o~numerický artefakt. Tato složka však leží o~40\,dB i~více pod tonálními složkami dronu (viz absolutní úrovně v~horním panelu), takže do~celkové energie přispívá zanedbatelně; energeticky vážený průměr přes celé pásmo je díky Parsevalově rovnosti shodný s~$A_{\mathrm{drone}}$ podle~\eqref{eq:drone_atten} a~uvádíme jej v~tabulce~\ref{tab:metrics}.
+Spektrální vyhodnocení na~obr.~\ref{fig:spectrum_result} probíhá na témže okně 5--6\,s. Výkonové spektrální hustoty počítáme Welchovou metodou (Hannovo okno 4096 vzorků, 50\,\% překryv), čímž průměrujeme přes několik segmentů. Křivky jsou pro čitelnost vyhlazeny 1/12oktávovým klouzavým průměrem a~vyneseny na~logaritmické frekvenční ose. Útlum v~závislosti na~frekvenci $A(f)=\mathrm{PSD}_{d_{\mathrm{drone}}}(f)-\mathrm{PSD}_{e-s}(f)$ vykreslujeme přes celé pásmo: zeleně frekvence, kde regulátor energii potlačuje, červeně frekvence, kde ji naopak přidává. Na~frekvencích s~malou energií dronového hluku regulátor vkládá slabý anti-hluk; ověřili jsme, že reziduum odpovídá výstupu sekundárních cest, jde tedy o~reálně vstříknutou energii, nikoli o~numerický artefakt. Tato složka však leží o~40\,dB i~více pod tonálními složkami dronu (viz absolutní úrovně v~horním panelu), takže do~celkové energie přispívá zanedbatelně; energeticky vážený průměr přes celé pásmo je díky Parsevalově rovnosti shodný s~$A_{\mathrm{drone}}$ podle~\eqref{eq:drone_atten} a~uvádíme jej v~tabulce~\ref{tab:metrics}.
 
 \section{Výsledky}
-Tabulka~\ref{tab:metrics} porovnává tři konfigurace. Útlum je energeticky vážený průměr v~okně 5--6\,s podle~\eqref{eq:drone_atten}. Ve všech případech jsme použili impulzní WAV s~\code{--wanted-gain 0.1}, $\mu=3000$ v~Q15, délku filtru $L=64$ a~vzorkovací kmitočet $f_s=16$\,kHz. Útlum počítáme z~reziduálního hluku $e-s$ po odečtení užitečného signálu.
+Tabulka~\ref{tab:metrics} uvádí výsledky tří konfigurací. Útlum je energeticky vážený průměr v~okně 5--6\,s podle~\eqref{eq:drone_atten}. Ve všech případech jsme použili impulzní WAV s~\code{--wanted-gain 0.1}, $\mu=3000$ v~Q15, délku filtru $L=64$ a~vzorkovací kmitočet $f_s=16$\,kHz. Útlum počítáme z~reziduálního hluku $e-s$ po odečtení užitečného signálu. Sum-first i~MISO používají tutéž čtyřmotorovou scénu. V~sum-first se čtyři motorové reference před vstupem do C jádra sečtou, takže jádro zpracovává jediný referenční kanál ($X=1$). SISO používá odlišnou jednomotorovou scénu, a~slouží proto jako samostatný referenční experiment, nikoli jako přímo srovnatelná varianta čtyřmotorového případu.
 
 \begin{table}[htbp]
 \caption{Útlum dronu pro jednotlivé konfigurace (okno 5--6\,s)}
 \label{tab:metrics}
 \centering
-\begin{tabular}{lccc}
+\begin{tabular}{lcccc}
 \toprule
-Režim & Reference & Aktuátory & Útlum dronu [dB] \\
+Režim & Motory & $X$ & Aktuátory & Útlum [dB] \\
 \midrule
-SISO & 1 & 1 & 24{,}5 \\
-sum-first & 1 & 4 & 24{,}4 \\
-MISO & 4 & 4 & 21{,}3 \\
+SISO & 1 & 1 & 1 & 24{,}5 \\
+sum-first & 4 & 1 & 4 & 6{,}7 \\
+MISO & 4 & 4 & 4 & 21{,}3 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-Naměřený útlum se pohybuje od 21{,}3 do 24{,}5\,dB. MISO se čtyřmi referencemi a~čtyřmi aktuátory používá 16 adaptivních filtrů, přesto za SISO zaostává jen přibližně o~3\,dB. Normalizace podle \eqref{eq:fxlms_power_multi} zmenšuje krok podle celkového výkonu kanálů. Dřívější verze místo toho dělila $\mu$ pevnou konstantou a~u~konfigurace 4$\times$4 dosahovala útlumu pouze v~jednotkách decibelů.
+V~přímo srovnatelném čtyřmotorovém scénáři dosáhlo MISO útlumu 21{,}3\,dB, tedy o~14{,}6\,dB více než sum-first s~útlumem 6{,}7\,dB. Samostatný jednomotorový běh SISO dosáhl 24{,}5\,dB. Vyšší hodnota SISO ale neprokazuje převahu nad MISO, protože vstupní hluk vzniká v~jiné scéně s~jediným motorem. Výsledek čtyřmotorového porovnání ukazuje, že zachování samostatných referencí je v~použitém modelu podstatné: MISO může pro každý aktuátor kombinovat příspěvky jednotlivých motorů, zatímco jejich předčasné sečtení v~režimu sum-first tuto informaci ztrácí. MISO používá 16 adaptivních filtrů a~normalizace podle~\eqref{eq:fxlms_power_multi} upravuje efektivní krok podle celkového výkonu všech kanálů.
 
-Časový průběh MISO 4$\times$4 na obr.~\ref{fig:time_result} zachycuje okno 5--6\,s. Impulzní událost přibližně v~čase 5{,}4\,s zůstává v~chybovém signálu, zatímco periodická složka motorů klesne. Spektra na obr.~\ref{fig:spectrum_result} potvrzují, že filtr tlumí především tonální složky BPF v~pásmu do 1\,kHz (zeleně), zatímco na~frekvencích bez dronové energie naopak vkládá slabý anti-hluk (červeně) o~desítky dB pod tóny dronu. Energeticky vážený průměr přes celé pásmo proto zůstává určen tonálními složkami a~odpovídá hodnotě z~tabulky. Nad pracovním pásmem účinek postupně slábne.
+Časový průběh MISO 4$\times$4 na obr.~\ref{fig:time_result} zachycuje okno 5--6\,s. Impulzní událost přibližně v~čase 5{,}4\,s zůstává v~chybovém signálu, zatímco periodická složka motorů klesne. Spektra na obr.~\ref{fig:spectrum_result} potvrzují, že filtr tlumí především tonální složky BPF do 1\,kHz (zeleně), kde má simulovaný dronový hluk nejvíce energie. Na~frekvencích s~malou energií dronového hluku naopak vkládá slabý anti-hluk (červeně) o~desítky decibelů pod úrovní hlavních tónů. Energeticky vážený průměr přes celé pásmo proto určují především tonální složky a~odpovídá hodnotě z~tabulky.
 
 \begin{figure}[tb]
 \centering
@@ -260,7 +260,7 @@ Směrové ANC bude vyžadovat polohu každého motoru, reproduktoru a~mikrofonu.
 Vliv filtru na detekci impulzů je třeba ověřit samostatně. Jednoduchý detektor založený na~krátkodobé energii nebo spektrální změně umožní porovnat počet správných a~chybných detekcí před filtrací a~po ní. Klasifikátor má smysl přidat až po tomto měření.
 
 \section{Závěr}
-Implementovaný FxLMS filtr potlačil v~simulaci vlastní hluk dronu o~21{,}3 až 24{,}5\,dB. Normalizovaný krok umožnil použít stejnou rychlost učení v~režimech SISO, sum-first i~MISO. Výsledky platí pro syntetické akustické cesty a~nepředpovídají výkon na skutečném dronu. Ten bude záviset na synchronizaci úhlové reference, koherenci harmonických BPF a~identifikaci sekundárních cest. Prostorové potlačení navíc vyžaduje geometrický model celé sestavy.
+Implementovaný FxLMS filtr dosáhl ve čtyřmotorovém scénáři útlumu 21{,}3\,dB v~režimu MISO 4$\times$4 a~6{,}7\,dB v~režimu sum-first. Zachování čtyř samostatných motorových referencí tedy v~použitém modelu přineslo proti jejich sečtení zlepšení o~14{,}6\,dB. SISO dosáhlo v~samostatném jednomotorovém scénáři 24{,}5\,dB, tato hodnota však není přímo srovnatelná s~vícemotorovými výsledky. Normalizovaný krok umožnil ve všech režimech použít stejnou rychlost učení. Výsledky platí pro syntetické akustické cesty a~nepředpovídají výkon na skutečném dronu. Ten bude záviset na synchronizaci úhlové reference, koherenci harmonických BPF a~identifikaci sekundárních cest. Prostorové potlačení navíc vyžaduje geometrický model celé sestavy.
 
 \bibliographystyle{ieeetr}
 \bibliography{references}
