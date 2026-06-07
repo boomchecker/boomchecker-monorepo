@@ -202,19 +202,19 @@ Naměřený útlum se pohybuje od 21{,}3 do 24{,}5\,dB. MISO se čtyřmi referen
 
 Časový průběh MISO 4$\times$4 na obr.~\ref{fig:time_result} zachycuje okno 5--6\,s. Impulzní událost přibližně v~čase 5{,}4\,s zůstává v~chybovém signálu, zatímco periodická složka motorů klesne. Spektra na obr.~\ref{fig:spectrum_result} potvrzují, že filtr tlumí především tonální složky BPF v~pásmu do 1\,kHz (zeleně), zatímco na~frekvencích bez dronové energie naopak vkládá slabý anti-hluk (červeně) o~desítky dB pod tóny dronu. Energeticky vážený průměr přes celé pásmo proto zůstává určen tonálními složkami a~odpovídá hodnotě z~tabulky. Nad pracovním pásmem účinek postupně slábne.
 
-\begin{figure*}[tb]
+\begin{figure}[tb]
 \centering
-\includegraphics[width=0.92\textwidth]{figures/fxlms_demo_miso.png}
+\includegraphics[width=\columnwidth]{figures/fxlms_demo_miso.png}
 \caption{Časový průběh MISO 4$\times$4 v~okně 5--6\,s. Panely shora zobrazují čtyři motorové reference $x_i[n]$, mikrofonní signál $d[n]$ se součtem odrušovacích složek $\sum_a C_a(z)y_a[n]$, výstupy aktuátorů $y_a[n]$ a~výstup ANC $e[n]$ s~užitečným signálem $s[n]$. Každý panel používá vlastní měřítko svislé osy.}
 \label{fig:time_result}
-\end{figure*}
+\end{figure}
 
-\begin{figure*}[tb]
+\begin{figure}[tb]
 \centering
-\includegraphics[width=0.92\textwidth]{figures/fxlms_spectrum_miso.png}
+\includegraphics[width=\columnwidth]{figures/fxlms_spectrum_miso.png}
 \caption{Spektrální porovnání MISO 4$\times$4 v~okně 5--6\,s (Welchova metoda) s~logaritmickou frekvenční osou a~1/12oktávovým vyhlazením. Horní panel zobrazuje PSD vstupu $d[n]$, výstupu ANC $e[n]$ a~užitečného signálu $s[n]$. Dolní panel udává útlum dronového hluku přes celé pásmo: zeleně frekvence s~potlačením, červeně frekvence, kde regulátor energii přidává (slabý anti-hluk o~desítky dB pod tóny dronu).}
 \label{fig:spectrum_result}
-\end{figure*}
+\end{figure}
 
 \section{Přechod k reálné motorové referenci}
 V~simulaci jsou motorové reference dostupné bez zpoždění a~sdílejí časovou základnu s~audiem. U~reálného pohonu závisí dostupnost, přesnost a~zpoždění na konkrétním ESC. Tabulka~\ref{tab:real_references} uvádí zdroje, které je třeba experimentálně porovnat.
