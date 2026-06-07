@@ -28,6 +28,26 @@ import numpy as np
 from scipy.io.wavfile import read, write
 from scipy.signal import butter, lfilter, resample_poly, welch
 
+plt.rcParams.update(
+    {
+        "savefig.dpi": 200,
+        "font.size": 11,
+        "axes.titlesize": 11,
+        "axes.titleweight": "bold",
+        "axes.labelsize": 10,
+        "axes.grid": True,
+        "grid.alpha": 0.25,
+        "grid.linewidth": 0.6,
+        "axes.spines.top": False,
+        "axes.spines.right": False,
+        "legend.fontsize": 8,
+        "legend.framealpha": 0.85,
+        "legend.handlelength": 1.4,
+        "legend.columnspacing": 1.0,
+        "lines.linewidth": 0.9,
+    }
+)
+
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 DEFAULT_LIB_PATH = ROOT_DIR / "build" / "liblms_filter.so"
@@ -348,6 +368,30 @@ def plot_results(
     plt.close(fig)
 
 
+def _autoscale_symmetric(ax: plt.Axes, *arrays: np.ndarray, margin: float = 1.2,
+                         floor: float = 1e-3) -> None:
+    """Set a tight symmetric y-limit so small signals stay visible."""
+    peak = 0.0
+    for arr in arrays:
+        arr = np.asarray(arr)
+        if arr.size:
+            peak = max(peak, float(np.max(np.abs(arr))))
+    peak = max(peak * margin, floor)
+    ax.set_ylim(-peak, peak)
+
+
+def _window_indices(
+    sample_count: int, fs: int, plot_window: tuple[float, float]
+) -> tuple[int, int]:
+    start_s, end_s = plot_window
+    start_idx = min(sample_count, int(start_s * fs))
+    end_idx = min(sample_count, int(end_s * fs))
+    if end_idx <= start_idx:
+        start_idx = 0
+        end_idx = min(sample_count, max(1, int(DEFAULT_PLOT_WINDOW[1] * fs)))
+    return start_idx, end_idx
+
+
 def plot_multichannel_results(
     out_path: Path,
     fs: int,
@@ -355,74 +399,62 @@ def plot_multichannel_results(
     primary_d: np.ndarray,
     wanted: np.ndarray,
     controller_y: np.ndarray,
-    controller_sum: np.ndarray,
-    secondary_output: np.ndarray,
     secondary_sum: np.ndarray,
     error_e: np.ndarray,
     plot_window: tuple[float, float] = DEFAULT_PLOT_WINDOW,
 ) -> None:
-    start_s, end_s = plot_window
-    sample_count = len(primary_d)
-    start_idx = min(sample_count, int(start_s * fs))
-    end_idx = min(sample_count, int(end_s * fs))
-    if end_idx <= start_idx:
-        start_idx = 0
-        end_idx = min(sample_count, max(1, int(DEFAULT_PLOT_WINDOW[1] * fs)))
+    start_idx, end_idx = _window_indices(len(primary_d), fs, plot_window)
+    sl = slice(start_idx, end_idx)
     t = np.arange(start_idx, end_idx) / fs
     has_wanted = bool(np.max(np.abs(wanted)) > 1e-12)
-    row_count = 7 if has_wanted else 5
-    fig, axes = plt.subplots(
-        row_count,
-        1,
-        figsize=(12, 13 if has_wanted else 10),
-        sharex=True,
-    )
 
-    row = 0
-    ax = axes[row]
-    for ref_idx, values in enumerate(references, start=1):
-        ax.plot(t, values[start_idx:end_idx], label=f"x{ref_idx}", alpha=0.62)
-    ax.set_title("reference channels x_i[n]")
-    ax.legend(loc="best", ncol=min(4, references.shape[0]))
-    row += 1
+    fig, axes = plt.subplots(4, 1, figsize=(7.1, 6.2), sharex=True)
+    ref_count = max(references.shape[0], 1)
+    act_count = max(controller_y.shape[0], 1)
+    ref_colors = plt.cm.viridis(np.linspace(0.12, 0.82, ref_count))
+    act_colors = plt.cm.plasma(np.linspace(0.12, 0.78, act_count))
 
-    axes[row].plot(t, primary_d[start_idx:end_idx])
-    axes[row].set_title("primary d[n]")
-    row += 1
+    # (1) Reference channels from the motors.
+    ax = axes[0]
+    for i, values in enumerate(references):
+        ax.plot(t, values[sl], color=ref_colors[i], lw=0.7, alpha=0.9,
+                label=fr"$x_{{{i + 1}}}$")
+    ax.set_ylabel("references")
+    _autoscale_symmetric(ax, references[:, sl])
+    ax.legend(loc="upper right", ncol=ref_count)
 
+    # (2) Microphone signal vs. the summed anti-noise that cancels it.
+    ax = axes[1]
+    ax.plot(t, primary_d[sl], color="#1f77b4", lw=0.8, label=r"mic $d[n]$")
+    ax.plot(t, secondary_sum[sl], color="#d62728", lw=0.8, alpha=0.85,
+            label=r"anti-noise $\sum_a C_a y_a$")
+    ax.set_ylabel("mic / anti-noise")
+    _autoscale_symmetric(ax, primary_d[sl], secondary_sum[sl])
+    ax.legend(loc="upper right", ncol=2)
+
+    # (3) Per-actuator controller outputs (each y_a drives its own actuator).
+    ax = axes[2]
+    for a, values in enumerate(controller_y):
+        ax.plot(t, values[sl], color=act_colors[a], lw=0.7, alpha=0.9,
+                label=fr"$y_{{{a + 1}}}$")
+    ax.set_ylabel("actuators")
+    _autoscale_symmetric(ax, controller_y[:, sl])
+    ax.legend(loc="upper right", ncol=act_count)
+
+    # (4) ANC output (error) with the useful signal it must preserve.
+    ax = axes[3]
     if has_wanted:
-        axes[row].plot(t, wanted[start_idx:end_idx])
-        axes[row].set_title("wanted signal")
-        row += 1
-        axes[row].plot(t, (wanted - error_e)[start_idx:end_idx])
-        axes[row].set_title("wanted - error")
-        row += 1
+        ax.plot(t, wanted[sl], color="0.6", lw=0.9, label=r"wanted $s[n]$")
+    ax.plot(t, error_e[sl], color="#2ca02c", lw=0.8, label=r"ANC output $e[n]$")
+    ax.set_ylabel("output")
+    _autoscale_symmetric(ax, error_e[sl], wanted[sl] if has_wanted else error_e[sl])
+    ax.legend(loc="upper right", ncol=2 if has_wanted else 1)
 
-    ax = axes[row]
-    for act_idx, values in enumerate(controller_y, start=1):
-        ax.plot(t, values[start_idx:end_idx], label=f"y{act_idx}", alpha=0.55)
-    ax.plot(t, controller_sum[start_idx:end_idx], color="black", linewidth=1.2, label="sum")
-    ax.set_title("controller outputs y_j[n]")
-    ax.legend(loc="best", ncol=min(5, controller_y.shape[0] + 1))
-    row += 1
-
-    ax = axes[row]
-    for act_idx, values in enumerate(secondary_output, start=1):
-        ax.plot(t, values[start_idx:end_idx], label=f"C{act_idx}y{act_idx}", alpha=0.55)
-    ax.plot(t, secondary_sum[start_idx:end_idx], color="black", linewidth=1.2, label="sum")
-    ax.set_title("secondary outputs C_j(z)y_j[n]")
-    ax.legend(loc="best", ncol=min(5, secondary_output.shape[0] + 1))
-    row += 1
-
-    axes[row].plot(t, error_e[start_idx:end_idx])
-    axes[row].set_title("error e[n]")
-
-    for ax in axes:
-        ax.grid(True, alpha=0.25)
-        ax.set_ylim(-1.05, 1.05)
+    axes[0].set_xlim(t[0], t[-1])
     axes[-1].set_xlabel("Time [s]")
-    fig.tight_layout()
-    fig.savefig(out_path, dpi=140)
+    fig.align_ylabels(axes)
+    fig.tight_layout(h_pad=0.6)
+    fig.savefig(out_path)
     plt.close(fig)
 
 
@@ -444,6 +476,24 @@ def spectrum_db(x: np.ndarray, fs: int) -> tuple[np.ndarray, np.ndarray]:
     return freqs, 10.0 * np.log10(np.maximum(psd, 1e-20))
 
 
+def octave_smooth(freqs: np.ndarray, values_db: np.ndarray,
+                  fraction: float = 1.0 / 12.0) -> np.ndarray:
+    """Fractional-octave moving average for readable acoustic spectra."""
+    out = np.asarray(values_db, dtype=np.float64).copy()
+    positive = freqs > 0
+    f = freqs[positive]
+    if f.size < 2:
+        return out
+    values = out[positive]
+    cumulative = np.concatenate([[0.0], np.cumsum(values)])
+    factor = 2.0 ** (fraction / 2.0)
+    lo = np.searchsorted(f, f / factor, side="left")
+    hi = np.searchsorted(f, f * factor, side="right")
+    counts = np.maximum(hi - lo, 1)
+    out[positive] = (cumulative[hi] - cumulative[lo]) / counts
+    return out
+
+
 def plot_spectrum_results(
     out_path: Path,
     fs: int,
@@ -453,41 +503,47 @@ def plot_spectrum_results(
     drone_primary: np.ndarray,
     noise_residual: np.ndarray,
 ) -> None:
-    freqs, wanted_db = spectrum_db(wanted, fs)
-    _, primary_db = spectrum_db(primary_d, fs)
+    freqs, primary_db = spectrum_db(primary_d, fs)
     _, error_db = spectrum_db(error_e, fs)
-    freqs, drone_db = spectrum_db(drone_primary, fs)
+    _, wanted_db = spectrum_db(wanted, fs)
+    _, drone_db = spectrum_db(drone_primary, fs)
     _, residual_db = spectrum_db(noise_residual, fs)
-    attenuation_db = drone_db - residual_db
-    primary_wanted_delta_db = np.abs(primary_db - wanted_db)
-    error_wanted_delta_db = np.abs(error_db - wanted_db)
 
-    fig, axes = plt.subplots(3, 1, figsize=(12, 11), sharex=True)
-    axes[0].plot(freqs, wanted_db, label="wanted")
-    axes[0].plot(freqs, primary_db, label="noisy input")
-    axes[0].plot(freqs, error_db, label="ANC output")
-    axes[0].set_ylabel("PSD [dB/Hz]")
-    axes[0].set_title("Wanted spectrum fit")
-    axes[0].grid(True, alpha=0.25)
-    axes[0].legend(loc="best")
+    primary_s = octave_smooth(freqs, primary_db)
+    error_s = octave_smooth(freqs, error_db)
+    wanted_s = octave_smooth(freqs, wanted_db)
+    attenuation_s = octave_smooth(freqs, drone_db - residual_db)
 
-    axes[1].plot(freqs, primary_wanted_delta_db, label="abs(noisy input - wanted)")
-    axes[1].plot(freqs, error_wanted_delta_db, label="abs(ANC output - wanted)")
-    axes[1].set_ylabel("PSD distance [dB]")
-    axes[1].set_title("Distance from wanted spectrum")
-    axes[1].grid(True, alpha=0.25)
-    axes[1].legend(loc="best")
+    has_wanted = bool(np.max(np.abs(wanted)) > 1e-12)
+    f_lo = max(20.0, float(freqs[1]) if freqs.size > 1 else 20.0)
+    f_hi = fs / 2.0
+    anc_band = min(1000.0, f_hi)
 
-    axes[2].plot(freqs, attenuation_db)
-    axes[2].axhline(0.0, color="black", linewidth=0.8, alpha=0.55)
-    axes[2].set_ylabel("Attenuation [dB]")
-    axes[2].set_xlabel("Frequency [Hz]")
-    axes[2].set_title("Drone attenuation")
-    axes[2].grid(True, alpha=0.25)
-    axes[2].set_xlim(0, fs / 2)
+    fig, axes = plt.subplots(2, 1, figsize=(7.1, 4.8), sharex=True)
 
-    fig.tight_layout()
-    fig.savefig(out_path, dpi=140)
+    ax = axes[0]
+    ax.axvspan(f_lo, anc_band, color="tab:blue", alpha=0.07)
+    ax.semilogx(freqs, primary_s, color="#d62728", label=r"noisy input $d[n]$")
+    ax.semilogx(freqs, error_s, color="#2ca02c", label=r"ANC output $e[n]$")
+    if has_wanted:
+        ax.semilogx(freqs, wanted_s, color="0.55", lw=0.9, label=r"wanted $s[n]$")
+    ax.set_ylabel("PSD [dB/Hz]")
+    ax.set_title("Spectrum: microphone vs. ANC output")
+    ax.legend(loc="lower left", ncol=3)
+
+    ax = axes[1]
+    ax.axvspan(f_lo, anc_band, color="tab:blue", alpha=0.07, label="ANC band (<1 kHz)")
+    ax.semilogx(freqs, attenuation_s, color="#1f77b4", label="drone attenuation")
+    ax.axhline(0.0, color="black", lw=0.8, alpha=0.55)
+    ax.set_ylabel("Attenuation [dB]")
+    ax.set_xlabel("Frequency [Hz]")
+    ax.set_title("Drone attenuation (positive = reduced)")
+    ax.legend(loc="upper right")
+
+    axes[0].set_xlim(f_lo, f_hi)
+    fig.align_ylabels(axes)
+    fig.tight_layout(h_pad=0.6)
+    fig.savefig(out_path)
     plt.close(fig)
 
 
@@ -727,11 +783,9 @@ def run_multichannel_mode(
     error = from_q15(error_q15)
     references = from_q15(references_q15)
     controller = from_q15(controller_q15)
-    secondary = from_q15(secondary_q15)
     secondary_sum_q15 = sum_q15_channels(secondary_q15)
     secondary_sum = from_q15(secondary_sum_q15)
     controller_sum_q15 = sum_q15_channels(controller_q15)
-    controller_sum = from_q15(controller_sum_q15)
     noise_residual = error - wanted
 
     tail, spectrum_start_s, spectrum_end_s = analysis_slice(
@@ -764,8 +818,6 @@ def run_multichannel_mode(
         primary,
         wanted,
         controller,
-        controller_sum,
-        secondary,
         secondary_sum,
         error,
         plot_window=plot_window,
