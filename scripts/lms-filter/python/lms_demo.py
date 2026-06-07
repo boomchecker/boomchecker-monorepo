@@ -630,7 +630,7 @@ def run_multichannel_comparison(
     metrics_path.write_text(json.dumps(metrics_with_paths, indent=2), encoding="utf-8")
 
     if save_wav:
-        write(output_dir / "primary_d.wav", fs, primary_q15)
+        write(output_dir / "d.wav", fs, primary_q15)
         write(output_dir / "sum_first_error.wav", fs, sum_error_q15)
         write(output_dir / "multi_ref_error.wav", fs, multi_error_q15)
         write(output_dir / "sum_first_secondary_sum.wav", fs, sum_q15_channels(sum_secondary_q15))
@@ -797,12 +797,12 @@ def run_multichannel_mode(
     metrics_path.write_text(json.dumps(metrics_with_paths, indent=2), encoding="utf-8")
 
     if save_wav:
-        write(output_dir / "primary_d.wav", fs, primary_q15)
-        write(output_dir / "reference.wav", fs, references_q15[0])
-        write(output_dir / "controller_y.wav", fs, controller_sum_q15)
-        write(output_dir / "secondary_output.wav", fs, secondary_sum_q15)
-        write(output_dir / "error.wav", fs, error_q15)
-        write(output_dir / "drone_primary.wav", fs, drone_primary_q15)
+        write(output_dir / "d.wav", fs, primary_q15)
+        write(output_dir / "x.wav", fs, references_q15[0])
+        write(output_dir / "y.wav", fs, controller_sum_q15)
+        write(output_dir / "Cy.wav", fs, secondary_sum_q15)
+        write(output_dir / "e.wav", fs, error_q15)
+        write(output_dir / "Px.wav", fs, drone_primary_q15)
         if wanted_wav_path is not None:
             write(output_dir / "wanted.wav", fs, wanted_q15)
             write(output_dir / "noise_residual.wav", fs, to_q15(noise_residual, peak=0.9))
@@ -910,14 +910,14 @@ def run_demo(
     metrics_path.write_text(json.dumps(metrics_with_paths, indent=2), encoding="utf-8")
 
     if save_wav:
-        write(output_dir / "reference.wav", fs, reference_q15)
-        write(output_dir / "primary_d.wav", fs, primary_q15)
-        write(output_dir / "controller_y.wav", fs, controller_q15)
-        write(output_dir / "secondary_output.wav", fs, secondary_q15)
-        write(output_dir / "error.wav", fs, error_q15)
+        write(output_dir / "x.wav", fs, reference_q15)
+        write(output_dir / "d.wav", fs, primary_q15)
+        write(output_dir / "y.wav", fs, controller_q15)
+        write(output_dir / "Cy.wav", fs, secondary_q15)
+        write(output_dir / "e.wav", fs, error_q15)
         if wanted_wav_path is not None:
             write(output_dir / "wanted.wav", fs, wanted_q15)
-            write(output_dir / "drone_primary.wav", fs, drone_primary_q15)
+            write(output_dir / "Px.wav", fs, drone_primary_q15)
             write(
                 output_dir / "noise_residual.wav",
                 fs,

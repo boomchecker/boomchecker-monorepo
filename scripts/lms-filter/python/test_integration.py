@@ -97,7 +97,7 @@ def main() -> None:
         )
     for filename in (
         "wanted.wav",
-        "drone_primary.wav",
+        "Px.wav",
         "noise_residual.wav",
         "fxlms_spectrum.png",
     ):
