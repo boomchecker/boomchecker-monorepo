@@ -124,6 +124,18 @@ V režimu \emph{MISO} (viz obr.~\ref{fig:fxlms_schema_multiple}) vstupuje do C j
 \end{equation}
 Sekundární výstupy aktuátorů se sčítají do jedné odrušovací složky v chybovém mikrofonu ($M=1$). Všechny adaptivní cesty se učí ze stejného chybového signálu $e[n]$. Každá cesta ale používá filtrovanou referenci přes odhad sekundární cesty daného aktuátoru.
 
+V C implementaci není sekundární cesta $C(z)$ odvozena z geometrie ani z měření reálného reproduktoru. Pro každý aktuátor $a$ je modelována samostatným pevným čtyřkoeficientovým FIR filtrem $C_a(z)$ v aritmetice Q15. Jeho vstupem je řídicí signál $y_a[n]$ na výstupu adaptivního filtru, tedy signál před aktuátorem, a výstup představuje odrušovací akustickou složku v místě chybového mikrofonu:
+\begin{equation}
+  c_a[n] = \sum_{k=0}^{3} c_{a,k}y_a[n-k].
+\end{equation}
+Úlohou tohoto FIR filtru je aproximovat impulzní odezvu sekundární fyzické cesty. Aktuální vzorek $y_a[n]$ a jeho tři předchozí hodnoty jsou násobeny jednotlivými koeficienty a sečteny. Výstup proto není pouze zesílenou kopií řídicího signálu: FIR filtr do něj zavádí krátkou časovou paměť, frekvenčně závislý útlum a fázový posun, které přibližují odezvu aktuátoru a šíření zvuku k mikrofonu. To je pro FxLMS podstatné, protože odrušovací signál musí dorazit do místa měření se správnou amplitudou a opačnou fází vůči primárnímu hluku. Použité čtyři koeficienty představují pouze krátký demonstrační model; věrnější model reálné sestavy by vznikl identifikací delší impulzní odezvy z měření.
+
+Koeficienty jsou v programu uloženy v poli \code{k\_secondary\_path}; jednotlivé aktuátory používají mírně odlišné sady koeficientů, aby reprezentovaly rozdílné přenosy od aktuátoru k mikrofonu. Tento FIR filtr je pevnou součástí simulovaného prostředí a jeho koeficienty se během adaptace nemění. Tím se liší od FIR filtrů regulátoru $G(z)$, jejichž váhy algoritmus průběžně upravuje s cílem minimalizovat $e[n]$. FIR výpočet používá kruhovou historii, pořadí koeficientů od nejnovějšího vzorku a po akumulaci posun o 15 bitů se saturací. Při více aktuátorech se jejich sekundární výstupy sečtou a z jediného simulovaného mikrofonního signálu se vypočte
+\begin{equation}
+  e[n] = d[n] - \sum_{a=0}^{A-1} c_a[n].
+\end{equation}
+Blok $C_a(z)$ tak v modelu zastupuje celý přenos od elektrického výstupu regulátoru přes aktuátor a šíření zvuku až k chybovému mikrofonu; tyto fyzické části nejsou simulovány odděleně. Odhad $\hat{C}_a(z)$ je implementován dalším čtyřkoeficientovým FIR filtrem s podobnými, ale záměrně neidentickými koeficienty z pole \code{k\_secondary\_path\_estimate}. Používá se pouze k filtraci referencí pro aktualizaci vah, nikoliv k tvorbě signálu $e[n]$.
+
 \subsection{Fixed-point aritmetika}
 Veřejné vzorky a koeficienty mají typ \code{int16\_t} ve stylu Q15. FIR výpočet akumuluje v širším integer typu a výsledek posouvá o 15 bitů. Aktualizace vah podle \eqref{eq:fxlms_update} násobí \code{mu\_q15}, chybový vzorek a filtrovanou referenci; výsledek se škáluje pravým posunem a saturuje do rozsahu \code{int16\_t}. Hostitelský wrapper při multi-channel konfiguraci dělí learning rate čtyřmi, aby adaptace nezačínala s příliš velkým krokem pro větší počet cest.
 
