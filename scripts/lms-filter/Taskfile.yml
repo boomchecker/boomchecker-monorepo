@@ -73,3 +73,13 @@ tasks:
       - build
     cmds:
       - ./python/venv/bin/python python/lms_demo.py {{.CLI_ARGS}}
+
+  drone-spectrum:
+    desc: Plot average drone-only spectrum from the DADS Hugging Face dataset
+    cmds:
+      - ./python/venv/bin/python drone-spectrum/drone_spectrum.py {{.CLI_ARGS}}
+
+  spectrum-all:
+    desc: Compute average PSD for ALL DADS recordings (both labels, parallel shards, checkpointable)
+    cmds:
+      - ./python/venv/bin/python -u drone-spectrum/spectrum_all.py {{.CLI_ARGS}}
