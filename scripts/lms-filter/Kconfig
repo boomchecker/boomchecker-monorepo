@@ -15,18 +15,23 @@ menu "FXLMS ANC demo"
             FIR length of the adaptive ANC controller G(z).
 
     config FXLMS_MU_Q15
-        int "Filtered-x LMS learning rate in Q15"
-        default 256
+        int "Normalized filtered-x LMS learning rate in Q15"
+        default 16384
         range 0 32767
         help
-            Learning rate encoded as Q15. Smaller values improve stability.
+            Normalized (NLMS-style) learning rate encoded as Q15, i.e. 32767
+            corresponds to a step of ~1.0. The update divides this value by the
+            filtered-x power, so it is independent of input level and of the
+            number of reference/actuator channels. Typical stable range is
+            roughly 0.1-0.7 (3277-22938); smaller values improve stability.
 
     config FXLMS_ADAPT_SHIFT
         int "Extra FXLMS adaptation right shift"
         default 0
         range 0 30
         help
-            Additional right shift applied to the controller-weight update.
+            Optional additional right shift applied to the already normalized
+            controller-weight update. Usually left at 0.
 
     config FXLMS_OUTPUT_LIMIT
         int "Output saturation limit"

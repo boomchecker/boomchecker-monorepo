@@ -92,8 +92,9 @@ static void test_filtered_x_update_uses_secondary_estimate(void) {
   const int16_t estimate[4] = {16384, 0, 0, 0};
   set_paths(secondary, estimate);
 
+  const int16_t mu = 1000;
   struct fxlms_config cfg = {
-      .taps = 1, .mu_q15 = 32767, .adapt_shift = 0, .output_limit = 32767};
+      .taps = 1, .mu_q15 = mu, .adapt_shift = 0, .output_limit = 32767};
   uint8_t *mem = NULL;
   struct fxlms_state *state = make_state(&cfg, &mem);
 
@@ -102,9 +103,13 @@ static void test_filtered_x_update_uses_secondary_estimate(void) {
   ASSERT_EQ_INT(0, res.secondary_output);
 
   ASSERT_EQ_INT(FXLMS_OK, fxlms_process_sample(state, 20000, 0, &res));
+  /* Normalized step: g += mu * e * x_f / (sum x_f^2 + eps). With taps=1 and a
+   * single channel the window holds exactly one filtered-x sample. */
   int16_t filtered_x = q15_mul(16384, 20000);
+  int64_t power = (int64_t)filtered_x * filtered_x;
+  int64_t eps = (int64_t)1 * 1 * CONFIG_FXLMS_NLMS_POWER_FLOOR;
   int16_t expected_weight =
-      (int16_t)(((int64_t)32767 * 20000 * filtered_x) >> 30);
+      (int16_t)(((int64_t)mu * 20000 * filtered_x) / (power + eps));
   int16_t expected_y = q15_mul(expected_weight, 20000);
   ASSERT_EQ_INT(expected_y, res.controller_y);
   ASSERT_EQ_INT(q15_mul(32767, expected_y), res.secondary_output);
@@ -116,8 +121,9 @@ static void test_secondary_estimate_changes_only_adaptation_branch(void) {
   const int16_t estimate_a[4] = {8192, 0, 0, 0};
   const int16_t estimate_b[4] = {24576, 0, 0, 0};
 
+  /* Small mu so the normalized single-tap step does not saturate the weight. */
   struct fxlms_config cfg = {
-      .taps = 1, .mu_q15 = 32767, .adapt_shift = 0, .output_limit = 32767};
+      .taps = 1, .mu_q15 = 200, .adapt_shift = 0, .output_limit = 32767};
 
   set_paths(secondary, estimate_a);
   uint8_t *mem_a = NULL;
@@ -131,6 +137,8 @@ static void test_secondary_estimate_changes_only_adaptation_branch(void) {
   struct fxlms_sample_result first_b;
   ASSERT_EQ_INT(FXLMS_OK, fxlms_process_sample(state_b, 18000, 16000, &first_b));
 
+  /* The estimate only feeds the adaptation branch, so the forward path (output,
+   * secondary, error) of the first sample is identical for both estimates. */
   ASSERT_EQ_INT(first_a.controller_y, first_b.controller_y);
   ASSERT_EQ_INT(first_a.secondary_output, first_b.secondary_output);
   ASSERT_EQ_INT(first_a.error, first_b.error);
@@ -139,8 +147,12 @@ static void test_secondary_estimate_changes_only_adaptation_branch(void) {
   struct fxlms_sample_result second_b;
   ASSERT_EQ_INT(FXLMS_OK, fxlms_process_sample(state_a, 18000, 0, &second_a));
   ASSERT_EQ_INT(FXLMS_OK, fxlms_process_sample(state_b, 18000, 0, &second_b));
-  ASSERT_TRUE(second_b.controller_y > second_a.controller_y);
-  ASSERT_TRUE(second_b.secondary_output > second_a.secondary_output);
+  /* The estimate still changes the adapted weights, but with the normalized
+   * step the update scales with x_f / (x_f^2 + eps): the smaller estimate (a)
+   * produces the smaller filtered-x power and therefore the larger step. */
+  ASSERT_TRUE(second_a.controller_y > second_b.controller_y);
+  ASSERT_TRUE(second_a.secondary_output > second_b.secondary_output);
+  ASSERT_TRUE(second_b.controller_y > 0);
 
   free(mem_a);
   free(mem_b);

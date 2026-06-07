@@ -52,6 +52,10 @@ struct fxlms_state {
   uint16_t pos;
   uint16_t secondary_pos;
   uint16_t estimate_pos;
+  /* Running sum of squared filtered-x over the tap window and all channels. */
+  int64_t filtered_x_power;
+  /* Regularization added to filtered_x_power in the normalized step denominator. */
+  int64_t power_eps;
   int16_t *weights_g;
   int16_t *reference_history;
   int16_t *filtered_x_history;
@@ -204,6 +208,9 @@ int fxlms_init(void *mem, size_t mem_size, const struct fxlms_config *cfg,
   state->estimate_history = (int16_t *)((uint8_t *)mem + offset);
 
   state->cfg = normalized;
+  state->filtered_x_power = 0;
+  state->power_eps = (int64_t)controller_count * normalized.taps *
+                     CONFIG_FXLMS_NLMS_POWER_FLOOR;
   *out = state;
   return FXLMS_OK;
 }
@@ -230,6 +237,7 @@ int fxlms_reset(struct fxlms_state *state) {
   state->pos = 0;
   state->secondary_pos = 0;
   state->estimate_pos = 0;
+  state->filtered_x_power = 0;
   return FXLMS_OK;
 }
 
@@ -311,23 +319,34 @@ int fxlms_process_multi_sample(struct fxlms_state *state,
                                            FXLMS_SECONDARY_ESTIMATE_TAPS],
                   state->estimate_pos, FXLMS_SECONDARY_ESTIMATE_TAPS,
                   FXLMS_SECONDARY_ESTIMATE_TAPS, state->cfg.output_limit);
-      state->filtered_x_history[filtered_x_index(state, a, r, state->pos)] =
-          filtered_x;
+      /* Slide the windowed filtered-x power: drop the sample leaving the tap
+       * window (currently at this slot) and add the new one. */
+      size_t fx_idx = filtered_x_index(state, a, r, state->pos);
+      int16_t evicted = state->filtered_x_history[fx_idx];
+      state->filtered_x_power +=
+          (int64_t)filtered_x * filtered_x - (int64_t)evicted * evicted;
+      state->filtered_x_history[fx_idx] = filtered_x;
     }
   }
 
+  /* Normalized (NLMS-style) step: divide mu by the filtered-x power summed over
+   * all taps and channels, so the effective step is independent of input level
+   * and channel count. `power` is always >= power_eps > 0. */
+  const int64_t power = state->filtered_x_power + state->power_eps;
   for (uint8_t a = 0; a < actuator_count; ++a) {
     for (uint8_t r = 0; r < reference_count; ++r) {
       uint16_t hist_idx = state->pos;
       for (uint16_t i = 0; i < taps; ++i) {
         size_t idx = controller_index(state, a, r, i);
-        int64_t delta =
+        int64_t numerator =
             (int64_t)state->cfg.mu_q15 * (int64_t)error *
             (int64_t)state->filtered_x_history[filtered_x_index(
                 state, a, r, hist_idx)];
-        int32_t updated =
-            (int32_t)state->weights_g[idx] +
-            shift_trunc_i64(delta, (uint8_t)(30U + state->cfg.adapt_shift));
+        int32_t step = (int32_t)(numerator / power);
+        if (state->cfg.adapt_shift > 0U) {
+          step = shift_trunc_i64((int64_t)step, state->cfg.adapt_shift);
+        }
+        int32_t updated = (int32_t)state->weights_g[idx] + step;
         state->weights_g[idx] = sat_i16(updated, 32767);
         hist_idx = (hist_idx == 0U) ? (uint16_t)(taps - 1U)
                                     : (uint16_t)(hist_idx - 1U);

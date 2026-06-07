@@ -44,12 +44,9 @@ int fxlms_filter_multi_i16(const int16_t *reference_x, const int16_t *primary_d,
   struct fxlms_config cfg = fxlms_default_config();
   cfg.reference_count = reference_count;
   cfg.actuator_count = actuator_count;
-  if (reference_count > 1U || actuator_count > 1U) {
-    cfg.mu_q15 = (int16_t)(cfg.mu_q15 / 4);
-    if (cfg.mu_q15 == 0) {
-      cfg.mu_q15 = 1;
-    }
-  }
+  /* No per-channel step rescaling: the normalized step already divides mu by the
+   * filtered-x power summed over all channels, so the same mu is used for SISO
+   * and multi-channel configurations. */
 
   size_t needed = 0;
   int st = fxlms_state_size(&cfg, &needed);

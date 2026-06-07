@@ -32,7 +32,7 @@ maxamart@fel.cvut.cz}}
 \maketitle
 
 \begin{abstract}
-Palubní mikrofon dronu měří kromě okolních událostí i vlastní hluk motorů a vrtulí. U krátkých impulzních signálů, například výstřelu, může tato složka zhoršit poměr signálu k rušení natolik, že jednoduchý detektor pracuje s nespolehlivým vstupem. Tento text navrhuje a popisuje simulovanou implementaci aktivního potlačení hluku založenou na algoritmu filtered-x least mean square (FxLMS). Referenční vstupy jsou odvozeny přímo z~řídicích signálů motorů, bez použití referenčních mikrofonů, a~adaptivní filtr minimalizuje reziduální hluk v~chybovém mikrofonním signálu. Text uvádí rovnice FxLMS, převod algoritmu do Q15 fixed-point C kódu a metodiku pro SISO, sum-first a MISO režimy. Kvantitativní výsledky budou doplněny po finálním vygenerování grafů a metrik.
+Palubní mikrofon dronu měří kromě okolních událostí i vlastní hluk motorů a vrtulí. U krátkých impulzních signálů, například výstřelu, může tato složka zhoršit poměr signálu k rušení natolik, že jednoduchý detektor pracuje s nespolehlivým vstupem. Tento text navrhuje a popisuje simulovanou implementaci aktivního potlačení hluku založenou na algoritmu filtered-x least mean square (FxLMS). Referenční vstupy jsou odvozeny přímo z~řídicích signálů motorů, bez použití referenčních mikrofonů, a~adaptivní filtr minimalizuje reziduální hluk v~chybovém mikrofonním signálu. Adaptace používá normalizovaný (NLMS) krok, jehož efektivní velikost je dělena okamžitým výkonem filtrované reference sečteným přes všechny kanály; tím je stejná rychlost učení stabilní pro SISO i~vícekanálové konfigurace bez ručního ladění. Text uvádí rovnice FxLMS, převod algoritmu do Q15 fixed-point C kódu a metodiku pro SISO, sum-first a MISO režimy. Kvantitativní výsledky budou doplněny po finálním vygenerování grafů a metrik.
 \end{abstract}
 
 \begin{IEEEkeywords}
@@ -89,12 +89,20 @@ Změna vah $g_i[n]$ se v mikrofonu projeví až přes sekundární cestu. FxLMS 
 \begin{equation}
   x_f[n] = \hat{C}(z)x[n],
 \end{equation}
-kde $\hat{C}(z)$ je odhad sekundární cesty. Aktualizace vah je
+kde $\hat{C}(z)$ je odhad sekundární cesty. Aktualizace vah používá \emph{normalizovaný} krok (varianta NLMS pro FxLMS)
 \begin{equation}
-  g_i[n+1] = g_i[n] + \mu e[n]x_f[n-i],
+  g_i[n+1] = g_i[n] + \frac{\mu}{P[n]}\, e[n]\,x_f[n-i],
   \label{eq:fxlms_update}
 \end{equation}
-kde $\mu$ nastavuje rychlost učení. V implementaci se tato rovnice počítá ve fixed-point aritmetice Q15 se saturací výstupu i vah.
+kde $\mu$ je bezrozměrná rychlost učení a $P[n]$ je okamžitý výkon filtrované reference v okně délky filtru $L$,
+\begin{equation}
+  P[n] = \varepsilon + \sum_{i=0}^{L-1} x_f^2[n-i].
+  \label{eq:fxlms_power}
+\end{equation}
+Malá kladná konstanta $\varepsilon$ regularizuje jmenovatel: zabraňuje dělení nulou a~přílišnému kroku, když je reference tichá. V implementaci se tato rovnice počítá ve fixed-point aritmetice Q15 se saturací výstupu i vah.
+
+\subsection*{Normalizovaný krok a jeho význam}
+U~klasického LMS kroku $\mu\,e[n]\,x_f[n-i]$ je efektivní velikost úměrná výkonu filtrované reference. Mez stability i~rychlost konvergence proto závisejí na hlasitosti vstupu: $\mu$ vyladěné pro jednu úroveň signálu může pro jinou úroveň divergovat, nebo konvergovat příliš pomalu. Dělení výkonem $P[n]$ tuto závislost odstraňuje --- efektivní krok $\mu/P[n]$ je vůči úrovni vstupu invariantní, takže $\mu$ je bezrozměrný parametr s~prakticky stabilním rozsahem zhruba $0<\mu\lesssim 1$ (v~práci volíme $\mu\approx 0{,}5$). To je klíčové pro vícekanálovou konfiguraci: jak ukazuje následující sekce, $P[n]$ se sčítá přes \emph{všechny} reference a~aktuátory, takže stejné $\mu$ funguje pro SISO i~pro libovolný počet kanálů bez ručního přeškálování.
 
 \subsection*{Vektorové rozšíření}
 
@@ -122,7 +130,14 @@ V režimu \emph{MISO} (viz obr.~\ref{fig:fxlms_schema_multiple}) vstupuje do C j
 \begin{equation}
   y_a[n] = \sum_{r=0}^{X-1}\sum_{i=0}^{L-1} g_{a,r,i}[n]x_r[n-i].
 \end{equation}
-Sekundární výstupy aktuátorů se sčítají do jedné odrušovací složky v chybovém mikrofonu ($M=1$). Všechny adaptivní cesty se učí ze stejného chybového signálu $e[n]$. Každá cesta ale používá filtrovanou referenci přes odhad sekundární cesty daného aktuátoru.
+Sekundární výstupy aktuátorů se sčítají do jedné odrušovací složky v chybovém mikrofonu ($M=1$). Všechny adaptivní cesty se učí ze stejného chybového signálu $e[n]$. Každá cesta ale používá vlastní filtrovanou referenci $x_{f,a,r}[n]=\hat{C}_a(z)x_r[n]$ přes odhad sekundární cesty daného aktuátoru a~aktualizace váhy $g_{a,r,i}$ má tvar~\eqref{eq:fxlms_update} s~$x_f$ nahrazeným za $x_{f,a,r}$.
+
+Normalizační výkon $P[n]$ z~\eqref{eq:fxlms_power} se ve vícekanálovém případě sčítá přes \emph{všechny} dvojice reference--aktuátor,
+\begin{equation}
+  P[n] = \varepsilon + \sum_{a=0}^{A-1}\sum_{r=0}^{X-1}\sum_{i=0}^{L-1} x_{f,a,r}^2[n-i].
+  \label{eq:fxlms_power_multi}
+\end{equation}
+Tím se efektivní krok automaticky zmenší úměrně počtu a~energii kanálů, takže stejné $\mu$ zůstává stabilní při růstu $X$ i~$A$. Dřívější varianta s~pevným krokem to řešila hrubým dělením $\mu$ konstantou pro vícekanálový režim; normalizace tento ad-hoc zásah nahrazuje a~odstraňuje propad útlumu, který přeškálování způsobovalo.
 
 V C implementaci není sekundární cesta $C(z)$ odvozena z geometrie ani z měření reálného reproduktoru. Pro každý aktuátor $a$ je modelována samostatným pevným čtyřkoeficientovým FIR filtrem $C_a(z)$ v aritmetice Q15. Jeho vstupem je řídicí signál $y_a[n]$ na výstupu adaptivního filtru, tedy signál před aktuátorem, a výstup představuje odrušovací akustickou složku v místě chybového mikrofonu:
 \begin{equation}
@@ -137,7 +152,7 @@ Koeficienty jsou v programu uloženy v poli \code{k\_secondary\_path}; jednotliv
 Blok $C_a(z)$ tak v modelu zastupuje celý přenos od elektrického výstupu regulátoru přes aktuátor a šíření zvuku až k chybovému mikrofonu; tyto fyzické části nejsou simulovány odděleně. Odhad $\hat{C}_a(z)$ je implementován dalším čtyřkoeficientovým FIR filtrem s podobnými, ale záměrně neidentickými koeficienty z pole \code{k\_secondary\_path\_estimate}. Používá se pouze k filtraci referencí pro aktualizaci vah, nikoliv k tvorbě signálu $e[n]$.
 
 \subsection{Fixed-point aritmetika}
-Veřejné vzorky a koeficienty mají typ \code{int16\_t} ve stylu Q15. FIR výpočet akumuluje v širším integer typu a výsledek posouvá o 15 bitů. Aktualizace vah podle \eqref{eq:fxlms_update} násobí \code{mu\_q15}, chybový vzorek a filtrovanou referenci; výsledek se škáluje pravým posunem a saturuje do rozsahu \code{int16\_t}. Hostitelský wrapper při multi-channel konfiguraci dělí learning rate čtyřmi, aby adaptace nezačínala s příliš velkým krokem pro větší počet cest.
+Veřejné vzorky a koeficienty mají typ \code{int16\_t} ve stylu Q15. FIR výpočet akumuluje v širším integer typu a výsledek posouvá o 15 bitů. Aktualizace vah podle \eqref{eq:fxlms_update} se počítá v~64bitové aritmetice: čitatel $\mu\,e[n]\,x_f[n-i]$ (parametr \code{mu\_q15} v~Q15, tj. $\mu=\code{mu\_q15}/2^{15}$) se celočíselně dělí jmenovatelem $P[n]$ a~výsledný přírůstek se přičte k~váze se saturací do rozsahu \code{int16\_t}. Výkon $P[n]$ je veden jako klouzavý součet čtverců filtrovaných referencí přes okno délky $L$ a~přes všechny kanály: při každém vzorku se odečte čtverec vzorku opouštějícího okno a~přičte čtverec nového, takže přepočet je $O(1)$ na kanál místo $O(L)$. Regularizace $\varepsilon$ je odvozena z~počtu kanálů a~délky filtru. Protože normalizace dělí krok výkonem sečteným přes všechny kanály, není potřeba žádné ruční přeškálování \code{mu\_q15} podle počtu referencí ani aktuátorů --- stejná hodnota se používá pro SISO i~vícekanálové konfigurace.
 
 \section{Experimentální metodika}
 Experimenty v této verzi používají simulaci. Python vytváří hluk dronu z více motorových referencí s různými otáčkami, gainy, zpožděními a FIR primárními cestami. Užitečný WAV signál se normalizuje, zkrátí nebo doplní na délku simulace a přičte k primárnímu mikrofonnímu signálu. Výstup FxLMS je chybový signál. V ideálním případě v něm zůstane užitečná událost a klesne složka korelovaná s motory.
