@@ -46,8 +46,33 @@ Aktivní potlačení hluku (ANC) používá řízený sekundární zdroj zvuku a
 
 První krok v této práci je užší než plné prostorové ANC. Simulujeme potlačení vlastního hluku dronu v jednom mikrofonním kanálu a hodnotíme, zda výstup lépe zachovává užitečný impulzní signál. Směrové maskování zvukové stopy pomocí reproduktorů na dronu zůstává navazující úloha. Současný model nemá souřadnice zdrojů, směrové vyzařování ani měření reálných akustických cest, takže z něj nelze odvozovat účinnost ve zvoleném směru prostoru.
 
+\section{Akustická charakteristika dronového hluku}
+
+Pro empirické ověření frekvenční struktury dronového hluku jsme analyzovali dataset DADS (Drone Audio Detection Samples) \cite{basso2024dads}. DADS je v době psaní tohoto textu největší veřejně dostupná databáze dronových audio nahrávek, sestavená agregací záznamů z~šesti různých zdrojů \cite{alemadi2019drone,ramos2024dronenoise} a~dalších měření palubních i~pozemních mikrofonů. Dataset obsahuje 163\,591 dronových nahrávek s~celkovou délkou 27{,}1\,h a~16\,729 nahrávek bez dronu (33{,}8\,h). Veškerý materiál je standardizován na vzorkovací kmitočet 16\,kHz, 16bitovou hloubku a~mono kanál.
+
+Průměrné výkonové spektrální hustoty (PSD) jsme vypočítali Welchovou metodou (okno 2048 vzorků, překryv 50\,\%) přes všechny nahrávky obou tříd a~výsledky průměrovali v~lineárním výkonovém měřítku. Obrázek~\ref{fig:dads_spectrum} ukazuje výsledné střední PSD a~25.–75.~percentilové pásmo pro každou třídu.
+
+Dronová třída (červeně) vykazuje výrazně vyšší energii pod přibližně 1\,kHz; střední PSD v~tomto pásmu leží o~10–15\,dB nad průměrem nahrávek bez dronu. Charakteristická tonální struktura odpovídá blade pass frequency (BPF) a~jejím harmonickým. U~malých UAV s~dvěma až~čtyřmi listy rotujícími při 3\,000–9\,000~min$^{-1}$ vychází BPF přibližně v~rozsahu 100–600\,Hz; v~grafu jsou tyto harmonické patrné jako ostrá tonální maxima pod hranicí ANC pásma.
+
+Nad 1\,kHz se střední PSD obou tříd přibližují a~variabilita nahrávek bez dronu (modrý pás) výrazně roste, protože záznamy zahrnují různorodé prostředí (výstřely, ulice, příroda). Z~pohledu ANC je 1\,kHz přirozená horní hranice pracovního pásma: vlnové délky jsou dostatečně velké, aby fázová chyba v~odrušovacím signálu nezpůsobovala zesílení místo útlumu, a~zároveň toto pásmo zachycuje dominantní energetický rozdíl mezi třídami. Tento závěr je v~souladu s~literaturou, kde je ANC dronů zpravidla omezen na stovky Hz \cite{kuo1996anc,ramos2024dronenoise}.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\columnwidth]{figures/dads_average_spectrum.png}
+  \caption{Střední PSD pro dronové ($n=163\,591$, červeně) a~ne-dronové ($n=14\,868$, modře) nahrávky z~datasetu DADS. Pásma odpovídají 25.–75.~percentilu přes nahrávky. Modrý region označuje ANC pracovní pásmo (0–1\,kHz).}
+  \label{fig:dads_spectrum}
+\end{figure}
+
 \section{Princip FxLMS}
 Základní feedforward ANC model pracuje s referencí $x[n]$, primární cestou $P(z)$ mezi zdrojem rušení a mikrofonem, adaptivním řídicím filtrem $G(z)$ a sekundární cestou $C(z)$ mezi aktuátorem a mikrofonem. Primární signál v mikrofonu zapíšeme jako
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\columnwidth]{generated/fxlms_schema.pdf}
+  \caption{Blokové schéma algoritmu FxLMS s modelem sekundární cesty $\hat{C}(z)$.}
+  \label{fig:fxlms_schema}
+\end{figure}
+
 \begin{equation}
   d[n] = P(z)x[n] + s[n],
 \end{equation}
@@ -71,6 +96,19 @@ kde $\hat{C}(z)$ je odhad sekundární cesty. Aktualizace vah je
 \end{equation}
 kde $\mu$ nastavuje rychlost učení. V implementaci se tato rovnice počítá ve fixed-point aritmetice Q15 se saturací výstupu i vah.
 
+\subsection*{Vektorové rozšíření}
+
+Pro více referencí a více chybových mikrofonů přecházíme na vektorový zápis (obr.~\ref{fig:fxlms_schema_multiple}). Označme $X$ počet referenčních kanálů (motorových referencí) a $M$ počet chybových mikrofonů. Referenční vektor $\mathbf{x}(n)\in\mathbb{R}^{X}$ vstupuje do maticového adaptivního filtru $\mathbf{G}(z)\in\mathbb{R}^{X\times X}$, který produkuje $X$ aktuátorových signálů. Sekundární cesta $\mathbf{C}(z)\in\mathbb{R}^{M\times X}$ mapuje výstupy aktuátorů do $M$ mikrofonů a generuje chybový vektor $\mathbf{e}(n)\in\mathbb{R}^{M}$. Odhad $\hat{\mathbf{C}}(z)$ filtruje referenci a vznikne matice filtrovaných referencí $\mathbf{x}'(n)\in\mathbb{R}^{X}$, která vstupuje do adaptační aktualizace.
+
+V implementaci odpovídá $X$ parametru \code{--reference-count} a $M$ počtu chybových mikrofonů (v současném modelu $M=1$). Počet aktuátorů je nastaven parametrem \code{--actuator-count}; ve zjednodušeném schématu na obr.~\ref{fig:fxlms_schema_multiple} je ztotožněn s~$X$.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\columnwidth]{generated/fxlms_schema_multiple.pdf}
+  \caption{Blokové schéma vektorového FxLMS pro $X$ referenčních kanálů a $M$ chybových mikrofonů. Silné šipky označují vektory; křížky na vodičích ukazují dimenzi ($X$ nebo $M$). Adaptivní filtr $\mathbf{G}(z)\in\mathbb{R}^{X\times X}$ generuje $X$ aktuátorových signálů; $\mathbf{C}(z)\in\mathbb{R}^{M\times X}$ je fyzická sekundární cesta; $\hat{\mathbf{C}}(z)$ je její odhad použitý ve filtraci reference.}
+  \label{fig:fxlms_schema_multiple}
+\end{figure}
+
 \section{Implementace}
 Kód je v modulu \code{scripts/lms-filter}. Python generuje syntetickou scénu, připravuje WAV soubory, volá sdílenou C knihovnu a ukládá grafy s metrikami. C jádro obsahuje fixed-point FxLMS filtr. Samotné jádro nealokuje haldu; volající předá stavový buffer o velikosti vypočtené z konfigurace. Hostitelský wrapper používá alokaci jen pro demonstrační API.
 
@@ -78,13 +116,13 @@ Kód je v modulu \code{scripts/lms-filter}. Python generuje syntetickou scénu, 
 SISO varianta používá jednu referenci a jeden aktuátor. Je to základní baseline s jedním adaptivním FIR filtrem $G(z)$, jednou historií reference, jednou sekundární cestou $C(z)$ a jedním odhadem $\hat{C}(z)$.
 
 \subsection{Sum-first a MISO režimy}
-Pro více motorových referencí používáme dva režimy. V režimu \emph{sum-first} Python nejdříve sečte syntetické reference jednotlivých motorů. C jádro potom dostane jeden referenční kanál. Se čtyřmi aktuátory tedy běží čtyři adaptivní filtry.
+Pro více motorových referencí používáme dva režimy. V režimu \emph{sum-first} Python nejdříve sečte syntetické reference jednotlivých motorů. C jádro potom dostane jeden referenční kanál ($X=1$). Se čtyřmi aktuátory tedy běží čtyři adaptivní filtry.
 
-V režimu \emph{MISO} vstupuje do C jádra plná matice referencí. Pro $R$ referencí a $A$ aktuátorů se alokuje $A \times R$ adaptivních FIR filtrů. Konfigurace \code{--reference-count 4 --actuator-count 4} tedy vytvoří 16 sad vah. Výstup aktuátoru $a$ je součet příspěvků všech referencí:
+V režimu \emph{MISO} (viz obr.~\ref{fig:fxlms_schema_multiple}) vstupuje do C jádra plná matice $X$ referencí. Pro $X$ referencí a $A$ aktuátorů se alokuje $A \times X$ adaptivních FIR filtrů. Konfigurace \code{--reference-count 4 --actuator-count 4} tedy vytvoří 16 sad vah ($X=4$, $A=4$, $M=1$). Výstup aktuátoru $a$ je součet příspěvků všech referencí:
 \begin{equation}
-  y_a[n] = \sum_{r=0}^{R-1}\sum_{i=0}^{L-1} g_{a,r,i}[n]x_r[n-i].
+  y_a[n] = \sum_{r=0}^{X-1}\sum_{i=0}^{L-1} g_{a,r,i}[n]x_r[n-i].
 \end{equation}
-Sekundární výstupy aktuátorů se sčítají do jedné odrušovací složky v chybovém mikrofonu. Všechny adaptivní cesty se učí ze stejného chybového signálu $e[n]$. Každá cesta ale používá filtrovanou referenci přes odhad sekundární cesty daného aktuátoru.
+Sekundární výstupy aktuátorů se sčítají do jedné odrušovací složky v chybovém mikrofonu ($M=1$). Všechny adaptivní cesty se učí ze stejného chybového signálu $e[n]$. Každá cesta ale používá filtrovanou referenci přes odhad sekundární cesty daného aktuátoru.
 
 \subsection{Fixed-point aritmetika}
 Veřejné vzorky a koeficienty mají typ \code{int16\_t} ve stylu Q15. FIR výpočet akumuluje v širším integer typu a výsledek posouvá o 15 bitů. Aktualizace vah podle \eqref{eq:fxlms_update} násobí \code{mu\_q15}, chybový vzorek a filtrovanou referenci; výsledek se škáluje pravým posunem a saturuje do rozsahu \code{int16\_t}. Hostitelský wrapper při multi-channel konfiguraci dělí learning rate čtyřmi, aby adaptace nezačínala s příliš velkým krokem pro větší počet cest.
