@@ -512,17 +512,18 @@ def plot_spectrum_results(
     primary_s = octave_smooth(freqs, primary_db)
     error_s = octave_smooth(freqs, error_db)
     wanted_s = octave_smooth(freqs, wanted_db)
-    attenuation_s = octave_smooth(freqs, drone_db - residual_db)
+    drone_s = octave_smooth(freqs, drone_db)
+    residual_s = octave_smooth(freqs, residual_db)
+    attenuation_s = drone_s - residual_s
 
     has_wanted = bool(np.max(np.abs(wanted)) > 1e-12)
     f_lo = max(20.0, float(freqs[1]) if freqs.size > 1 else 20.0)
     f_hi = fs / 2.0
-    anc_band = min(1000.0, f_hi)
+    positive = freqs > 0
 
     fig, axes = plt.subplots(2, 1, figsize=(7.1, 4.8), sharex=True)
 
     ax = axes[0]
-    ax.axvspan(f_lo, anc_band, color="tab:blue", alpha=0.07)
     ax.semilogx(freqs, primary_s, color="#d62728", label=r"noisy input $d[n]$")
     ax.semilogx(freqs, error_s, color="#2ca02c", label=r"ANC output $e[n]$")
     if has_wanted:
@@ -531,14 +532,22 @@ def plot_spectrum_results(
     ax.set_title("Spectrum: microphone vs. ANC output")
     ax.legend(loc="lower left", ncol=3)
 
+    # Full attenuation curve, including frequencies where the controller ADDS
+    # energy (negative). Green = reduced, red = added. The added levels sit far
+    # below the drone tones (see top panel), so they barely affect the average.
     ax = axes[1]
-    ax.axvspan(f_lo, anc_band, color="tab:blue", alpha=0.07, label="ANC band (<1 kHz)")
-    ax.semilogx(freqs, attenuation_s, color="#1f77b4", label="drone attenuation")
-    ax.axhline(0.0, color="black", lw=0.8, alpha=0.55)
+    ax.set_xscale("log")
+    f_pos = freqs[positive]
+    att_pos = attenuation_s[positive]
+    ax.fill_between(f_pos, att_pos, 0.0, where=att_pos >= 0.0,
+                    color="#2ca02c", alpha=0.25, interpolate=True)
+    ax.fill_between(f_pos, att_pos, 0.0, where=att_pos < 0.0,
+                    color="#d62728", alpha=0.25, interpolate=True)
+    ax.plot(f_pos, att_pos, color="#1f77b4", lw=1.0)
+    ax.axhline(0.0, color="black", lw=0.8, alpha=0.6)
     ax.set_ylabel("Attenuation [dB]")
     ax.set_xlabel("Frequency [Hz]")
-    ax.set_title("Drone attenuation (positive = reduced)")
-    ax.legend(loc="upper right")
+    ax.set_title("Drone attenuation (green = reduced, red = added)")
 
     axes[0].set_xlim(f_lo, f_hi)
     fig.align_ylabels(axes)

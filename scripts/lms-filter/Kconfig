@@ -16,7 +16,7 @@ menu "FXLMS ANC demo"
 
     config FXLMS_MU_Q15
         int "Normalized filtered-x LMS learning rate in Q15"
-        default 16384
+        default 3000
         range 0 32767
         help
             Normalized (NLMS-style) learning rate encoded as Q15, i.e. 32767
