@@ -89,22 +89,22 @@ Po průchodu sekundární cestou vznikne odrušovací složka $c_y[n] = C(z)y[n]
 
 Změna vah $g_i[n]$ se v mikrofonu projeví až přes sekundární cestu. FxLMS proto v adaptační větvi nepoužívá přímo $x[n]$, ale filtrovanou referenci
 \begin{equation}
-  x_f[n] = \hat{C}(z)x[n],
+  x'[n] = \hat{C}(z)x[n],
 \end{equation}
 kde $\hat{C}(z)$ je odhad sekundární cesty. Aktualizace vah používá \emph{normalizovaný} krok (varianta NLMS pro FxLMS)
 \begin{equation}
-  g_i[n+1] = g_i[n] + \frac{\mu}{P[n]}\, e[n]\,x_f[n-i],
+  g_i[n+1] = g_i[n] + \frac{\mu}{P[n]}\, e[n]\,x'[n-i],
   \label{eq:fxlms_update}
 \end{equation}
 kde $\mu$ je bezrozměrná rychlost učení a $P[n]$ je okamžitý výkon filtrované reference v okně délky filtru $L$,
 \begin{equation}
-  P[n] = \varepsilon + \sum_{i=0}^{L-1} x_f^2[n-i].
+  P[n] = \varepsilon + \sum_{i=0}^{L-1} {x'}^2[n-i].
   \label{eq:fxlms_power}
 \end{equation}
 Kladná konstanta $\varepsilon$ brání dělení nulou a~omezuje velikost kroku při slabé referenci. Implementace používá aritmetiku Q15 a~saturuje výstup i~váhy.
 
 \subsection*{Normalizovaný krok a jeho význam}
-U~běžného LMS je velikost aktualizace $\mu\,e[n]\,x_f[n-i]$ přímo závislá na výkonu reference. Hodnota $\mu$ zvolená pro jednu úroveň vstupu proto může při silnějším signálu způsobit nestabilitu a~při slabším signálu zpomalit konvergenci. Normalizace výkonem $P[n]$ tuto závislost omezuje. Parametr $\mu$ je bezrozměrný, obvykle se volí v~rozsahu $0<\mu\lesssim 1$ a~v~této práci má hodnotu přibližně 0{,}09 (3000 ve~formátu Q15). Ve vícekanálové variantě zahrnuje $P[n]$ všechny reference a~aktuátory, takže se $\mu$ nemusí přepočítávat podle počtu kanálů.
+U~běžného LMS je velikost aktualizace $\mu\,e[n]\,x'[n-i]$ přímo závislá na výkonu reference. Hodnota $\mu$ zvolená pro jednu úroveň vstupu proto může při silnějším signálu způsobit nestabilitu a~při slabším signálu zpomalit konvergenci. Normalizace výkonem $P[n]$ tuto závislost omezuje. Parametr $\mu$ je bezrozměrný, obvykle se volí v~rozsahu $0<\mu\lesssim 1$ a~v~této práci má hodnotu přibližně 0{,}09 (3000 ve~formátu Q15). Ve vícekanálové variantě zahrnuje $P[n]$ všechny reference a~aktuátory, takže se $\mu$ nemusí přepočítávat podle počtu kanálů.
 
 \subsection*{Vektorové rozšíření}
 
@@ -132,11 +132,11 @@ V režimu \emph{MISO} (viz obr.~\ref{fig:fxlms_schema_multiple}) vstupuje do C j
 \begin{equation}
   y_a[n] = \sum_{r=0}^{X-1}\sum_{i=0}^{L-1} g_{a,r,i}[n]x_r[n-i].
 \end{equation}
-Sekundární výstupy aktuátorů se sčítají do jedné odrušovací složky v chybovém mikrofonu ($M=1$). Všechny adaptivní cesty se učí ze stejného chybového signálu $e[n]$. Každá cesta ale používá vlastní filtrovanou referenci $x_{f,a,r}[n]=\hat{C}_a(z)x_r[n]$ přes odhad sekundární cesty daného aktuátoru a~aktualizace váhy $g_{a,r,i}$ má tvar~\eqref{eq:fxlms_update} s~$x_f$ nahrazeným za $x_{f,a,r}$.
+Sekundární výstupy aktuátorů se sčítají do jedné odrušovací složky v chybovém mikrofonu ($M=1$). Všechny adaptivní cesty se učí ze stejného chybového signálu $e[n]$. Každá cesta ale používá vlastní filtrovanou referenci $x'_{a,r}[n]=\hat{C}_a(z)x_r[n]$ přes odhad sekundární cesty daného aktuátoru a~aktualizace váhy $g_{a,r,i}$ má tvar~\eqref{eq:fxlms_update} s~$x'$ nahrazeným za $x'_{a,r}$.
 
 Normalizační výkon $P[n]$ z~\eqref{eq:fxlms_power} se ve vícekanálovém případě sčítá přes \emph{všechny} dvojice reference--aktuátor,
 \begin{equation}
-  P[n] = \varepsilon + \sum_{a=0}^{A-1}\sum_{r=0}^{X-1}\sum_{i=0}^{L-1} x_{f,a,r}^2[n-i].
+  P[n] = \varepsilon + \sum_{a=0}^{A-1}\sum_{r=0}^{X-1}\sum_{i=0}^{L-1} {x'}_{a,r}^2[n-i].
   \label{eq:fxlms_power_multi}
 \end{equation}
 Součet zohledňuje počet i~energii kanálů. Se vzrůstajícím $X$ a~$A$ se efektivní krok zmenší, zatímco hodnota $\mu$ zůstane stejná. Předchozí implementace dělila $\mu$ ve vícekanálovém režimu pevnou konstantou, což zpomalovalo adaptaci a~snižovalo dosažený útlum.
@@ -154,7 +154,7 @@ Pole \code{k\_secondary\_path} obsahuje pro každý aktuátor mírně odlišnou 
 Blok $C_a(z)$ zastupuje aktuátor i~šíření zvuku k~mikrofonu. Simulace tyto části dále nerozlišuje. Odhad $\hat{C}_a(z)$ tvoří další čtyřkoeficientový FIR filtr. Jeho koeficienty v~poli \code{k\_secondary\_path\_estimate} jsou podobné, ale ne shodné s~modelem skutečné cesty. Odhad filtruje pouze reference při aktualizaci vah a~nepodílí se přímo na výpočtu $e[n]$.
 
 \subsection{Fixed-point aritmetika}
-Vzorky a~koeficienty veřejného rozhraní mají typ \code{int16\_t} a~formát Q15. FIR filtr akumuluje součiny v~širším celočíselném typu a~výsledek posune o~15 bitů. Aktualizace vah podle \eqref{eq:fxlms_update} používá 64bitovou aritmetiku. Čitatel $\mu\,e[n]\,x_f[n-i]$, kde $\mu=\code{mu\_q15}/2^{15}$, se celočíselně vydělí výkonem $P[n]$. Přírůstek váhy se poté saturuje do rozsahu \code{int16\_t}. Výkon je uložen jako klouzavý součet čtverců přes okno délky $L$ a~všechny kanály. Při každém vzorku se odečte nejstarší čtverec a~přičte nový, takže aktualizace stojí $O(1)$ operací na kanál místo $O(L)$. Regularizace $\varepsilon$ závisí na délce filtru a~počtu kanálů. Pro všechny konfigurace se používá stejná hodnota \code{mu\_q15}.
+Vzorky a~koeficienty veřejného rozhraní mají typ \code{int16\_t} a~formát Q15. FIR filtr akumuluje součiny v~širším celočíselném typu a~výsledek posune o~15 bitů. Aktualizace vah podle \eqref{eq:fxlms_update} používá 64bitovou aritmetiku. Čitatel $\mu\,e[n]\,x'[n-i]$, kde $\mu=\code{mu\_q15}/2^{15}$, se celočíselně vydělí výkonem $P[n]$. Přírůstek váhy se poté saturuje do rozsahu \code{int16\_t}. Výkon je uložen jako klouzavý součet čtverců přes okno délky $L$ a~všechny kanály. Při každém vzorku se odečte nejstarší čtverec a~přičte nový, takže aktualizace stojí $O(1)$ operací na kanál místo $O(L)$. Regularizace $\varepsilon$ závisí na délce filtru a~počtu kanálů. Pro všechny konfigurace se používá stejná hodnota \code{mu\_q15}.
 
 \section{Experimentální metodika}
 Experiment používá syntetická data. Python vytváří hluk z~několika motorových referencí, které se liší otáčkami, zesílením, zpožděním a~primární FIR cestou. Užitečný WAV signál se normalizuje, upraví na délku simulace a~přičte k~primárnímu mikrofonnímu signálu. Výstupem FxLMS je chybový signál, ve kterém má zůstat užitečný impulz a~klesnout složka korelovaná s~motory.
