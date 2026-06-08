@@ -81,19 +81,19 @@
 % Bus marks and labels
 \draw[line width=0.8pt] ($(xsplit)!0.45!(P.west)+(-0.08,-0.16)$) --
                        ($(xsplit)!0.45!(P.west)+(0.08,0.16)$);
-\node[above] at ($(xsplit)!0.45!(P.west)$) {\scriptsize $X$};
+\node[above] at ($(xsplit)!0.45!(P.west)$) {\scriptsize $R$};
 
 \draw[line width=0.8pt] ($(xmid)!0.45!(G.west)+(-0.08,-0.16)$) --
                        ($(xmid)!0.45!(G.west)+(0.08,0.16)$);
-\node[above] at ($(xmid)!0.45!(G.west)$) {\scriptsize $X$};
+\node[above] at ($(xmid)!0.45!(G.west)$) {\scriptsize $R$};
 
 \draw[line width=0.8pt] ($(xlow)!0.45!(Chat.north)+(-0.08,-0.16)$) --
                        ($(xlow)!0.45!(Chat.north)+(0.08,0.16)$);
-\node[right] at ($(xlow)!0.55!(Chat.north)$) {\scriptsize $X$};
+\node[right] at ($(xlow)!0.55!(Chat.north)$) {\scriptsize $R$};
 
 \draw[line width=0.8pt] ($(G.east)!0.45!(C.west)+(-0.08,-0.16)$) --
                        ($(G.east)!0.45!(C.west)+(0.08,0.16)$);
-\node[above] at ($(G.east)!0.45!(C.west)$) {\scriptsize $X$};
+\node[above] at ($(G.east)!0.45!(C.west)$) {\scriptsize $A$};
 
 \draw[line width=0.8pt] ($(P.east)!0.55!(sum.west)+(-0.08,-0.16)$) --
                        ($(P.east)!0.55!(sum.west)+(0.08,0.16)$);
@@ -113,7 +113,7 @@
 
 \draw[line width=0.8pt] ($(Chat.east)!0.45!(mul.west)+(-0.08,-0.16)$) --
                        ($(Chat.east)!0.45!(mul.west)+(0.08,0.16)$);
-\node[below] at ($(Chat.east)!0.45!(mul.west)$) {\scriptsize $X$};
+\node[below] at ($(Chat.east)!0.45!(mul.west)$) {\scriptsize $R$};
 
 % Dashed adaptive block
 \draw[dashed]
@@ -122,9 +122,9 @@
     ($(mul.south east)+(0.9,-0.55)$);
 
 % Dimensions
-\node[below=1mm of x] {\scriptsize $\mathbf{x}\in\mathbb{R}^{X}$};
-\node[below=1mm of G] {\scriptsize $\mathbf{G}: X\times X$};
-\node[below=1mm of C] {\scriptsize $\mathbf{C}: M\times X$};
+\node[above=1mm of x] {\scriptsize $\mathbf{x}\in\mathbb{R}^{R}$};
+\node[below=1mm of G] {\scriptsize $\mathbf{G}: A\times R$};
+\node[below=1mm of C] {\scriptsize $\mathbf{C}: M\times A$};
 \node[above=1mm of e] {\scriptsize $\mathbf{e}\in\mathbb{R}^{M}$};
 
 \end{tikzpicture}

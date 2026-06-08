@@ -108,14 +108,14 @@ U~běžného LMS je velikost aktualizace $\mu\,e[n]\,x'[n-i]$ přímo závislá 
 
 \subsection*{Vektorové rozšíření}
 
-Vícekanálovou variantu zapisujeme vektorově (obr.~\ref{fig:fxlms_schema_multiple}). Symbol $X$ označuje počet motorových referencí a~$M$ počet chybových mikrofonů. Referenční vektor $\mathbf{x}(n)\in\mathbb{R}^{X}$ vstupuje do maticového adaptivního filtru $\mathbf{G}(z)\in\mathbb{R}^{X\times X}$, který vytváří $X$ signálů pro aktuátory. Sekundární cesta $\mathbf{C}(z)\in\mathbb{R}^{M\times X}$ převádí jejich výstupy na chybový vektor $\mathbf{e}(n)\in\mathbb{R}^{M}$. Pro aktualizaci vah se reference filtrují odhadem $\hat{\mathbf{C}}(z)$.
+Vícekanálovou variantu zapisujeme vektorově (obr.~\ref{fig:fxlms_schema_multiple}). Symbol $R$ označuje počet motorových referencí a~$M$ počet chybových mikrofonů. Referenční vektor $\mathbf{x}(n)\in\mathbb{R}^{R}$ vstupuje do maticového adaptivního filtru $\mathbf{G}(z)\in\mathbb{R}^{A\times R}$, který vytváří $A$ signálů pro aktuátory. Sekundární cesta $\mathbf{C}(z)\in\mathbb{R}^{M\times A}$ převádí jejich výstupy na chybový vektor $\mathbf{e}(n)\in\mathbb{R}^{M}$. Pro aktualizaci vah se reference filtrují odhadem $\hat{\mathbf{C}}(z)$.
 
-V implementaci odpovídá $X$ parametru \code{--reference-count} a $M$ počtu chybových mikrofonů (v současném modelu $M=1$). Počet aktuátorů je nastaven parametrem \code{--actuator-count}; ve zjednodušeném schématu na obr.~\ref{fig:fxlms_schema_multiple} je ztotožněn s~$X$.
+V implementaci odpovídá $R$ parametru \code{--reference-count} a $M$ počtu chybových mikrofonů (v současném modelu $M=1$). Počet aktuátorů je nastaven parametrem \code{--actuator-count}; ve zjednodušeném schématu na obr.~\ref{fig:fxlms_schema_multiple} je ztotožněn s~$R$.
 
 \begin{figure}[htbp]
   \centering
   \includegraphics[width=\columnwidth]{generated/fxlms_schema_multiple.pdf}
-  \caption{Blokové schéma vektorového FxLMS pro $X$ referenčních kanálů a $M$ chybových mikrofonů. Silné šipky označují vektory; křížky na vodičích ukazují dimenzi ($X$ nebo $M$). Adaptivní filtr $\mathbf{G}(z)\in\mathbb{R}^{X\times X}$ generuje $X$ aktuátorových signálů; $\mathbf{C}(z)\in\mathbb{R}^{M\times X}$ je fyzická sekundární cesta; $\hat{\mathbf{C}}(z)$ je její odhad použitý ve filtraci reference.}
+  \caption{Blokové schéma vektorového FxLMS pro $R$ referenčních kanálů a $M$ chybových mikrofonů. Silné šipky označují vektory; křížky na vodičích ukazují dimenzi ($R$, $A$, nebo $M$). Adaptivní filtr $\mathbf{G}(z)\in\mathbb{R}^{A\times R}$ generuje $A$ aktuátorových signálů; $\mathbf{C}(z)\in\mathbb{R}^{M\times A}$ je fyzická sekundární cesta; $\hat{\mathbf{C}}(z)$ je její odhad použitý ve filtraci reference.}
   \label{fig:fxlms_schema_multiple}
 \end{figure}
 
@@ -126,20 +126,20 @@ Implementace je v~modulu \code{scripts/lms-filter}. Pythonový program sestaví 
 SISO varianta používá jednu referenci, jeden aktuátor a~jeden adaptivní FIR filtr $G(z)$. Uchovává jednu historii reference, sekundární cestu $C(z)$ a~její odhad $\hat{C}(z)$.
 
 \subsection{Sum-first a MISO režimy}
-Více motorových referencí lze zpracovat dvěma způsoby. Režim \emph{sum-first} je nejprve sečte v~Pythonu, takže C jádro dostane jediný referenční kanál ($X=1$). Se čtyřmi aktuátory pracují čtyři adaptivní filtry.
+Více motorových referencí lze zpracovat dvěma způsoby. Režim \emph{sum-first} je nejprve sečte v~Pythonu, takže C jádro dostane jediný referenční kanál ($R=1$). Se čtyřmi aktuátory pracují čtyři adaptivní filtry.
 
-V režimu \emph{MISO} (viz obr.~\ref{fig:fxlms_schema_multiple}) vstupuje do C jádra plná matice $X$ referencí. Pro $X$ referencí a $A$ aktuátorů se alokuje $A \times X$ adaptivních FIR filtrů. Konfigurace \code{--reference-count 4 --actuator-count 4} tedy vytvoří 16 sad vah ($X=4$, $A=4$, $M=1$). Výstup aktuátoru $a$ je součet příspěvků všech referencí:
+V režimu \emph{MISO} (viz obr.~\ref{fig:fxlms_schema_multiple}) vstupuje do C jádra plná matice $R$ referencí. Pro $R$ referencí a $A$ aktuátorů se alokuje $A \times R$ adaptivních FIR filtrů. Konfigurace \code{--reference-count 4 --actuator-count 4} tedy vytvoří 16 sad vah ($R=4$, $A=4$, $M=1$). Výstup aktuátoru $a$ je součet příspěvků všech referencí:
 \begin{equation}
-  y_a[n] = \sum_{r=0}^{X-1}\sum_{i=0}^{L-1} g_{a,r,i}[n]x_r[n-i].
+  y_a[n] = \sum_{r=0}^{R-1}\sum_{i=0}^{L-1} g_{a,r,i}[n]x_r[n-i].
 \end{equation}
 Sekundární výstupy aktuátorů se sčítají do jedné odrušovací složky v chybovém mikrofonu ($M=1$). Všechny adaptivní cesty se učí ze stejného chybového signálu $e[n]$. Každá cesta ale používá vlastní filtrovanou referenci $x'_{a,r}[n]=\hat{C}_a(z)x_r[n]$ přes odhad sekundární cesty daného aktuátoru a~aktualizace váhy $g_{a,r,i}$ má tvar~\eqref{eq:fxlms_update} s~$x'$ nahrazeným za $x'_{a,r}$.
 
 Normalizační výkon $P[n]$ z~\eqref{eq:fxlms_power} se ve vícekanálovém případě sčítá přes \emph{všechny} dvojice reference--aktuátor,
 \begin{equation}
-  P[n] = \varepsilon + \sum_{a=0}^{A-1}\sum_{r=0}^{X-1}\sum_{i=0}^{L-1} {x'}_{a,r}^2[n-i].
+  P[n] = \varepsilon + \sum_{a=0}^{A-1}\sum_{r=0}^{R-1}\sum_{i=0}^{L-1} {x'}_{a,r}^2[n-i].
   \label{eq:fxlms_power_multi}
 \end{equation}
-Součet zohledňuje počet i~energii kanálů. Se vzrůstajícím $X$ a~$A$ se efektivní krok zmenší, zatímco hodnota $\mu$ zůstane stejná. Předchozí implementace dělila $\mu$ ve vícekanálovém režimu pevnou konstantou, což zpomalovalo adaptaci a~snižovalo dosažený útlum.
+Součet zohledňuje počet i~energii kanálů. Se vzrůstajícím $R$ a~$A$ se efektivní krok zmenší, zatímco hodnota $\mu$ zůstane stejná. Předchozí implementace dělila $\mu$ ve vícekanálovém režimu pevnou konstantou, což zpomalovalo adaptaci a~snižovalo dosažený útlum.
 
 Sekundární cesta $C(z)$ nevychází z~geometrie ani z~měření skutečného reproduktoru. Každému aktuátoru $a$ odpovídá pevný čtyřkoeficientový FIR filtr $C_a(z)$ v~aritmetice Q15. Na jeho vstupu je řídicí signál $y_a[n]$ a~na výstupu simulovaná odrušovací složka v~místě chybového mikrofonu:
 \begin{equation}
@@ -181,7 +181,7 @@ přičemž obě střední kvadratické chyby se počítají ve~vyhodnocovacím o
 Spektrální vyhodnocení na~obr.~\ref{fig:spectrum_result} probíhá na témže okně 5--6\,s. Výkonové spektrální hustoty počítáme Welchovou metodou (Hannovo okno 4096 vzorků, 50\,\% překryv), čímž průměrujeme přes několik segmentů. Křivky jsou pro čitelnost vyhlazeny 1/12oktávovým klouzavým průměrem a~vyneseny na~logaritmické frekvenční ose. Útlum v~závislosti na~frekvenci $A(f)=\mathrm{PSD}_{d_{\mathrm{drone}}}(f)-\mathrm{PSD}_{e-s}(f)$ vykreslujeme přes celé pásmo: zeleně frekvence, kde regulátor energii potlačuje, červeně frekvence, kde ji naopak přidává. Na~frekvencích s~malou energií dronového hluku regulátor vkládá slabý anti-hluk; ověřili jsme, že reziduum odpovídá výstupu sekundárních cest, jde tedy o~reálně vstříknutou energii, nikoli o~numerický artefakt. Tato složka však leží o~40\,dB i~více pod tonálními složkami dronu (viz absolutní úrovně v~horním panelu), takže do~celkové energie přispívá zanedbatelně; energeticky vážený průměr přes celé pásmo je díky Parsevalově rovnosti shodný s~$A_{\mathrm{drone}}$ podle~\eqref{eq:drone_atten} a~uvádíme jej v~tabulce~\ref{tab:metrics}.
 
 \section{Výsledky}
-Tabulka~\ref{tab:metrics} uvádí výsledky tří konfigurací. Útlum je energeticky vážený průměr v~okně 5--6\,s podle~\eqref{eq:drone_atten}. Ve všech případech jsme použili impulzní WAV s~\code{--wanted-gain 0.1}, $\mu=3000$ v~Q15, délku filtru $L=64$ a~vzorkovací kmitočet $f_s=16$\,kHz. Útlum počítáme z~reziduálního hluku $e-s$ po odečtení užitečného signálu. Sum-first i~MISO používají tutéž čtyřmotorovou scénu. V~sum-first se čtyři motorové reference před vstupem do C jádra sečtou, takže jádro zpracovává jediný referenční kanál ($X=1$). SISO používá odlišnou jednomotorovou scénu, a~slouží proto jako samostatný referenční experiment, nikoli jako přímo srovnatelná varianta čtyřmotorového případu.
+Tabulka~\ref{tab:metrics} uvádí výsledky tří konfigurací. Útlum je energeticky vážený průměr v~okně 5--6\,s podle~\eqref{eq:drone_atten}. Ve všech případech jsme použili impulzní WAV s~\code{--wanted-gain 0.1}, $\mu=3000$ v~Q15, délku filtru $L=64$ a~vzorkovací kmitočet $f_s=16$\,kHz. Útlum počítáme z~reziduálního hluku $e-s$ po odečtení užitečného signálu. Sum-first i~MISO používají tutéž čtyřmotorovou scénu. V~sum-first se čtyři motorové reference před vstupem do C jádra sečtou, takže jádro zpracovává jediný referenční kanál ($R=1$). SISO používá odlišnou jednomotorovou scénu, a~slouží proto jako samostatný referenční experiment, nikoli jako přímo srovnatelná varianta čtyřmotorového případu.
 
 \begin{table}[htbp]
 \caption{Útlum dronu pro jednotlivé konfigurace (okno 5--6\,s)}
@@ -189,7 +189,7 @@ Tabulka~\ref{tab:metrics} uvádí výsledky tří konfigurací. Útlum je energe
 \centering
 \begin{tabular}{lcccc}
 \toprule
-Režim & Motory & $X$ & Aktuátory & Útlum [dB] \\
+Režim & Motory & $R$ & Aktuátory & Útlum [dB] \\
 \midrule
 SISO & 1 & 1 & 1 & 24{,}5 \\
 sum-first & 4 & 1 & 4 & 6{,}7 \\
