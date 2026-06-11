@@ -276,12 +276,15 @@ UniqueId=ce101761-10fe-4fe4-becb-190e6b908eea
 Description=node
 AllowFabrication=0
 ParameterCount=0
-VariationCount=5
+VariationCount=8
 Variation1=Designator=R1|UniqueId=\WWVQEOYE\TKQCMFKD|Kind=1|AlternatePart=
 Variation2=Designator=J2|UniqueId=\WWVQEOYE\GYECOTKJ|Kind=1|AlternatePart=
 Variation3=Designator=C8|UniqueId=\WWVQEOYE\GKESQKSW|Kind=1|AlternatePart=
-Variation4=Designator=R19|UniqueId=\EYTJMWFC\GPHKXZKU|Kind=0|AlternatePart=
-Variation5=Designator=R20|UniqueId=\EYTJMWFC\ZYRQMHJM|Kind=1|AlternatePart=
+Variation4=Designator=R20|UniqueId=\EYTJMWFC\ZYRQMHJM|Kind=1|AlternatePart=
+Variation5=Designator=C35|UniqueId=\WWVQEOYE\LHXAAOLB|Kind=1|AlternatePart=
+Variation6=Designator=C36|UniqueId=\WWVQEOYE\RFRTXNTK|Kind=1|AlternatePart=
+Variation7=Designator=R33|UniqueId=\WWVQEOYE\IUQSGNWP|Kind=1|AlternatePart=
+Variation8=Designator=R?|UniqueId=\WWVQEOYE\TOBRNHZR|Kind=1|AlternatePart=
 ParamVariationCount=0
 
 [Parameter1]
@@ -974,6 +977,16 @@ Type158=1
 Type159=1
 Type160=1
 Type161=1
+Type162=1
+Type163=1
+Type164=1
+Type165=1
+Type166=1
+Type167=1
+Type168=1
+Type169=1
+Type170=1
+Type171=1
 
 [Difference Levels]
 Type1=1
@@ -1064,6 +1077,13 @@ Type85=1
 Type86=1
 Type87=1
 Type88=1
+Type89=1
+Type90=1
+Type91=1
+Type92=1
+Type93=1
+Type94=1
+Type95=1
 
 [Electrical Rules Check]
 Type1=1
@@ -1283,30 +1303,6 @@ ComponentDesignItemID0=ECK+100n16V
 ComponentSymbolReference0=ECK+100n16V
 ComponentUpdate0=1
 ComponentIsDeviceSheet0=0
-ComponentLibIdentifierKind1=Library Name And Type
-ComponentLibraryIdentifier1=bch-lib.SchLib
-ComponentDesignItemID1=ECK+10u10V
-ComponentSymbolReference1=ECK+10u10V
-ComponentUpdate1=1
-ComponentIsDeviceSheet1=0
-ComponentLibIdentifierKind2=Library Name And Type
-ComponentLibraryIdentifier2=bch-lib.SchLib
-ComponentDesignItemID2=EMCU+E22-900M22S
-ComponentSymbolReference2=EMCU+E22-900M22S
-ComponentUpdate2=1
-ComponentIsDeviceSheet2=0
-ComponentLibIdentifierKind3=Library Name And Type
-ComponentLibraryIdentifier3=bch-lib.SchLib
-ComponentDesignItemID3=ER+10K
-ComponentSymbolReference3=ER+10K
-ComponentUpdate3=1
-ComponentIsDeviceSheet3=0
-ComponentLibIdentifierKind4=Library Name And Type
-ComponentLibraryIdentifier4=resonect.SchLib
-ComponentDesignItemID4=ER+33R
-ComponentSymbolReference4=ER+33R
-ComponentUpdate4=1
-ComponentIsDeviceSheet4=0
 FullReplace=1
 UpdateDesignatorLock=1
 UpdatePartIDLock=1
@@ -1347,20 +1343,8 @@ ParameterUpdate11=1
 ModelTypeGroup0=PCBLIB
 ModelTypeUpdate0=1
 ModelType0=PCBLIB
-ModelName0=C0603
+ModelName0=CAPC1608X95N
 ModelUpdate0=1
-ModelType1=PCBLIB
-ModelName1=CAPC1608X95N
-ModelUpdate1=1
-ModelType2=PCBLIB
-ModelName2=E22-900M22S
-ModelUpdate2=1
-ModelType3=PCBLIB
-ModelName3=RESC1608X50N
-ModelUpdate3=1
-ModelType4=PCBLIB
-ModelName4=RESC1608X55N
-ModelUpdate4=1
 
 [DatabaseUpdateOptions]
 SelectedOnly=0
@@ -1373,14 +1357,16 @@ Net1=NetName=NetC1_1|NetColor=$00FF6EFF
 Net2=NetName=NetC1_2|NetColor=$00FF6EFF
 Net3=NetName=NetC2_1|NetColor=$00FF6EFF
 Net4=NetName=NetC2_2|NetColor=$00FF6EFF
-Net5=NetName=NetJ2_1|NetColor=$00FF6EFF
-Net6=NetName=NetJ5_A6|NetColor=$00FFFF6E
-Net7=NetName=NetJ5_A7|NetColor=$00FFFF6E
-Net8=NetName=NetL3_24|NetColor=$00FF6EFF
-Net9=NetName=USB_D_N|NetColor=$00FFFF6E
-Net10=NetName=USB_D_P|NetColor=$00FFFF6E
-Net11=NetName=USB_DN|NetColor=$00FFFF6E
-Net12=NetName=USB_DP|NetColor=$00FFFF6E
+Net5=NetName=NetC36_1|NetColor=$00FF6EFF
+Net6=NetName=NetJ2_1|NetColor=$00FF6EFF
+Net7=NetName=NetJ5_A6|NetColor=$00FFFF6E
+Net8=NetName=NetJ5_A7|NetColor=$00FFFF6E
+Net9=NetName=NetL3_23|NetColor=$00FF6EFF
+Net10=NetName=NetL3_24|NetColor=$00FF6EFF
+Net11=NetName=USB_D_N|NetColor=$00FFFF6E
+Net12=NetName=USB_D_P|NetColor=$00FFFF6E
+Net13=NetName=USB_DN|NetColor=$00FFFF6E
+Net14=NetName=USB_DP|NetColor=$00FFFF6E
 
 [Comparison Options]
 ComparisonOptions0=Kind=Net|MinPercent=75|MinMatch=3|ShowMatch=0|UseName=-1|InclAllRules=0
