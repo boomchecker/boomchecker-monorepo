@@ -1,6 +1,6 @@
 ﻿[Design]
 Version=1.0
-HierarchyMode=0
+HierarchyMode=2
 ChannelRoomNamingStyle=0
 ReleasesFolder=
 ChannelDesignatorFormatString=$Component_$RoomName
@@ -9,12 +9,12 @@ OpenOutputs=1
 ArchiveProject=0
 TimestampOutput=0
 SeparateFolders=0
-TemplateLocationPath=
+TemplateLocationPath=C:\Users\maxam\Documents\GIT\03_skola\boomchecker-monorepo\hw\altium_template\
 PinSwapBy_Netlabel=1
 PinSwapBy_Pin=1
 AllowPortNetNames=0
 AllowSheetEntryNetNames=1
-AppendSheetNumberToLocalNets=0
+AppendSheetNumberToLocalNets=1
 NetlistSinglePinNets=0
 DefaultConfiguration=Sources
 UserID=0xFFFFFFFF
@@ -271,6 +271,40 @@ DItemRevisionGUID=
 GenerateClassCluster=0
 DocumentUniqueId=
 
+[Document14]
+DocumentPath=top.Harness
+AnnotationEnabled=1
+AnnotateStartValue=1
+AnnotationIndexControlEnabled=0
+AnnotateSuffix=
+AnnotateScope=All
+AnnotateOrder=-1
+DoLibraryUpdate=1
+DoDatabaseUpdate=1
+ClassGenCCAutoEnabled=1
+ClassGenCCAutoRoomEnabled=0
+ClassGenNCAutoScope=None
+DItemRevisionGUID=
+GenerateClassCluster=0
+DocumentUniqueId=
+
+[Document15]
+DocumentPath=imu.Harness
+AnnotationEnabled=1
+AnnotateStartValue=1
+AnnotationIndexControlEnabled=0
+AnnotateSuffix=
+AnnotateScope=All
+AnnotateOrder=-1
+DoLibraryUpdate=1
+DoDatabaseUpdate=1
+ClassGenCCAutoEnabled=1
+ClassGenCCAutoRoomEnabled=0
+ClassGenNCAutoScope=None
+DItemRevisionGUID=
+GenerateClassCluster=0
+DocumentUniqueId=
+
 [ProjectVariant1]
 UniqueId=ce101761-10fe-4fe4-becb-190e6b908eea
 Description=node
@@ -288,24 +322,24 @@ Variation8=Designator=R?|UniqueId=\WWVQEOYE\TOBRNHZR|Kind=1|AlternatePart=
 ParamVariationCount=0
 
 [Parameter1]
-Name=Author
-Value=Martin Maxa
+Name=Revision
+Value=0.1
 
 [Parameter2]
-Name=Date
-Value=2025-05-20
-
-[Parameter3]
-Name=Name
-Value=node
-
-[Parameter4]
 Name=Project
 Value=BCH
 
+[Parameter3]
+Name=Name
+Value=stmnode
+
+[Parameter4]
+Name=Date
+Value=2025-05-20
+
 [Parameter5]
-Name=Revision
-Value=0.2
+Name=Author
+Value=Martin Maxa
 
 [Configuration1]
 Name=Sources
@@ -1287,10 +1321,10 @@ GlobalIndexSortLocation=0
 CompClassManualEnabled=0
 CompClassManualRoomEnabled=0
 NetClassAutoBusEnabled=1
-NetClassAutoCompEnabled=0
-NetClassAutoNamedHarnessEnabled=0
+NetClassAutoCompEnabled=1
+NetClassAutoNamedHarnessEnabled=1
 NetClassManualEnabled=1
-NetClassSeparateForBusSections=0
+NetClassSeparateForBusSections=1
 
 [LibraryUpdateOptions]
 SelectedOnly=1
@@ -1303,6 +1337,18 @@ ComponentDesignItemID0=ECK+100n16V
 ComponentSymbolReference0=ECK+100n16V
 ComponentUpdate0=1
 ComponentIsDeviceSheet0=0
+ComponentLibIdentifierKind1=Library Name And Type
+ComponentLibraryIdentifier1=bch-lib.SchLib
+ComponentDesignItemID1=ECK+10u10V
+ComponentSymbolReference1=ECK+10u10V
+ComponentUpdate1=1
+ComponentIsDeviceSheet1=0
+ComponentLibIdentifierKind2=Library Name And Type
+ComponentLibraryIdentifier2=bch-lib.SchLib
+ComponentDesignItemID2=EU+LIS2MDLTR
+ComponentSymbolReference2=EU+LIS2MDLTR
+ComponentUpdate2=1
+ComponentIsDeviceSheet2=0
 FullReplace=1
 UpdateDesignatorLock=1
 UpdatePartIDLock=1
@@ -1343,8 +1389,14 @@ ParameterUpdate11=1
 ModelTypeGroup0=PCBLIB
 ModelTypeUpdate0=1
 ModelType0=PCBLIB
-ModelName0=CAPC1608X95N
+ModelName0=C0603
 ModelUpdate0=1
+ModelType1=PCBLIB
+ModelName1=CAPC1608X95N
+ModelUpdate1=1
+ModelType2=PCBLIB
+ModelName2=LGA-12
+ModelUpdate2=1
 
 [DatabaseUpdateOptions]
 SelectedOnly=0
@@ -1353,20 +1405,23 @@ UpdateToLatestRevision=1
 PartTypes=0
 
 [NetInfos]
-Net1=NetName=NetC1_1|NetColor=$00FF6EFF
-Net2=NetName=NetC1_2|NetColor=$00FF6EFF
-Net3=NetName=NetC2_1|NetColor=$00FF6EFF
-Net4=NetName=NetC2_2|NetColor=$00FF6EFF
-Net5=NetName=NetC36_1|NetColor=$00FF6EFF
-Net6=NetName=NetJ2_1|NetColor=$00FF6EFF
-Net7=NetName=NetJ5_A6|NetColor=$00FFFF6E
-Net8=NetName=NetJ5_A7|NetColor=$00FFFF6E
-Net9=NetName=NetL3_23|NetColor=$00FF6EFF
-Net10=NetName=NetL3_24|NetColor=$00FF6EFF
-Net11=NetName=USB_D_N|NetColor=$00FFFF6E
-Net12=NetName=USB_D_P|NetColor=$00FFFF6E
-Net13=NetName=USB_DN|NetColor=$00FFFF6E
-Net14=NetName=USB_DP|NetColor=$00FFFF6E
+Net1=NetName=N00000|NetColor=$00FFFF6E
+Net2=NetName=NetC1_1|NetColor=$00FF6EFF
+Net3=NetName=NetC1_2|NetColor=$00FF6EFF
+Net4=NetName=NetC2_1|NetColor=$00FF6EFF
+Net5=NetName=NetC2_2|NetColor=$00FF6EFF
+Net6=NetName=NetC36_1|NetColor=$00FF6EFF
+Net7=NetName=NetJ2_1|NetColor=$00FF6EFF
+Net8=NetName=NetJ5_A6|NetColor=$00FFFF6E
+Net9=NetName=NetJ5_A7|NetColor=$00FFFF6E
+Net10=NetName=NetL3_23|NetColor=$00FF6EFF
+Net11=NetName=NetL3_24|NetColor=$00FF6EFF
+Net12=NetName=USB_D_1_N|NetColor=$00FFFF6E
+Net13=NetName=USB_D_1_P|NetColor=$00FFFF6E
+Net14=NetName=USB_D_N|NetColor=$00FFFF6E
+Net15=NetName=USB_D_P|NetColor=$00FFFF6E
+Net16=NetName=USB_DN|NetColor=$00FFFF6E
+Net17=NetName=USB_DP|NetColor=$00FFFF6E
 
 [Comparison Options]
 ComparisonOptions0=Kind=Net|MinPercent=75|MinMatch=3|ShowMatch=0|UseName=-1|InclAllRules=0
