@@ -12,8 +12,8 @@ def generate_svm_test_vectors(output_header, n_samples_per_class=5):
     analyzer = MFCCAnalyzer(sample_rate=16000)
     
     # Načtení dat (Drony a Hluk)
-    df_drone = pd.read_parquet('train-00038-of-00039.parquet').sample(n_samples_per_class, random_state=1)
-    df_noise = pd.read_parquet('train-00003-of-00039.parquet')
+    df_drone = pd.read_parquet('wav/train-00038-of-00039.parquet').sample(n_samples_per_class, random_state=1)
+    df_noise = pd.read_parquet('wav/train-00003-of-00039.parquet')
     df_noise = df_noise[df_noise['label'] == 0].sample(n_samples_per_class, random_state=1)
     
     test_vectors = []

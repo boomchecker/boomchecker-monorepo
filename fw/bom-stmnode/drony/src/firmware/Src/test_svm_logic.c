@@ -11,6 +11,8 @@ int main(void) {
     printf("--- SVM C-Logic Validation Test ---\n");
     printf("Testing on %d real vectors from Parquet datasets...\n\n", NUM_TEST_VECTORS);
 
+    svm_classifier_init();
+
     int passed = 0;
     for (int i = 0; i < NUM_TEST_VECTORS; i++) {
         float decision = svm_get_decision_value(svm_test_vectors[i]);
