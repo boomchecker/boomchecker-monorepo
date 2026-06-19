@@ -1,0 +1,6 @@
+build/
+python/venv/
+python/__pycache__/
+python/out/
+sdkconfig
+

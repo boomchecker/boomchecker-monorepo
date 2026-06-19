@@ -1,0 +1,43 @@
+menu "FXLMS ANC demo"
+
+    config FXLMS_SAMPLE_RATE_HZ
+        int "Sample rate"
+        default 16000
+        range 8000 48000
+        help
+            Default sample rate used by the PC simulation.
+
+    config FXLMS_TAPS
+        int "Number of adaptive controller taps"
+        default 64
+        range 1 512
+        help
+            FIR length of the adaptive ANC controller G(z).
+
+    config FXLMS_MU_Q15
+        int "Normalized filtered-x LMS learning rate in Q15"
+        default 3000
+        range 0 32767
+        help
+            Normalized (NLMS-style) learning rate encoded as Q15, i.e. 32767
+            corresponds to a step of ~1.0. The update divides this value by the
+            filtered-x power, so it is independent of input level and of the
+            number of reference/actuator channels. Typical stable range is
+            roughly 0.1-0.7 (3277-22938); smaller values improve stability.
+
+    config FXLMS_ADAPT_SHIFT
+        int "Extra FXLMS adaptation right shift"
+        default 0
+        range 0 30
+        help
+            Optional additional right shift applied to the already normalized
+            controller-weight update. Usually left at 0.
+
+    config FXLMS_OUTPUT_LIMIT
+        int "Output saturation limit"
+        default 32767
+        range 1 32767
+        help
+            Absolute saturation limit for output samples.
+
+endmenu
