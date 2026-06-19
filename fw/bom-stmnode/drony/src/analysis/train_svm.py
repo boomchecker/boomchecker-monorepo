@@ -6,6 +6,7 @@ import os
 import glob
 import librosa
 from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
 from sklearn.svm import SVC
 from sklearn.metrics import classification_report, accuracy_score
 import joblib
@@ -96,8 +97,8 @@ def load_local_wavs(base_dir):
 if __name__ == "__main__":
     # 1. Načtení dat z původních parquet souborů (základní šum a drony)
     # Zmenšíme max_samples, abychom dali větší váhu novým datům
-    X_pq1, y_pq1 = load_and_extract_features('wav/train-00038-of-00039.parquet', max_samples=500)
-    X_pq0, y_pq0 = load_and_extract_features('wav/train-00003-of-00039.parquet', max_samples=500)
+    X_pq1, y_pq1 = load_and_extract_features('wav/train-00038-of-00039.parquet', max_samples=2000)
+    X_pq0, y_pq0 = load_and_extract_features('wav/train-00003-of-00039.parquet', max_samples=2000)
     
     # 2. Načtení nových lokálních WAV souborů
     X_loc, y_loc = load_local_wavs('wav')
@@ -116,18 +117,26 @@ if __name__ == "__main__":
     # Split dat (80% trénink, 20% testování)
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
     
-    # Trénování SVM
-    print("\nTrénování SVM klasifikátoru...")
-    clf = SVC(kernel='rbf', C=1.0, gamma='scale', probability=True)
-    clf.fit(X_train, y_train)
+    # Škálování příznaků (StandardScaler)
+    print("\nŠkálování příznaků pomocí StandardScaler...")
+    scaler = StandardScaler()
+    X_train_scaled = scaler.fit_transform(X_train)
+    X_test_scaled = scaler.transform(X_test)
+    
+    # Trénování lineárního SVM s vyváženými vahami tříd
+    print("Trénování lineárního SVM klasifikátoru...")
+    clf = SVC(kernel='linear', class_weight='balanced')
+    clf.fit(X_train_scaled, y_train)
     
     # Evaluace
-    y_pred = clf.predict(X_test)
+    y_pred = clf.predict(X_test_scaled)
     print("\nVýsledky klasifikace na testovacím setu (20 % dat):")
     print(f"Accuracy: {accuracy_score(y_test, y_pred):.4f}")
     print(classification_report(y_test, y_pred))
     
-    # Uložení modelu
+    # Uložení modelu a scaleru
     os.makedirs('models', exist_ok=True)
     joblib.dump(clf, 'models/drone_detector_svm.pkl')
+    joblib.dump(scaler, 'models/scaler.pkl')
     print("Model uložen do: models/drone_detector_svm.pkl")
+    print("Scaler uložen do: models/scaler.pkl")

@@ -27,13 +27,15 @@ def process_file(file_path):
 
 def run_analysis():
     import glob
-    # Load model
+    # Load model and scaler
     model_path = "models/drone_detector_svm.pkl"
-    if not os.path.exists(model_path):
-        print(f"Model not found at {model_path}")
+    scaler_path = "models/scaler.pkl"
+    if not os.path.exists(model_path) or not os.path.exists(scaler_path):
+        print("Model or Scaler not found.")
         return
     
     clf = joblib.load(model_path)
+    scaler = joblib.load(scaler_path)
     
     wav_files = glob.glob("wav/*.wav")
     print(f"Found {len(wav_files)} WAV files for analysis.")
@@ -42,16 +44,18 @@ def run_analysis():
     for path in wav_files:
         name = os.path.basename(path)
         y, sr, mfccs, S_db, feature_vector = process_file(path)
-        # Prediction with probability
-        pred = clf.predict([feature_vector])[0]
-        probs = clf.predict_proba([feature_vector])[0]
+        
+        # Scale features
+        scaled_feature_vector = scaler.transform([feature_vector])[0]
+        
+        # Prediction and decision value
+        pred = clf.predict([scaled_feature_vector])[0]
+        decision = clf.decision_function([scaled_feature_vector])[0]
         
         label = "DRONE" if pred == 1 else "NOISE"
-        # Confidence is probability of the predicted class
-        confidence = probs[1] if pred == 1 else probs[0]
         
-        results.append((name, y, sr, mfccs, S_db, label, confidence))
-        print(f"[{label}] {name:30} | Conf: {confidence:7.2%} | Drone Prob: {probs[1]:7.2%}")
+        results.append((name, y, sr, mfccs, S_db, label, decision))
+        print(f"[{label}] {name:30} | Decision: {decision:8.4f}")
 
     # Plotting (only first 6 to keep it readable)
     to_plot = results[:6]
@@ -60,14 +64,14 @@ def run_analysis():
     fig, axes = plt.subplots(rows * 3, cols, figsize=(15, 5 * rows))
     fig.suptitle("Batch Analysis: Drone Detection Performance", fontsize=18)
 
-    for idx, (name, y, sr, mfccs, S_db, label, confidence) in enumerate(to_plot):
+    for idx, (name, y, sr, mfccs, S_db, label, decision) in enumerate(to_plot):
         r_base = (idx // cols) * 3
         c = idx % cols
         
         # 1. Waveform
         time = np.linspace(0, len(y) / sr, len(y))
         axes[r_base, c].plot(time, y)
-        axes[r_base, c].set_title(f"{name}\nResult: {label} ({confidence:.1%})")
+        axes[r_base, c].set_title(f"{name}\nResult: {label} (Decision: {decision:.2f})")
         
         # 2. PSD
         librosa.display.specshow(S_db, sr=sr, hop_length=512, x_axis='time', y_axis='linear', ax=axes[r_base+1, c])

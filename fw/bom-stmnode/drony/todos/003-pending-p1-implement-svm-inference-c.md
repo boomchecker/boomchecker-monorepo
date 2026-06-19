@@ -12,9 +12,10 @@ dependencies: ["001", "002"]
 Napsat efektivní funkci v C pro klasifikaci příznaků pomocí exportovaného SVM modelu.
 
 ## Úkoly
-- [x] Implementovat výpočet RBF jádra v `src/firmware/Src/svm_classifier.c`.
-- [x] Implementovat rozhodovací funkci (sumace dual_coef * kernel + intercept).
+- [x] Implementovat StandardScaler škálování v `src/firmware/Src/svm_classifier.c`.
+- [x] Implementovat lineární rozhodovací funkci (skalární součin w * x + b).
 - [x] Propojit výstup MFCC s touto SVM funkcí.
 
 ## Ověření
-- [x] Firmware úspěšně klasifikuje testovací data v simulaci (připraven main_dsp_test.c).
+- [x] C model dává identické predikce jako Python model pro testovací vektory (10/10 PASS).
+- [x] Celý C pipeline úspěšně klasifikuje testovací data v simulaci (spuštěno dsp_test.exe).

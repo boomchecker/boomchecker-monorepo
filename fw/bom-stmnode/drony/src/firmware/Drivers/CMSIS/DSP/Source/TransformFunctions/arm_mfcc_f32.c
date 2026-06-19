@@ -81,12 +81,13 @@ void arm_mfcc_f32(
   const float32_t *coefs=S->filterCoefs;
   arm_matrix_instance_f32 pDctMat;
 
-  /* Normalize */
-  arm_absmax_f32(pSrc,S->fftLen,&maxValue,&index);
+  /* RMS Normalize */
+  float32_t rmsValue;
+  arm_rms_f32(pSrc,S->fftLen,&rmsValue);
 
-  if (maxValue != 0.0f)
+  if (rmsValue > 1e-6f)
   {
-     arm_scale_f32(pSrc,1.0f/maxValue,pSrc,S->fftLen);
+     arm_scale_f32(pSrc,1.0f/rmsValue,pSrc,S->fftLen);
   }
 
   /* Multiply by window */
@@ -118,9 +119,9 @@ void arm_mfcc_f32(
   pTmp[1]=0.0f;
 #endif
   arm_cmplx_mag_f32(pTmp,pSrc,S->fftLen);
-  if (maxValue != 0.0f)
+  if (rmsValue > 1e-6f)
   {
-     arm_scale_f32(pSrc,maxValue,pSrc,S->fftLen);
+     arm_scale_f32(pSrc,rmsValue,pSrc,S->fftLen);
   }
 
   /* Apply MEL filters */

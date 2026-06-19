@@ -33,6 +33,13 @@ def download_cmsis_dsp():
         if os.path.exists(dst_inc): shutil.rmtree(dst_inc)
         shutil.copytree(src_inc, dst_inc)
         
+        # Kopírování PrivateInclude
+        src_pinc = os.path.join(root_dir, "PrivateInclude")
+        dst_pinc = os.path.join(dsp_dir, "PrivateInclude")
+        if os.path.exists(src_pinc):
+            if os.path.exists(dst_pinc): shutil.rmtree(dst_pinc)
+            shutil.copytree(src_pinc, dst_pinc)
+        
         # Kopírování Source
         src_src = os.path.join(root_dir, "Source")
         dst_src = os.path.join(dsp_dir, "Source")

@@ -50,8 +50,18 @@ def evaluate_on_file(file_path, model_path, max_samples=1000):
     X_val = np.array(features_list)
     y_val = np.array(labels_list)
     
+    # Load scaler and scale validation features
+    scaler_path = os.path.join(os.path.dirname(model_path), 'scaler.pkl')
+    if os.path.exists(scaler_path):
+        print(f"Loading scaler from: {scaler_path}")
+        scaler = joblib.load(scaler_path)
+        X_val_scaled = scaler.transform(X_val)
+    else:
+        print("Warning: Scaler not found, using raw features.")
+        X_val_scaled = X_val
+        
     # Predikce
-    y_pred = clf.predict(X_val)
+    y_pred = clf.predict(X_val_scaled)
     
     print(f"\n--- Výsledky pro {file_path} ---")
     print(f"Počet testovaných vzorků: {len(y_val)}")
@@ -59,7 +69,7 @@ def evaluate_on_file(file_path, model_path, max_samples=1000):
     print(classification_report(y_val, y_pred))
 
 if __name__ == "__main__":
-    new_file = 'train-00036-of-00039.parquet'
+    new_file = 'wav/train-00036-of-00039.parquet'
     model_file = 'models/drone_detector_svm.pkl'
     
     evaluate_on_file(new_file, model_file)
