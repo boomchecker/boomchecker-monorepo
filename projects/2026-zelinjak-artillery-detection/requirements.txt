@@ -1,0 +1,9 @@
+librosa
+matplotlib
+numpy
+pandas
+pyarrow
+pyserial
+scikit-learn
+scipy
+tensorflow
