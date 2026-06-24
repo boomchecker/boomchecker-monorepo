@@ -1,5 +1,12 @@
 import type { Env } from "./env";
-import { COMMAND_NAME, TEXT_OPTION, MAX_TEXT_LEN } from "./constants";
+import {
+  COMMAND_NAME,
+  TEXT_OPTION,
+  MAX_TEXT_LEN,
+  CALLBACK_PATH,
+  CLAUDE_PREFIX,
+  MAX_DISCORD_MESSAGE,
+} from "./constants";
 import { SafeError } from "./errors";
 import { verifyDiscordRequest } from "./discord/verify";
 import {
@@ -16,7 +23,7 @@ import {
   isThreadChannel,
   type Interaction,
 } from "./discord/payload";
-import { createThread, postUserTurn, fetchTranscript } from "./discord/rest";
+import { createThread, postUserTurn, postToThread, fetchTranscript } from "./discord/rest";
 import { fireRoutine } from "./routine/fire";
 
 export default {
@@ -25,7 +32,14 @@ export default {
       return new Response("Method Not Allowed", { status: 405 });
     }
 
-    // Verify the Ed25519 signature over (timestamp + rawBody) before trusting anything.
+    const url = new URL(request.url);
+
+    // Callback from the routine: deliver its result into the Discord thread.
+    if (url.pathname === CALLBACK_PATH) {
+      return handleCallback(request, env);
+    }
+
+    // Otherwise this is a Discord interaction. Verify the Ed25519 signature first.
     const signature = request.headers.get("x-signature-ed25519");
     const timestamp = request.headers.get("x-signature-timestamp");
     const rawBody = await request.text();
@@ -62,7 +76,7 @@ export default {
       }
 
       // Ack within Discord's 3s window, then do the slow work in the background.
-      ctx.waitUntil(handleCommand(env, interaction, userText));
+      ctx.waitUntil(handleCommand(env, interaction, userText, url.origin));
       return deferredPublic();
     }
 
@@ -70,14 +84,59 @@ export default {
   },
 } satisfies ExportedHandler<Env>;
 
-// Resolve the thread to work in (create one if the command was run in a normal
-// channel), fire the routine with the thread transcript as context, and edit the
-// deferred message. Claude's actual result is posted into the thread later by the
-// routine (via its Discord webhook) — the fire endpoint is asynchronous.
+// Constant-time comparison for the callback bearer token.
+function timingSafeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) {
+    return false;
+  }
+  let mismatch = 0;
+  for (let i = 0; i < a.length; i++) {
+    mismatch |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+  return mismatch === 0;
+}
+
+// Routine -> Worker callback: authenticate the narrow callback token, then post the
+// result into the thread using the bot token. The routine never holds the bot token.
+async function handleCallback(request: Request, env: Env): Promise<Response> {
+  const auth = request.headers.get("authorization") ?? "";
+  if (
+    !env.ROUTINE_CALLBACK_TOKEN ||
+    !timingSafeEqual(auth, `Bearer ${env.ROUTINE_CALLBACK_TOKEN}`)
+  ) {
+    return new Response("Unauthorized", { status: 401 });
+  }
+
+  let body: { thread_id?: string; content?: string };
+  try {
+    body = (await request.json()) as { thread_id?: string; content?: string };
+  } catch {
+    return new Response("Invalid JSON", { status: 400 });
+  }
+  if (!body.thread_id || !body.content) {
+    return new Response("Missing thread_id or content", { status: 400 });
+  }
+
+  try {
+    await postToThread(
+      env,
+      body.thread_id,
+      `${CLAUDE_PREFIX} ${body.content}`.slice(0, MAX_DISCORD_MESSAGE),
+    );
+  } catch {
+    return new Response("Failed to post to Discord", { status: 502 });
+  }
+  return new Response("ok", { status: 200 });
+}
+
+// Resolve the thread (create one if in a normal channel), fire the routine with the
+// thread transcript as context plus a callback URL/token, and edit the deferred
+// message. The routine delivers its result by calling back to CALLBACK_PATH.
 async function handleCommand(
   env: Env,
   interaction: Interaction,
   userText: string,
+  origin: string,
 ): Promise<void> {
   const username = getInvokerUsername(interaction);
   const channelId = interaction.channel_id ?? interaction.channel?.id;
@@ -102,11 +161,15 @@ async function handleCommand(
     const transcript = await fetchTranscript(env, threadId);
     await postUserTurn(env, threadId, username, userText);
 
+    const base = (env.PUBLIC_WORKER_BASE_URL || origin).replace(/\/+$/, "");
+    const callbackUrl = `${base}${CALLBACK_PATH}`;
+
     const routineText = buildThreadRoutineText({
-      username,
       userText,
       transcript,
       threadId,
+      callbackUrl,
+      callbackToken: env.ROUTINE_CALLBACK_TOKEN,
     }).slice(0, MAX_TEXT_LEN);
     const sessionUrl = await fireRoutine(env, routineText);
 
