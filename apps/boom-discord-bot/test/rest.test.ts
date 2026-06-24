@@ -37,6 +37,20 @@ describe("fetchTranscript", () => {
     );
   });
 
+  it("includes question turns in the transcript", async () => {
+    const messages = [
+      { content: "**Question**\nWho is the assignee?" },
+      { content: "**Request** alice: do x" },
+    ];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify(messages), { status: 200 })),
+    );
+    expect(await fetchTranscript(env, "t1")).toBe(
+      "**Request** alice: do x\n\n**Question**\nWho is the assignee?",
+    );
+  });
+
   it("returns empty string (best effort) on a non-ok response", async () => {
     vi.stubGlobal(
       "fetch",

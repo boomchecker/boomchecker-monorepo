@@ -218,6 +218,23 @@ describe("worker.fetch — routine callback", () => {
     ).toBe(true);
   });
 
+  it("labels a question callback with the question marker", async () => {
+    const { env } = await setup();
+    const { fetchMock, state } = makeDiscordMock();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const req = callbackRequest("cb-token", {
+      thread_id: "t1",
+      content: "Who should be the assignee?",
+      kind: "question",
+    });
+    const res = await worker.fetch!(req, env, noopCtx);
+    expect(res.status).toBe(200);
+    expect(
+      state.posted.some((c) => c.startsWith("**Question**") && c.includes("assignee")),
+    ).toBe(true);
+  });
+
   it("rejects a wrong callback token with 401 and posts nothing", async () => {
     const { env } = await setup();
     const { fetchMock } = makeDiscordMock();

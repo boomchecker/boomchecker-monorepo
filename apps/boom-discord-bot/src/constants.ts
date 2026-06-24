@@ -18,6 +18,8 @@ export const DISCORD_API = "https://discord.com/api/v10";
 // bot-owned messages (so we never need the MESSAGE_CONTENT intent).
 export const ECHO_PREFIX = "**Request**";
 export const CLAUDE_PREFIX = "**Result**";
+// Used when the routine calls back with `kind: "question"` instead of a final result.
+export const QUESTION_PREFIX = "**Question**";
 
 // How many recent thread messages to pull when rebuilding context.
 export const TRANSCRIPT_FETCH_LIMIT = 100;

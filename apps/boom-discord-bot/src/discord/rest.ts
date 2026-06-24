@@ -7,6 +7,7 @@ import {
   DISCORD_API,
   ECHO_PREFIX,
   CLAUDE_PREFIX,
+  QUESTION_PREFIX,
   TRANSCRIPT_FETCH_LIMIT,
   MAX_THREAD_NAME,
   MAX_CONTEXT_CHARS,
@@ -94,7 +95,11 @@ export async function fetchTranscript(env: Env, threadId: string): Promise<strin
   // Discord returns newest-first; reverse to chronological order.
   for (const message of messages.reverse()) {
     const content = message.content ?? "";
-    if (content.startsWith(ECHO_PREFIX) || content.startsWith(CLAUDE_PREFIX)) {
+    if (
+      content.startsWith(ECHO_PREFIX) ||
+      content.startsWith(CLAUDE_PREFIX) ||
+      content.startsWith(QUESTION_PREFIX)
+    ) {
       lines.push(content);
     }
   }

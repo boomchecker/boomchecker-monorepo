@@ -5,6 +5,7 @@ import {
   MAX_TEXT_LEN,
   CALLBACK_PATH,
   CLAUDE_PREFIX,
+  QUESTION_PREFIX,
   MAX_DISCORD_MESSAGE,
 } from "./constants";
 import { SafeError } from "./errors";
@@ -108,9 +109,9 @@ async function handleCallback(request: Request, env: Env): Promise<Response> {
     return new Response("Unauthorized", { status: 401 });
   }
 
-  let body: { thread_id?: string; content?: string };
+  let body: { thread_id?: string; content?: string; kind?: string };
   try {
-    body = (await request.json()) as { thread_id?: string; content?: string };
+    body = (await request.json()) as { thread_id?: string; content?: string; kind?: string };
   } catch {
     return new Response("Invalid JSON", { status: 400 });
   }
@@ -118,11 +119,14 @@ async function handleCallback(request: Request, env: Env): Promise<Response> {
     return new Response("Missing thread_id or content", { status: 400 });
   }
 
+  // `kind: "question"` marks a clarifying question (the routine is waiting on the
+  // user); anything else is a final result.
+  const prefix = body.kind === "question" ? QUESTION_PREFIX : CLAUDE_PREFIX;
   try {
     await postToThread(
       env,
       body.thread_id,
-      `${CLAUDE_PREFIX}\n${body.content}`.slice(0, MAX_DISCORD_MESSAGE),
+      `${prefix}\n${body.content}`.slice(0, MAX_DISCORD_MESSAGE),
     );
   } catch {
     return new Response("Failed to post to Discord", { status: 502 });
