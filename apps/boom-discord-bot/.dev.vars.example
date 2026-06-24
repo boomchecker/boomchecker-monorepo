@@ -1,0 +1,4 @@
+# Local secrets for `wrangler dev`. Copy to `.dev.vars` (gitignored) and fill in.
+DISCORD_PUBLIC_KEY=
+CLAUDE_ROUTINE_FIRE_URL=
+CLAUDE_ROUTINE_BEARER_TOKEN=
