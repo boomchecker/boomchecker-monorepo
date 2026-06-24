@@ -37,14 +37,14 @@ jobs:
 
       - name: Build documentation
         run: |
-          mkdocs build --strict -d docs/_site
+          mkdocs build --strict -d site
 
       - name: Set custom domain
-        run: echo "docs.boomchecker.cz" > docs/_site/CNAME
+        run: echo "docs.boomchecker.cz" > site/CNAME
 
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: docs/_site
+          path: site
 
   deploy:
     needs: build
