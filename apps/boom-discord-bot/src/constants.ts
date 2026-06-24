@@ -17,9 +17,9 @@ export const DISCORD_API = "https://discord.com/api/v10";
 // the transcript from bot-owned messages (so we never need the MESSAGE_CONTENT intent).
 export const ECHO_PREFIX = "📥";
 
-// Label prepended to Claude's results (posted by the routine via webhook) when
-// assembling the transcript.
-export const CLAUDE_LABEL = "🤖 Claude:";
+// Prefix the Worker adds to Claude result messages it posts into the thread (via the
+// routine callback). Used to pick result messages out when rebuilding the transcript.
+export const CLAUDE_PREFIX = "🤖";
 
 // How many recent thread messages to pull when rebuilding context.
 export const TRANSCRIPT_FETCH_LIMIT = 100;
@@ -28,3 +28,9 @@ export const TRANSCRIPT_FETCH_LIMIT = 100;
 // under MAX_TEXT_LEN for the new request and framing).
 export const MAX_THREAD_NAME = 100;
 export const MAX_CONTEXT_CHARS = 50000;
+
+// Worker path the routine calls back to deliver its result into the thread.
+export const CALLBACK_PATH = "/routine-callback";
+
+// Discord message content hard limit.
+export const MAX_DISCORD_MESSAGE = 2000;
