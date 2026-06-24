@@ -1,7 +1,9 @@
 # VS code
 .vscode
 
-# Generated docs
+# Generated docs (MkDocs site output + mkdoxy temp + local docs venv)
+site/
+.venv-docs/
 docs/_build
 docs/_doxygen
 

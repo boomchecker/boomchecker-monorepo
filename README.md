@@ -30,20 +30,19 @@ We use Changesets; each package has its own version. Only projects in `apps/` an
   - `task -l` - list available tasks.
   - `task changeset` - create a new changeset.
   - `task changeset:version` - apply pending changesets to package versions.
-- `task docs` - generate Doxygen XML/HTML and Sphinx HTML docs into `docs/_build`.
-
-Generated documentation lives at `docs/_build/**` after running `task docs`.
+- `task docs` - build the MkDocs Material site (with mkdoxy C-API) into `./site`.
+- `task docs:serve` - live-preview the docs at http://localhost:8000.
 
 ## Documentation
 
-The latest published documentation is always available at [docs.boomchecker.cz](https://docs.boomchecker.cz). The site mirrors `task docs` output, so if you need an offline copy just run the task locally and open `docs/_build/html/index.html`.
+The latest published documentation is always available at [docs.boomchecker.cz](https://docs.boomchecker.cz). It is built with **MkDocs Material**; the sources live in `docs/` (Markdown). For an offline copy, run `task docs` and open `site/index.html`, or `task docs:serve` for a live preview. New contributors should start with the **Get Started** section.
 
 ## Docker and development environment
 
 Devcontainer is a prebuilt image plus VS Code configuration that pins toolchains, CLIs and dependencies so everyone develops in the same environment (no host drift, works the same on CI). We use two devcontainers at the moment.
 
 - `fw-devcontainer`: ESP-IDF-based image prepared for firmware work
-- `sw-devcontainer`: Go 1.23 + Node 20 for backend/web services.
+- `sw-devcontainer`: Go 1.24 + Node 20 (plus Python 3.11) for backend/web services, scripts, and docs.
 
 - VS Code usage: open in WSL2, run `Ctrl + Shift + P` and type `Remote-Containers: Reopen in Container`, and pick the service you need. The correct toolchains/extensions are baked in.
 
