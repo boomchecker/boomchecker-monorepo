@@ -1,0 +1,84 @@
+name: Deploy Discord Bot
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "apps/boom-discord-bot/**"
+      - ".github/workflows/deploy-discord-bot.yaml"
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Deploy Worker
+    runs-on: ubuntu-latest
+    # All deploy + runtime secrets live in the `staging` GitHub Environment.
+    environment: staging
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm --filter boom-discord-bot typecheck
+
+      - name: Test
+        run: pnpm --filter boom-discord-bot test
+
+      # Upload the Worker runtime secrets from the `staging` GitHub Environment to
+      # Cloudflare via `wrangler secret bulk`. The JSON is built with `jq` (so any
+      # special characters in values are escaped correctly), written to a 0600
+      # temp file, and removed with a trap even if the upload fails. Runs before
+      # deploy so the Worker has its secrets in place.
+      #
+      # First-ever deploy note: `secret bulk` attaches to an existing Worker. If the
+      # Worker has never been created, run this workflow once via workflow_dispatch;
+      # if the upload reports the Worker does not exist, do a one-time
+      # `pnpm wrangler deploy` (or temporarily switch the deploy step to
+      # `wrangler deploy --secrets-file <file>`, which creates + sets atomically).
+      - name: Upload Worker runtime secrets to Cloudflare
+        working-directory: apps/boom-discord-bot
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          DISCORD_PUBLIC_KEY: ${{ secrets.DISCORD_PUBLIC_KEY }}
+          CLAUDE_ROUTINE_FIRE_URL: ${{ secrets.CLAUDE_ROUTINE_FIRE_URL }}
+          CLAUDE_ROUTINE_BEARER_TOKEN: ${{ secrets.CLAUDE_ROUTINE_BEARER_TOKEN }}
+        run: |
+          set -euo pipefail
+          secrets_file="$(mktemp)"
+          chmod 600 "$secrets_file"
+          trap 'rm -f "$secrets_file"' EXIT
+          jq -n \
+            --arg discord_public_key "$DISCORD_PUBLIC_KEY" \
+            --arg claude_routine_fire_url "$CLAUDE_ROUTINE_FIRE_URL" \
+            --arg claude_routine_bearer_token "$CLAUDE_ROUTINE_BEARER_TOKEN" \
+            '{
+              DISCORD_PUBLIC_KEY: $discord_public_key,
+              CLAUDE_ROUTINE_FIRE_URL: $claude_routine_fire_url,
+              CLAUDE_ROUTINE_BEARER_TOKEN: $claude_routine_bearer_token
+            }' > "$secrets_file"
+          pnpm wrangler secret bulk "$secrets_file"
+
+      - name: Deploy Worker
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: apps/boom-discord-bot
+          command: deploy
