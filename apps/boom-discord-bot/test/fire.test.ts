@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { fireRoutine, SafeError } from "../src/routine/fire";
+import { fireRoutine } from "../src/routine/fire";
+import { SafeError } from "../src/errors";
 import { ANTHROPIC_BETA } from "../src/constants";
 import type { Env } from "../src/env";
 
@@ -7,6 +8,7 @@ const env: Env = {
   DISCORD_PUBLIC_KEY: "pk",
   CLAUDE_ROUTINE_FIRE_URL: "https://api.anthropic.com/v1/claude_code/routines/trig_x/fire",
   CLAUDE_ROUTINE_BEARER_TOKEN: "sk-ant-oat01-secret",
+  DISCORD_BOT_TOKEN: "bot-token",
 };
 
 afterEach(() => {
