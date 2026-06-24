@@ -12,7 +12,8 @@ build
 dist
 .bin
 
-# pnpm
+# Node / pnpm
+node_modules
 .pnpm-store
 
 # Python
