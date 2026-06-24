@@ -25,12 +25,11 @@ RUN apt-get update && apt-get install -y \
 RUN ln -sf /usr/bin/python3 /usr/local/bin/python && \
     ln -sf /usr/bin/pip3 /usr/local/bin/pip
 
-# Documentation toolchain (Sphinx + Breathe + RTD theme + Mermaid) available globally
+# Documentation toolchain (MkDocs Material + mkdoxy for the C API) available globally.
+# Doxygen + graphviz (installed above) are required by mkdoxy.
 RUN python3 -m pip install --no-cache-dir --break-system-packages \
-    sphinx \
-    breathe \
-    sphinx-rtd-theme \
-    sphinxcontrib-mermaid
+    mkdocs-material \
+    mkdoxy
 
 # Install Node.js LTS (v20) from NodeSource
 RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
