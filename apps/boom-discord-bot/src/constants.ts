@@ -13,13 +13,11 @@ export const MAX_TEXT_LEN = 65536;
 // Discord REST base.
 export const DISCORD_API = "https://discord.com/api/v10";
 
-// Marker prefixing a user-turn echo the bot posts into the thread. Used to rebuild
-// the transcript from bot-owned messages (so we never need the MESSAGE_CONTENT intent).
-export const ECHO_PREFIX = "📥";
-
-// Prefix the Worker adds to Claude result messages it posts into the thread (via the
-// routine callback). Used to pick result messages out when rebuilding the transcript.
-export const CLAUDE_PREFIX = "🤖";
+// Plain-text markers (no emoji) the Worker prefixes onto the messages it posts. They
+// double as readable labels in the thread and let us rebuild the transcript from
+// bot-owned messages (so we never need the MESSAGE_CONTENT intent).
+export const ECHO_PREFIX = "**Request**";
+export const CLAUDE_PREFIX = "**Result**";
 
 // How many recent thread messages to pull when rebuilding context.
 export const TRANSCRIPT_FETCH_LIMIT = 100;

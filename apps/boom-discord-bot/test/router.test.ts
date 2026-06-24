@@ -167,8 +167,8 @@ describe("worker.fetch — interactions", () => {
   it("inside a thread: reuses the thread and sends transcript as context", async () => {
     const { env, privateKey } = await setup();
     const transcript = [
-      { content: "🤖 earlier answer" },
-      { content: "📥 **tester:** earlier question" },
+      { content: "**Result**\nearlier answer" },
+      { content: "**Request** tester: earlier question" },
     ];
     const { fetchMock, state } = makeDiscordMock(transcript);
     vi.stubGlobal("fetch", fetchMock);
@@ -213,7 +213,9 @@ describe("worker.fetch — routine callback", () => {
     const req = callbackRequest("cb-token", { thread_id: "t1", content: "Done: BOOM-1" });
     const res = await worker.fetch!(req, env, noopCtx);
     expect(res.status).toBe(200);
-    expect(state.posted.some((c) => c.startsWith("🤖") && c.includes("Done: BOOM-1"))).toBe(true);
+    expect(
+      state.posted.some((c) => c.startsWith("**Result**") && c.includes("Done: BOOM-1")),
+    ).toBe(true);
   });
 
   it("rejects a wrong callback token with 401 and posts nothing", async () => {

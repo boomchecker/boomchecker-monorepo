@@ -60,7 +60,7 @@ export async function postUserTurn(
   text: string,
 ): Promise<void> {
   try {
-    await postToThread(env, threadId, `${ECHO_PREFIX} **${username}:** ${text}`);
+    await postToThread(env, threadId, `${ECHO_PREFIX} ${username}: ${text}`);
   } catch {
     // Ignore — echo is non-critical.
   }

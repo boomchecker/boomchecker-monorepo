@@ -20,11 +20,11 @@ describe("fetchTranscript", () => {
     // Discord returns newest-first.
     const messages = [
       { content: "plain user message" }, // no marker -> dropped
-      { content: "🤖 result two" }, // claude
-      { content: "📥 **alice:** second" }, // echo
-      { content: "🚀 working…" }, // deferred ack -> dropped
-      { content: "🤖 result one" }, // claude
-      { content: "📥 **alice:** first" }, // echo
+      { content: "**Result**\nresult two" }, // claude
+      { content: "**Request** alice: second" }, // echo
+      { content: "Working on it — run: x" }, // deferred ack -> dropped
+      { content: "**Result**\nresult one" }, // claude
+      { content: "**Request** alice: first" }, // echo
     ];
     vi.stubGlobal(
       "fetch",
@@ -33,7 +33,7 @@ describe("fetchTranscript", () => {
 
     const transcript = await fetchTranscript(env, "t1");
     expect(transcript).toBe(
-      "📥 **alice:** first\n\n🤖 result one\n\n📥 **alice:** second\n\n🤖 result two",
+      "**Request** alice: first\n\n**Result**\nresult one\n\n**Request** alice: second\n\n**Result**\nresult two",
     );
   });
 
