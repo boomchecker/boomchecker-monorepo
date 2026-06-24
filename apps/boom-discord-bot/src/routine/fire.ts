@@ -1,8 +1,6 @@
 import type { Env } from "../env";
 import { ANTHROPIC_BETA, ANTHROPIC_VERSION } from "../constants";
-
-// Error whose message is safe to show in Discord (no tokens, URLs, or stack traces).
-export class SafeError extends Error {}
+import { SafeError } from "../errors";
 
 interface RoutineFireResponse {
   type: string;
