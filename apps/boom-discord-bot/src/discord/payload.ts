@@ -1,5 +1,5 @@
 // Minimal typings for the slices of a Discord interaction we read, plus helpers
-// to extract the command text and build the enriched payload for the routine.
+// to extract the command text, detect threads, and build the routine payload.
 
 interface CommandOption {
   name: string;
@@ -18,29 +18,53 @@ export interface Interaction {
   };
   guild_id?: string;
   channel_id?: string;
-  channel?: { id: string; name?: string };
+  channel?: { id: string; name?: string; type?: number };
   member?: { user?: { username?: string; id?: string } };
   user?: { username?: string; id?: string };
+}
+
+// Discord channel types we care about.
+export const ChannelType = {
+  GUILD_TEXT: 0,
+  ANNOUNCEMENT_THREAD: 10,
+  PUBLIC_THREAD: 11,
+  PRIVATE_THREAD: 12,
+} as const;
+
+export function isThreadChannel(type: number | undefined): boolean {
+  return (
+    type === ChannelType.ANNOUNCEMENT_THREAD ||
+    type === ChannelType.PUBLIC_THREAD ||
+    type === ChannelType.PRIVATE_THREAD
+  );
 }
 
 export function getOptionValue(interaction: Interaction, name: string): string | undefined {
   return interaction.data?.options?.find((option) => option.name === name)?.value;
 }
 
-function getInvokerUsername(interaction: Interaction): string {
+export function getInvokerUsername(interaction: Interaction): string {
   // Guild interactions carry `member.user`; DMs carry `user`.
   return interaction.member?.user?.username ?? interaction.user?.username ?? "unknown user";
 }
 
-// Build the freeform text sent to the routine. Adds light Discord context so the
-// routine can attribute who asked and from where. Contains no secrets.
-export function buildRoutineText(interaction: Interaction, userText: string): string {
-  const username = getInvokerUsername(interaction);
-  const channel = interaction.channel?.name
-    ? `#${interaction.channel.name}`
-    : interaction.channel_id
-      ? `channel ${interaction.channel_id}`
-      : "an unknown channel";
-  const guild = interaction.guild_id ? ` (guild ${interaction.guild_id})` : "";
-  return `Requested by ${username} in ${channel}${guild} via Discord:\n\n${userText}`;
+// Build the freeform text sent to the routine: the prior thread transcript (if any)
+// as context, then the new request, then a reminder of where to post the result.
+// Contains no secrets. The routine's own prompt is responsible for posting the
+// result to the Discord webhook using the THREAD_ID below.
+export function buildThreadRoutineText(args: {
+  username: string;
+  userText: string;
+  transcript: string;
+  threadId: string;
+}): string {
+  const { username, userText, transcript, threadId } = args;
+  const context = transcript
+    ? `Conversation so far in this Discord thread:\n\n${transcript}\n\n---\n\n`
+    : "";
+  return (
+    `${context}New request from ${username} via Discord (THREAD_ID: ${threadId}):\n\n${userText}\n\n` +
+    `[When finished, post a concise result and the created Linear issue URL back to ` +
+    `this Discord thread (THREAD_ID: ${threadId}).]`
+  );
 }
