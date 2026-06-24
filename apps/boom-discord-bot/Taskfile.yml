@@ -1,0 +1,27 @@
+version: "3"
+
+tasks:
+  dev:
+    desc: Run the Worker locally (wrangler dev)
+    cmds:
+      - pnpm wrangler dev
+
+  deploy:
+    desc: Deploy the Worker to Cloudflare
+    cmds:
+      - pnpm wrangler deploy
+
+  typecheck:
+    desc: Type-check the Worker and scripts
+    cmds:
+      - pnpm run typecheck
+
+  test:
+    desc: Run unit tests
+    cmds:
+      - pnpm run test
+
+  register:
+    desc: Register the /boom-linear guild command (needs DISCORD_* env vars)
+    cmds:
+      - pnpm run register:commands
