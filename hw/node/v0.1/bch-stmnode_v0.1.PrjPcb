@@ -305,6 +305,23 @@ DItemRevisionGUID=
 GenerateClassCluster=0
 DocumentUniqueId=
 
+[Document16]
+DocumentPath=analog_mics.SchDoc
+AnnotationEnabled=1
+AnnotateStartValue=1
+AnnotationIndexControlEnabled=0
+AnnotateSuffix=
+AnnotateScope=All
+AnnotateOrder=6
+DoLibraryUpdate=1
+DoDatabaseUpdate=1
+ClassGenCCAutoEnabled=1
+ClassGenCCAutoRoomEnabled=0
+ClassGenNCAutoScope=None
+DItemRevisionGUID=
+GenerateClassCluster=0
+DocumentUniqueId=KJTDUTTF
+
 [ProjectVariant1]
 UniqueId=ce101761-10fe-4fe4-becb-190e6b908eea
 Description=node
@@ -322,24 +339,24 @@ Variation8=Designator=R?|UniqueId=\WWVQEOYE\TOBRNHZR|Kind=1|AlternatePart=
 ParamVariationCount=0
 
 [Parameter1]
-Name=Revision
-Value=0.1
+Name=Author
+Value=Martin Maxa
 
 [Parameter2]
-Name=Project
-Value=BCH
+Name=Date
+Value=2025-05-20
 
 [Parameter3]
 Name=Name
 Value=stmnode
 
 [Parameter4]
-Name=Date
-Value=2025-05-20
+Name=Project
+Value=BCH
 
 [Parameter5]
-Name=Author
-Value=Martin Maxa
+Name=Revision
+Value=0.1
 
 [Configuration1]
 Name=Sources
