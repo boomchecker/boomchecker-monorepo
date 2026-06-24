@@ -9,6 +9,8 @@ const env: Env = {
   CLAUDE_ROUTINE_FIRE_URL: "https://api.anthropic.com/v1/claude_code/routines/trig_x/fire",
   CLAUDE_ROUTINE_BEARER_TOKEN: "sk-ant-oat01-secret",
   DISCORD_BOT_TOKEN: "bot-token",
+  ROUTINE_CALLBACK_TOKEN: "cb-token",
+  PUBLIC_WORKER_BASE_URL: "",
 };
 
 afterEach(() => {

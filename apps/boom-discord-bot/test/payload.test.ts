@@ -19,29 +19,32 @@ describe("isThreadChannel", () => {
 });
 
 describe("buildThreadRoutineText", () => {
-  it("includes the transcript, the new request, and the thread id", () => {
+  it("includes the transcript, callback header, and the request", () => {
     const text = buildThreadRoutineText({
-      username: "alice",
       userText: "add CI step",
       transcript: "📥 **alice:** earlier request",
       threadId: "t1",
+      callbackUrl: "https://worker.example/routine-callback",
+      callbackToken: "cb-token",
     });
     expect(text).toContain("Conversation so far");
     expect(text).toContain("📥 **alice:** earlier request");
-    expect(text).toContain("add CI step");
     expect(text).toContain("THREAD_ID: t1");
+    expect(text).toContain("CALLBACK_URL: https://worker.example/routine-callback");
+    expect(text).toContain("CALLBACK_TOKEN: cb-token");
+    expect(text).toContain("USER_REQUEST:\nadd CI step");
   });
 
   it("omits the context block on a fresh thread", () => {
     const text = buildThreadRoutineText({
-      username: "alice",
-      userText: "add CI step",
+      userText: "x",
       transcript: "",
       threadId: "t1",
+      callbackUrl: "u",
+      callbackToken: "k",
     });
     expect(text).not.toContain("Conversation so far");
-    expect(text).toContain("add CI step");
-    expect(text).toContain("THREAD_ID: t1");
+    expect(text.startsWith("THREAD_ID: t1")).toBe(true);
   });
 });
 

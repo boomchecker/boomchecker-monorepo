@@ -17,6 +17,8 @@ async function setup() {
     CLAUDE_ROUTINE_FIRE_URL: "https://api.anthropic.com/v1/claude_code/routines/trig_x/fire",
     CLAUDE_ROUTINE_BEARER_TOKEN: "sk-ant-oat01-secret",
     DISCORD_BOT_TOKEN: "bot-token",
+    ROUTINE_CALLBACK_TOKEN: "cb-token",
+    PUBLIC_WORKER_BASE_URL: "https://worker.example",
   };
   return { env, privateKey: keyPair.privateKey };
 }
@@ -45,10 +47,10 @@ const noopCtx = {
   passThroughOnException: () => {},
 } as unknown as ExecutionContext;
 
-// Routes the various Discord/Anthropic REST calls the command flow makes, and
-// records the routine fire body so tests can assert on the context sent.
+// Routes the Discord/Anthropic REST calls the command flow makes, and records the
+// routine fire body + any posted thread content so tests can assert on them.
 function makeDiscordMock(transcript: unknown[] = []) {
-  const state = { fireBody: "" };
+  const state = { fireBody: "", posted: [] as string[] };
   const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
     const method = init?.method ?? "GET";
     if (url.includes("/threads")) {
@@ -72,7 +74,9 @@ function makeDiscordMock(transcript: unknown[] = []) {
       return new Response(JSON.stringify(transcript), { status: 200 });
     }
     if (url.includes("/messages")) {
-      return new Response("", { status: 200 }); // user-turn echo
+      const parsed = JSON.parse(String(init?.body ?? "{}")) as { content?: string };
+      if (parsed.content) state.posted.push(parsed.content);
+      return new Response("", { status: 200 });
     }
     return new Response("", { status: 404 });
   });
@@ -92,7 +96,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("worker.fetch", () => {
+describe("worker.fetch — interactions", () => {
   it("responds to PING with PONG", async () => {
     const { env, privateKey } = await setup();
     const res = await worker.fetch!(await signedRequest(privateKey, { type: 1 }), env, noopCtx);
@@ -132,7 +136,7 @@ describe("worker.fetch", () => {
     expect(json.data.flags).toBe(64);
   });
 
-  it("in a normal channel: defers, creates a thread, and fires the routine", async () => {
+  it("in a normal channel: defers, creates a thread, fires with callback info", async () => {
     const { env, privateKey } = await setup();
     const { fetchMock, state } = makeDiscordMock();
     vi.stubGlobal("fetch", fetchMock);
@@ -149,23 +153,21 @@ describe("worker.fetch", () => {
       channel: { id: "c1", type: 0 },
       member: { user: { username: "tester" } },
     });
-    const res = await worker.fetch!(req, env, ctx);
-    expect(await res.json()).toEqual({ type: 5 });
+    expect(await (await worker.fetch!(req, env, ctx)).json()).toEqual({ type: 5 });
 
     await Promise.all(tasks);
     const calls = fetchMock.mock.calls.map((c) => c[0] as string);
     expect(calls.some((u) => u.endsWith("/channels/c1/threads"))).toBe(true);
-    expect(calls.some((u) => u.includes("/routines/"))).toBe(true);
-    expect(calls.some((u) => u.includes("/messages/@original"))).toBe(true);
-    // New request text reached the routine.
     expect(state.fireBody).toContain("do a thing");
     expect(state.fireBody).toContain("THREAD_ID: new-thread");
+    expect(state.fireBody).toContain("CALLBACK_URL: https://worker.example/routine-callback");
+    expect(state.fireBody).toContain("CALLBACK_TOKEN: cb-token");
   });
 
-  it("inside a thread: reuses the thread, sends transcript as context, no new thread", async () => {
+  it("inside a thread: reuses the thread and sends transcript as context", async () => {
     const { env, privateKey } = await setup();
     const transcript = [
-      { content: "🤖 Claude: earlier answer", webhook_id: "w1" },
+      { content: "🤖 earlier answer" },
       { content: "📥 **tester:** earlier question" },
     ];
     const { fetchMock, state } = makeDiscordMock(transcript);
@@ -188,11 +190,50 @@ describe("worker.fetch", () => {
 
     const calls = fetchMock.mock.calls.map((c) => c[0] as string);
     expect(calls.some((u) => u.includes("/threads"))).toBe(false);
-    expect(
-      calls.some((u) => u.includes("/channels/existing-thread/messages")),
-    ).toBe(true);
     expect(state.fireBody).toContain("earlier question");
     expect(state.fireBody).toContain("follow up");
     expect(state.fireBody).toContain("THREAD_ID: existing-thread");
+  });
+});
+
+describe("worker.fetch — routine callback", () => {
+  function callbackRequest(token: string, body: unknown): Request {
+    return new Request("https://bot.example/routine-callback", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  }
+
+  it("posts the result into the thread with the bot token", async () => {
+    const { env } = await setup();
+    const { fetchMock, state } = makeDiscordMock();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const req = callbackRequest("cb-token", { thread_id: "t1", content: "Done: BOOM-1" });
+    const res = await worker.fetch!(req, env, noopCtx);
+    expect(res.status).toBe(200);
+    expect(state.posted.some((c) => c.startsWith("🤖") && c.includes("Done: BOOM-1"))).toBe(true);
+  });
+
+  it("rejects a wrong callback token with 401 and posts nothing", async () => {
+    const { env } = await setup();
+    const { fetchMock } = makeDiscordMock();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = await worker.fetch!(
+      callbackRequest("wrong", { thread_id: "t1", content: "x" }),
+      env,
+      noopCtx,
+    );
+    expect(res.status).toBe(401);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("returns 400 when thread_id or content is missing", async () => {
+    const { env } = await setup();
+    vi.stubGlobal("fetch", makeDiscordMock().fetchMock);
+    const res = await worker.fetch!(callbackRequest("cb-token", { thread_id: "t1" }), env, noopCtx);
+    expect(res.status).toBe(400);
   });
 });

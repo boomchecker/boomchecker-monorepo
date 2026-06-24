@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { fetchTranscript, createThread } from "../src/discord/rest";
+import { fetchTranscript, createThread, postToThread } from "../src/discord/rest";
 import type { Env } from "../src/env";
 
 const env: Env = {
@@ -7,6 +7,8 @@ const env: Env = {
   CLAUDE_ROUTINE_FIRE_URL: "https://api.anthropic.com/v1/claude_code/routines/trig_x/fire",
   CLAUDE_ROUTINE_BEARER_TOKEN: "sk-ant-oat01-secret",
   DISCORD_BOT_TOKEN: "bot-token",
+  ROUTINE_CALLBACK_TOKEN: "cb-token",
+  PUBLIC_WORKER_BASE_URL: "",
 };
 
 afterEach(() => {
@@ -14,14 +16,14 @@ afterEach(() => {
 });
 
 describe("fetchTranscript", () => {
-  it("keeps echoes and webhook results in chronological order, drops everything else", async () => {
+  it("keeps echoes and claude results in chronological order, drops everything else", async () => {
     // Discord returns newest-first.
     const messages = [
-      { content: "plain user message" }, // no prefix, no webhook -> dropped
-      { content: "result two", webhook_id: "w1" }, // claude
+      { content: "plain user message" }, // no marker -> dropped
+      { content: "🤖 result two" }, // claude
       { content: "📥 **alice:** second" }, // echo
-      { content: "🤖 working…" }, // bot ack (not an echo, no webhook) -> dropped
-      { content: "result one", webhook_id: "w1" }, // claude
+      { content: "🚀 working…" }, // deferred ack -> dropped
+      { content: "🤖 result one" }, // claude
       { content: "📥 **alice:** first" }, // echo
     ];
     vi.stubGlobal(
@@ -31,7 +33,7 @@ describe("fetchTranscript", () => {
 
     const transcript = await fetchTranscript(env, "t1");
     expect(transcript).toBe(
-      "📥 **alice:** first\n\n🤖 Claude: result one\n\n📥 **alice:** second\n\n🤖 Claude: result two",
+      "📥 **alice:** first\n\n🤖 result one\n\n📥 **alice:** second\n\n🤖 result two",
     );
   });
 
@@ -47,8 +49,7 @@ describe("fetchTranscript", () => {
 describe("createThread", () => {
   it("returns the new thread id and authenticates as the bot", async () => {
     const fetchMock = vi.fn(async (_url: string, init: RequestInit) => {
-      const headers = init.headers as Record<string, string>;
-      expect(headers.Authorization).toBe("Bot bot-token");
+      expect((init.headers as Record<string, string>).Authorization).toBe("Bot bot-token");
       return new Response(JSON.stringify({ id: "thread9" }), { status: 200 });
     });
     vi.stubGlobal("fetch", fetchMock);
@@ -61,5 +62,26 @@ describe("createThread", () => {
       vi.fn(async () => new Response("", { status: 403 })),
     );
     await expect(createThread(env, "c1", "n")).rejects.toThrow("could not create thread");
+  });
+});
+
+describe("postToThread", () => {
+  it("posts the content as the bot", async () => {
+    const fetchMock = vi.fn(async (_url: string, init: RequestInit) => {
+      expect((init.headers as Record<string, string>).Authorization).toBe("Bot bot-token");
+      expect(JSON.parse(init.body as string)).toEqual({ content: "hello" });
+      return new Response("", { status: 200 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    await postToThread(env, "t1", "hello");
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  it("throws a safe error on failure", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("", { status: 403 })),
+    );
+    await expect(postToThread(env, "t1", "x")).rejects.toThrow("could not post to thread");
   });
 });
