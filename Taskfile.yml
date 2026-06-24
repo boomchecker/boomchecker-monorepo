@@ -19,6 +19,11 @@ includes:
     optional: true
 
 tasks:
+  setup:
+    desc: Bootstrap the workspace (install JS dependencies for all apps/packages)
+    cmds:
+      - pnpm install
+
   changeset:
     cmds:
       - pnpm changeset
@@ -29,53 +34,43 @@ tasks:
       - pnpm changeset version
     desc: Apply versions from pending changesets
 
-  docs:
-    desc: Build documentation (Doxygen + Sphinx)
+  docs:setup:
+    desc: Install the docs toolchain (doxygen + graphviz, and a local venv with MkDocs Material + mkdoxy).
     cmds:
-      - task docs:assemble
-
-  docs:root:
-    desc: Build root landing page only
-    internal: true
-    cmds:
-      - sphinx-build -b html docs docs/_build/html
-
-  docs:firmware:
-    desc: Build firmware documentation only
-    internal: true
-    cmds:
-      - PROJECT=firmware sphinx-build -b html docs docs/_build/firmware/html
-
-  docs:monorepo:
-    desc: Build monorepo documentation only
-    internal: true
-    cmds:
-      - PROJECT=monorepo sphinx-build -b html docs docs/_build/monorepo/html
-
-  docs:scripts:
-    desc: Build scripts documentation only (includes Doxygen)
-    internal: true
-    cmds:
-      - doxygen Doxyfile
-      - PROJECT=scripts sphinx-build -b html docs docs/_build/scripts/html
-
-  docs:assemble:
-    desc: Copy per-project builds under the root HTML output for local previews
-    internal: true
-    deps:
-      - docs:root
-      - docs:firmware
-      - docs:monorepo
-      - docs:scripts
-    cmds:
+      # System dependency: doxygen (+ graphviz) — required by the mkdoxy plugin.
       - |
         set -euo pipefail
-        mkdir -p docs/_build/html
-        rm -rf docs/_build/html/firmware docs/_build/html/monorepo docs/_build/html/scripts
-        mkdir -p docs/_build/html/firmware docs/_build/html/monorepo docs/_build/html/scripts
-        rsync -a docs/_build/firmware/html/ docs/_build/html/firmware/
-        rsync -a docs/_build/monorepo/html/ docs/_build/html/monorepo/
-        rsync -a docs/_build/scripts/html/ docs/_build/html/scripts/
+        if command -v doxygen >/dev/null 2>&1; then
+          echo "doxygen already installed: $(doxygen --version)"
+        elif command -v apt-get >/dev/null 2>&1; then
+          echo "Installing doxygen + graphviz via apt-get..."
+          sudo apt-get update
+          sudo apt-get install -y doxygen graphviz
+        else
+          echo "ERROR: doxygen not found and apt-get unavailable. Install doxygen + graphviz manually." >&2
+          exit 1
+        fi
+      # Python toolchain in an isolated venv (avoids PEP 668 externally-managed errors).
+      - python3 -m venv .venv-docs
+      - ./.venv-docs/bin/pip install --upgrade pip
+      - ./.venv-docs/bin/pip install mkdocs-material mkdoxy
+    status:
+      - command -v doxygen >/dev/null 2>&1
+      - test -x ./.venv-docs/bin/mkdocs
+
+  docs:
+    desc: Build the documentation site (MkDocs Material + mkdoxy) into ./site
+    deps:
+      - docs:setup
+    cmds:
+      - ./.venv-docs/bin/mkdocs build --strict
+
+  docs:serve:
+    desc: Live-preview the documentation at http://localhost:8000
+    deps:
+      - docs:setup
+    cmds:
+      - ./.venv-docs/bin/mkdocs serve
 
   latex:setup:
     desc: Install LaTeX packages needed to build reports
