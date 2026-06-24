@@ -59,6 +59,7 @@ jobs:
           DISCORD_PUBLIC_KEY: ${{ secrets.DISCORD_PUBLIC_KEY }}
           CLAUDE_ROUTINE_FIRE_URL: ${{ secrets.CLAUDE_ROUTINE_FIRE_URL }}
           CLAUDE_ROUTINE_BEARER_TOKEN: ${{ secrets.CLAUDE_ROUTINE_BEARER_TOKEN }}
+          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
         run: |
           set -euo pipefail
           secrets_file="$(mktemp)"
@@ -68,10 +69,12 @@ jobs:
             --arg discord_public_key "$DISCORD_PUBLIC_KEY" \
             --arg claude_routine_fire_url "$CLAUDE_ROUTINE_FIRE_URL" \
             --arg claude_routine_bearer_token "$CLAUDE_ROUTINE_BEARER_TOKEN" \
+            --arg discord_bot_token "$DISCORD_BOT_TOKEN" \
             '{
               DISCORD_PUBLIC_KEY: $discord_public_key,
               CLAUDE_ROUTINE_FIRE_URL: $claude_routine_fire_url,
-              CLAUDE_ROUTINE_BEARER_TOKEN: $claude_routine_bearer_token
+              CLAUDE_ROUTINE_BEARER_TOKEN: $claude_routine_bearer_token,
+              DISCORD_BOT_TOKEN: $discord_bot_token
             }' > "$secrets_file"
           pnpm wrangler secret bulk "$secrets_file"
 
