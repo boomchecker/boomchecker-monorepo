@@ -49,22 +49,25 @@ export function getInvokerUsername(interaction: Interaction): string {
 }
 
 // Build the freeform text sent to the routine: the prior thread transcript (if any)
-// as context, then the new request, then a reminder of where to post the result.
-// Contains no secrets. The routine's own prompt is responsible for posting the
-// result to the Discord webhook using the THREAD_ID below.
+// as context, then a header carrying the thread id and the callback URL/token, then
+// the new request. The routine's prompt uses CALLBACK_URL + CALLBACK_TOKEN to POST its
+// result back to the Worker (which posts it into the thread).
 export function buildThreadRoutineText(args: {
-  username: string;
   userText: string;
   transcript: string;
   threadId: string;
+  callbackUrl: string;
+  callbackToken: string;
 }): string {
-  const { username, userText, transcript, threadId } = args;
+  const { userText, transcript, threadId, callbackUrl, callbackToken } = args;
   const context = transcript
     ? `Conversation so far in this Discord thread:\n\n${transcript}\n\n---\n\n`
     : "";
   return (
-    `${context}New request from ${username} via Discord (THREAD_ID: ${threadId}):\n\n${userText}\n\n` +
-    `[When finished, post a concise result and the created Linear issue URL back to ` +
-    `this Discord thread (THREAD_ID: ${threadId}).]`
+    `${context}` +
+    `THREAD_ID: ${threadId}\n` +
+    `CALLBACK_URL: ${callbackUrl}\n` +
+    `CALLBACK_TOKEN: ${callbackToken}\n\n` +
+    `USER_REQUEST:\n${userText}`
   );
 }
