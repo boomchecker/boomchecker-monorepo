@@ -2,11 +2,32 @@ import { describe, it, expect } from "vitest";
 import {
   isThreadChannel,
   buildThreadRoutineText,
+  buildThreadName,
   getOptionValue,
   getInvokerUsername,
   ChannelType,
   type Interaction,
 } from "../src/discord/payload";
+
+describe("buildThreadName", () => {
+  it("passes a short request through unchanged", () => {
+    expect(buildThreadName("Add CI step")).toBe("Add CI step");
+  });
+
+  it("collapses whitespace and newlines to a single line", () => {
+    expect(buildThreadName("Add   CI\nstep  now")).toBe("Add CI step now");
+  });
+
+  it("truncates a long request with an ellipsis", () => {
+    const name = buildThreadName("x".repeat(200));
+    expect(name.length).toBeLessThanOrEqual(72);
+    expect(name.endsWith("…")).toBe(true);
+  });
+
+  it("falls back when the text is empty", () => {
+    expect(buildThreadName("   ")).toBe("boom-linear task");
+  });
+});
 
 describe("isThreadChannel", () => {
   it("detects thread channel types", () => {

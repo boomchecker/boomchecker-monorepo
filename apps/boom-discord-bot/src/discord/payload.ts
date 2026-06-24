@@ -48,6 +48,17 @@ export function getInvokerUsername(interaction: Interaction): string {
   return interaction.member?.user?.username ?? interaction.user?.username ?? "unknown user";
 }
 
+// Build a concise thread name from the user's request (first line, collapsed
+// whitespace, capped). Discord caps thread names at 100 chars; we keep it shorter.
+export function buildThreadName(text: string): string {
+  const oneLine = text.replace(/\s+/g, " ").trim();
+  if (!oneLine) {
+    return "boom-linear task";
+  }
+  const max = 72;
+  return oneLine.length > max ? `${oneLine.slice(0, max - 1).trimEnd()}…` : oneLine;
+}
+
 // Build the freeform text sent to the routine: the prior thread transcript (if any)
 // as context, then a header carrying the thread id and the callback URL/token, then
 // the new request. The routine's prompt uses CALLBACK_URL + CALLBACK_TOKEN to POST its

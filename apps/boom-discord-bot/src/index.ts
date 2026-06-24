@@ -18,6 +18,7 @@ import {
 } from "./discord/interactions";
 import {
   buildThreadRoutineText,
+  buildThreadName,
   getOptionValue,
   getInvokerUsername,
   isThreadChannel,
@@ -121,7 +122,7 @@ async function handleCallback(request: Request, env: Env): Promise<Response> {
     await postToThread(
       env,
       body.thread_id,
-      `${CLAUDE_PREFIX} ${body.content}`.slice(0, MAX_DISCORD_MESSAGE),
+      `${CLAUDE_PREFIX}\n${body.content}`.slice(0, MAX_DISCORD_MESSAGE),
     );
   } catch {
     return new Response("Failed to post to Discord", { status: 502 });
@@ -153,7 +154,7 @@ async function handleCommand(
     if (isThreadChannel(channelType)) {
       threadId = channelId;
     } else {
-      threadId = await createThread(env, channelId, userText);
+      threadId = await createThread(env, channelId, buildThreadName(userText));
       createdThread = true;
     }
 
@@ -174,11 +175,11 @@ async function handleCommand(
     const sessionUrl = await fireRoutine(env, routineText);
 
     content = createdThread
-      ? `🧵 Opened thread <#${threadId}> — the result will appear there. (run: ${sessionUrl})`
-      : `🚀 Working — the result will appear in this thread. (run: ${sessionUrl})`;
+      ? `Opened thread <#${threadId}> — the result will appear there. (run: ${sessionUrl})`
+      : `Working on it — the result will appear in this thread. (run: ${sessionUrl})`;
   } catch (error) {
     const reason = error instanceof SafeError ? error.message : "unexpected error";
-    content = `❌ Failed to start the task. Reason: ${reason}`;
+    content = `Failed to start the task. Reason: ${reason}`;
   }
 
   try {
