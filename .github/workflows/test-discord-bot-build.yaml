@@ -1,0 +1,37 @@
+name: Test Discord Bot Build
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'apps/boom-discord-bot/**'
+      - '.github/workflows/test-discord-bot-build.yaml'
+
+jobs:
+  test-build:
+    name: Typecheck and test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm --filter boom-discord-bot typecheck
+
+      - name: Test
+        run: pnpm --filter boom-discord-bot test
