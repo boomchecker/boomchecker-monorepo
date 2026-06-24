@@ -1,5 +1,6 @@
 import type { Env } from "./env";
 import { COMMAND_NAME, TEXT_OPTION, MAX_TEXT_LEN } from "./constants";
+import { SafeError } from "./errors";
 import { verifyDiscordRequest } from "./discord/verify";
 import {
   InteractionType,
@@ -8,8 +9,15 @@ import {
   ephemeralMessage,
   editOriginalResponse,
 } from "./discord/interactions";
-import { buildRoutineText, getOptionValue, type Interaction } from "./discord/payload";
-import { fireRoutine, SafeError } from "./routine/fire";
+import {
+  buildThreadRoutineText,
+  getOptionValue,
+  getInvokerUsername,
+  isThreadChannel,
+  type Interaction,
+} from "./discord/payload";
+import { createThread, postUserTurn, fetchTranscript } from "./discord/rest";
+import { fireRoutine } from "./routine/fire";
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -62,18 +70,49 @@ export default {
   },
 } satisfies ExportedHandler<Env>;
 
-// Fire the routine and edit the deferred message with the result. Runs after the
-// deferred ack, so all outcomes are reported via the follow-up edit.
+// Resolve the thread to work in (create one if the command was run in a normal
+// channel), fire the routine with the thread transcript as context, and edit the
+// deferred message. Claude's actual result is posted into the thread later by the
+// routine (via its Discord webhook) — the fire endpoint is asynchronous.
 async function handleCommand(
   env: Env,
   interaction: Interaction,
   userText: string,
 ): Promise<void> {
+  const username = getInvokerUsername(interaction);
+  const channelId = interaction.channel_id ?? interaction.channel?.id;
+  const channelType = interaction.channel?.type;
+
   let content: string;
   try {
-    const text = buildRoutineText(interaction, userText).slice(0, MAX_TEXT_LEN);
-    const sessionUrl = await fireRoutine(env, text);
-    content = `🚀 Task sent to Claude Code. Watch the run: ${sessionUrl}`;
+    if (!channelId) {
+      throw new SafeError("missing channel context");
+    }
+
+    let threadId: string;
+    let createdThread = false;
+    if (isThreadChannel(channelType)) {
+      threadId = channelId;
+    } else {
+      threadId = await createThread(env, channelId, userText);
+      createdThread = true;
+    }
+
+    // Read prior context, then echo the new request so it persists for next time.
+    const transcript = await fetchTranscript(env, threadId);
+    await postUserTurn(env, threadId, username, userText);
+
+    const routineText = buildThreadRoutineText({
+      username,
+      userText,
+      transcript,
+      threadId,
+    }).slice(0, MAX_TEXT_LEN);
+    const sessionUrl = await fireRoutine(env, routineText);
+
+    content = createdThread
+      ? `🧵 Opened thread <#${threadId}> — the result will appear there. (run: ${sessionUrl})`
+      : `🚀 Working — the result will appear in this thread. (run: ${sessionUrl})`;
   } catch (error) {
     const reason = error instanceof SafeError ? error.message : "unexpected error";
     content = `❌ Failed to start the task. Reason: ${reason}`;
