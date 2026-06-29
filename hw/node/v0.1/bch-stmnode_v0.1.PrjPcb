@@ -44,11 +44,16 @@ CrossRefPorts=3
 CrossRefCrossSheets=1
 CrossRefSheetEntries=0
 CrossRefFollowFromMainSettings=1
-CurrentVariant=node
+CurrentVariant=stmnode
 
 [Preferences]
 PrefsVaultGUID=
 PrefsRevisionGUID=
+
+[Release]
+ReleaseTarget=1
+ReleaseFolderPath=[OutputPath]
+ReleaseZipPath=[OutputPath][ProjectName].zip
 
 [Document1]
 DocumentPath=top.SchDoc
@@ -324,7 +329,7 @@ DocumentUniqueId=KJTDUTTF
 
 [ProjectVariant1]
 UniqueId=ce101761-10fe-4fe4-becb-190e6b908eea
-Description=node
+Description=stmnode
 AllowFabrication=0
 ParameterCount=0
 VariationCount=8
@@ -335,28 +340,28 @@ Variation4=Designator=R20|UniqueId=\EYTJMWFC\ZYRQMHJM|Kind=1|AlternatePart=
 Variation5=Designator=C35|UniqueId=\WWVQEOYE\LHXAAOLB|Kind=1|AlternatePart=
 Variation6=Designator=C36|UniqueId=\WWVQEOYE\RFRTXNTK|Kind=1|AlternatePart=
 Variation7=Designator=R33|UniqueId=\WWVQEOYE\IUQSGNWP|Kind=1|AlternatePart=
-Variation8=Designator=R?|UniqueId=\WWVQEOYE\TOBRNHZR|Kind=1|AlternatePart=
+Variation8=Designator=R34|UniqueId=\WWVQEOYE\TOBRNHZR|Kind=1|AlternatePart=
 ParamVariationCount=0
 
 [Parameter1]
-Name=Author
-Value=Martin Maxa
+Name=Revision
+Value=0.1
 
 [Parameter2]
-Name=Date
-Value=2025-05-20
+Name=Project
+Value=BCH
 
 [Parameter3]
 Name=Name
 Value=stmnode
 
 [Parameter4]
-Name=Project
-Value=BCH
+Name=Date
+Value=2025-05-20
 
 [Parameter5]
-Name=Revision
-Value=0.1
+Name=Author
+Value=Martin Maxa
 
 [Configuration1]
 Name=Sources
@@ -367,6 +372,36 @@ Variant=[No Variations]
 OutputJobsCount=0
 ContentTypeGUID=CB6F2064-E317-11DF-B822-12313F0024A2
 ConfigurationType=Source
+
+[Configuration2]
+Name=Fabrication
+ParameterCount=0
+ConstraintFileCount=0
+ReleaseItemId=
+Variant=[No Variations]
+OutputJobsCount=0
+ContentTypeGUID=0C520D2A-E60C-11DF-B822-12313F0024A2
+ConfigurationType=Fabrication
+
+[Configuration3]
+Name=Assembly node
+ParameterCount=0
+ConstraintFileCount=0
+ReleaseItemId=
+Variant=node
+OutputJobsCount=0
+ContentTypeGUID=0D12F8DC-E60C-11DF-B822-12313F0024A2
+ConfigurationType=Assembly
+
+[Configuration4]
+Name=Assembly
+ParameterCount=0
+ConstraintFileCount=0
+ReleaseItemId=
+Variant=[No Variations]
+OutputJobsCount=0
+ContentTypeGUID=0D12F8DC-E60C-11DF-B822-12313F0024A2
+ConfigurationType=Assembly
 
 [OutputGroup1]
 Name=Netlist Outputs
@@ -1350,40 +1385,10 @@ UpdateToLatestRevision=1
 PartTypes=0
 ComponentLibIdentifierKind0=Library Name And Type
 ComponentLibraryIdentifier0=bch-lib.SchLib
-ComponentDesignItemID0=ECK+100n16V
-ComponentSymbolReference0=ECK+100n16V
+ComponentDesignItemID0=ECR+24MHZ
+ComponentSymbolReference0=ECR+24MHZ
 ComponentUpdate0=1
 ComponentIsDeviceSheet0=0
-ComponentLibIdentifierKind1=Library Name And Type
-ComponentLibraryIdentifier1=bch-lib.SchLib
-ComponentDesignItemID1=ECK+10u10V
-ComponentSymbolReference1=ECK+10u10V
-ComponentUpdate1=1
-ComponentIsDeviceSheet1=0
-ComponentLibIdentifierKind2=Library Name And Type
-ComponentLibraryIdentifier2=bch-lib.SchLib
-ComponentDesignItemID2=ER+10K
-ComponentSymbolReference2=ER+10K
-ComponentUpdate2=1
-ComponentIsDeviceSheet2=0
-ComponentLibIdentifierKind3=Library Name And Type
-ComponentLibraryIdentifier3=bch-lib.SchLib
-ComponentDesignItemID3=ER+33R
-ComponentSymbolReference3=ER+33R
-ComponentUpdate3=1
-ComponentIsDeviceSheet3=0
-ComponentLibIdentifierKind4=Library Name And Type
-ComponentLibraryIdentifier4=bch-lib.SchLib
-ComponentDesignItemID4=EU+ISM330DLC
-ComponentSymbolReference4=EU+ISM330DLC
-ComponentUpdate4=1
-ComponentIsDeviceSheet4=0
-ComponentLibIdentifierKind5=Library Name And Type
-ComponentLibraryIdentifier5=bch-lib.SchLib
-ComponentDesignItemID5=EU+LIS2MDLTR
-ComponentSymbolReference5=EU+LIS2MDLTR
-ComponentUpdate5=1
-ComponentIsDeviceSheet5=0
 FullReplace=1
 UpdateDesignatorLock=1
 UpdatePartIDLock=1
@@ -1424,23 +1429,8 @@ ParameterUpdate11=1
 ModelTypeGroup0=PCBLIB
 ModelTypeUpdate0=1
 ModelType0=PCBLIB
-ModelName0=C0603
+ModelName0=830107006509
 ModelUpdate0=1
-ModelType1=PCBLIB
-ModelName1=CAPC1608X95N
-ModelUpdate1=1
-ModelType2=PCBLIB
-ModelName2=LGA-12
-ModelUpdate2=1
-ModelType3=PCBLIB
-ModelName3=LGA-14_1
-ModelUpdate3=1
-ModelType4=PCBLIB
-ModelName4=RESC1608X50N
-ModelUpdate4=1
-ModelType5=PCBLIB
-ModelName5=RESC1608X55N
-ModelUpdate5=1
 
 [DatabaseUpdateOptions]
 SelectedOnly=0
