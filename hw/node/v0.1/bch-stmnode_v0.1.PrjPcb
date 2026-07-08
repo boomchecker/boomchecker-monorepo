@@ -327,6 +327,23 @@ DItemRevisionGUID=
 GenerateClassCluster=0
 DocumentUniqueId=KJTDUTTF
 
+[Document17]
+DocumentPath=project_info.SchDoc
+AnnotationEnabled=1
+AnnotateStartValue=1
+AnnotationIndexControlEnabled=0
+AnnotateSuffix=
+AnnotateScope=All
+AnnotateOrder=7
+DoLibraryUpdate=1
+DoDatabaseUpdate=1
+ClassGenCCAutoEnabled=1
+ClassGenCCAutoRoomEnabled=0
+ClassGenNCAutoScope=None
+DItemRevisionGUID=
+GenerateClassCluster=0
+DocumentUniqueId=JPIDVXHC
+
 [ProjectVariant1]
 UniqueId=ce101761-10fe-4fe4-becb-190e6b908eea
 Description=stmnode
@@ -343,13 +360,17 @@ Variation7=Designator=R33|UniqueId=\WWVQEOYE\IUQSGNWP|Kind=1|AlternatePart=
 Variation8=Designator=R34|UniqueId=\WWVQEOYE\TOBRNHZR|Kind=1|AlternatePart=
 ParamVariationCount=0
 
+[GeneratedDocument1]
+DocumentPath=Project Outputs for bch-stmnode_v0.1\Design Rule Check - bch-stmnode_v0.html
+DItemRevisionGUID=
+
 [Parameter1]
 Name=Revision
 Value=0.1
 
 [Parameter2]
 Name=Project
-Value=BCH
+Value=boomchecker
 
 [Parameter3]
 Name=Name
@@ -1385,8 +1406,8 @@ UpdateToLatestRevision=1
 PartTypes=0
 ComponentLibIdentifierKind0=Library Name And Type
 ComponentLibraryIdentifier0=bch-lib.SchLib
-ComponentDesignItemID0=ECR+24MHZ
-ComponentSymbolReference0=ECR+24MHZ
+ComponentDesignItemID0=SYM+FEL_LOGO
+ComponentSymbolReference0=SYM+FEL_LOGO
 ComponentUpdate0=1
 ComponentIsDeviceSheet0=0
 FullReplace=1
@@ -1402,34 +1423,18 @@ RemoveParameters=0
 AddModels=1
 RemoveModels=1
 UpdateCurrentModels=1
-ParameterName0=Arrow Part Number
+ParameterName0=Comment
 ParameterUpdate0=1
-ParameterName1=Arrow Price/Stock
+ParameterName1=Component Kind
 ParameterUpdate1=1
-ParameterName2=Comment
+ParameterName2=Description
 ParameterUpdate2=1
-ParameterName3=Component Kind
+ParameterName3=Library Reference
 ParameterUpdate3=1
-ParameterName4=Datasheet Link
-ParameterUpdate4=1
-ParameterName5=Description
-ParameterUpdate5=1
-ParameterName6=Height
-ParameterUpdate6=1
-ParameterName7=Library Reference
-ParameterUpdate7=1
-ParameterName8=Manufacturer_Name
-ParameterUpdate8=1
-ParameterName9=Manufacturer_Part_Number
-ParameterUpdate9=1
-ParameterName10=Mouser Part Number
-ParameterUpdate10=1
-ParameterName11=Mouser Price/Stock
-ParameterUpdate11=1
 ModelTypeGroup0=PCBLIB
 ModelTypeUpdate0=1
 ModelType0=PCBLIB
-ModelName0=830107006509
+ModelName0=FEL_LOGO
 ModelUpdate0=1
 
 [DatabaseUpdateOptions]
@@ -1448,14 +1453,16 @@ Net6=NetName=NetC36_1|NetColor=$00FF6EFF
 Net7=NetName=NetJ2_1|NetColor=$00FF6EFF
 Net8=NetName=NetJ5_A6|NetColor=$00FFFF6E
 Net9=NetName=NetJ5_A7|NetColor=$00FFFF6E
-Net10=NetName=NetL3_23|NetColor=$00FF6EFF
-Net11=NetName=NetL3_24|NetColor=$00FF6EFF
-Net12=NetName=USB_D_1_N|NetColor=$00FFFF6E
-Net13=NetName=USB_D_1_P|NetColor=$00FFFF6E
-Net14=NetName=USB_D_N|NetColor=$00FFFF6E
-Net15=NetName=USB_D_P|NetColor=$00FFFF6E
-Net16=NetName=USB_DN|NetColor=$00FFFF6E
-Net17=NetName=USB_DP|NetColor=$00FFFF6E
+Net10=NetName=NetL3_1|NetColor=$00FF6EFF
+Net11=NetName=NetL3_2|NetColor=$00FF6EFF
+Net12=NetName=NetL3_23|NetColor=$00FF6EFF
+Net13=NetName=NetL3_24|NetColor=$00FF6EFF
+Net14=NetName=USB_D_1_N|NetColor=$00FFFF6E
+Net15=NetName=USB_D_1_P|NetColor=$00FFFF6E
+Net16=NetName=USB_D_N|NetColor=$00FFFF6E
+Net17=NetName=USB_D_P|NetColor=$00FFFF6E
+Net18=NetName=USB_DN|NetColor=$00FFFF6E
+Net19=NetName=USB_DP|NetColor=$00FFFF6E
 
 [Comparison Options]
 ComparisonOptions0=Kind=Net|MinPercent=75|MinMatch=3|ShowMatch=0|UseName=-1|InclAllRules=0
