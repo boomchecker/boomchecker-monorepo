@@ -18,7 +18,7 @@ RevisionNamingSchemeGUID=
 Name=OutJob.OutJob
 Description=
 TargetOutputMedium=PDF
-VariantName=node
+VariantName=stmnode
 VariantScope=1
 CurrentConfigurationName=
 TargetPrinter=Virtual Printer
@@ -237,7 +237,7 @@ Configuration8_Item1=Record=PickPlaceView|Units=Metric|GenerateCSVFormat=True|Ge
 [PublishSettings]
 OutputFilePath2=C:\Users\maxam\Documents\GIT\03_skola\boomchecker-monorepo\hw\node\v0.2\Project Outputs for bch-node_v0.2\PDF\
 ReleaseManaged2=1
-OutputBasePath2=Project Outputs for bch-node_v0.2
+OutputBasePath2=Project Outputs for bch-stmnode_v0.1
 OutputPathMedia2=[Media Name]
 OutputPathMediaValue2=
 OutputPathOutputer2=
@@ -384,7 +384,7 @@ ExcludedParam2_117=Simulation
 ExcludedParam2_118=Database Table Name
 OutputFilePath3=C:\Users\maxam\Documents\GIT\01_Resonect\felix-hw\PROJECTS\FLX\FLX-FM\FLX-FM_v0.2\Project Outputs for FLX-FM_v0.2\
 ReleaseManaged3=1
-OutputBasePath3=Project Outputs for bch-node_v0.2
+OutputBasePath3=Project Outputs for bch-stmnode_v0.1
 OutputPathMedia3=
 OutputPathMediaValue3=Gerbers
 OutputPathOutputer3=[Output Custom]
@@ -397,7 +397,7 @@ OutputFileNameSpecial3=
 OpenOutput3=1
 OutputFilePath4=C:\Users\maxam\Documents\GIT\01_Resonect\felix-hw\PROJECTS\FLX\FLX-FM\FLX-FM_v0.2\Project Outputs for FLX-FM_v0.2\
 ReleaseManaged4=1
-OutputBasePath4=Project Outputs for bch-node_v0.2
+OutputBasePath4=Project Outputs for bch-stmnode_v0.1
 OutputPathMedia4=
 OutputPathMediaValue4=
 OutputPathOutputer4=[Output Custom]
@@ -410,7 +410,7 @@ OutputFileNameSpecial4=
 OpenOutput4=0
 OutputFilePath5=C:\Users\maxam\Documents\GIT\01_Resonect\felix-hw\PROJECTS\FLX\FLX-FM\FLX-FM_v0.2\Project Outputs for FLX-FM_v0.2\bom_HST-FM_v0.2\
 ReleaseManaged5=1
-OutputBasePath5=Project Outputs for bch-node_v0.2
+OutputBasePath5=Project Outputs for bch-stmnode_v0.1
 OutputPathMedia5=='bom_'+Project+'-'+Name+'_v'+Revision
 OutputPathMediaValue5=='bom_'+Project+'-'+Name+'_v'+Revision
 OutputPathOutputer5=
