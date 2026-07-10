@@ -48,7 +48,9 @@ def predict_tflite(model_path: Path, x: np.ndarray) -> np.ndarray:
         output = interpreter.get_tensor(output_details["index"])
         if output_details["dtype"] == np.int8:
             scale, zero_point = output_details["quantization"]
-            predictions.append(float((output[0][0] - zero_point) * scale))
+            # Widen to avoid int8 overflow: output[0][0] and zero_point can differ by up to 255,
+            # which wraps around under numpy's default int8 arithmetic (NEP 50 casting).
+            predictions.append(float((int(output[0][0]) - int(zero_point)) * scale))
         else:
             predictions.append(float(output[0][0]))
     return np.array(predictions)

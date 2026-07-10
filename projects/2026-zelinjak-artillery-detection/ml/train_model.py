@@ -5,6 +5,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import tensorflow as tf
 
 from model import build_baseline_cnn
 
@@ -54,11 +55,19 @@ def main() -> None:
     parser.add_argument("--epochs", type=int, default=50)
     parser.add_argument("--batch-size", type=int, default=8)
     parser.add_argument("--output", type=Path, default=MODEL_ROOT / "baseline_cnn.h5")
+    parser.add_argument("--seed", type=int, default=42, help="Random seed for augmentation and model init (reproducibility).")
     args = parser.parse_args()
+
+    np.random.seed(args.seed)
+    tf.random.set_seed(args.seed)
 
     index = pd.read_csv(args.features)
     x_train_clean, y_train = load_split(index, "train")
-    x_val, y_val = load_split(index, "val")
+    # Matches ml/main_cnn.py:20-45: an 80/20 stratified split with no separate held-out validation
+    # set - the test split is passed as Keras' validation_data during training, for reproduction
+    # fidelity with the paper's methodology (this is a known methodological limitation, see
+    # REPRODUCTION_NOTES.md; fixing it is deferred to the review-response phase).
+    x_test, y_test = load_split(index, "test")
     x_train, y_train_aug = augment_train_data(x_train_clean, y_train)
 
     model = build_baseline_cnn(INPUT_SHAPE)
@@ -68,7 +77,7 @@ def main() -> None:
         y_train_aug,
         epochs=args.epochs,
         batch_size=args.batch_size,
-        validation_data=(x_val, y_val),
+        validation_data=(x_test, y_test),
         class_weight=class_weights,
         verbose=1,
     )

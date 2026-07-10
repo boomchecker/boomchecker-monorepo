@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import csv
-import hashlib
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 import pandas as pd
+from sklearn.model_selection import train_test_split
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -44,14 +44,15 @@ def metadata_value(other_params: Any, key: str) -> str:
     return ""
 
 
-def stable_split(class_id: int, recording_id: str) -> str:
-    digest = hashlib.sha1(f"{class_id}:{recording_id}".encode("utf-8")).hexdigest()
-    bucket = int(digest[:8], 16) % 100
-    if bucket < 70:
-        return "train"
-    if bucket < 85:
-        return "val"
-    return "test"
+def assign_splits(rows: list[dict[str, str | int]]) -> None:
+    """Stratified 80/20 train/test split, matching the paper's methodology (ml/main_cnn.py:20-24:
+    train_test_split(..., test_size=0.2, random_state=42, stratify=y_clean))."""
+    class_ids = [int(row["class_id"]) for row in rows]
+    indices = list(range(len(rows)))
+    train_idx, test_idx = train_test_split(indices, test_size=0.2, random_state=42, stratify=class_ids)
+    train_set = set(train_idx)
+    for i, row in enumerate(rows):
+        row["split"] = "train" if i in train_set else "test"
 
 
 def main() -> None:
@@ -81,7 +82,6 @@ def main() -> None:
 
                 original_id = str(record.get("id", "") or Path(filename).stem)
                 recording_id = f"{Path(filename).stem}"
-                split = stable_split(class_id, recording_id)
                 other_params = record.get("other_params")
 
                 rows.append(
@@ -92,7 +92,7 @@ def main() -> None:
                         "audio_path": f"audio/{filename}",
                         "label": label,
                         "class_id": class_id,
-                        "split": split,
+                        "split": "",
                         "source_library": parquet_name,
                         "source_label": str(record.get("label", "") or ""),
                         "samplerate": int(record.get("samplerate", 0) or 0),
@@ -119,7 +119,6 @@ def main() -> None:
             print(f"Leaving unlabelled audio out of manifest: {audio_path.name}")
             continue
         recording_id = audio_path.stem
-        split = stable_split(class_id, recording_id)
         rows.append(
             {
                 "recording_id": recording_id,
@@ -128,7 +127,7 @@ def main() -> None:
                 "audio_path": f"audio/{audio_path.name}",
                 "label": label,
                 "class_id": class_id,
-                "split": split,
+                "split": "",
                 "source_library": "unreferenced_audio",
                 "source_label": "",
                 "samplerate": 0,
@@ -145,6 +144,7 @@ def main() -> None:
         )
         seen_filenames.add(audio_path.name)
 
+    assign_splits(rows)
     rows.sort(key=lambda item: (str(item["split"]), int(item["class_id"]), str(item["filename"])))
     fieldnames = list(rows[0].keys()) if rows else []
 

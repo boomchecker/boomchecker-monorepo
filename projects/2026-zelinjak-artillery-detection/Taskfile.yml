@@ -1,37 +1,55 @@
 version: "3"
 
+vars:
+  PY: "{{.ROOT_DIR}}/venv/bin/python"
+
 tasks:
-  manifest:
-    desc: Generate normalized recording manifest and deterministic train/val/test split
+  setup:
+    desc: Install Python dependencies into a project-local venv
     cmds:
-      - python ml/generate_manifest.py
+      - bash ./setup.sh
+
+  manifest:
+    desc: Generate normalized recording manifest and stratified 80/20 train/test split
+    cmds:
+      - "{{.PY}} ml/generate_manifest.py"
 
   features:
-    desc: Generate MFCC feature matrices from the normalized manifest
+    desc: Generate clean MFCC feature matrices from the normalized manifest
     cmds:
-      - python ml/prepare_features.py
+      - "{{.PY}} ml/prepare_features.py"
+
+  features:robustness:
+    desc: Generate clean + waveform-domain SNR-swept (30/20/10/5 dB) MFCC features over the full corpus
+    cmds:
+      - "{{.PY}} ml/prepare_features.py --include-noisy --snr-db 30 20 10 5"
 
   train:
     desc: Train the baseline CNN on generated MFCC features
     cmds:
-      - python ml/train_model.py
+      - "{{.PY}} ml/train_model.py"
 
   convert:
     desc: Convert the trained Keras model to an int8 TFLite model and C header
     cmds:
-      - python ml/convert_model.py
+      - "{{.PY}} ml/convert_model.py"
 
   validate:pc:
     desc: Evaluate the generated TFLite model on the test split
     cmds:
-      - python ml/evaluate_pc.py --model generated/models/model.tflite --format tflite --split test
+      - "{{.PY}} ml/evaluate_pc.py --model generated/models/model.tflite --format tflite --split test"
+
+  robustness:pc:
+    desc: "Run the waveform-domain SNR robustness sweep (Table II/III style) on PC. Example: task robustness:pc -- --model-keras archive/models/najlepsi_model.h5 --model-tflite archive/models/model.tflite"
+    cmds:
+      - "{{.PY}} ml/evaluate_robustness.py {{.CLI_ARGS}}"
 
   validate:esp:
-    desc: Send test MFCC features to an ESP32-S3 over UART and report responses
+    desc: Send test MFCC features to an ESP32-S3 over UART and report accuracy/latency statistics
     requires:
       vars: [ESPPORT]
     cmds:
-      - python ml/validate_esp_uart.py --port {{.ESPPORT}} --split test
+      - "{{.PY}} ml/validate_esp_uart.py --port {{.ESPPORT}} --split test"
 
   firmware:build:
     desc: Build the ESP32-S3 firmware

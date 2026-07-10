@@ -16,7 +16,7 @@ MANIFEST_PATH = PROJECT_ROOT / "datasets" / "recordings" / "manifest.csv"
 AUDIO_ROOT = PROJECT_ROOT / "datasets" / "recordings"
 OUTPUT_ROOT = PROJECT_ROOT / "generated" / "features"
 EXPECTED_FRAMES = 58
-NOISE_FACTOR = 0.0316
+DEFAULT_SNR_DB_LEVELS = [30, 20, 10, 5]
 
 
 def fix_shape(mfcc_matrix: np.ndarray) -> np.ndarray:
@@ -28,9 +28,12 @@ def fix_shape(mfcc_matrix: np.ndarray) -> np.ndarray:
     return mfcc_matrix
 
 
-def add_white_noise(signal: np.ndarray, noise_factor: float) -> np.ndarray:
-    noise = np.random.normal(0, signal.std(), signal.size)
-    return signal + noise_factor * noise
+def add_snr_noise(signal: np.ndarray, snr_db: float) -> np.ndarray:
+    """Add waveform-domain Gaussian noise at the given acoustic SNR (dB), applied before MFCC extraction."""
+    signal_power = np.mean(signal**2)
+    noise_power = signal_power / (10 ** (snr_db / 10))
+    noise = np.random.normal(0, np.sqrt(noise_power), signal.shape)
+    return signal + noise
 
 
 def compute_mfcc(signal: np.ndarray, sampling_rate: int) -> np.ndarray:
@@ -48,9 +51,18 @@ def main() -> None:
     parser.add_argument("--manifest", type=Path, default=MANIFEST_PATH)
     parser.add_argument("--output", type=Path, default=OUTPUT_ROOT)
     parser.add_argument("--include-noisy", action="store_true")
+    parser.add_argument(
+        "--snr-db",
+        type=float,
+        nargs="+",
+        default=DEFAULT_SNR_DB_LEVELS,
+        help="Acoustic SNR levels (dB) for waveform-domain noise variants, used with --include-noisy.",
+    )
     parser.add_argument("--limit", type=int, default=0)
+    parser.add_argument("--seed", type=int, default=42, help="Random seed for noise generation (reproducibility).")
     args = parser.parse_args()
 
+    np.random.seed(args.seed)
     manifest = pd.read_csv(args.manifest)
     if args.limit:
         manifest = manifest.head(args.limit)
@@ -68,7 +80,9 @@ def main() -> None:
 
         variants = [("clean", signal)]
         if args.include_noisy:
-            variants.append(("audio_noise", add_white_noise(signal, NOISE_FACTOR)))
+            for snr_db in args.snr_db:
+                variant_name = f"noise_snr{int(round(snr_db))}db"
+                variants.append((variant_name, add_snr_noise(signal, snr_db)))
 
         for variant, variant_signal in variants:
             try:
