@@ -1,13 +1,13 @@
-# BCH Node Hardware v0.2
+# BCH Node Hardware v0.1
 
-Firmware-facing hardware notes for the `bch-node_v0.2` board revision. This
+Firmware-facing hardware notes for the `bch-node_v0.1` board revision. This
 document is intended as an engineering handoff for STM32/CubeMX setup and
 firmware bring-up, not as a replacement for the Altium project or component
 datasheets.
 
 ## Source Status
 
-- Hardware project: `bch-node_v0.2.PrjPcb`
+- Hardware project: `bch-node_v0.1.PrjPcb`
 - MCU: `STM32H563ZIT6`
 - Primary schematic sheets: `top.SchDoc`, `mcu.SchDoc`, `gps.SchDoc`,
   `lora.SchDoc`, `imu.SchDoc`, `power.SchDoc`
@@ -209,7 +209,7 @@ Firmware bring-up notes:
 
 ## Power System
 
-The v0.2 power system includes USB-C input, battery charging, and a DC/DC rail,
+The v0.1 power system includes USB-C input, battery charging, and a DC/DC rail,
 but no firmware-facing power control/status interface is currently planned.
 
 Known hardware blocks:
@@ -242,14 +242,14 @@ verified against the Altium project.
 
 ## Revision Status
 
-- Revision: `0.2`
+- Revision: `0.1`
 - Project variant: `node`
 - Main purpose of this README version: provide a structured firmware-facing
   hardware interface reference and make missing pin assignments explicit.
 
 ## Release Notes
 
-- Initial hardware README for `hw/node/v0.2`.
+- Initial hardware README for `hw/node/v0.1`.
 - Documents GNSS, LoRa, IMU, magnetometer, and PDM microphone firmware
   interfaces.
 - Keeps MCU pin and CubeMX function assignments as `TBD` until verified.
