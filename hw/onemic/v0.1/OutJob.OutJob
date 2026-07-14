@@ -17,11 +17,11 @@ RevisionNamingSchemeGUID=
 [OutputGroup1]
 Name=OutJob.OutJob
 Description=
-TargetOutputMedium=PDF
-VariantName=stmnode
+TargetOutputMedium=Gerbers + NC Drill
+VariantName=onemic
 VariantScope=1
 CurrentConfigurationName=
-TargetPrinter=Virtual Printer
+TargetPrinter=Microsoft Print to PDF
 PrinterOptions=Record=PrinterOptions|Copies=1|Duplex=1|TrueTypeOptions=3|Collate=1|PrintJobKind=1|PrintWhat=1
 OutputMedium1=Print Job
 OutputMedium1_Type=Printer
@@ -40,14 +40,14 @@ OutputName1=='pcb_'+Project+'-'+Name+'_v'+Revision
 OutputCategory1=Assembly
 OutputDocumentPath1=
 OutputVariantName1=
-OutputEnabled1=1
+OutputEnabled1=0
 OutputEnabled1_OutputMedium1=0
 OutputEnabled1_OutputMedium2=2
 OutputEnabled1_OutputMedium3=0
 OutputEnabled1_OutputMedium4=0
 OutputEnabled1_OutputMedium5=0
 OutputDefault1=0
-PageOptions1=Record=PageOptions|CenterHorizontal=True|CenterVertical=True|PrintScale=4.69|XCorrection=1.00|YCorrection=1.00|PrintKind=0|BorderSize=5000000|LeftOffset=0|BottomOffset=0|Orientation=2|PaperLength=1000|PaperWidth=1000|Scale=100|PaperSource=7|PrintQuality=-3|MediaType=1|DitherType=10|PrintScaleMode=1|PaperKind=A4|PaperIndex=9
+PageOptions1=Record=PageOptions|CenterHorizontal=True|CenterVertical=True|PrintScale=6.87|XCorrection=1.00|YCorrection=1.00|PrintKind=0|BorderSize=5000000|LeftOffset=0|BottomOffset=0|Orientation=2|PaperLength=1000|PaperWidth=1000|Scale=100|PaperSource=7|PrintQuality=-3|MediaType=1|DitherType=10|PrintScaleMode=1|PaperKind=A4|PaperIndex=9
 Configuration1_Name1=OutputConfigurationParameter1
 Configuration1_Item1=DesignatorDisplayMode=Physical|PrintArea=DesignExtent|PrintAreaLowerLeftCornerX=0|PrintAreaLowerLeftCornerY=0|PrintAreaUpperRightCornerX=0|PrintAreaUpperRightCornerY=0|Record=PcbPrintView|DocumentPath=[PCB Document]
 Configuration1_Name2=OutputConfigurationParameter2
@@ -104,7 +104,7 @@ OutputName2=='schema_'+Project+'-'+Name+'_v'+Revision
 OutputCategory2=Documentation
 OutputDocumentPath2=[Project Physical Documents]
 OutputVariantName2=
-OutputEnabled2=1
+OutputEnabled2=0
 OutputEnabled2_OutputMedium1=0
 OutputEnabled2_OutputMedium2=1
 OutputEnabled2_OutputMedium3=0
@@ -180,9 +180,9 @@ PcbPrintPreferences4=SubsititueFont_Default=True|SubsititueFont_Serif=True|Subsi
 OutputType5=Gerber
 OutputName5=Gerbers PCB
 OutputCategory5=Fabrication
-OutputDocumentPath5=
+OutputDocumentPath5=bch-onemic_v0.1_panel.PcbDoc
 OutputVariantName5=
-OutputEnabled5=0
+OutputEnabled5=1
 OutputEnabled5_OutputMedium1=0
 OutputEnabled5_OutputMedium2=0
 OutputEnabled5_OutputMedium3=1
@@ -194,9 +194,9 @@ Configuration5_Item1=AddToAllLayerClasses.Set= |AddToAllPlots.Set=SerializeLayer
 OutputType6=NC Drill
 OutputName6=NC Drill Files
 OutputCategory6=Fabrication
-OutputDocumentPath6=
+OutputDocumentPath6=bch-onemic_v0.1_panel.PcbDoc
 OutputVariantName6=
-OutputEnabled6=0
+OutputEnabled6=1
 OutputEnabled6_OutputMedium1=0
 OutputEnabled6_OutputMedium2=0
 OutputEnabled6_OutputMedium3=2
@@ -208,7 +208,7 @@ Configuration6_Item1=BoardEdgeRoutToolDia=2000000|GenerateBoardEdgeRout=False|Ge
 OutputType7=Gerber
 OutputName7=Gerbers Paste
 OutputCategory7=Fabrication
-OutputDocumentPath7=
+OutputDocumentPath7=bch-onemic_v0.1_panel.PcbDoc
 OutputVariantName7=
 OutputEnabled7=0
 OutputEnabled7_OutputMedium1=0
@@ -237,7 +237,7 @@ Configuration8_Item1=Record=PickPlaceView|Units=Metric|GenerateCSVFormat=True|Ge
 [PublishSettings]
 OutputFilePath2=C:\Users\maxam\Documents\GIT\03_skola\boomchecker-monorepo\hw\node\v0.2\Project Outputs for bch-node_v0.2\PDF\
 ReleaseManaged2=1
-OutputBasePath2=Project Outputs for bch-stmnode_v0.1
+OutputBasePath2=Project Outputs for bch-onemic_v0.1
 OutputPathMedia2=[Media Name]
 OutputPathMediaValue2=
 OutputPathOutputer2=
@@ -382,9 +382,9 @@ ExcludedParam2_115=Pin Info
 ExcludedParam2_116=Signal Integrity
 ExcludedParam2_117=Simulation
 ExcludedParam2_118=Database Table Name
-OutputFilePath3=C:\Users\maxam\Documents\GIT\01_Resonect\felix-hw\PROJECTS\FLX\FLX-FM\FLX-FM_v0.2\Project Outputs for FLX-FM_v0.2\
+OutputFilePath3=C:\Users\maxam\Documents\GIT\03_skola\boomchecker-monorepo\hw\onemic\v0.1\Project Outputs for bch-onemic_v0.1
 ReleaseManaged3=1
-OutputBasePath3=Project Outputs for bch-stmnode_v0.1
+OutputBasePath3=Project Outputs for bch-onemic_v0.1
 OutputPathMedia3=
 OutputPathMediaValue3=Gerbers
 OutputPathOutputer3=[Output Custom]
@@ -397,7 +397,7 @@ OutputFileNameSpecial3=
 OpenOutput3=1
 OutputFilePath4=C:\Users\maxam\Documents\GIT\01_Resonect\felix-hw\PROJECTS\FLX\FLX-FM\FLX-FM_v0.2\Project Outputs for FLX-FM_v0.2\
 ReleaseManaged4=1
-OutputBasePath4=Project Outputs for bch-stmnode_v0.1
+OutputBasePath4=Project Outputs for bch-onemic_v0.1
 OutputPathMedia4=
 OutputPathMediaValue4=
 OutputPathOutputer4=[Output Custom]
@@ -410,7 +410,7 @@ OutputFileNameSpecial4=
 OpenOutput4=0
 OutputFilePath5=C:\Users\maxam\Documents\GIT\01_Resonect\felix-hw\PROJECTS\FLX\FLX-FM\FLX-FM_v0.2\Project Outputs for FLX-FM_v0.2\bom_HST-FM_v0.2\
 ReleaseManaged5=1
-OutputBasePath5=Project Outputs for bch-stmnode_v0.1
+OutputBasePath5=Project Outputs for bch-onemic_v0.1
 OutputPathMedia5=='bom_'+Project+'-'+Name+'_v'+Revision
 OutputPathMediaValue5=='bom_'+Project+'-'+Name+'_v'+Revision
 OutputPathOutputer5=
@@ -425,7 +425,7 @@ OpenOutput5=1
 [GeneratedFilesSettings]
 RelativeOutputPath2=C:\Users\maxam\Documents\GIT\03_skola\boomchecker-monorepo\hw\node\v0.2\Project Outputs for bch-node_v0.2\PDF\
 OpenOutputs2=1
-RelativeOutputPath3=C:\Users\maxam\Documents\GIT\01_Resonect\felix-hw\PROJECTS\FLX\FLX-FM\FLX-FM_v0.2\Project Outputs for FLX-FM_v0.2\
+RelativeOutputPath3=C:\Users\maxam\Documents\GIT\03_skola\boomchecker-monorepo\hw\onemic\v0.1\Project Outputs for bch-onemic_v0.1
 OpenOutputs3=1
 AddToProject3=0
 TimestampFolder3=0
