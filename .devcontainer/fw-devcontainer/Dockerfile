@@ -5,11 +5,11 @@ FROM ubuntu:24.04
 ENV DEBIAN_FRONTEND=noninteractive
 ENV TZ=Etc/UTC
 
-# Create dev user with UID 1001 (avoid conflicts)
-RUN useradd -m -u 1001 -s /bin/bash dev && \
-    usermod -a -G dialout dev && \
-    mkdir -p /home/dev/.ssh && \
-    chown -R dev:dev /home/dev
+# Create boom user with UID 1001 (avoid conflicts)
+RUN useradd -m -u 1001 -s /bin/bash boom && \
+    usermod -a -G dialout boom && \
+    mkdir -p /home/boom/.ssh && \
+    chown -R boom:boom /home/boom
 
 # ESP-IDF build prerequisites (per Espressif's Linux setup docs) — the minimum needed
 # to clone + install ESP-IDF below. Kept in its own layer, ahead of everything else,
@@ -43,7 +43,7 @@ ENV IDF_TOOLS_PATH=/opt/esp
 RUN git clone --recursive --shallow-submodules --depth 1 --branch v5.4 \
         https://github.com/espressif/esp-idf.git $IDF_PATH && \
     $IDF_PATH/install.sh esp32 && \
-    chown -R dev:dev /opt/esp
+    chown -R boom:boom /opt/esp
 
 # Install ESP debugging dependencies
 RUN /bin/bash -c "source $IDF_PATH/export.sh && python -m pip install esp-debug-backend debugpy construct || { echo 'Warning: pip install for ESP debug deps failed (likely no network). Install inside the container when available.'; true; }"
@@ -112,16 +112,16 @@ ENV PNPM_HOME="/pnpm-store"
 RUN mkdir -p $PNPM_HOME && \
     echo "export PNPM_HOME=$PNPM_HOME" >> ~/.bashrc && \
     echo "export PATH=\$PNPM_HOME:\$PATH" >> ~/.bashrc && \
-    chown -R dev:dev $PNPM_HOME
+    chown -R boom:boom $PNPM_HOME
 
 # Ensure ESP-IDF environment variables are sourced in Bash
 RUN echo "source $IDF_PATH/export.sh > /dev/null 2>&1" >> ~/.bashrc
 
-# Configure dev user with ESP-IDF environment
-RUN echo "source $IDF_PATH/export.sh > /dev/null 2>&1" >> /home/dev/.bashrc && \
-    echo "export PNPM_HOME=/pnpm-store" >> /home/dev/.bashrc && \
-    echo "export PATH=\$PNPM_HOME:\$PATH" >> /home/dev/.bashrc && \
-    chown -R dev:dev /home/dev/.bashrc
+# Configure boom user with ESP-IDF environment
+RUN echo "source $IDF_PATH/export.sh > /dev/null 2>&1" >> /home/boom/.bashrc && \
+    echo "export PNPM_HOME=/pnpm-store" >> /home/boom/.bashrc && \
+    echo "export PATH=\$PNPM_HOME:\$PATH" >> /home/boom/.bashrc && \
+    chown -R boom:boom /home/boom/.bashrc
 
 ENV LANG C.UTF-8
 ENV LC_ALL C.UTF-8
