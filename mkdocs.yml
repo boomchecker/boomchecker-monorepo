@@ -1,0 +1,106 @@
+site_name: Boomchecker
+site_description: Boomchecker monorepo documentation and developer handbook
+site_url: https://docs.boomchecker.cz
+docs_dir: docs
+# site_dir is overridden in CI (mkdocs build -d docs/_site); locally defaults to ./site
+
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.indexes
+    - navigation.prune
+    - navigation.top
+    - navigation.instant
+    - navigation.tracking
+    - toc.follow
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.tabs.link
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - footnotes
+  - toc:
+      permalink: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.keys
+  - pymdownx.snippets:
+      base_path: [.]
+      check_paths: true
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.details
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+
+plugins:
+  - search
+  - mkdoxy:
+      projects:
+        peak_detector:
+          src-dirs: scripts/median-filter/csrc
+          full-doc: true
+          doxy-cfg:
+            FILE_PATTERNS: "*.c *.h"
+            RECURSIVE: true
+
+nav:
+  - Home: index.md
+  - Get Started:
+      - Overview: get-started/index.md
+      - Prerequisites: get-started/prerequisites.md
+      - Install WSL2: get-started/wsl.md
+      - Install Docker Desktop: get-started/docker.md
+      - Install VS Code: get-started/vscode.md
+      - Open the devcontainer: get-started/devcontainer.md
+      - Share USB with usbipd: get-started/usbipd.md
+      - Your first build: get-started/first-build.md
+      - Git basics: get-started/git-basics.md
+      - Monorepo rules: get-started/monorepo-rules.md
+      - Contributing (theses): get-started/contributing.md
+  - Firmware:
+      - Overview: firmware/index.md
+      - ESP32 node (bom-node): firmware/bom-node.md
+      - STM32 node (bom-stm32node):
+          - firmware/bom-stm32node/index.md
+          - Toolchain: firmware/bom-stm32node/toolchain.md
+          - Build & flash: firmware/bom-stm32node/build.md
+  - Apps:
+      - Overview: apps/index.md
+      - API backend: apps/api-backend.md
+      - Discord bot: apps/boom-discord-bot.md
+      - Device web: apps/device-web.md
+  - Scripts:
+      - Overview: scripts/index.md
+      - Peak detector algorithm: scripts/peak-detector.md
+      - Peak detector C API: peak_detector/links.md
+      - FxLMS filter: scripts/lms-filter.md
+      - TDOA estimation: scripts/tdoa.md

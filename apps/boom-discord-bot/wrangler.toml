@@ -1,0 +1,9 @@
+name = "boom-discord-bot"
+main = "src/index.ts"
+compatibility_date = "2026-06-24"
+
+# Secrets (set with `wrangler secret put`, never committed):
+#   DISCORD_PUBLIC_KEY, CLAUDE_ROUTINE_FIRE_URL, CLAUDE_ROUTINE_BEARER_TOKEN
+
+[observability]
+enabled = true
