@@ -1,0 +1,23 @@
+version: "3"
+
+tasks:
+  build:
+    desc: Build STM32 firmware (Debug)
+    aliases: [b]
+    cmds:
+      - cmake --preset Debug
+      - cmake --build --preset Debug
+
+  flash:
+    desc: Flash STM32 board over ST-Link via OpenOCD
+    aliases: [f]
+    deps:
+      - build
+    cmds:
+      - openocd -f interface/stlink.cfg -f target/stm32h5x.cfg -c "program build/Debug/bom-stm32node.elf verify reset exit"
+
+  clean:
+    desc: Remove the build directory
+    aliases: [c]
+    cmds:
+      - rm -rf build
