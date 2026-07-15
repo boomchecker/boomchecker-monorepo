@@ -44,7 +44,7 @@ CrossRefPorts=3
 CrossRefCrossSheets=1
 CrossRefSheetEntries=0
 CrossRefFollowFromMainSettings=1
-CurrentVariant=stmnode
+CurrentVariant=onemic
 
 [Preferences]
 PrefsVaultGUID=
@@ -73,108 +73,6 @@ GenerateClassCluster=0
 DocumentUniqueId=EKHPFWSM
 
 [Document2]
-DocumentPath=mcu.SchDoc
-AnnotationEnabled=1
-AnnotateStartValue=1
-AnnotationIndexControlEnabled=0
-AnnotateSuffix=
-AnnotateScope=All
-AnnotateOrder=1
-DoLibraryUpdate=1
-DoDatabaseUpdate=1
-ClassGenCCAutoEnabled=1
-ClassGenCCAutoRoomEnabled=0
-ClassGenNCAutoScope=None
-DItemRevisionGUID=
-GenerateClassCluster=0
-DocumentUniqueId=YKCWKOMY
-
-[Document3]
-DocumentPath=gps.SchDoc
-AnnotationEnabled=1
-AnnotateStartValue=1
-AnnotationIndexControlEnabled=0
-AnnotateSuffix=
-AnnotateScope=All
-AnnotateOrder=2
-DoLibraryUpdate=1
-DoDatabaseUpdate=1
-ClassGenCCAutoEnabled=1
-ClassGenCCAutoRoomEnabled=0
-ClassGenNCAutoScope=None
-DItemRevisionGUID=
-GenerateClassCluster=0
-DocumentUniqueId=XNKFEZBI
-
-[Document4]
-DocumentPath=lora.SchDoc
-AnnotationEnabled=1
-AnnotateStartValue=1
-AnnotationIndexControlEnabled=0
-AnnotateSuffix=
-AnnotateScope=All
-AnnotateOrder=4
-DoLibraryUpdate=1
-DoDatabaseUpdate=1
-ClassGenCCAutoEnabled=1
-ClassGenCCAutoRoomEnabled=0
-ClassGenNCAutoScope=None
-DItemRevisionGUID=
-GenerateClassCluster=0
-DocumentUniqueId=KKLQVYIJ
-
-[Document5]
-DocumentPath=power.SchDoc
-AnnotationEnabled=1
-AnnotateStartValue=1
-AnnotationIndexControlEnabled=0
-AnnotateSuffix=
-AnnotateScope=All
-AnnotateOrder=5
-DoLibraryUpdate=1
-DoDatabaseUpdate=1
-ClassGenCCAutoEnabled=1
-ClassGenCCAutoRoomEnabled=0
-ClassGenNCAutoScope=None
-DItemRevisionGUID=
-GenerateClassCluster=0
-DocumentUniqueId=YZWMLBAF
-
-[Document6]
-DocumentPath=imu.SchDoc
-AnnotationEnabled=1
-AnnotateStartValue=1
-AnnotationIndexControlEnabled=0
-AnnotateSuffix=
-AnnotateScope=All
-AnnotateOrder=3
-DoLibraryUpdate=1
-DoDatabaseUpdate=1
-ClassGenCCAutoEnabled=1
-ClassGenCCAutoRoomEnabled=0
-ClassGenNCAutoScope=None
-DItemRevisionGUID=
-GenerateClassCluster=0
-DocumentUniqueId=OPEOXEWE
-
-[Document7]
-DocumentPath=bch-stmnode_v0.1.PcbDoc
-AnnotationEnabled=1
-AnnotateStartValue=1
-AnnotationIndexControlEnabled=0
-AnnotateSuffix=
-AnnotateScope=All
-AnnotateOrder=-1
-DoLibraryUpdate=1
-DoDatabaseUpdate=1
-ClassGenCCAutoEnabled=1
-ClassGenCCAutoRoomEnabled=0
-ClassGenNCAutoScope=None
-DItemRevisionGUID=
-GenerateClassCluster=0
-DocumentUniqueId=GIFXNPWR
-
-[Document8]
 DocumentPath=..\..\altium_libs\bch-lib.PcbLib
 AnnotationEnabled=1
 AnnotateStartValue=1
@@ -191,7 +89,7 @@ DItemRevisionGUID=
 GenerateClassCluster=0
 DocumentUniqueId=MPRJBCLL
 
-[Document9]
+[Document3]
 DocumentPath=..\..\altium_libs\bch-lib.SchLib
 AnnotationEnabled=1
 AnnotateStartValue=1
@@ -208,58 +106,7 @@ DItemRevisionGUID=
 GenerateClassCluster=0
 DocumentUniqueId=NGLTGAHM
 
-[Document10]
-DocumentPath=gps.Harness
-AnnotationEnabled=1
-AnnotateStartValue=1
-AnnotationIndexControlEnabled=0
-AnnotateSuffix=
-AnnotateScope=All
-AnnotateOrder=-1
-DoLibraryUpdate=1
-DoDatabaseUpdate=1
-ClassGenCCAutoEnabled=1
-ClassGenCCAutoRoomEnabled=0
-ClassGenNCAutoScope=None
-DItemRevisionGUID=
-GenerateClassCluster=0
-DocumentUniqueId=
-
-[Document11]
-DocumentPath=lora.Harness
-AnnotationEnabled=1
-AnnotateStartValue=1
-AnnotationIndexControlEnabled=0
-AnnotateSuffix=
-AnnotateScope=All
-AnnotateOrder=-1
-DoLibraryUpdate=1
-DoDatabaseUpdate=1
-ClassGenCCAutoEnabled=1
-ClassGenCCAutoRoomEnabled=0
-ClassGenNCAutoScope=None
-DItemRevisionGUID=
-GenerateClassCluster=0
-DocumentUniqueId=
-
-[Document12]
-DocumentPath=mcu.Harness
-AnnotationEnabled=1
-AnnotateStartValue=1
-AnnotationIndexControlEnabled=0
-AnnotateSuffix=
-AnnotateScope=All
-AnnotateOrder=-1
-DoLibraryUpdate=1
-DoDatabaseUpdate=1
-ClassGenCCAutoEnabled=1
-ClassGenCCAutoRoomEnabled=0
-ClassGenNCAutoScope=None
-DItemRevisionGUID=
-GenerateClassCluster=0
-DocumentUniqueId=
-
-[Document13]
+[Document4]
 DocumentPath=OutJob.OutJob
 AnnotationEnabled=1
 AnnotateStartValue=1
@@ -276,75 +123,7 @@ DItemRevisionGUID=
 GenerateClassCluster=0
 DocumentUniqueId=
 
-[Document14]
-DocumentPath=top.Harness
-AnnotationEnabled=1
-AnnotateStartValue=1
-AnnotationIndexControlEnabled=0
-AnnotateSuffix=
-AnnotateScope=All
-AnnotateOrder=-1
-DoLibraryUpdate=1
-DoDatabaseUpdate=1
-ClassGenCCAutoEnabled=1
-ClassGenCCAutoRoomEnabled=0
-ClassGenNCAutoScope=None
-DItemRevisionGUID=
-GenerateClassCluster=0
-DocumentUniqueId=
-
-[Document15]
-DocumentPath=imu.Harness
-AnnotationEnabled=1
-AnnotateStartValue=1
-AnnotationIndexControlEnabled=0
-AnnotateSuffix=
-AnnotateScope=All
-AnnotateOrder=-1
-DoLibraryUpdate=1
-DoDatabaseUpdate=1
-ClassGenCCAutoEnabled=1
-ClassGenCCAutoRoomEnabled=0
-ClassGenNCAutoScope=None
-DItemRevisionGUID=
-GenerateClassCluster=0
-DocumentUniqueId=
-
-[Document16]
-DocumentPath=analog_mics.SchDoc
-AnnotationEnabled=1
-AnnotateStartValue=1
-AnnotationIndexControlEnabled=0
-AnnotateSuffix=
-AnnotateScope=All
-AnnotateOrder=6
-DoLibraryUpdate=1
-DoDatabaseUpdate=1
-ClassGenCCAutoEnabled=1
-ClassGenCCAutoRoomEnabled=0
-ClassGenNCAutoScope=None
-DItemRevisionGUID=
-GenerateClassCluster=0
-DocumentUniqueId=KJTDUTTF
-
-[Document17]
-DocumentPath=project_info.SchDoc
-AnnotationEnabled=1
-AnnotateStartValue=1
-AnnotationIndexControlEnabled=0
-AnnotateSuffix=
-AnnotateScope=All
-AnnotateOrder=7
-DoLibraryUpdate=1
-DoDatabaseUpdate=1
-ClassGenCCAutoEnabled=1
-ClassGenCCAutoRoomEnabled=0
-ClassGenNCAutoScope=None
-DItemRevisionGUID=
-GenerateClassCluster=0
-DocumentUniqueId=JPIDVXHC
-
-[Document18]
+[Document5]
 DocumentPath=..\..\altium_libs\vias_lib.PvLib
 AnnotationEnabled=1
 AnnotateStartValue=1
@@ -361,45 +140,70 @@ DItemRevisionGUID=
 GenerateClassCluster=0
 DocumentUniqueId=
 
+[Document6]
+DocumentPath=bch-onemic_v0.1.PcbDoc
+AnnotationEnabled=1
+AnnotateStartValue=1
+AnnotationIndexControlEnabled=0
+AnnotateSuffix=
+AnnotateScope=All
+AnnotateOrder=-1
+DoLibraryUpdate=1
+DoDatabaseUpdate=1
+ClassGenCCAutoEnabled=1
+ClassGenCCAutoRoomEnabled=0
+ClassGenNCAutoScope=None
+DItemRevisionGUID=
+GenerateClassCluster=0
+DocumentUniqueId=GIFXNPWR
+
+[Document7]
+DocumentPath=bch-onemic_v0.1_panel.PcbDoc
+AnnotationEnabled=1
+AnnotateStartValue=1
+AnnotationIndexControlEnabled=0
+AnnotateSuffix=
+AnnotateScope=All
+AnnotateOrder=-1
+DoLibraryUpdate=1
+DoDatabaseUpdate=1
+ClassGenCCAutoEnabled=1
+ClassGenCCAutoRoomEnabled=0
+ClassGenNCAutoScope=None
+DItemRevisionGUID=
+GenerateClassCluster=0
+DocumentUniqueId=UECCHLCZ
+
 [ProjectVariant1]
 UniqueId=ce101761-10fe-4fe4-becb-190e6b908eea
-Description=stmnode
+Description=onemic
 AllowFabrication=0
 ParameterCount=0
-VariationCount=4
-Variation1=Designator=R1|UniqueId=\WWVQEOYE\TKQCMFKD|Kind=1|AlternatePart=
-Variation2=Designator=J2|UniqueId=\WWVQEOYE\GYECOTKJ|Kind=1|AlternatePart=
-Variation3=Designator=C35|UniqueId=\WWVQEOYE\LHXAAOLB|Kind=1|AlternatePart=
-Variation4=Designator=C36|UniqueId=\WWVQEOYE\RFRTXNTK|Kind=1|AlternatePart=
+VariationCount=3
+Variation1=Designator=R6|UniqueId=\RLNWRDZC|Kind=1|AlternatePart=
+Variation2=Designator=R7|UniqueId=\IAWVZKVM|Kind=1|AlternatePart=
+Variation3=Designator=R8|UniqueId=\QBYDSZIY|Kind=1|AlternatePart=
 ParamVariationCount=0
 
-[GeneratedDocument1]
-DocumentPath=Project Outputs for bch-stmnode_v0.1\Design Rule Check - bch-stmnode_v0.html
-DItemRevisionGUID=
-
-[GeneratedDocument2]
-DocumentPath=Project Outputs for bch-stmnode_v0.1\Footprint Comparison - bch-stmnode_v0.html
-DItemRevisionGUID=
-
 [Parameter1]
-Name=Revision
-Value=0.1
+Name=Author
+Value=Martin Maxa
 
 [Parameter2]
-Name=Project
-Value=boomchecker
+Name=Date
+Value=2025-07-13
 
 [Parameter3]
 Name=Name
-Value=stmnode
+Value=onemic
 
 [Parameter4]
-Name=Date
-Value=2025-05-20
+Name=Project
+Value=boomchecker
 
 [Parameter5]
-Name=Author
-Value=Martin Maxa
+Name=Revision
+Value=0.1
 
 [Configuration1]
 Name=Sources
@@ -927,6 +731,36 @@ OutputName12=Web Review Data
 OutputDocumentPath12=
 OutputVariantName12=
 OutputDefault12=0
+OutputType13=Ansoft Neutral
+OutputName13=Ansoft Neutral (AutoPCB)
+OutputDocumentPath13=
+OutputVariantName13=
+OutputDefault13=0
+OutputType14=HyperLynx
+OutputName14=HyperLynx (AutoPCB)
+OutputDocumentPath14=
+OutputVariantName14=
+OutputDefault14=0
+OutputType15=MathWorks
+OutputName15=MathWorks (AutoPCB)
+OutputDocumentPath15=
+OutputVariantName15=
+OutputDefault15=0
+OutputType16=Orcad v7 Capture Design
+OutputName16=Orcad v7 Capture Design (AutoSCH)
+OutputDocumentPath16=
+OutputVariantName16=
+OutputDefault16=0
+OutputType17=P-CAD ASCII
+OutputName17=P-CAD ASCII (AutoPCB)
+OutputDocumentPath17=
+OutputVariantName17=
+OutputDefault17=0
+OutputType18=P-CAD V16 Schematic Design
+OutputName18=P-CAD V16 Schematic Design (AutoSCH)
+OutputDocumentPath18=
+OutputVariantName18=
+OutputDefault18=0
 
 [OutputGroup10]
 Name=PostProcess Outputs
@@ -1423,8 +1257,8 @@ UpdateToLatestRevision=1
 PartTypes=0
 ComponentLibIdentifierKind0=Library Name And Type
 ComponentLibraryIdentifier0=bch-lib.SchLib
-ComponentDesignItemID0=EJ-USBC_IP67
-ComponentSymbolReference0=EJ-USBC_IP67
+ComponentDesignItemID0=EX+IM67D130AXTSA2
+ComponentSymbolReference0=EX+IM67D130AXTSA2
 ComponentUpdate0=1
 ComponentIsDeviceSheet0=0
 FullReplace=1
@@ -1440,34 +1274,18 @@ RemoveParameters=0
 AddModels=1
 RemoveModels=1
 UpdateCurrentModels=1
-ParameterName0=Arrow Part Number
+ParameterName0=Comment
 ParameterUpdate0=1
-ParameterName1=Arrow Price/Stock
+ParameterName1=Component Kind
 ParameterUpdate1=1
-ParameterName2=Comment
+ParameterName2=Description
 ParameterUpdate2=1
-ParameterName3=Component Kind
+ParameterName3=Library Reference
 ParameterUpdate3=1
-ParameterName4=Datasheet Link
-ParameterUpdate4=1
-ParameterName5=Description
-ParameterUpdate5=1
-ParameterName6=Height
-ParameterUpdate6=1
-ParameterName7=Library Reference
-ParameterUpdate7=1
-ParameterName8=Manufacturer_Name
-ParameterUpdate8=1
-ParameterName9=Manufacturer_Part_Number
-ParameterUpdate9=1
-ParameterName10=Mouser Part Number
-ParameterUpdate10=1
-ParameterName11=Mouser Price/Stock
-ParameterUpdate11=1
 ModelTypeGroup0=PCBLIB
 ModelTypeUpdate0=1
 ModelType0=PCBLIB
-ModelName0=USB472003A
+ModelName0=LLGA-5-4X3
 ModelUpdate0=1
 
 [DatabaseUpdateOptions]
