@@ -9,12 +9,13 @@ tasks:
       - cmake --build --preset Debug
 
   flash:
-    desc: Flash STM32 board over ST-Link via OpenOCD
+    desc: Flash STM32 board over ST-Link (st-flash)
     aliases: [f]
     deps:
       - build
     cmds:
-      - openocd -f interface/stlink.cfg -f target/stm32h5x.cfg -c "program build/Debug/bom-stm32node.elf verify reset exit"
+      - arm-none-eabi-objcopy -O binary build/Debug/bom-stm32node.elf build/Debug/bom-stm32node.bin
+      - st-flash write build/Debug/bom-stm32node.bin 0x08000000
 
   clean:
     desc: Remove the build directory
