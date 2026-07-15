@@ -107,6 +107,13 @@ RUN curl --location https://taskfile.dev/install.sh | sh -s -- -b /usr/local/bin
 # Install Changesets CLI
 RUN npm install -g @changesets/cli
 
+# AI tools: Codex CLI + Claude Code CLI
+RUN npm install -g @openai/codex @anthropic-ai/claude-code
+
+# Prepare Codex/Claude config dirs so the mounted volumes keep correct ownership
+RUN mkdir -p /home/boom/.codex /home/boom/.claude && \
+    chown -R boom:boom /home/boom/.codex /home/boom/.claude
+
 # Set up PNPM storage to behave like on a local computer
 ENV PNPM_HOME="/pnpm-store"
 RUN mkdir -p $PNPM_HOME && \
