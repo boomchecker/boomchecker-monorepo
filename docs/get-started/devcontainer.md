@@ -34,8 +34,11 @@ The repo ships **two** devcontainers under `.devcontainer/`. Pick by what you wo
     - VS Code extensions: Go, Docker, GitHub PR, Prettier, C/C++.
 
 Both are defined through `.devcontainer/compose.devcontainer.yml`, mount the repo at
-`/workspace`, run as the non-root user **`dev`**, and forward your `~/.ssh` so git over
-SSH works inside the container.
+`/workspace`, and run as a non-root user (**`boom`** for `fw-devcontainer`, **`dev`** for
+`sw-devcontainer`). Your host `~/.ssh` is mounted read-only; on first create, a
+`postCreateCommand` copies its keys into a persistent `ssh-data` volume (owned by the
+container user, with correct `600`/`644` permissions) so git over SSH works inside the
+container without mutating your host's SSH directory.
 
 ## Open it
 

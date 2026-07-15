@@ -4,6 +4,9 @@
   "service": "sw-devcontainer",
   "runServices": ["sw-devcontainer"],
   "workspaceFolder": "/workspace",
+  "containerUser": "root",
+  "remoteUser": "dev",
+  "postCreateCommand": "mkdir -p ~dev/.ssh && cp -n ~dev/.ssh-host/* ~dev/.ssh/ 2>/dev/null; chown -R dev:dev ~dev/.ssh && chmod 700 ~dev/.ssh && find ~dev/.ssh -maxdepth 1 -type f ! -name '*.pub' -exec chmod 600 {} + ; find ~dev/.ssh -maxdepth 1 -type f -name '*.pub' -exec chmod 644 {} + ; true",
   "customizations": {
     "vscode": {
       "settings": {

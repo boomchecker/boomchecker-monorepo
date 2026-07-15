@@ -6,8 +6,10 @@ services:
     volumes:
       # Mount the root folder that contains .git
       - ../:/workspace:cached
-      # Mount SSH keys from WSL (read-write to allow proper permissions)
-      - ${HOME}/.ssh:/root/.ssh
+      # Mount host SSH keys read-only; postCreateCommand copies them into ssh-data below
+      - ${HOME}/.ssh:/home/boom/.ssh-host:ro
+      # Persist SSH keys, seeded from the host on create (own copy, correct perms)
+      - ssh-data:/home/boom/.ssh
       # Persist Codex config/history
       - codex-data:/home/boom/.codex
       # Persist Claude Code config/history
@@ -27,8 +29,10 @@ services:
     volumes:
       # Mount the root folder that contains .git
       - ../:/workspace:cached
-      # Mount SSH keys from WSL (read-write to allow proper permissions)
-      - ${HOME}/.ssh:/root/.ssh
+      # Mount host SSH keys read-only; postCreateCommand copies them into ssh-data below
+      - ${HOME}/.ssh:/home/dev/.ssh-host:ro
+      # Persist SSH keys, seeded from the host on create (own copy, correct perms)
+      - ssh-data:/home/dev/.ssh
       # Persist Codex config/history
       - codex-data:/home/dev/.codex
       # Persist Claude Code config/history
@@ -42,3 +46,4 @@ services:
 volumes:
   codex-data:
   claude-data:
+  ssh-data:
