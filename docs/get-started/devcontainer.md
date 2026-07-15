@@ -10,15 +10,16 @@ The repo ships **two** devcontainers under `.devcontainer/`. Pick by what you wo
 === "Firmware → `fw-devcontainer`"
     For firmware in `fw/` — both **ESP32** and **STM32** platforms.
 
-    - Base image: **`espressif/idf:v5.4`** (ESP-IDF 5.4 preinstalled, with CMake +
-      Ninja).
+    - Base image: **`ubuntu:24.04`**, with ESP-IDF 5.4 installed directly (cloned
+      + `install.sh`) and **CMake + Ninja** installed as system packages.
     - **ESP32** (`bom-node`): the full ESP-IDF toolchain (`idf.py`).
     - **STM32** (`bom-stm32node`): an ARM bare-metal toolchain —
       `arm-none-eabi-gcc`, `libnewlib`, `gdb-multiarch` — plus `openocd` and
       `st-flash` (stlink-tools) for flashing over ST-Link. STM32CubeMX-generated
-      projects build with **CMake + Ninja** (provided by the ESP-IDF environment).
+      projects build with **CMake + Ninja**, independent of ESP-IDF.
     - Also includes: Node.js 20, pnpm, [Taskfile](https://taskfile.dev), Changesets,
-      `clang`/`clang-tidy`/`clang-format`, QEMU dependencies, and `valgrind`.
+      `clang`/`clang-tidy`/`clang-format`, `doxygen`, `gh`, `picocom`, `usbutils`,
+      QEMU dependencies, and `valgrind`.
     - Runs **privileged** with `SYS_PTRACE` so debugging and USB flashing work.
     - VS Code extensions: ESP-IDF, C/C++, CMake Tools, Docker, GitHub PR, Prettier.
 
@@ -65,9 +66,10 @@ SSH works inside the container.
    above).
 
 !!! warning "Rebuilds can take a while"
-    A **rebuild** re-runs the whole image build. For the **`fw-devcontainer`** (ESP-IDF
-    base image + toolchains) the first build can take **several minutes** — let it
-    finish. A plain *Reopen* afterwards is near-instant.
+    A **rebuild** re-runs the whole image build. For the **`fw-devcontainer`**, the
+    first build can take a **while** — ESP-IDF and the STM32 toolchain are cloned and
+    installed from scratch on plain Ubuntu, not pulled from a prebuilt vendor image. Let
+    it finish. A plain *Reopen* afterwards is near-instant.
 
 !!! tip "When do I need to rebuild?"
     Any change under `.devcontainer/` (Dockerfile, `compose.devcontainer.yml`,
