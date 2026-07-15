@@ -58,6 +58,7 @@ RUN /bin/bash -c "source $IDF_PATH/export.sh"
 
 # Base tools + code-quality tooling + QEMU runtime deps (for `idf.py qemu`).
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    openssh-client \
     gnupg \
     unzip \
     rsync \
