@@ -9,7 +9,9 @@ services:
       # Mount SSH keys from WSL (read-write to allow proper permissions)
       - ${HOME}/.ssh:/root/.ssh
       # Persist Codex config/history
-      - codex-data:/home/dev/.codex
+      - codex-data:/home/boom/.codex
+      # Persist Claude Code config/history
+      - claude-data:/home/boom/.claude
     privileged: true
     cap_add:
       - SYS_PTRACE
