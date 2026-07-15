@@ -5,8 +5,13 @@ FROM ubuntu:24.04
 ENV DEBIAN_FRONTEND=noninteractive
 ENV TZ=Etc/UTC
 
-# Create boom user with UID 1001 (avoid conflicts)
-RUN useradd -m -u 1001 -s /bin/bash boom && \
+# Rename the image's built-in "ubuntu" user (UID/GID 1000) to "boom" instead of
+# creating a new one — 1000 is the typical first-user UID on Linux/WSL hosts, so
+# bind-mounted host files (/workspace) stay writable without a UID mismatch.
+# If your host user's UID (`id -u`) isn't 1000, adjust here and in
+# compose.devcontainer.yml's `user:` field to match.
+RUN usermod -l boom -d /home/boom -m ubuntu && \
+    groupmod -n boom ubuntu && \
     usermod -a -G dialout boom && \
     mkdir -p /home/boom/.ssh && \
     chown -R boom:boom /home/boom
