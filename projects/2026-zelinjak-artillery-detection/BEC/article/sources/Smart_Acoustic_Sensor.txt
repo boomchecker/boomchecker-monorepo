@@ -1,0 +1,317 @@
+                                           Smart Acoustic Sensor
+
+                          Jakub Svatos                                                                          Jan Holub
+               Department of Measurement,                                                         Department of Measurement,
+            Czech Technical University in Prague                                               Czech Technical University in Prague
+                  Prague 166 27, Czechia                                                             Prague 166 27, Czechia
+                   svatoja1@fel.cvut.cz                                                               holubjan@fel.cvut.cz
+
+    Abstract—To automatically detect dangerous situations in                    factors such as the caliber of both bullet and barrel, the length
+public areas, systems based on visual detection are the most                    of the latter, or even the chemical properties of the propellant.
+commonly used. In certain situations, to detect a source of danger,             The acoustic impulse signal also depends on multiple sets of
+an automatic acoustic detection system may be preferable. This                  factors such as a temperature of the air, air humidity, wind
+paper presents a smart acoustic sensor system, which                            speed, environment (e.g., foliage density, urban area) and soil
+automatically detects acoustic pulse events, such as gunshots, in               characteristics [10]. Above that, the measured acoustic
+public places, and localizes the position of the acoustic source.               impulse signal also contains information about the
+Tested firearms are 9 mm short gun, 6.35 mm short gun, .22 short                surroundings. Figs. 1 and 2 shows a typical representation of
+gun with various subsonic and supersonic ammunition. Various
+                                                                                a subsonic and supersonic gunshot signals.
+sounds like door slams, human screams, etc. represent false
+alarms.
+
+    Keywords— acoustic impulse signal, acoustic sensor, gunshot
+detection, signal processing
+
+                         I.    INTRODUCTION
+     In these days, acoustic impulse signal detection
+ techniques are required not only in military applications but
+ also in surveillance public areas such as schools, campuses,
+ shopping centers or hospitals. Detection, localization, and
+ classification of acoustic impulse signal (gunshots) is of
+ interest in the above mentioned areas. There are several
+ commercial or experimental acoustical detection and
+ localization systems designed for gunshot occurrence
+                                                                              Fig. 1. Signal corresponding to 9 mm pistol subsonic shoot at a distance of 8 m
+ available on the market [1] - [5]. These systems are intended
+ to detect acoustic impulse signal – gunshot and to localize the
+ direction of the source of the signal. Systems that are more
+ sophisticated can even classify and identify the particular
+ firearm type. On the other hand, a drawback of these systems
+ is high purchase and operational cost. For example, in [6] uses
+ feature extraction based on mutual information in both time
+ and frequency domain, in [7] uses a wavelet transformation
+ and advanced classification using SVM or k-nearest
+ neighbors classifiers. All these methods demand great
+ computational means and therefore increasing the cost of the
+ detector.
+     To detect and classify a gunshot, a better understanding of
+ its complexity physic have to be understood first. In [8] and
+ [9] a comprehensive explanation is presented. Gunshot                        Fig. 2. Signal corresponding to 9 mm pistol shoot supersonic at a distance of
+                                                                              25 m
+ pattern is produced by two phenomena: The muzzle blast,
+ and, if the bullet travels at supersonic speed, shock wave. The                  In Fig. 2, due to the relatively low speed of the supersonic
+ muzzle blast is caused by the rapidly expanding gases from                   bullet (Mach number M = 1.09), the shock arrival is not visible
+ the confined explosive charge that is used to propel the bullet              thanks to its proximity to the muzzle blast part of the signal.
+ out of the gun barrel and propagates through the air at the
+ speed of sound. The shock wave propagates away from the                          Considering all these criteria, to successfully identify and
+ bullet’s path and expands as a cone behind the bullet, with the              detect a gunshot impulse signal, advanced signal processing
+ wave front propagating outward at the speed of sound [8]. The                including adaptive filtering and complex data classification have
+ shape of a gunshot acoustic impulse signal depends on many                   to be deployed. In this article, a Smart Acoustic Sensor (SAS)
+                                                                              able to detect an incoming gunshot in a noisy environment is
+
+
+
+
+     978-1-7281-3815-2/19/$31.00 ©2019 IEEE
+                                                                            161
+
+    Authorized licensed use limited to: CZECH TECHNICAL UNIVERSITY. Downloaded on June 01,2026 at 21:49:24 UTC from IEEE Xplore. Restrictions apply.
+presented. The system determines the azimuth and elevation of                       The acoustic signals are amplified by the four-channel
+the incoming detected gunshot. The system consists of four                     amplifier (RME QuadMic II) and digitized using four-channel
+microphones – three for the azimuth placed in the base of the                  16-bit digitizer (NI9222 placed in NI cDAQ 9171 chassis). The
+tetrahedron and one for elevation, placed on the top, analog                   digitized data (all four channels) are processed in parallel threads
+signal pre-processing unit and digital signal processing and data              of the detection algorithm. Each acoustic signal is firstly
+analysis unit. Compared to other existing available solutions                  squared, thus converted to energy signal. To filter the various
+(e.g. [3] or [5]), the proposed system has a unique modular                    noisy environment background, the signal has to be filtered.
+structure which means its deployment is quite flexible (e.g., the              Advanced filtering method such as adaptive filtering method is
+sensor part can be located on the building or car roof while the               one of the options. Therefore, the acoustic energy signal is then
+processing unit can be installed in a distant protected place). It is          filtered by the modified median filter. The acoustic energy signal
+also quite cost-effective as it is composed mostly of inexpensive              is divided into the predefined odd number of blocks of data –
+commercially easily available components. Even though, its                     windows. The middle window is the so-called actual data
+parameters are fully comparable with professional systems                      window, where the detection is performed. Each window
+deploying proprietary dedicated HW components. In the future,                  represents 50 samples, i.e., 1 ms of recorded data long. The data
+these systems can be used as a standalone units placed in schools,             in the window before the window of actual represents the
+campuses, shopping centers or public areas, in general, to detect              acoustic signal recorder after the actual data and vice versa, data
+and localize gunshot events. The units can also work as system                 recorded before are stored in windows which follows actual data
+element, delivering data into the shared central server. Such                  (Fig. 4). A number of windows changes the performance of the
+topology allows for additional analyses, i.e., triangulation                   median filter. The optimal number of windows (12 + 1 with
+localization of the event position using time-stamped data from                actual data) has been set by experimental measurements. These
+multiple units receiving the acoustic signal related to the                    windows served as an input of the modified median filter.
+shooting.
+                                                                                                                                             RMS      Rms
+    The paper is organized as follows. In Section II, the SAS                   Sample         2                                     +       MAX
+                                                                                                                                                      Max
+system and detection algorithm with the modified median filter                             x                                                          Timestamp
+                                                                                  x(t)                                                   -
+are introduced. In Section III, experimental and real data                                                                                   Energy   Energy
+together with the detection algorithm results are presented. The
+conclusion and future work are presented in section IV.                                   Win      Win       Act.        Win   Win
+                                                                                           1        2        Data        11    12
+                               II.    METHODS
+     There are many methods for dealing with the detection of                                            Median Filter
+gunshots [11] – [17]. The presented SAS use modified median
+filter method described below. The acoustic impulse signals are
+recorded using microphones placed in the tetrahedron (Fig. 3).
+                                                                               Fig. 4. Block diagram of the median filter
+In this case, the distance x between microphones in the
+tetrahedron base is 54.0 cm, while the height h of the tetrahedron                 The filter output is the noise background of the acoustic
+is 44.1 cm.                                                                    signal energy which is subtracted from the middle window with
+                                                                               actual data. The middle window with filtered actual data is then
+                                                                               tested for a gunshot event. To distinguish true acoustic event
+                                                                               from false alarms, the actual window is searched for a maximal
+                                                                               peak which meets the following criteria:
+                                                                                  •      Maximal value of the signal has to be greater than
+                                                                               Sensitivity Threshold Level (STL) parameter
+                                                                                   •   Maximal value of the signal has to exceed RMS of the
+                                                                               signal multiple times (RMS Threshold Level)
+                                                                                   These parameters adjust detector sensitivity, and their values
+                                                                               depend on the environment. Both parameters are set adaptively
+                                                                               to suppress false detection due to the noise of the environment.
+                                                                               When the acoustic event meets both these criteria, moreover the
+                                                                               algorithm compares the energy of the potential gunshot signal
+                                                                               with the Energy Threshold Level (ETL). In case the energy
+                                                                               exceeds the ETL algorithm compare the overall energy of the
+                                                                               window before and after the actual data window. If the energy
+                                                                               of the signal belonging to the window after the detected
+                                                                               maximum is greater than the energy of the signal belonging to
+                                                                               the window before the window where the acoustic event is
+                                                                               detected, the gunshot is indicated.
+                                                                                   The next step of the algorithm analyses the maximum
+                                                                               acoustic signal delay between two microphones. To avoid false
+Fig. 3. Acoustic sensors placed in tetrahedron
+                                                                               detections caused for example by multiple consequent impulse
+
+
+
+
+                                                                        162
+
+     Authorized licensed use limited to: CZECH TECHNICAL UNIVERSITY. Downloaded on June 01,2026 at 21:49:24 UTC from IEEE Xplore. Restrictions apply.
+sounds from different directions, the maximum time delay of an                      The microphones placed in the base of the tetrahedron are
+acoustic signal between microphones is computed. If the                        numbered as follows. The microphone (resp. corresponding
+detected gunshot delay between microphones is greater than the                 thread) which detect the gunshot as first is numbered as a first
+theoretically calculated delay, the shot is not indicated. The                 (channel 1), the microphone, which detects the gunshot as
+output of the detection algorithm is four timestamps (one for                  second, is numbered as second, etc. While the microphone on
+each microphone/thread). The algorithm can be expressed by                     the top of the tetrahedron used for the elevation calculation is
+following pseudocode (Tab I).                                                  always numbered as a fourth. These experimental data have been
+                                                                               used to set an optimal number of windows for modified median
+               TABLE I.         THE ALGORITHM PSEUDOCODE                       filter and presets of all parameters for detection algorithm. The
+    If (Max > Sensitivity Threshold Level) &&                                  real data has been taken at shooting range at different distances
+           (Max > (Rms * RMS Threshold Level))                                 from 10 m to 25 m, using the configured hardware setup. As a
+                                                                               background noise, a diesel engine in different distances together
+           {
+                                                                               with loud speech has been used. The example of recorded
+                 If (energy (Actual Data Window) > Energy Threshold            subsonic .22 caliber short gun gunshot signal, taken in a shooting
+                 Level)                                                        range noised by the diesel engine is in Fig. 6 (see the difference
+                      {                                                        between noisy background in Fig. 6 and quiet background in Fig.
+                                                                               1). The sampling frequency of the recorded signal in real
+                          If (energy (Actual Data Window + 1) > energy
+                          (Actual Data Window - 1))
+                                                                               conditions has been set to 50 kSa/s. Only one channel is
+                                                                               presented in Fig. 6.
+                                 {
+                                     Gunshot Detected (t1, t2, t3, t4)
+           }          }          }
+
+
+
+                              III.      RESULTS
+    Tested firearms has been 9 mm short gun, 6.35 mm short
+gun, .22 short gun, .22 rifle gun. A various subsonic and
+supersonic (up to M = 1.1) ammunition has been used with the 9
+mm short gun. As false alarms, a various door slams, handclaps,
+human screams, dog barks, etc. has been used. 41 different
+signals corresponding to gunshots and 80 signals corresponding
+to false alarms has been recorded.
+     Firstly, the experimental data has been taken in the anechoic
+acoustic chamber and recorded by proposed SAS (see chapter
+                                                                               Fig. 6. Signal corresponding to gunshot of .22 caliber short gun in noisy
+II). The distance between the shooter and the acoustic detector                environment (SNR = 5dB)
+has been 8 m. The sampling frequency has been set to 250 kSa/s.
+The example of recorded and filtered subsonic gunshot signal,                       The example of recorded signal corresponding to supersonic
+taken in the acoustic chamber from all four microphones is in                  9 mm caliber short gun gunshot is Fig. 7. Again, the signal is
+Fig. 5. The presented signal is converted from voltage signal to               filtered and converted to the energy signal.
+the energy signal by powering to two of the original signal.
+
+
+
+
+Fig. 5. Signal corresponding to subsonic gunshot recorded by the Acoustic      Fig. 7. Signal corresponding to supersonic gunshot recorded by the Acoustic
+Smart Sensor                                                                   Smart Sensor
+
+
+
+
+                                                                             163
+
+     Authorized licensed use limited to: CZECH TECHNICAL UNIVERSITY. Downloaded on June 01,2026 at 21:49:24 UTC from IEEE Xplore. Restrictions apply.
+    If the algorithm (all four threads), presented in chapter II,                  Total uncertainty of the system (for the correct input
+detect a gunshot, Smart Acoustic System calculates the azimuth                 parameters) is ±1.8° for azimuth and ±3.8° for elevation. The
+and the elevation of the incoming shot from the four timestamps.               total uncertainty of the system depends on the frequency of the
+For azimuth and elevation computation (using the four                          oscillator (10-6), the sampling frequency, the uncertainty of the
+timestamps) the following parameters are defined:                              distance between the microphones in tetrahedron (±3 mm) and
+                                                                               the uncertainty of the speed of sound.
+         τ1 is the time difference between the first occurrence and
+          the second occurrence of gunshot detection timestamp                     In total 41 signals corresponds to subsonic and supersonic
+                                                                               gunshots (see examples of the corresponding signals presented
+         τ2 is the time difference between the first occurrence and           on Fig. 5 and Fig. 7) and 80 signals represent false alarms
+          the third occurrence of gunshot detection timestamp                  (various doors slams, handclaps, scream, dog bark ...) have been
+         τ3 is the time difference between the first occurrence of            tested on presented SAS. The example of one of the false alarms
+          gunshot and gunshot detection timestamp corresponds                  – a door slam is presented in Fig. 9.
+          to the signal from the elevation microphone
+         τM is the computed maximal time delay between two
+          microphones
+    The azimuth is calculated by formulas:
+                                               𝜏
+                          𝛼1,2 = arccos⁡( 1 )                          (1)
+                                               𝜏𝑀
+                                               𝜏
+                          𝛼3,4 = arccos ( 2 ) + 60°                    (2)
+                                               𝜏𝑀
+
+    Both (1) and (2) have multiple solutions due to harmonic
+function periodicity. However, the right solution is the one that
+is common both for (1) and (2):
+                          α1 or 2 = α3 or 4.                           (3)
+    The elevation of incoming gunshot is calculated by (4).
+                                                                               Fig. 9. Signal corresponding to door slam recorded by the Acoustic Smart
+                              𝑣                     𝑣𝑠 𝜏3                      Sensor
+            𝛽 = 𝑎𝑟𝑐𝑡𝑔 ( 𝛼) − arcsin⁡(                        )         (4)
+                               ℎ                         2
+                                                   √ℎ2 +𝑣𝛼
+                                                                                  The signal corresponding to door slam is filtered and
+    ,where vs is the speed of sound and vα is correction factor for            converted to the energy signal using the same algorithm as
+the height of the tetrahedron given by formula:                                previously presented gunshot signals.
+
+                     √3        1   √3                                              The test results for all signals in the form of True Alarms
+            𝑣𝛼 = ⁡        𝑥+ 𝑥          cos(3(𝛼 − 30°))                (5)     Occurrences (TAO) and False Alarms Occurrences (FAO) are
+                     4         6    2
+                                                                               shown in Tab. II. 100% of gunshots has been correctly detected,
+The gunshot detection is presented by SAS to the user with the                 on the other hand, 12% of signals corresponding to a door slams
+graphical user interface. The Main window contains the                         has been evaluated as a false alarm.
+following elements: the computed azimuth and elevation of the
+gunshot detection, circular section indicates azimuth/elevation                              TABLE II.        THE RESULTS OF THE DETECTION
+with scattering ±5° (for better visual orientation) and labels with
+display the temperature and the relative humidity, along with the                                      door                            dog
+                                                                                           gunshot              handclap    scream              others
+calculated sound speed. GUI of the SAS is shown in Fig. 8.                                             slam                            bark
+                                                                                  TAO       41/41        /          /          /         /         /
+                                                                                  FAO         /        3/25       0/15       0/15      0/15      0/10
+
+
+                                                                                   From the experimental and real data measurements the Smart
+                                                                               Acoustic Sensor, operating on the principle of the modified
+                                                                               median filter, can successfully detect an acoustic event and can
+                                                                               recognize a gunshot signal up to Signal to Noise ratio
+                                                                               SNR ≥ 5dB. If the SNR is lower than 5 dB, the detection success
+                                                                               rate drops dramatically.
+                                                                                                         IV. CONCLUSION
+                                                                                   In this paper, the SAS for a detection of gunshots has been
+                                                                               presented. It is based on a modified median filter. The system
+                                                                               can detect and localize the azimuth and elevation of the
+                                                                               incoming gunshot to SNR ≥ 5dB. Experimental measurements,
+                                                                               taken in the anechoic acoustic chamber were conducted to set
+Fig. 8. GUI of the Application
+
+
+
+
+                                                                        164
+
+     Authorized licensed use limited to: CZECH TECHNICAL UNIVERSITY. Downloaded on June 01,2026 at 21:49:24 UTC from IEEE Xplore. Restrictions apply.
+parameters of the proposed algorithm to increase performance                         based features”, Expert Systems With Applications, vol. 46, pp. 77-86,
+and reduce false alarms. The real measurements were taken at a                       2016.
+shooting range using different firearms, and various subsonic                   [7] U. Libal, K. Spyra, “Wavelet Based Shock Wave and Muzzle Blast
+                                                                                     Classification for Different Supersonic Projectiles”, Expert Systems with
+and supersonic ammunition showed the detector could detect the                       Applications, vol. 41, pp. 5097-5104, 2014.
+tested gunshots in 100% occurrence.                                             [8] R. C. Maher, "Modeling and Signal Processing of Acoustic Gunshot
+    In the future, currently, limited datasets will be extended by                   Recordings," 2006 IEEE 12th Digital Signal Processing Workshop & 4th
+                                                                                     IEEE Signal Processing Education Workshop, Teton National Park, WY,
+new measurements, which are now ongoing. Moreover, the                               pp. 257-261, 2006.
+recognition and classification of the caliber of the firearm will               [9] R. C. Maher, "Acoustical Characterization of Gunshots," 2007 IEEE
+be evaluated and implemented to the SAS.                                             Workshop on Signal Processing Applications for Public Security and
+                                                                                     Forensics, Washington, DC, USA, pp. 1-5, 2007.
+                          ACKNOWLEDGMENT                                        [10] A. Chacon-Rodriguez, P. Julian, L. Castro, P. Alvarado and N.
+    This research was supported by the “Energy for Smart                             Hernandez, "Evaluation of Gunshot Detection Algorithms," in IEEE
+                                                                                     Transactions on Circuits and Systems I: Regular Papers, vol. 58, no. 2, pp.
+Objects” grant provided by Electronic Components and Systems                         363-373, 2011.
+for European Leadership Joint Undertaking in collaboration with
+                                                                                [11] C. Clavel, T. Ehrette and G. Richard, "Events Detection for an Audio-
+the European Union's H2020 Framework Programme                                       Based Surveillance System," 2005 IEEE International Conference on
+(H2020/2014-2020) and National Authorities, under grant                              Multimedia and Expo, Amsterdam, pp. 1306-1309, 2005.
+agreement n° 692482.                                                            [12] W. Thanhikam, "Gunshot noise detection using zero phase technique,"
+                                                                                     2015 Asian Conference on Defence Technology (ACDT), Hua Hin, pp.
+                              REFERENCES                                             183-186, 2015.
+[1]   B. Kaushik, D. Nance, K.K. Ahuja “A Review of the Role of Acoustic        [13] A. Çağlar, et al., “Sensor Fusion, Sensitivity Analysis and Calibration in
+      Sensors in the Modern Battlefield”, 11th AIAA/CEAS Aeroacoustics               Shooter Localization Systems”, Sensors and Actuators A: Physical, vol.
+      Conference, 2005.                                                              271, pp. 66-75, 2018
+[2]   H. E. Bree, “The microflown. Journal of Clinical Monitoring and           [14] A. Dufaux, L. Besacier, M. Ansorge, and F. Pellandini, “Automatic sound
+      Computing” - J CLIN MONITOR COMPUT, dissertation thesis, 1997.                 detection and recognitions for noisy environment,” in Proc. X EUSIPCO,
+[3]   SHOTSPOTTER, available at: http://www.shotspotter.com/, 2018.                  1997, p. 1889.
+[4]   J. Millet and B. Baligand, “Latest Achievements in Gunfire Detection      [15] I. Obeid and P. Wolf, “Evaluation of spike-detection algorithms for a
+      Systems”, Battlefield Acoustic Sensing for ISR Applications (pp. 26-1–         brain–machine interface application,” IEEE Trans. Biomed. Eng., vol. 51,
+      26-14) NATO RTO-MP-SET-107, 2006.                                              no. 6, pp. 905–911, Jun. 2004.
+[5]   G. L. Duckworth, D.C. Gilbert, J.E. Barger, “Acoustic Counter-sniper      [16] F. Núñez, et al., “Pulse-coupled time synchronization for distributed
+      System”, Command Control, Communications, and Intelligent Systems              acoustic event detection using wireless sensor networks,” Control
+      for Law Enforcement, SPIE Proceedings, Vol. 2938, 1996.                        Engineering Practice, Vol. 60, pp. 106-107, 2017.
+[6]   J. Ludeña-Choez, A. Gallardo-Antolín, “Acoustic Event Classification      [17] G. Valenzise, et al., “Scream and Gunshot Detection and Localization for
+      Using Spectral Band Selection and Non-Negative Matrix Factorization-           Audio-surveillance Systems,” Proceedings of the 2007 IEEE Conference
+                                                                                     on Advanced Video and Signal Based Surveillance, pp. 21-26, 2007
+
+
+
+
+                                                                               165
+
+      Authorized licensed use limited to: CZECH TECHNICAL UNIVERSITY. Downloaded on June 01,2026 at 21:49:24 UTC from IEEE Xplore. Restrictions apply.
+

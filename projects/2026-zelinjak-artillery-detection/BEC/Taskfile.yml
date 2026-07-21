@@ -1,0 +1,32 @@
+version: "3"
+
+vars:
+  TEX_DIR: article
+  TEX: article_main.tex
+  JOB: article_main
+  AUX_PREFIX: article/article_main
+  CNN_FIG: sec3_cnn_architecture
+
+tasks:
+  cnn-figure:
+    desc: Generate PlotNeuralNet CNN architecture figure
+    cmds:
+      - powershell -NoProfile -Command 'python scripts/generate_cnn_architecture.py; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; Push-Location article/figs; pdflatex -interaction=nonstopmode -halt-on-error {{.CNN_FIG}}.tex; $code = $LASTEXITCODE; Pop-Location; if ($code -ne 0) { exit $code }'
+
+  build:
+    desc: Compile {{.TEX_DIR}}/{{.TEX}} to {{.TEX_DIR}}/{{.JOB}}.pdf
+    deps:
+      - cnn-figure
+    cmds:
+      - powershell -NoProfile -Command 'Push-Location {{.TEX_DIR}}; pdflatex -interaction=nonstopmode -halt-on-error {{.TEX}}; if ($LASTEXITCODE -ne 0) { Pop-Location; exit $LASTEXITCODE }; bibtex {{.JOB}}; if ($LASTEXITCODE -ne 0) { Pop-Location; exit $LASTEXITCODE }; pdflatex -interaction=nonstopmode -halt-on-error {{.TEX}}; if ($LASTEXITCODE -ne 0) { Pop-Location; exit $LASTEXITCODE }; pdflatex -interaction=nonstopmode -halt-on-error {{.TEX}}; $code = $LASTEXITCODE; Pop-Location; if ($code -ne 0) { exit $code }'
+
+  clean:
+    desc: Remove LaTeX auxiliary files
+    cmds:
+      - powershell -NoProfile -Command "Remove-Item -ErrorAction SilentlyContinue {{.AUX_PREFIX}}.aux,{{.AUX_PREFIX}}.log,{{.AUX_PREFIX}}.out,{{.AUX_PREFIX}}.bbl,{{.AUX_PREFIX}}.blg,{{.AUX_PREFIX}}.toc,{{.AUX_PREFIX}}.synctex.gz,article/figs/{{.CNN_FIG}}.aux,article/figs/{{.CNN_FIG}}.log"
+
+  rebuild:
+    desc: Clean and compile again
+    cmds:
+      - task: clean
+      - task: build

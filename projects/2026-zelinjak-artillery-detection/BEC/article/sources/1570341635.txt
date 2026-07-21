@@ -1,0 +1,350 @@
+                                       2017 25th European Signal Processing Conference (EUSIPCO)
+
+
+
+
+ A Curriculum Learning Method for Improved Noise
+   Robustness in Automatic Speech Recognition
+                                            Stefan Braun, Daniel Neil, Shih-Chii Liu
+                                                 Institute of Neuroinformatics
+                                             University of Zurich and ETH Zurich
+                                                      Zurich, Switzerland
+                                Email: brauns@student.ethz.ch, dneil@ini.uzh.ch, shih@ini.uzh.ch
+
+
+    Abstract—The performance of automatic speech recognition          dropout [13] - originally intended to improve regularisation
+ systems under noisy environments still leaves room for improve-      - have been shown to also improve noise robustness [12].
+ ment. Speech enhancement or feature enhancement techniques           The same is true for model adaptation/noise aware training
+ for increasing noise robustness of these systems usually add com-
+ ponents to the recognition system that need careful optimization.    techniques [12].
+ In this work, we propose the use of a relatively simple curriculum
+ training strategy called accordion annealing (ACCAN). It uses a         This paper presents general training methods for improving
+ multi-stage training schedule where samples at signal-to-noise
+ ratio (SNR) values as low as 0dB are first added and samples
+                                                                      noise robustness in recurrent neural network (RNN)-based rec-
+ at increasing higher SNR values are gradually added up to an         ognizers. RNNs are used here because they have demonstrated
+ SNR value of 50dB. We also use a method called per-epoch             state-of-the-art performance in tasks such as the common
+ noise mixing (PEM) that generates noisy training samples online      sequence labelling task in speech recognition [14] [15].
+ during training and thus enables dynamically changing the SNR
+ of our training data. Both the ACCAN and the PEM methods
+ are evaluated on a end-to-end speech recognition pipeline on the       In particular, we introduce a new training strategy called
+ Wall Street Journal corpus. ACCAN decreases the average word         accordion annealing (ACCAN) which exploits the benefits
+ error rate (WER) on the 20dB to -10dB SNR range by up to             of curriculum-based training methods. By first training the
+ 31.4% when compared to a conventional multi-condition training       network on low SNR levels down to 0 dB and gradually
+ method.
+                                                                      increasing the SNR range to encompass higher SNR levels,
+                       I. I NTRODUCTION                               the trained network shows better noise robustness when tested
+                                                                      under a wide range of SNR levels.
+    The performance of automatic speech recognition (ASR)
+ systems has increased significantly with the use of deep neural
+ networks (DNNs) [1]. However, their performance in noisy                This work also investigates the usefulness of adding noise
+ environments still leaves room for improvement. Over the past        both at the acoustic waveform level and at the feature rep-
+ decades, a multitude of methods to improve noise robustness          resentation level during training. In particular, we exploit a
+ of ASR systems has been proposed [2], with many methods              method called per-epoch noise mixing (PEM), which is a
+ being applicable to DNNs. These methods enhance noise                waveform-level data augmentation method. It enables us to
+ robustness at various levels and are applied prior to feature        generate a new training set for every epoch of training, i.e.
+ extraction, at the feature level, and during training.               each training sample is mixed with a newly sampled noise
+    Some example enhancement methods applied prior to fea-            segment at a randomly chosen SNR in every epoch. This
+ ture extraction include denoising methods [3] and source sep-        form of data augmentation prevents networks from relying on
+ aration methods [4] [5]. Methods applied at the feature level        constant noise segments for classification and helps in creating
+ include methods that produce auditory-level features [6] and         the necessary training samples over a wide SNR range. These
+ feature space adaptation methods [7]. Other approaches use           steps lead to improved generalization and noise robustness of
+ DNNs, e.g. feature denoising with deep autoencoders [8] [9]          the trained network. Our results are evaluated on the Wall
+ or feature extraction from the raw waveform via convolutional        Street Journal corpus in a large-vocabulary continuous speech
+ neural networks (CNNs) [10] [11]. Many of these strategies           recognition (LVCSR) task. The testing is carried out on a large
+ add components to the speech recognition system that need            SNR range going from clean conditions (> 50 dB) down to
+ careful optimization.                                                -20 dB.
+    The training method itself can have a major influence on
+ the performance of a neural network under noisy conditions.            The paper is organized as follows: Section II presents
+ Training on noisy data is an established method of increasing        our training methods for improved noise robustness. The
+ the noise robustness of a network. Noisy training sets with a        evaluation setup is detailed in Section III, with results given
+ range of SNR values e.g. 10 dB - 20 dB [12] or 0 dB - 30 dB          in Section IV followed by discussions in Section V and
+ [10] are used during training. Other training methods such as        concluding remarks in Section VI.
+
+
+ISBN 978-0-9928626-7-1 © EURASIP 2017                             578
+                                     2017 25th European Signal Processing Conference (EUSIPCO)
+
+
+       II. T RAINING METHODS FOR IMPROVED NOISE                     on the GPU and pre-processing the next-epoch training data
+                         ROBUSTNESS                                 in parallel on the CPU. After an epoch was trained on, the
+ A. Baseline                                                        training data gets discarded to free storage for the next epoch.
+                                                                       Secondly, PEM shows the network more unique training
+    Our baseline method takes advantage of multi-condition          data: every training sample is presented at a selection of SNRs
+ training [16] in order to increase the noise robustness of the     and with as many noise samples as can be extracted from the
+ network. Pink noise is added to a clean dataset to create sam-     noise file and as needed by the number of epochs to reach a
+ ples with the desired SNR. Each training sample is randomly        steady-state accuracy level. Thirdly, other noise types, different
+ chosen to be of an SNR level in the range 0 to 50 dB with 5        SNR training ranges, and even different audio features could
+ dB steps. This wide range is larger than the SNR ranges used       be quickly tested as the training data can be easily augmented
+ in previous work (e.g. 0 to 30 dB as in [10]). Our exhaustive      online. Finally, PEM enables us to dynamically change the
+ simulations show that using such a large range resulted in the     SNR level during training, which renders advanced training
+ best performance on the test datasets. The noise mixing is done    paradigms such as curriculum learning (section II-D) feasible.
+ once at the waveform-level before filterbank audio features are       In contrast to the Gauss-method, PEM permits more control
+ computed. This one set of training data is presented to the        over the training data. Real-world noise is added to the acous-
+ network over all training epochs. The resulting networks will      tic waveform at controlled SNRs, ensuring that the training
+ be referred to as “noisy-baseline”. For completeness, we also      data corresponds to realistic noise corruption with results that
+ include a “clean-baseline”, i.e. a network that is only trained    can be evaluated. Of course, PEM can be combined with
+ on clean speech.                                                   Gaussian noise addition (optional step three in Section II-C).
+ B. Gaussian noise injection                                        We refer to PEM without Gaussian noise injection as “Vanilla-
+                                                                    PEM” and to PEM with Gaussian noise injection as “Gauss-
+     Gaussian noise injection is a well-known method for im-        PEM”.
+ proving generalisation in neural networks [17]. It is used here
+ to improve the noise robustness of the network.                    D. Curriculum learning
+     During training, artificial Gaussian noise is added to the        Neural networks have been shown to optimize on the SNR
+ filterbank features created from the different SNR samples.        they are trained on [16]. A network trained on clean conditions
+ The amount of additive noise is drawn from a zero-centered         thus fares worse than a network trained on noisy conditions.
+ Gaussian distribution. Using a Gaussian with a standard de-        Also, networks trained on a vast SNR range generally do worse
+ viation of σ = 0.6 yielded the best results. This method is        on a single SNR than networks optimized for this specific
+ referred to as the “Gauss-method” in the rest of the paper.        SNR. In order to achieve high accuracy under both high and
+ C. Per-epoch noise mixing (PEM)                                    low SNR with a single network, we explored novel training
+                                                                    paradigms based on curriculum learning. While curriculum
+    PEM is a method for adding noise to the waveform level          learning has been used in image classification (scheduled
+ during training. In every training epoch, each training sample     denoising autoencoders, [18]) as well as speech recognition
+ is mixed with a randomly sampled noise segment at a ran-           (SortaGrad [15], a method for faster accuracy convergence),
+ domly sampled SNR. The training procedure consists of the          this is the first work targeted at LVCSR under noisy conditions.
+ following steps:                                                      Our novel ACCAN training method applies a multi-stage
+    1) Mix every training sample with a randomly selected           training schedule: in the first stage, the neural network is
+        noise segment from a large pink noise pool to create        trained on the lowest SNR samples. In the following stages, the
+        a resulting sample at a randomly chosen SNR level           SNR training range is expanded in 5 dB steps towards higher
+        between 0 to 50 dB.                                         SNR values. A typical schedule is shown in Table I. In every
+    2) Extract audio features (e.g. filterbank features) for the    stage, training repeats until the WER on the development set
+        noise-corrupted audio to obtain the training data for the   no longer improves. At the end of each stage, the weights of
+        current epoch.                                              the best network are stored and used as the starting point for
+    3) Optional: add Gaussian noise to the audio features.          the next stage. Both training and validation sets share the same
+    4) Train on newly generated training data for one epoch.        SNR range. The ACCAN approach seems counter-intuitive as
+    5) Discard this training data after the epoch to free up        the network is first trained on noisy data that is difficult to
+        storage.                                                    classify. However, the noise allows the network to explore
+    6) Repeat from step 1 until training terminates.                the parameter space more extensively at the beginning [19].
+    This method has several key advantages over conventional        We also evaluated a method called “ACCAN-reversed”, which
+ pre-training preprocessing methods. Firstly, it enables unlim-     expands from high SNR to low SNR, but the results were very
+ ited data augmentation on large speech datasets. With conven-      close to the standard “Gauss-PEM” approach.
+ tional methods, augmenting training data at the waveform level
+ with real-world noise at various SNR values is prohibitively                                 III. S ETUP
+ expensive in terms of processing time and training data size.          Audio database: All experiments were carried out on
+ PEM allows use to overcome these restrictions by training          the Wall Street Journal (WSJ) corpus (LDC93S6B and
+
+
+ISBN 978-0-9928626-7-1 © EURASIP 2017                           579
+                                         2017 25th European Signal Processing Conference (EUSIPCO)
+
+
+                           TABLE I                                         the full SNR range at epoch 190. Saturation kicked in at epoch
+ T HE ACCAN TRAINING STRATEGY: SNR RANGES [ D B] OF THE TRAINING           240. While ACCAN trained for more epochs than the others,
+                                STAGES
+                                                                           it only trained for 50 epochs on the full SNR range.
+        Method        Stage 1     Stage 2    ...       Stage 10
+        ACCAN            [0]       [0, 5]    ...   [0, 5, ..., 45, 50]                              IV. R ESULTS
+     ACCAN reversed     [50]      [50, 45]   ...   [50, 45, ..., 5, 0]        The reported results are given for the ’test-eval92’ evalua-
+ LDC94S13B) in the following configuration:                                tion set for the Wall Street Journal corpus. The evaluation set
+    • training set: train-si84 (7138 samples, 15h of speech),              was tested in clean condition and with added pink noise or
+    • development set: test-dev93 (503 samples, 1h of speech),             babble noise at 15 SNR levels from 50dB to -20 dB in dB
+    • test set: test-eval92 (333 samples, 0.7h of speech).                 steps. We report in Table II the average WER over following
+ For noise corruption, we used two different noise types: pink             SNR ranges:
+ noise generated by the Audacity [20] software and babble                     • Full SNR range: [clean signal, 50dB to -10dB]
+ noise from the NOISEX database [21].                                         • High SNR range: [50dB to 0dB]
+       Data preparation and language model: The labels and                    • Low SNR range: [0dB to -10dB]
+ transcriptions were extracted with EESEN [14] routines. All                  • range of interest (ROI): [20dB to -10dB]
+ experiments were character-based and used 58 labels (letters,             We choose to include the ROI, as our hearing tests showed that
+ digits, punctuation marks etc.) During test time, the network             this range seems to well reflect common scenarios in public
+ output was decoded with the Weighted Finite State Trans-                  environments, where a clean speech signal is most often not
+ ducer (WFST) approach from the EESEN framework, which                     found. Detailed results for each SNR individually are given in
+ allows us to apply a trigram language model. The language                 Table III. Results for -15dB and -20dB are reported too, but
+ model used an expanded vocabulary in order to avoid out-                  should be considered as extreme cases. WER improvements
+ of-vocabulary words occurring in the standard WSJ language                are given as relative improvements in the text.
+ model.
+       Audio features: We used 123-dimensional filterbank fea-                                         TABLE II
+ tures that consisted of 40 filterbanks, 1 energy term and their               AVERAGE ABSOLUTE WER [%] FOR GIVEN SNR RANGES AFTER
+                                                                                       DECODING . P RINTED BOLD : LOWEST WER.
+ respective first and second order derivatives. The features were
+ generated by preprocessing routines from EESEN [14]. Each                                      Testing against pink noise
+ feature dimension is zero-mean and unit-variance normalized.                        Method              Full   High     Low    ROI
+       Neural network configuration: Our recognition pipeline                        Clean-baseline      54.7    29.0   109.6   67.9
+                                                                                     Noisy-baseline      46.0    23.3    88.6   51.7
+ is a end-to-end solution that involves a RNN as the acoustic                        Gauss               37.4    19.8    71.1   42.1
+ model. In order to automatically learn the alignments between                       Vanilla-PEM         35.6    17.8    70.6   40.8
+ speech frames and label sequences, the Connectionist Tem-                           Gauss-PEM           34.1    16.6    64.7   37.2
+                                                                                     ACCAN               34.4    18.1    59.5   36.0
+ poral Classification (CTC) [22] objective was adopted. The                          ACCAN reversed      35.2    17.8    66.3   38.8
+ Lasagne library [23] enabled us to build and train our 5-layer                                Testing against babble noise
+ neural network. The first 4 layers consisted of bidirectional                       Method              Full   High     Low    ROI
+ long short-term memory (LSTM) [24] units with 250 units in                          Clean-baseline      53.0    32.0   113.7   72.1
+                                                                                     Noisy-baseline      53.3    29.9   114.0   68.4
+ each direction. The fifth and final layer was a non-flattening                      Gauss               45.4    25.4    96.3   56.9
+ dense layer with 59 outputs, corresponding to the character la-                     Vanilla-PEM         41.0    22.8    88.3   52.3
+ bels + the blank label required by CTC. The network contained                       Gauss-PEM           39.5    21.6    83.7   49.0
+                                                                                     ACCAN               39.6    21.5    80.2   47.0
+ 8.5M tunable parameters. All layers were initialized with the                       ACCAN reversed      39.5    21.5    82.9   48.2
+ Glorot uniform strategy [25]. Every experiment started with
+ the exact same weight initialization. During training, the Adam
+ [26] stochastic optimization method was used. To prevent                  A. Noise addition methods
+ overfitting and to increase noise robustness, dropout [13] was               This section summarizes results from the baseline, Gauss,
+ used (dropout probability=0.3). Every epoch of training, the              Vanilla-PEM and Gauss-PEM methods, all trained on the SNR
+ WER on the development set was monitored with a simple                    range from 0dB to 50dB. Our network trained on clean speech
+ best-path decoding approach.                                              only (clean-baseline) achieves 13.8% WER with a trigram
+    With all training strategies except ACCAN, the network was             language model and our 8.5M parameter network, while in
+ trained for a generous 150 epochs. The networks weights from              literature [27], a 13.5% WER was achieved using a trigram
+ the epoch with the lowest WER were kept for evaluation. Gen-              language model and 3x larger (26.5M) parameter network.
+ erally, the improvements in WER saturated well before 150                 This confirms that our end-to-end speech recognition pipeline
+ epochs were reached. The ACCAN method used a patience of                  is fully functional.
+ 5 as to switch between SNR stages, i.e. if the WER did not                      Baseline: The noisy-baseline network starts with a 25%
+ improve for 5 epochs on the current SNR stage, the training               higher WER on the clean test set than our clean-baseline
+ continued on the next SNR stage. By respecting the stage-                 network. For SNRs lower than 25dB, the noisy-baseline is
+ switching policy, ACCAN reached the final SNR stage with                  significantly more noise robust. The WER seems to drastically
+
+
+ISBN 978-0-9928626-7-1 © EURASIP 2017                                    580
+                                        2017 25th European Signal Processing Conference (EUSIPCO)
+
+
+                                                               TABLE III
+                             A BSOLUTE WER [%] ON SINGLE SNR S AFTER DECODING . P RINTED BOLD : LOWEST WER.
+
+                                                            Testing against pink noise
+  Method / SNR[dB]   clean     50.0   45.0   40.0   35.0     30.0   25.0 20.0      15.0   10.0    5.0    0.0     -5.0   -10.0   -15.0   -20.0
+  Clean-baseline     13.8      14.4   14.0   13.8   13.7     13.7   16.1 18.9      25.9   40.1   61.8   86.4    109.0   133.4   147.2   152.8
+  Noisy-baseline     17.3      17.4   17.3   16.9   16.5     16.4   16.2 16.8      19.0   23.4   36.5   59.8    90.0    116.2   126.7   129.5
+  Gauss              15.7      15.8   15.7   15.6   14.8     14.4   14.5 15.3      16.9   20.2   28.9   45.5    72.8    94.9    99.0    98.9
+  Vanilla-PEM        13.3      13.2   13.2   12.7   12.6     12.6   12.9 13.6      15.1   18.9   26.2   45.0    73.5    93.4    96.9    97.1
+  Gauss-PEM          13.6      13.5   13.6   13.4   13.2     12.6   12.4 12.8      14.2   17.0   22.3   37.6    66.3    90.2    95.9    96.8
+  ACCAN              15.9      15.8   15.4   15.3   15.0     15.0   15.2 15.9      16.1   18.5   22.9   33.7    58.8    85.9    95.6    96.2
+  ACCAN reversed     14.6      14.4   14.3   14.1   13.3     13.4   13.9 14.4      15.4   18.5   24.4   40.2    67.8    90.9    97.0    97.2
+                                                           Testing against babble noise
+  Method / SNR[dB]   clean     50.0   45.0   40.0   35.0     30.0   25.0 20.0      15.0   10.0    5.0    0.0     -5.0   -10.0   -15.0   -20.0
+  Clean-baseline     13.8      14.2   14.2   13.9   14.2     14.5   15.7 18.8      26.6   43.9   74.2   102.2   116.6   122.4   122.3   121.4
+  Noisy-baseline     17.3      17.1   16.9   16.7   16.1     15.7   15.8 17.8      23.1   35.5   60.6   94.1    119.4   128.4   129.3   129.2
+  Gauss              15.7      15.6   15.7   15.7   15.3     15.0   15.4 16.5      19.5   27.5   45.9   77.4    102.6   109.0   109.8   110.6
+  Vanilla-PEM        13.3      13.2   12.9   12.7   12.3     12.7   12.8 14.0      17.4   25.6   44.2   72.7    93.2    99.1    99.5    99.8
+  Gauss-PEM          13.6      13.8   13.7   13.4   13.4     13.3   13.7 14.6      16.9   22.9   37.4   64.1    89.8    97.3    97.3    97.4
+  ACCAN              15.9      15.7   15.3   14.9   15.1     15.1   15.0 15.5      17.5   21.8   33.4   57.2    86.1    97.2    98.8    99.1
+  ACCAN reversed     14.6      14.4   14.2   14.0   14.1     14.0   14.0 14.6      16.5   21.9   35.5   63.5    88.7    96.6    97.6    97.6
+
+
+
+ increase at 25dB for the clean-baseline, while the noisy-                babble noise, the biggest WER decreases are found at 10dB
+ baseline sees the increase at a lower 10dB SNR. However, all             (4.9%), 5dB (10.9%) and 0dB (10.7%).
+ other methods outperform the noisy-baseline by a significant                The average WER of ACCAN on the high SNR range
+ margin at high and low SNRs.                                             is worse on pink noise (relative 8.8% increase in WER),
+       Vanilla-PEM vs Gauss: Compared to the noisy-baseline,              but better on babble noise (relative 0.4% decrease in WER).
+ Vanilla-PEM achieves a 23% decrease in WER on high SNR,                  Ultimately, the absolute WER in clean speech of ACCAN
+ while Gauss only reduces WER by 15% (both pink noise                     (15.9%) is better than the noisy-baseline (17.3%) but worse
+ and babble noise). This results in vanilla-PEM being able to             than Gauss-PEM (13.6%).
+ outperform the clean-baseline on clean speech, while Gauss is
+ not able to do the same. On low SNR, both methods reduce                                           V. D ISCUSSION
+ WER by around 20% on the pink noise test set. On babble
+ noise, PEM results in a higher 22.5% WER decrease compared                  All proposed training methods lead to networks with in-
+ to the 15.5% decrease provided by Gauss.                                 creased noise robustness in the low SNR range in comparison
+                                                                          with the standard noisy-baseline method. The noise robustness
+       Gauss-PEM: The Gauss-PEM method achieves the over-
+                                                                          is increased on a network level and it does not rely on complex
+ all lowest WER on the high and low SNR range. It beats the
+                                                                          preprocessing frameworks.
+ noisy-baseline method by between 26.5% and 28.7% on high
+ SNR, on low SNR and on the ROI for both pink noise and                      We see increased noise robustness against both tested noise
+ babble noise. The results on the high SNR range are notable:             types. This is remarkable, as the networks only saw the pink
+ Gauss-PEM is able to outperform the clean-baseline network               noise type during training. The results show that waveform-
+ at every single SNR step in the high SNR range, even on                  level noise mixing (PEM) is especially strong in transferring
+ clean speech. The network is much more noise robust while at             noise robustness to noise types not seen in training. The
+ the same time it even improves clean speech scores. Around               feature level noise addition (Gauss) is less effective on unseen
+ 35dB to 25dB, Gauss-PEM (other methods, too) reaches its                 noise types. Also, PEM enabled us to train noise robust
+ minimum WER. This is expected, as the mean SNR of the                    networks that - at the same time - achieve lower WER on
+ training SNR range is 25dB and the network seems to optimize             clean speech than a network trained only on clean speech.
+ for SNR levels close to this value [16].                                 The uncompromising data augmentation by PEM should be
+                                                                          a decisive factor to achieve these results. While the noisy-
+                                                                          baseline trained on 1.7GB of unique data (waveform level), the
+ B. Curriculum learning
+                                                                          PEM-enabled networks trained on up to 408GB (240 epochs
+    To further increase the noise robustness, we developed                for ACCAN * 1.7GB) of unique training data (waveform
+ a curriculum learning strategy for the Gauss-PEM method,                 level). By permanently sampling different noise segments, we
+ resulting in our novel ACCAN method. We compare our                      force the network to not rely only on constant noise features
+ results to Gauss-PEM, as this was the most noise robust                  for classification, but to develop a better internal representation
+ non-curriculum method. Our test results show increased noise             of the speech data. This representation could be refined further
+ robustness for ACCAN on pink noise and babble noise: the                 by using other noise types besides pink noise for training, such
+ WER decreases between 3.3% (ROI, pink noise) and 4.1%                    as babble noise, street noise, restaurant noise. Also, SNR steps
+ (ROI babble noise). For pink noise, the biggest decrease is seen         smaller than 5dB could be used to allow more than 11 different
+ at 0dB (10.5% WER decrease) and -5dB (11.3% decrease). For               SNR levels during training.
+
+
+ISBN 978-0-9928626-7-1 © EURASIP 2017                                 581
+                                            2017 25th European Signal Processing Conference (EUSIPCO)
+
+
+    PEM enabled us to dynamically change the SNR during                         [6] H. Hermansky, N. Morgan, A. Bayya, and P. Kohn, “Compensation
+ training. This facilitated the implementation of our novel                         for the effect of the communication channel in auditory-like analysis
+                                                                                    of speech (rasta-plp),” in Second European Conference on Speech
+ ACCAN training strategy, that achieved the best noise robust-                      Communication and Technology, 1991.
+ ness performance. The multi-stage training starts at low SNRs,                 [7] T. Hori, Z. Chen, H. Erdogan, J. R. Hershey, J. Roux, V. Mitra,
+ where annealed networks are able to explore the parameters                         and S. Watanabe, “The merl/sri system for the 3rd chime challenge
+                                                                                    using beamforming, robust feature extraction, and advanced speech
+ space with moderate influence of the speech signal. During                         recognition,” in Proc. IEEE ASRU, 2015.
+ gradual exposure to higher SNRs in the training process,                       [8] A. L. Maas, Q. V. Le, T. M. O’Neil, O. Vinyals, P. Nguyen, and A. Y.
+ accordion annealed networks refine their internal model of                         Ng, “Recurrent neural networks for noise reduction in robust asr.” in
+                                                                                    INTERSPEECH, 2012, pp. 22–25.
+ speech step by step, while they seemingly acquire higher                       [9] X. Feng, Y. Zhang, and J. Glass, “Speech feature denoising and
+ noise robustness at the lower SNR levels. The inverse way of                       dereverberation via deep autoencoders for noisy reverberant speech
+ going through the SNR range does not yield increased noise                         recognition,” in 2014 IEEE International Conference on Acoustics,
+                                                                                    Speech, and Signal Processing (ICASSP). IEEE, 2014, pp. 1759–1763.
+ robustness. The immediate presence of clean speech signals                    [10] D. Palaz, R. Collobert et al., “Analysis of cnn-based speech recognition
+ seems to force the network to converge faster to a complex                         system using raw speech as input,” in Proceedings of Interspeech, 2015.
+ acoustic model instead of exploring the parameter space.                      [11] G. Trigeorgis, F. Ringeval, R. Brueckner, E. Marchi, M. A. Nicolaou,
+                                                                                    S. Zafeiriou et al., “Adieu features? end-to-end speech emotion recog-
+                       VI. C ONCLUSION                                              nition using a deep convolutional recurrent network,” in 2016 IEEE
+                                                                                    International Conference on Acoustics, Speech and Signal Processing
+    This work proposes new training methods for improving the                       (ICASSP). IEEE, 2016, pp. 5200–5204.
+ noise robustness of RNNs for a LVCSR task. The networks are                   [12] M. L. Seltzer, D. Yu, and Y. Wang, “An investigation of deep neural net-
+                                                                                    works for noise robust speech recognition,” in 2013 IEEE International
+ trained for a wide SNR range with the use of the Vanilla-PEM                       Conference on Acoustics, Speech, and Signal Processing (ICASSP).
+ training method which adds noise at the waveform level and                         IEEE, 2013, pp. 7398–7402.
+ the Gauss method which injects Gaussian noise at the feature                  [13] N. Srivastava, G. Hinton, A. Krizhevsky, I. Sutskever, and R. Salakhut-
+                                                                                    dinov, “Dropout: A simple way to prevent neural networks from over-
+ level. By combining the Gauss and Vanilla-PEM methods into                         fitting,” The Journal of Machine Learning Research, vol. 15, no. 1, pp.
+ the Gauss-PEM method, we achieve on average a 28% WER                              1929–1958, 2014.
+ reduction on the 20dB to -10 dB SNR range when compared                       [14] Y. Miao, M. Gowayyed, and F. Metze, “Eesen: End-to-end speech
+                                                                                    recognition using deep rnn models and wfst-based decoding,” in 2015
+ to a conventional multi-condition training method. At the same                     IEEE Workshop on Automatic Speech Recognition and Understanding
+ time, we achieve lower WER on clean speech than a network                          (ASRU), 2015, pp. 167–174.
+ that is trained solely on clean speech. The ACCAN training                    [15] D. Amodei et al., “Deep speech 2: End-to-end speech recognition in
+                                                                                    english and mandarin,” CoRR, vol. abs/1512.02595, 2015. [Online].
+ strategy enhances the Gauss-PEM method with a curriculum                           Available: http://arxiv.org/abs/1512.02595
+ learning strategy. The ACCAN training strategy results in                     [16] S. Yin, C. Liu, Z. Zhang, Y. Lin, D. Wang, J. Tejedor, T. F. Zheng, and
+ performance up to 11.3% lower WER at low SNRs compared                             Y. Li, “Noisy training for deep neural networks in speech recognition,”
+                                                                                    EURASIP Journal on Audio, Speech, and Music Processing, vol. 2015,
+ to Gauss-PEM method.                                                               no. 1, pp. 1–14, 2015.
+                                                                               [17] P. Koistinen and L. Holmström, “Kernel regression and backpropagation
+                 VII. ACKNOWLEDGEMENTS                                              training with noise,” in 1991 IEEE International Joint Conference on
+    The authors acknowledge Enea Ceolini and Joachim Ott for                        Neural Networks, 1991, pp. 367–372.
+                                                                               [18] K. J. Geras and C. A. Sutton, “Scheduled denoising autoencoders,”
+ discussions on RNNs. They also acknowledge Ying Zhang and                          CoRR, vol. abs/1406.3269, 2014. [Online]. Available: http://arxiv.org/
+ Yoshua Bengio (both from University of Montreal) for help                          abs/1406.3269
+ in the setup of the language model. This work was partially                   [19] Y. Bengio, J. Louradour, R. Collobert, and J. Weston, “Curriculum
+                                                                                    learning,” in Proceedings of the 26th Annual International Conference
+ supported by Samsung Advanced Institute of Technology and                          on Machine Learning, ser. ICML ’09. New York, NY, USA:
+ EU H2020 COCOHA #644732.                                                           ACM, 2009, pp. 41–48. [Online]. Available: http://doi.acm.org/10.1145/
+                                                                                    1553374.1553380
+                              R EFERENCES                                      [20] A. team, “Audacity,” 2016. [Online]. Available: http://www.
+  [1] G. Hinton, L. Deng, D. Yu, G. E. Dahl, A.-r. Mohamed, N. Jaitly,              audacityteam.org/
+      A. Senior, V. Vanhoucke, P. Nguyen, T. N. Sainath et al., “Deep neural   [21] A. Varga and H. J. Steeneken, “Assessment for automatic speech recog-
+      networks for acoustic modeling in speech recognition: The shared views        nition: Ii. noisex-92: A database and an experiment to study the effect of
+      of four research groups,” IEEE Signal Processing Magazine, vol. 29,           additive noise on speech recognition systems,” Speech Communication,
+      no. 6, pp. 82–97, 2012.                                                       vol. 12, no. 3, pp. 247–251, 1993.
+  [2] J. Li, L. Deng, Y. Gong, and R. Haeb-Umbach, “An overview of             [22] A. Graves, S. Fernández, F. Gomez, and J. Schmidhuber, “Connection-
+      noise-robust automatic speech recognition,” IEEE/ACM Transactions on          ist temporal classification: labelling unsegmented sequence data with
+      Audio, Speech, and Language Processing, vol. 22, no. 4, pp. 745–777,          recurrent neural networks,” in Proceedings of the 23rd International
+      2014.                                                                         Conference on Machine learning. ACM, 2006, pp. 369–376.
+  [3] S. F. Boll, “Suppression of acoustic noise in speech using spectral      [23] L. team, “Lasagne: First release.” Aug. 2015. [Online]. Available:
+      subtraction,” IEEE Transactions on Acoustics, Speech and Signal Pro-          http://dx.doi.org/10.5281/zenodo.27878
+      cessing, vol. 27, no. 2, pp. 113–120, 1979.                              [24] S. Hochreiter and J. Schmidhuber, “Long short-term memory,” Neural
+  [4] Y. Fujita, R. Takashima, T. Homma, R. Ikeshita, Y. Kawaguchi,                 Computation, vol. 9, no. 8, pp. 1735–1780, 1997.
+      T. Sumiyoshi, T. Endo, and M. Togami, “Unified asr system using          [25] X. Glorot and Y. Bengio, “Understanding the difficulty of training deep
+      lgm-based source separation, noise-robust feature extraction, and word        feedforward neural networks,” in International Conference on Artificial
+      hypothesis selection,” in 2015 IEEE Workshop on Automatic Speech              Intelligence and Statistics, 2010, pp. 249–256.
+      Recognition and Understanding (ASRU), 2015, pp. 416–422.                 [26] D. P. Kingma and J. Ba, “Adam: A method for stochastic
+  [5] T. Hori, Z. Chen, H. Erdogan, J. R. Hershey, J. Roux, V. Mitra,               optimization,” CoRR, vol. abs/1412.6980, 2014. [Online]. Available:
+      and S. Watanabe, “The merl/sri system for the 3rd chime challenge             http://arxiv.org/abs/1412.6980
+      using beamforming, robust feature extraction, and advanced speech        [27] A. Graves and N. Jaitly, “Towards end-to-end speech recognition with
+      recognition,” in Proc. IEEE ASRU, 2015.                                       recurrent neural networks.” in ICML, vol. 14, 2014, pp. 1764–1772.
+
+
+
+
+ISBN 978-0-9928626-7-1 © EURASIP 2017                                      582
+

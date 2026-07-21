@@ -1,0 +1,432 @@
+  Weapon Identification Across Varying Acoustic Conditions Using an
+                   Exemplar Embedding Approach
+
+                          Saad Khan, Ajay Divakaran, and Harpreet S. Sawhney
+                  Sarnoff Corporation, 201 Washington Road, Princeton, NJ 08540, USA
+
+
+                                                      ABSTRACT
+
+Gunshot recordings have the potential for both tactical detection and forensic evaluation particularly to ascertain
+information about the type of firearm and ammunition used. Perhaps the most significant challenge to such an analysis is
+the effect of recording conditions on the audio signature of recorded data. In this paper we present a first study of using
+an exemplar embedding approach to automatically detect and classify firearm type across different recording conditions.
+We demonstrate that a small number of exemplars can span the space of gunshot audio signatures and that this optimal
+set can be obtained using a wrapper function. By projecting a given gunshot to the subspace spanned by the exemplar set
+a distance measure/feature vector is obtained that enables comparisons across recording conditions. We also investigate
+the use of a hierarchy of gunshot classifications that assists in improving finer level classification by pruning out gunshot
+labeling that is inconsistent with its higher level type. The embedding based approach can thus be used both by itself and
+as a pruning stage for other search techniques.
+
+Our dataset includes 20 different gun types captured in a number of different conditions. This data acts as our original
+exemplar set. The dataset also includes 12 gun types each with multiple shots recorded in the same conditions as the
+exemplar set. This second set provides our training and testing sets. We show that we can reduce our exemplar space
+from 20 to only 4 uniquely different gunshots without significantly limiting the ability of our embedding approach to
+discriminate different gunshots in the training and testing sets. The basic hypothesis in the embedding approach is that
+the relationship between the set of exemplars and space of gunshots including the testing/training set would be robust to
+a change in recording conditions or the environment. That is to say the embedding distance between a particular gunshot
+and the exemplars would tend to remain the same in changing environments. The implication of this are two-fold; first,
+unlike other dimensionality reduction approaches we have access to particular instances/examples of entities (the
+exemplars), which act as bridges to connect different recording conditions. Second, the embedding distances are
+invariant across recording conditions, the embedded vector can be used as a feature of similarity between gunshots
+recorded in different conditions.
+
+Unlike other dimensionality reduction approaches , our approach generates descriptions that are always in terms of the
+same exemplars. In other approaches such as PCA, the data driven nature makes it difficult if not impossible to make
+correspondence in the dimensions in one space to another.
+
+We have shown that gunshot classification across different recording conditions can be performed at a reasonable degree
+of certainty (60-72\%) at a finer level (gunshot to weapon model) and at a high degree of certainty (95-100\%) at a
+higher degree of abstraction (gunshot to `handgun' or `rifle'). We also investigate the use of simulated recording
+conditions and artificial noise to quantitatively evaluate the performance of our approach.
+
+
+
+
+                    Sensors, and Command, Control, Communications, and Intelligence (C3I) Technologies for
+                   Homeland Security and Homeland Defense IX, edited by Edward M. Carapezza, Proc. of SPIE
+                    Vol. 7666, 76662B · © 2010 SPIE · CCC code: 0277-786X/10/$18 · doi: 10.1117/12.850185
+
+                                              Proc. of SPIE Vol. 7666 76662B-1
+1 Introduction: Background and Motivation
+Past work in audio classification has been carried out to classify broad categories such as speech, music,
+cheering etc. [2, 3] mostly using Gaussian Mixture Models (GMM’s) and Hidden Markov Models (HMM’s).
+Such broad categorization has sufficed for audio-visual event detection for applications such as consumer
+video browsing and surveillance. However, it falls short when a finer characterization of the event is required.
+Gunshot analysis (see [1] for a survey of the state of the art) requires fine classification of gunshots into
+precise weapon categories. Clavel et al [5] come closest to such fine classification since they detect and
+classify gunshots using a collection of sub-classifiers for guns, grenades etc. Other prior work in gunshot
+analysis by Freytag et al [4] and others [6-11] has been based on a non-hierarchical template matching over
+various weapons. The main disadvantage of the non-hierarchical approach is that it is time consuming
+because it is not possible to get any characterization of a given acoustic signature without going through the
+entire database of weapons. Secondly these approaches require the acoustic capture conditions to be
+consistent across training and testing gunshot samples. This constraint limits the applicability of weapon
+identification to controlled laboratory conditions or preselected environmental conditions. Circumventing this
+problem requires a canonical space of weapon signatures that can act as the bridge between different
+recording conditions and that is favorable to a hierarchical course to fine analysis of weapon acoustic
+signatures.
+
+In this paper we present an exemplar embedding approach that shows that a relatively small number of
+exemplars, obtained using a wrapper function, can span an expansive space of gunshot audio signatures. By
+projecting/embedding a given gunshot into the exemplar space a distance measure/feature vector is obtained
+that describes the given gunshot in terms of the exemplars. The basic hypothesis in the exemplar embedding
+approach is that the relationship between the set of exemplars and space of gunshots including the
+testing/training set would be robust to a change in recording conditions or the environment. That is to say the
+embedding distance between a particular gunshot and the exemplars would tend to remain the same in
+changing environments The implication of this are two-fold; first, unlike other dimensionality reduction
+approaches we have access to particular instances/examples of entities (the exemplars), which act as bridges
+to connect different recording conditions. Second, the embedding distances are invariant across recording
+conditions; the embedded vector can be used as a feature of similarity between gunshots recorded in different
+conditions.
+We also investigate the use of a hierarchy of gunshot classifications that assists in improving finer level
+classification by pruning out gunshot labeling that is inconsistent with its higher level type. . The first level of
+hierarchy consists of classification into broad weapons categories such as Rifle, Hand-Gun etc. The second
+level of the hierarchy consists of classification into specific weapons such as 9mm, 357 etc. The embedding
+based approach can thus be used both by itself and as a pruning stage for other search techniques.
+Though exemplar embedding is not a new concept, a similar concept was applied for visual objet
+classification [15], this is the first application of this idea to the acoustic classification domain to our
+knowledge. Unlike other dimensionality reduction approaches, our approach generates descriptions that are
+always in terms of the same exemplars. In other approaches such as PCA, the data driven nature makes it
+difficult if not impossible to make correspondence in the dimensions in one space to another.
+
+The rest of the paper is organized as follows. Section 2 describes the difficulty caused by variation in capture
+conditions. Section 3 describes our exemplar embedding approach and the hierarchical classification of
+weapon acoustic signatures. We present our experimental results in section 4 and discuss concluding remarks
+with future directions in section 5.
+
+2 Difficulty Caused by Variation in Capture Conditions
+
+
+
+
+                                           Proc. of SPIE Vol. 7666 76662B-2
+There are several factors stemming from the mechanics of the gun as well as the capture conditions. The
+muzzle blast is the primary sound for sub-sonic bullets, and is influenced by the ammunition, gun barrel
+length (among other factors), as well as the presence of acoustic suppressors that disguise the weapon. The
+mechanical action is picked up only if the microphone is close to the weapon. For supersonic bullets, the
+shock wave precedes the muzzle blast and is comparably strong in signal power. For supersonic bullets
+therefore, even a single bullet will produce pairs of sounds. Propagation through the ground or other solid
+surfaces is mostly relevant when the recording device is close to the weapon. The speed of sound can be 5
+times higher in solid media than in the air.
+Lossy propagation and reflection – Variations in temperature, humidity, ground surfaces and obstacles
+directly influence the extent of attenuation and scattering. The wind direction can affect the perceived
+frequency of the gunshot. These effects are not significant at a distance of 25 meters but become noticeable at
+a distance of 100 meters or greater. Finally, the angle between the gun and the microphone also plays a role
+especially since the microphone has a directional characteristic. We propose a data-driven approach based on
+robust signal processing for feature extraction and machine learning, since we cannot physically model all
+possible variations of the factors mentioned above. Our approach relies on training classifiers derived by
+using machine learning to classify weapon shots with robust features extracted from the training data and the
+actual test data. The advantage of this approach is that we can capture a wide range of operating conditions by
+capturing appropriate data in realistic conditions. Complex non-linear models underlying the data can be
+implicitly represented in terms of the classifiers. Furthermore, this approach enables incrementally adding
+new weapon types as more data becomes available, as well as adding more diversity of weapon sounds for
+those already in the database. Another important aspect of our data driven and classification approach is that
+we can enable similarity matching to a large database of already captured sounds for retrieving similar/same
+weapons from a large collection.
+Effects of variability in recording devices - Freytag et al show that [4] the same weapon with the same
+ammunition yields significantly different signatures for each recording device. As Maher [1] points out,
+gunshots are impulse like signals and therefore the signatures are as informative of the overall capture
+conditions as they are of the nature of the gunshot. In other words, once again, we can account for small
+changes in the recording device but will have to depend on a family of models trained on a suitable variety of
+recording devices, with a model for each recording device. If we choose a wide enough variety of recording
+devices, we expect to find at least one recording device that is acceptably close to the capture device used by
+the query signature, and thus find a matching weapon.
+
+
+3 Exemplar based Embedding
+The central hypothesis in our approach is that the space of gunshot acoustic signatures can be modeled as a
+subspace spanned by a minimal set of gunshot types or “exemplars”. Given these exemplars a test acoustic
+signature can be projected or “embedded” into the exemplar subspace creating a unique descriptor that can be
+used for gunshot detection, gun type classification tasks amongst others. In the following we describe our
+process of feature extraction from gunshot acoustic signatures, the exemplar embedding, exemplar selection
+approach and finally the classification approach using exemplar embedding.
+
+3.1 Feature Selection & Exemplar Descriptors
+Feature extraction is performed using a 30ms sliding window (10ms overlap) over the gunshot time duration
+and computing 13 Mel Frequency Cepstral Coefficients (MFCCs). We empirically determined the expected
+time duration of gunshots to be 0.5s based on SNR. Each frame is then multiplied by a hamming window
+function:
+wi = (0.5 − 0.46(cos(2π       )), 1 ≤ i ≤ N ,
+                          N
+
+
+
+
+                                          Proc. of SPIE Vol. 7666 76662B-3
+where N is the number of samples in the window. After performing FFT on each windowed frame, MFCC
+(Mel-Frequency Cepstral Coefficients) are calculated using the following Discrete Cosine Transform:
+         2 K
+Cn =       ∑ log Si × cos(n(i − 1 2) π K ), n = 1,2...L
+         K i =1
+where K is the number of sub bands and L is the desired length of cepstrum. S i , 1 ≤ i ≤ K , represent the filter
+bank energy after the passing through the triangular band pass filters. The band edges for these band pass
+filters correspond to the Mel frequency scale (linear scale below 1 kHz and logarithmic scale above 1 kHz).
+We select the first thirteen coefficients resulting in a 13 dimensional feature vector associated with a given
+gunshot acoustic signature.
+By “Exemplars” we mean a set of representative gunshot types that have the potential to span the entire space
+of gunshot types in our domain. In other words we hypothesize that each gunshot type can be represented in
+terms of varying degrees of affinity to the gun types in the exemplar set. For each of our gunshot exemplars
+Ei we train a Gaussian Mixture Model Gi on a set of MFCC feature vectors obtained from a number of
+gunshot examples of the respective gun type (For details on GMM’s and MFCC extraction, please see [2].). These
+act as the descriptors for each exemplar and provide a means to obtain the degree of affinity to another
+gunshot type.
+
+3.2 Exemplar Embedding
+As described earlier for each potential exemplar we use a set of training examples to generate a GMM from
+the MFCC extracted from their acoustic signatures. These GMMs serve as descriptors for each of the
+exemplars. Suppose there are N elements in our exemplar set. For each exemplar Ei a GMM descriptor Gi is
+learned from training examples. Thus we have a set of exemplar descriptors: [G1, G2, …, GN]. Given a
+sufficiently expansive set of exemplars we can hypothesize that the exemplar descriptor set spans the space of
+gunshot acoustic signatures in our domain of interest. Now the act of exemplar embedding is to project a test
+acoustic signature into the space of exemplar descriptors. This is performed by obtaining the MFCC feature xi
+of the test gunshot and obtaining the likelihood li = G(xi) that it belongs to the exemplar descriptor Ei. The
+result as shown in figure 1 is a feature vector L = [l1, l2, …, lN] that we call the embedding vector.
+ Exemplar Embedding Space
+         G(x2)
+
+
+
+
+                    l2
+                              G(x1)
+                         l1
+
+          ln
+
+G(xn)
+Figure 1: Exemplar embedding. A gunshot MFCC feature xi is projected into the exemplar space by obtaining the
+likelihoods li = G(xi) for each of the exemplar descriptors.
+
+3.3 Exemplar Selection
+Identifying discriminative exemplars is an essential step of the learning process. Previous works use motion
+energy minima and maxima [11, 12], or k-means clustering (adapted to return exemplars) [13] to this end.
+However, there is no apparent relationship between such criteria and the discriminant quality of the selected
+exemplars. In light of this, we use a wrapper [14], a technique for discriminant feature subset selection.
+The idea behind a wrapper is to use the trained classifier itself to evaluate how discriminative a candidate set
+of exemplars is. Thus a wrapper performs a greedy search over the full set of exemplars where in each
+
+
+
+
+                                           Proc. of SPIE Vol. 7666 76662B-4
+iteration, classifiers are learned and evaluated for each possible subset considered. The wrapper method we
+use is called backward elimination [ref], and proceeds as follows.
+Let E denote the initial set of exemplars. Given training gunshots:
+
+1. Set X = Ø
+
+2. Find e ∈ E, where k-means clustering of the training gunshots using Y- y as embedding exemplars has best
+clustering performance.
+
+3. Set Y = Y- y and add X = X U y
+
+4. Go to step 2 and repeat till Y = Ø.
+
+The crucial step in the above algorithm is step 2 where we evaluate the ability of a reduced exemplar set to
+distinguish between a set of training gunshot examples. Our criteria for evaluating exemplar set’s
+discriminatory power are quite straight forward. For each of the training gunshot examples we obtain the
+embedding vector L using the exemplar set. These embedding vectors are then clustered using k-means
+clustering. The clusters are evaluated for their accuracy by comparison with ground truth labels. In step 2 of
+the above algorithm we sequentially remove one of the exemplars in the exemplar set and compute the
+clustering accuracy of the reduced exemplar set. The exemplar that has the least effect on the clustering
+performance is permanently removed from the exemplar set. In this fashion at every iteration of the algorithm
+we prune the exemplar set and the best clustering performance is recorded. Figure 2 shows the plot of
+clustering accuracy over the training set for increasing iterations of the wrapper method. At each iteration, the
+exemplar with the least impact on clustering accuracy is removed. Our initial exemplar set consisted of 20
+different gunshot descriptors all of which were generated from multiple gunshot acoustic signatures recorded
+in the same environmental conditions. The training set consisted of approximately 100 gunshot signatures
+randomly selected from different gun types in the exemplar set and separated prior to this experiment. As can
+be observed in figure 2(a), as we progress through the pruning of the exemplar set the clustering accuracy
+varies. An interesting thing to notice is that initially the clustering accuracy remains constant but after 5 of the
+exemplars are removed from the set, the clustering accuracy improves indicating that our original exemplar
+set not only had redundancy but also the fact that this redundancy can increase the complexity of the system
+to a level where inference tasks like k-means or other classification approaches may be confused. From
+iteration 6 to 16 we have another plateau in clustering performance. At this point any further reduction in the
+exemplar set results in a monotonically decreasing training set clustering accuracy. This suggests that four
+remaining exemplars (marked in red text in figure 2b) is the minimal set of exemplars that we must maintain
+to achieve a satisfactory level of discriminatory power from the embedding vectors. Therefore as a result of
+the pruning in the wrapper algorithm we have obtained a reduced set of exemplars that we shall use for
+embedding based classification.
+
+
+
+
+                                           Proc. of SPIE Vol. 7666 76662B-5
+                                                                      1.    '45Colt_Officer _Model1’
+                                                                      2.    '20_Gauge_Shotgun_Model1’
+                                                                      3.    '22mm_Automatic_Model1’
+                                                                      4.    ‘20_Gauge_Shotgun_Model2’
+                                                                      5.    '9mm_Model1’
+                                                                      6.    '9mm_Model2’
+                                                                      7.    '357_Model1’
+                                                                      8.    '50_Calib_Model1’
+                                                                      9.    '22250_Model1’
+                                                                      10.   '22mm_Automatic_Model2’
+                                                                      11.   '762x54_Model1’
+                                                                      12.   '9mm_Model3’
+                                                                      13.   '357_Model2’
+                                                                      14.   ‘M1Grand_Model1’
+                                                                      15.   '762x54r_Model2’
+                                                                      16.   ‘M1Grand_Model2
+                                                                      17.   ‘M1Grand_Model3
+                                                                      18.   '22250_Model2’
+                                                                      19.   '45Colt_Officers_Model2’
+                                                                      20.   '357_Model3’
+
+                                       (a)                                             (b)
+Figure 2: In (a) we show the clustering accuracy of the training set using sequentially reduced number of exemplars to
+ generate the embedding vectors. (b) shows the set of gunshot types used as the exemplars. The exemplars are numbered
+according to the sequence in which they are eliminated from the exemplar set using the wrapper method. Exemplars in
+red are the ones we selected as our minimal set.
+
+
+3.4 Application of Embedding to Capture Condition Invariant Weapon Identification
+Using the exemplar set each new gunshot can be described as an embedding vector in the exemplar space i.e.
+in terms of likeliness or affinity to each of the exemplars. As we shall see we can use this exemplar
+embedding vector as the underlying bridge to communicate between different capture conditions. Assuming
+that differing environmental conditions preserves the inherent relations between the different gunshot acoustic
+signatures we use the same exemplar set across varying acoustic capture conditions. For each capture
+condition a new set of descriptors are trained for the exemplars using gunshot examples obtained in the
+particular capture conditions. The result is a set of gunshot descriptors for each different capture condition
+using the same set of exemplars. This means the embedding vectors obtained from different capture
+conditions can communicate and interact in a single embedding space. Figure 3 illustrates this.
+                         Exemplars – Condition 1                   Exemplars – Condition 2
+                         E1
+
+                                                   l1        l1
+ Test – condition1                                                                                      Test – condition2
+                                                   l2        l2
+                         E2
+                                                   .         .
+                                   ..              .         .                 ..
+                                    .              .         .                  .
+                                                   ln        ln
+
+                         En
+Figure 3: Exemplar embedding across different capture conditions. For each different capture condition the same gun
+types are used as exemplars and test gunshots are embedded using the same gun type exemplars. This allows comparison
+across capture conditions as the embedding vectors are in terms of the same exemplars.
+
+For each gunshot sample in our training set we obtain the embedding vector using exemplars in the matching
+conditions. These embedding vectors are then clustered using k-means clustering and the cluster centroids of
+each gun type are used as descriptors for each gun class. In the classification stage, given a test gun shot
+sample we first project it into the exemplar embedding space using the exemplar set that best matches the
+
+
+
+
+                                            Proc. of SPIE Vol. 7666 76662B-6
+capture conditions of the test gun shot. Note we assume we already have prior knowledge of the test gun
+shot’s capture conditions. The task of automatically determining the capture conditions from an acoustic
+signature is a challenging problem in itself and we do not in this paper propose a solution for this problem.
+Given the embedding vector for the test, gunshot classification is performed by computing its distance from
+each of the gunshot type cluster centroids and choosing the nearest class.
+
+4 Experimental Results
+To generate our exemplar set we used a pool of 20 different gunshots types all recorded in the same capture
+conditions (outdoors approx 10 m from source) which consisted of a variety of rifles and handguns like 45
+Colt, 9mm, 50 Caliber, 20 Gauge Shotgun etc (see figure 2 for details). For training and testing we had a
+separate pool of gunshots consisting of between 5 to 15 samples of each gun type. The training set was used
+in our exemplar selection algorithm (section 3.3) to obtain a reduced set of 3 exemplars: M1Grand (rifle),
+22250 (rifle), 45Colt (handgun) and 357 (handgun). The training set was also used to obtain the cluster
+centers for each gun type in the exemplar embedding space.
+To test performance across recording conditions we simulated different capture conditions including: “Room
+Reverb”, “Concert Reverb” & “Doppler Effect”. Each of the exemplar and test gunshot sample was modified
+with the appropriate modulation. Exemplar embedding was performed in the respective capture conditions
+and embedding vectors were compared across conditions. A true classification was marked as one when a test
+gunshot sample from a different capture condition was classified or matched to the correct gun type class
+cluster in the original capture conditions. Table 1 shows the performance of our approach. Note that “In First
+2”, “In First 3” means the correct classification is amongst the two and three closest clusters respectively,
+whereas “First” means the correct classification is also the closest cluster.
+
+                   Room Reverb          Concert Reverb          Doppler
+
+In First 3         0.99                 0.93                    0.71
+
+In First 2         0.83                 0.75                    0.51
+
+First              0.69                 0.6                     0.41
+
+Handgun/Rifle      1                    0.97                    0.96
+
+Table 1: Classification accuracy for embedding based approach for different capture conditions.
+
+We also tested our approach on a reduced number of classes. Instead of all 20 gunshot types we divided the
+testing set into two classes: Rifle and Handgun. As can be seen in table 1, classification accuracy is much
+improved with this reduced number of classes. This suggests a hierarchy of gunshot classifications that can
+assist in improving finer level classification by pruning out gunshot labeling that is inconsistent with its
+higher level type. The embedding based approach can thus be used both by itself and as a pruning stage for
+other search techniques.
+
+Conclusions and Future Directions
+In this paper we have presented a first study of using an exemplar embedding approach to automatically
+detect and classify firearm type across different recording conditions. We demonstrate that a small number of
+exemplars can span the space of gunshot audio signatures and that minimal set can be obtained using a
+wrapper function. By projecting a given gunshot to the subspace spanned by the exemplar set a distance
+measure/feature vector is obtained that enables comparisons across recording conditions. The embedding
+based approach can be used both by itself and as a pruning stage for other search techniques.
+
+
+
+
+                                         Proc. of SPIE Vol. 7666 76662B-7
+In the future we plan to extend our approach to large databases of gunshot acoustic signatures as well as
+increasing the number of capture conditions. Another interesting direction for further study would be
+investigate the performance of our exemplar embedding approach to different categories of sounds like
+musical instruments, animal sounds and even speech recognition.
+
+References
+[1]
+     Maher, R.C, “Acoustical characterization of gunshots,” IEEE SAFE 2007
+[2]
+     Otsuka, I, Shipman, S and Divakaran, A, “A Video-Browsing Enabled Personal Video
+     Recorder,” in Multimedia Content Analysis: Theory and Applications, Editor Ajay Divakaran,
+     Springer 2008.
+[3]
+     Smaragdis, P, Radhakrishnan, R, Wilson, K, “Context Extraction through Audio Signal
+     Analysis,” in Multimedia Content Analysis: Theory and Applications, Editor Ajay Divakaran,
+     Springer 2008.
+[4]
+     Freytag, J.C., and Brustad, B.M., “A survey of audio forensic gunshot investigations,” Proc.
+     AES 12th International Conf., Audio Forensics in the Digital Age, pp. 131-134, July 2005.
+[5]
+     Clavel, C. Ehrette, T. Richard, G., “Events Detection for an Audio-Based Surveillance
+     System,” IEEE International Conference on Multimedia and Expo, ICME 2005.
+[6]
+     Koenig, B.E., Hoffman, S.M., Nakasone, H., and Beck, S.D., “Signal convolution of recorded
+     free-field gunshot sounds,” J. Audio Eng. Soc., vol. 46(7/8), pp. 634-653, July/Aug 1998.
+[7]
+     Sadler, B.M., Pham, T., and Sadler, L.C., “Optimal and wavelet-based shock wave detection and
+     estimation,” J. Acoust. Soc. Am., vol 104(2), pt. 1, pp. 955-963. August 1998.
+[8]
+     Duckworth, G.L., Gilbert, D.C., and Barger, J.E., “Acoustic counter-sniper system,” Proc. of
+     SPIE, vol. 2938, Command, Control, Communications, and Intelligence Systems for Law
+     Enforcement, E.M. Carapezza and D. Spector, Eds., pp. 262-275, February 1997.
+[9]
+     Weissler, P.G., and Kobal, M.T., “Noise of police firearms,” J. Acoust. Soc. Am., vol. 56(5), pp.
+     1515-1522, November 1974.
+[10]
+     Maher, R.C. "Modeling and signal processing of acoustic gunshot recordings," Proc. IEEE
+     Signal Processing Society 12th DSP Workshop, Jackson Lake, WY, September 2006.
+[11]
+     Harris, C. "Absorption of sound in the air versus humidity and temperature," J. Acoust. Soc.
+     Am., vol. 40(1), pp. 148-159, January 1966.
+[12]
+     F. Lv and R. Nevatia. Single view human action recognition using key pose matching and viterbi
+     path searching.CVPR, 2007.
+[13]
+     A. Ogale, A. Karapurkar, G. Guerra-Filho, and Y. Aloimonos. View-invariant identification of
+     pose sequences for action recognition. In VACE, 2004. 4
+[14]
+     G. H. John, R. Kohavi, and K. Pfleger. Irrelevant features and the subset selection problem. In
+     ICML, 1994
+[15]
+     Yanlin Guo, Ying Shan, Harpreet S. Sawhney, Rakesh Kumar, “PEET: Prototype Embedding
+     and Embedding Transition for Matching Vehicles over Disparate Viewpoints,” IEEE CVPR
+     2007.
+
+
+
+
+                                       Proc. of SPIE Vol. 7666 76662B-8
+

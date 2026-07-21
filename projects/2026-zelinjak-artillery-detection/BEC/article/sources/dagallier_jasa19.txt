@@ -1,0 +1,862 @@
+Long-range acoustic localization of artillery shots using
+distributed synchronous acoustic sensors
+           Adrien Dagallier,1,a) Sylvain Cheinet,1 Matthias Cosnefroy,1,b) Winfried Rickert,2
+           Thomas Weßling,2 Pierre Wey,1 and Daniel Juve    3
+           1
+                                                                        en
+             French-German Research Institute of Saint-Louis, 5 rue du G eral Cassagnou, 68300 Saint-Louis, France
+           2
+             Wehrtechnische Dienststelle 91, Schiessplatz, D49716 Meppen, Germany
+           3
+                      e de Lyon, Ecole Centrale de Lyon, Laboratoire de M
+             Universit                                                  ecanique des Fluides et d’Acoustique,
+           Unite Mixte de Recherche, Centre National de la Recherche Scientifique 5509, Ecully, F-69134, France
+
+           (Received 1 February 2019; revised 24 July 2019; accepted 24 July 2019; published online 31
+           December 2019)
+          Acoustic recordings of artillery shots feature the signatures of the shot’s muzzle, projectile, and
+          impact waves modulated by the environment. This study aims at improving the sensing of such shots
+          using a set of synchronous acoustic sensors distributed over a 1 km2 area. It uses the time matching
+          approach, which is based on finding the best match between the observed and pre-calculated times
+          of arrivals of the various waves at each sensor. The pre-calculations introduced here account for the
+          complex acoustic source with a 6-degrees-of-freedom ballistic trajectory model, and for the propaga-
+          tion channel with a wavefront-tracking acoustic model including meteorological and terrain effects.
+          The approach is demonstrated using three recordings of artillery shots measured by sensors which
+          are more than 10 km from the point of fire and distributed at several hundred meters away from and
+          around the target points. Using only the impact wave, it locates the impact point with an error of a
+          few meters. Processing the muzzle and impact and projectile waves enables the estimation of the
+          weapon’s position with a 1 km error. Sensitivities of the localization method to various factors such
+          as the number of sensors, atmospheric data, and the number of processed waves are discussed.
+          C 2019 Acoustical Society of America. https://doi.org/10.1121/1.5138927
+          V
+
+           [KTW]                                                                                         Pages: 4860–4872
+
+
+I. INTRODUCTION                                                                bearings from TOAs by synchronous pairs of sensors1 turned
+                                                                               into cross-bearings determined from multiple asynchronous
+     Localization of artillery shots brutally became of concern
+                                                                               arrays of synchronous sensors.4,5 Yet the localization itself
+in 1914.1 Being passive, all-weather, discrete, and non-line-
+                                                                               has not changed much and is still based on the muzzle blast.
+of-sight, acoustic sensing was investigated with great hopes—
+                                                                               The ballistic shock wave is often not even mentioned in
+and at first poor successes. The shells had only recently
+become supersonic, and even trained listeners could not dif-                   recent articles.
+ferentiate the snaps belonging to the muzzle blast from those                       Achieving a bearing from an array is relatively straight-
+coming from the ballistic shock wave emitted along the tra-                    forward for loud impulse sounds, whatever the distance
+jectory by the supersonic projectile, which resulted in haphaz-                between the array and the sound source. For ranging, though,
+ard localizations. The discovery of infrasounds in artillery by                this geometry remains a stringent constraint.6–9 Following,
+Esclangon2 led to the invention of manometers specifically                     e.g., Thompson and Durfee,6 the ratio r ¼ l/L is introduced,
+designed for the characteristic slow oscillations of the muzzle                where l is the characteristic size of the sensors array and L the
+blast. Times of Arrival (TOAs) could be reliably ascribed to                   source-array distance. Achieving accurate ranging is usually
+the muzzle blast and the shock wave of the supersonic projec-                  thought to require a large baseline array, i.e., with r  1.4–7
+tile was discarded. The localization itself was entrusted to a                 Conversely, ranging artillery sounds in the case r  1 (small
+team of expert computers that could locate the sound source                    baseline array) has never been demonstrated.
+from the muzzle wave TOAs within a few minutes.                                     Depending on the range, the atmosphere, the ground,
+     Since then, detection and classification procedures have                  possible obstacles (woods, buildings, hills…), refraction10 or
+been improved and largely automatized,3 sensors are much                       air absorption,11 the various waves emitted by and during a
+more sensitive, and wireless communications allow fast                         shot may undergo such alterations as to become hardly rec-
+system deployments over broad areas.4 Determination of                         ognizable. The type and amount of explosive charge in the
+                                                                               shell dramatically alter the impact acoustic signature and
+                                                                               possibly the directionality of the explosion. The ballistic
+a)
+  Also at: Universite de Lyon, Ecole Centrale de Lyon, Laboratoire de
+                                                                               shock wave and later multipath arrivals, emitted along the
+  Mecanique des Fluides et d’Acoustique, Unite Mixte de Recherche, Centre    trajectory because of the initial supersonic velocity, may be
+  National de la Recherche Scientifique 5509, Ecully, F-69134, France.         seen as a large amplitude, broadband signal that lasts for
+  Electronic mail: adrien.dagallier@isl.eu                                     more than one second and tends to drown out all the signals
+b)
+   Also at: Universite de Lyon, Ecole Centrale de Lyon, Laboratoire de
+   Mecanique des Fluides et d’Acoustique, Unite Mixte de Recherche, Centre   recorded in that interval. The recorded number of arrivals
+   National de la Recherche Scientifique 5509, Ecully, F-69134, France.        and their order depend on the shot configuration, the
+
+4860     J. Acoust. Soc. Am. 146 (6), December 2019           0001-4966/2019/146(6)/4860/13/$30.00           C 2019 Acoustical Society of America
+                                                                                                             V
+obstacles, and the atmospheric wind and sound speed gra-            practice, the simulations may be run from each sensor to all
+dients. The projectile trajectory itself is affected by the envi-   mesh points, which reduces the number of simulations down
+ronment since most aerodynamic coefficients depend on the           to N and thus the computation time.
+Mach number, which is a function of the local sound speed                  Upon detection of an event, the TOA ^t imic is obtained
+and wind. Localization performance is affected, sometimes           (the hat standing for observations). Let i0, 1 6 i0 6 N, denote
+critically.12                                                       the index of a reference microphone, taken as, e.g., the sen-
+      In recent years, the matching method for localization of      sor of first signal arrival. Let Dtimic ;j ¼ timic ;j  ti0 ;j denote the
+point sources in complex, known environments has been               predicted differential TOA of the signal at microphones imic
+developed.13 This method consists of pre-computing a data-          and i0, emitted by the source at location j, and define
+base of acoustic features at each microphone for all possible       ^ i ¼ ^t i  ^t i . When the source location j is the actual
+                                                                    D  mic    mic     0
+source positions. The pre-calculation factors in the full com-                                   ^ i for all imic. Let us define the
+                                                                    source position, Dtimic ;j ’ Dt mic
+plexity of the propagation channel. The source position is          cost function  13,14
+
+estimated by determining, from the database, the source posi-
+tion for which the predicted acoustic features at each micro-                    X
+                                                                                 N
+                                                                         Ej ¼                 ^ i  Dti ;j Þ2 :
+                                                                                             ðDt                                           (1)
+phone best match the measurements. Among all the acoustic                                        mic   mic
+                                                                                imic ¼ 1
+features of operational interest (frequency spectra, temporal                   imic 6¼ i0
+signals, directions of arrival, or times of arrival13,14), TOAs
+are the most robust ones. This makes it practical to work on                                                            pﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃ
+                                                                    Let us define the localization index Cj ¼ 1= Ej =ðN  1Þ.
+TOAs, and the method can then be referred to as time match-         Cj is highest where the predicted TOAs match the measured
+ing. Note that the actual quantities of interest are the differ-    ones in a least-square sense. It is our basic localization metrics.
+ences in TOAs (DTOAs). Following Cheinet et al.,13,14 the
+                                                                    The simplest way of calculating the TOAs is an analytical
+denomination TOA is, however, kept to avoid confusion with
+                                                                    model time ¼ distance/sound speed, assuming line-of-sight
+so-called DTOA methods, which refer to estimating a direc-
+                                                                    and homogeneous atmosphere. In this case, the time matching
+tion of arrival from pairs of sensors, or to computing the time
+                                                                    approach reduces to a simple multi-lateration method based on
+delay between the arrival of the muzzle blast and ballistic
+                                                                    TOAs. One key aspect of the matching approach is that the
+shock wave at each sensor or between the arrival of the bal-
+                                                                    propagation modeling in the preparatory step may account for
+listic shock wave at each pair of sensors.1,3–9,15
+                                                                    the effects of the propagation channel on the TOAs. For urban
+      This paper extends the matching approach to isolated
+artillery shots by building a numerical database of TOAs of         environments, Cheinet et al.13,14 use a 3D solver based on the
+the impact signal, ballistic shock wave, and muzzle blast           finite-difference time-domain method (FDTD). Such a solver
+through coupled ballistic–acoustic simulations. The ballistic       is very general and can handle non-line-of-sight propagation
+model parameters and the atmospheric data are assumed to            and inhomogeneous atmospheres. However, the full time-
+be known. It investigates whether the resulting processing,         dependent pressure field is computed with the FDTD, which
+accounting for the complex artillery sound source and propa-        is both computationally demanding and unnecessary in the
+gation effects in a consistent way, is able to locate the impact    context of Eq. (1)—only the signal TOA is useful. In the
+point and the weapon. The paper is organised as follows.            remainder of this section, another TOA calculation approach is
+Section II introduces the matching approach and the acoustic        introduced, namely, a 3D interface-tracking solver. It applies
+model. Section III applies the approach to point source local-      to the same propagation media as the FDTD but restricts to
+ization for sources within the sensor array using the impact        TOA calculations and is thus much faster.
+wave only (impact point localization) or far away from the
+array using the muzzle blast only (gun localization). Section
+IV includes the ballistic shock wave and the ballistics of the      B. Interface tracking
+projectile in the processing. Section V discusses the sensitiv-        Let us consider a sound wave propagating in an arbitrary
+ities of the approach to various factors such as atmospheric        medium. In a frame moving with the medium, the apparent
+data, the number of sensors, and the number of processed            wavefront velocity at point x and time t is cðx; tÞnðx; tÞ,
+waves. Section VI provides a conclusion.                            where n is the normal to the wavefront and
+                                                                                  pﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃ
+II. MATCHING AND MARCHING APPROACH                                     cðx; tÞ ¼ cRTðx; tÞð1 þ ahðx; tÞÞ
+A. Matching localization of point sources
+                                                                    is the time-dependent local sound speed, where c ¼ 1:4 is the
+     The principle of the time matching approach for point          specific heat ratio, R ¼ 287.05 J/kg/K the specific gas constant,
+source localization13,14 is here briefly recalled. The domain       T and h the local temperature and specific humidity16 (in
+of interest is first discretized in a three-dimensional (3D)        kgkg1), and a ¼ 0:511. In a frame at rest, it becomes
+mesh. Each element of the mesh, of index j, can be thought
+of as a possible source location. For each source location, a            ceff ðx; tÞ ¼ cðx; tÞnðx; tÞ þ vðx; tÞ;                           (2)
+numerical simulation of an impulse sound propagation is
+performed, from which the TOA is calculated at each sensor          where v is the local velocity of the fluid. Let P be a point on
+(index imic, imic ¼ 1…N, with N the number of sensors). The         the wavefront t ¼ FðxÞ and let xP ðtÞ be its position at time t.
+overall procedure produces the TOA database (timic,j). In           P remains on the wavefront if
+
+J. Acoust. Soc. Am. 146 (6), December 2019                                                                            Dagallier et al.   4861
+       dxP                                                                        domain (Fig. 1). The algorithm starts from an initial “known”
+           ¼ ceff ðxP ; tÞ:                                              (3)
+        dt                                                                        subdomain, e.g., a single point for an acoustic point source.
+                                                                                  The interface between the “known” and the “unknown” parts,
+This equation completely describes the wavefront completely,                      which is the set of points at the boundary of the “known”
+but the presence of n makes it difficult to use for proper                        domain, is then updated as follows: find the point with the
+computations. The position of P at time t þ dt is xP ðt þ dtÞ                     smallest TOA in the interface, move it to the “known” domain,
+ xP ðtÞ þ x_ P ðtÞdt, and one has t þ dt  FðxP Þ þ x_ P dt  rF.                compute its neighbors’ TOAs and add them to the interface.
+Since t ¼ FðxP Þ, one has x_ P  rF ¼ 1. Besides, rFðxP Þ is                      The TOAs are computed from the “known” points by means
+normal to the surface t ¼ FðxÞ and therefore collinear with n.                    of Eq. (4). The algorithm stops when all points are “known.”
+With rF ¼ jjrFjjn, Eq. (3) becomes                                                For validation purposes, a comparison between the interface
+                                                                                  propagation of the IFM and a FDTD solver for the linearized
+       jjrFjjðc þ n  vÞ ¼ 1:                                            (4)      Euler equations30 is shown in Fig. 2 for a wave emitted by a
+                                                                                  point source in a medium with strong sound speed contrasts
+Equation (4) may lead to the ray equations and subsequent
+                                                                                  (300–400 m/s) and some reflective and diffractive obstacles.
+TOA calculations when integrated along a ray (see, e.g., Ref.
+                                                                                  The resulting pressure field is displayed for five different snap-
+17, Sec. 8.1). Alternatively, wavefront approaches use Eq.
+                                                                                  shots. Superposed is the wavefront as computed with the IFM.
+(4) to propagate the wavefront through the medium, so that                        The match is very good, including both in areas with (de)focus-
+TOAs are obtained at every point of the meshed domain.                            ing and behind obstacles, where only diffracted waves can
+These wavefront methods come in several flavors, based on                         propagate and classical ray approach is not applicable. The
+the Huygens principle. Shortest path methods draw upon                            computation time is on the order of 5 min on a 4 CPUs com-
+graph theory,18–20 while finite-difference approaches com-                        puter for the time domain simulation, against about one second
+pute the continuous wavefront surface.21,22 Among the latter,                     on 1 CPU for the IFM on the same grid. As Fig. 2 highlights,
+Sethian et al.23 have developed an Eulerian solver, called the                    however, the speedup is at the expense of all information
+Fast-Marching method.                                                             regarding the pressure time series. The IFM predicts exclu-
+                                                                                  sively the TOA of the first wavefront to arrive. More extensive
+C. Acoustic model                                                                 discussions on the numerical errors of the Fast-Marching
+      In this study, the used solver of Eq. (4) is based on the                   method may be found in the literature.25 The errors are well-
+model of Sethian and Vladimirsky.24 This choice is motivated                      below the uncertainty levels of the TOA estimation in the
+by the generality of their formulation. It addresses general                      experimental data. Note that ground reflections do not need to
+anisotropic problems, where the wavefront propagation                             be modeled, since they necessarily arrive after the first TOAs
+depends not only on the position of the front, but also on the                    computed by the IFM. In summary, the localization steps are
+direction of propagation,23,24 e.g., due to wind in atmospheric                   (i) the preparatory TOA determination with IFM in the known,
+acoustics, or to currents in underwater acoustics. This approach                  complex environment, then (ii) a minimization of Eq. (1) using
+readily applies to seismic acoustics,25,26 underwater acous-                      the observed TOAs. The method is hereafter referred to as
+tics,27 and other applications such as signal denoising or path-                  matching-and-marching approach, as it combines the time
+planning. The model of Sethian and Vladimirsky is developed                       matching principle with the fast-marching propagation model.
+for two-dimensional (2D) unstructured meshes. Our implemen-
+                                                                                  III. APPLICATION TO POINT SOURCE LOCALIZATION
+tation extends it to 3D media and uses a Cartesian grid.
+Anisotropy is accounted for by a retroaction loop28 and the                            The point source localization approach outlined in
+implementation of Yatziv et al.29 is retained for its efficiency.                 Sec. II A is now tested for the impact’s wave and the weapon’s
+The present implementation is hereafter referred to as the IFM                    muzzle blast taken separately. The analysis is based on an
+(Institute Saint-Louis Fast-Marching Model). The IFM propa-                       experimental dataset of three artillery shots. For each shot,
+gates the interface of a “known” subdomain in an “unknown”                        the weapon, impact and microphone positions, as well as
+
+
+
+
+FIG. 1. (Color online) Algorithm’s principle. The “known” TOA domain is the filled area, the small gray disks and the dark line represent the current interface.
+The point with the smallest TOA is picked from the interface. The local direction of propagation is given by the gradient to the interface (arrows), with finite
+difference schemes of first (“1”) or second (“2”) order. The neighbor points (“N”) are added to the interface (dashed line) with their estimated TOA.
+
+
+4862      J. Acoust. Soc. Am. 146 (6), December 2019                                                                                            Dagallier et al.
+FIG. 2. (Color online) Comparison FDTD-IFM. (a) Simulation domain with strong sound speed variations and obstacles. (b)–(f) snapshots of the FDTD and
+IFM simulations. The colormap is used for the FDTD pressure field. The thick line is the wavefront computed by the IFM.
+
+
+the projectile’s muzzle velocity and the elevation and azi-                  rise time of the signal, which ranges between 1 ms (ballistic
+muth angles of the barrel were observed. The shots took                      shock waves) and 50 ms (muzzle blast, shot 3).
+place between 15 and 16 h on June 7, 2011, at Meppen
+Proving Ground, North West Germany. Synchronous                              A. Localization of the impact point
+acoustic data from N ¼ 6 microphones were recorded.
+                                                                                  The matching-and-marching approach is now applied to
+They are located about 13 km away from the weapon, and
+                                                                             test localization of the impact explosion based on the impact
+at distances between 100 and 1000 m from the impact
+                                                                             TOAs only. The observed impact points are within or close
+points. For such distances, the assumption of point source
+                                                                             to the sensors array, so that for these sound sources, the array
+emission is deemed to be valid for the muzzle blast. It
+                                                                             is with r  1 (Sec. I). For the TOA precalculations, the IFM
+should also be applicable to the impact explosion if the
+                                                                             domain is of size 1.6 km  1.6 km  0.2 km, and the model
+sounds emitted by supersonic fragments of the shell or of
+                                                                             is run with a Cartesian grid of step 5 m in all directions. The
+the ground are negligible compared to or indistinguishable
+                                                                             temperature profile is derived from the standard atmosphere
+from the explosion blast itself.
+                                                                             model31 (see Fig. 7), with a ground temperature of 16  C,
+     The acoustic recordings are shown on Figs. 3(a)–3(c).
+For each of the three shots, the first wave arriving at each                 without wind. The TOA database calculation takes less than
+sensor is the ballistic shock wave, which has a rise time of a               5 min on a single CPU. The domain is meshed in 3D, but
+few samples, followed by a high frequency content tail.                      hereafter only ground level localization maps are shown.
+Then comes either the impact wave (shot 1 and 2) or the                           The localization results are gathered in Table I. The
+muzzle blast (shot 3), depending on the shot configuration.                  errors are on the order of 5 m. This uncertainty is on the
+The muzzle blast is a low frequency wave, its high frequency                 order of the model grid spacing. It is also on the order of the
+content being lost due to atmospheric absorption. For each                   spatial uncertainty resulting from the TOA estimation inac-
+recorded shot, the muzzle blast is followed by a second                      curacies. Furthermore, the explosion itself generates a shock
+arrival [Fig. 3(d)]. It is presumed that the latter is due to the            wave in the near field, whose supersonic propagation over
+refraction by inversions in atmospheric temperature and                      the first 10 m is not accounted for in our (linear) sound
+wind along the shot axis [see also Fig. 7(a) below, at a height              propagation model (extension of the Fast-Marching scheme
+of around 2 km]. The impact signal is generated as the pro-                  to non-linear shock wave physics should, however, be possi-
+jectile hits the ground close to the sensor array. As illustrated            ble32). The map of the localization index Cj is shown in Fig.
+by Fig. 3(d), the signature of the impact explosion varies                   4(a) for shot 2. The small spread of the high localization
+more markedly from microphone to microphone than the                         index region13,14 suggests that the localization is reliable.
+ballistic shock wave and muzzle blast arrivals. Besides a                    Overall, the method compares satisfactorily with the claimed
+possible anisotropy of the explosion, the near-field pressure                error of commercial systems4,15,33 and of acoustic systems
+signal may undergo various propagation conditions from the                   used on artillery proving grounds for impact localization.
+impact point to the various sensors:10 favorable vs unfavor-                      Taking the reported near-surface wind (3 m/s near the
+able wind, close range vs far away from the sensor.                          surface, in the direction of the shot) into account neither
+     The sampling frequency of the microphones used in this                  improves nor deters the above impact localizations. This
+study is 1 kHz, which is deemed sufficient for artillery guns                wind magnitude is on the order of 1% of the sound speed,
+sound signals. The arrivals are classified from visual inspec-               and will thus affect the localization on the order of 1%, or
+tion (Fig. 3), and the TOAs are determined as the times at                   1–10 m in the considered shots (Table I). Such a correction
+which the acoustic pressure first reaches pmax/10, where pmax                is not significant enough to be seen given the aforementioned
+is the first pressure peak in the considered arrival. Here, the              5 m discretization. In the general case, the effect of wind
+actual TOA measurement error is always smaller than the                      speed on localization could be non-linear. In the present
+
+J. Acoust. Soc. Am. 146 (6), December 2019                                                                                   Dagallier et al.   4863
+FIG. 3. (Color online) (a)–(c) Acoustic recordings at the six microphones (sampling frequency 1 kHz) of the three shots. The solid (resp. dashed, dotted)
+curves on the recordings indicate the arrivals of the ballistic (resp. impact, muzzle) waves. They are a guide to the eye. (d) Zoom on shot 2. The arrivals of the
+ballistic (resp. impact, muzzle) waves are tagged with the letter “B” (resp. “I”, “M”). Two muzzle blast arrivals are visible.
+
+
+scenario, all conducted tests suggest that such a non-linearity                         In that case, the localization approach estimates the
+does not affect the results significantly.                                         bearing of the sound source [Fig. 4(b)]. The bearing is
+                                                                                   slightly off, which is presumably due to the neglect of wind
+B. Localization of far-away point sources                                          in computing the TOAs. Besides, the range estimate shows
+     The matching-and-marching approach is now applied to
+locate the weapon based solely on the muzzle blast TOAs. In
+that case, the sound source is at a large distance from the sen-
+sors, so that one has r  1. For the TOA precalculations in
+that case, the IFM domain is of size 54  8 km in the X and Y
+directions, respectively, for a height of 4 km, and the IFM
+model is run with a Cartesian grid of step 100  100  20 m.
+The standard atmosphere model is used31 without wind.
+Computing the TOAs in the whole domain takes less than 10
+min on a single CPU.
+
+TABLE I. Impact localization error, defined as the distance between the
+measured and computed impact points.
+
+                                            Localization error (m)
+
+Point                             No wind                             Wind
+                                                                                   FIG. 4. (Color online) (a) Localization of the impact. Distributed sensors
+Impact 1                             6.3                                2.2        (dots), numbered from 1 to 6, and impacts positions (stars), from 1 to 3. The
+Impact 2                             9.5                                3.2        normalized localization index (Cj) for the impact of shot 2 is displayed in
+Impact 3                             3.6                               13.2        inset. The darker the color, the higher the localization index. (b) Normalized
+                                                                                   localization index for the weapon localization, shot 2.
+
+4864       J. Acoust. Soc. Am. 146 (6), December 2019                                                                                            Dagallier et al.
+errors on the order of the range. Such large errors are typical                 (corresponding to the first arrival on the array). The set of
+of ranging from small baseline arrays. Operational sensing                      parameters ðj0 ; v0 ; e0 ; a0 Þ ¼ argminj;v;e;a fSj;v;e;a g minimizing
+systems based on small baseline arrays usually estimate the                     this cost function provides the best estimates of the position
+source bearing without ranging.5,6 The reported error of                        of the gun, the muzzle velocity, and the barrel elevation and
+2 –3 in Fig. 4 is in line with the literature5–7,12 and may be                azimuthp    angles.        The localization
+                                                                                              ﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃ
+                                                                                                                     ﬃ      index is now defined as
+related to the low characteristic frequencies and background                    Cj ¼ 1= Ej =ð3N  1Þ, where N is the number of sensors
+noise contamination of the muzzle blast after 13 km of prop-                    and Ej ¼ minv;e;a fSj;v;e;a g. The precalculation of the TOAs in
+agation (inaccurate TOA estimation), as well as to random                       Eq. (5) is now addressed. For use in actual localization, these
+TOA fluctuations at the sensors due to atmospheric turbu-                       TOAs have to be modeled with a sufficient degree of physi-
+lence along the path, and to possible terrain variations                        cal realism and consistency. The muzzle and impact waves
+(woods, buildings, etc.).                                                       are seen as point sources and are modeled as in Sec. III. The
+      In the above localization tests, the weapon is localized                  projectile’s wave is modeled by combining a ballistic trajec-
+based on the muzzle blast TOAs, while the impact position is                    tory model to the IFM, as now detailed.
+estimated from the impact TOAs. In other words, the physical,                         Artillery projectiles travel large distances, at possibly
+consistent link between these acoustic data is ignored. The bal-                supersonic speeds and at large incidence angles. To ensure
+listic wave is ignored as well, which is questionable on a sens-                that the multiple aerodynamic phenomena are correctly
+ing point of view: the ballistic shock wave has the largest                     treated, the BALCO software34 is used. BALCO is a NATO
+amplitude, a sharp rise and a characteristic tail (Fig. 3). It is               6 degrees-of-freedom (position plus angular rotations) stan-
+thus straightforward to detect and classify. Furthermore, this                  dard numerical model (STANREC 4618) to compute high
+wave is emitted in the bulk atmosphere, and its TOA is there-                   accuracy trajectories in three dimensions. It may be used for
+fore less sensitive to ground obstacles (buildings), topography                 a large variety of projectiles and weapons. The model allows
+(hills, mountains), or near-surface atmospheric gradients than                  for pre- or user-defined gravity, aerodynamic, and atmo-
+the muzzle and impact sounds. Later multipath arrivals do not                   spheric models. This study restricts to ballistic projectiles,
+affect the TOA estimation. In Sec. IV, the matching-and-                        considered as non-propelled, single rigid bodies. Unless oth-
+marching approach is adapted to consistently process all three                  erwise stated, all trajectories are computed with (i) an ellip-
+types of sounds emitted by an artillery shot.                                   soidal Earth gravity model,35 (ii) projectile and weapon
+                                                                                coefficients (lift and drag, Magnus effect, pitch/roll/spin
+IV. ARTILLERY SHOT LOCALIZATION                                                 moments, moments of inertia of the projectile, barrel rifling)
+A. Principle                                                                    of a standard French 155 mm ammunition and weapon. The
+                                                                                atmospheric model is taken identical to the one used in the
+      The TOA matching method can be extended to utilize                        sound propagation calculations. Under these assumptions, it
+all three types of sounds emitted by an artillery shot. The
+                                                                                is possible to reliably predict the projectile trajectory and its
+shot parameters to be estimated are the weapon position, the
+                                                                                subsequent impact position for any given set of parameters
+muzzle velocity, and the barrel elevation and azimuth. For a
+                                                                                (j, v, e, a).
+given pre-determined discretization of these parameters, let
+                                                                                      Acoustically speaking, it is assumed that the ballistic
+us introduce their respective indices j, v, e, a. Let us denote
+                                                                                shot sound is emitted only when the projectile is super-
+by tballistic
+     imic ;v;e;a;j the TOA at sensor imic due to projectile sound for           sonic. Physically, this assumption is motivated by the non-
+the shot configuration specified by the shot indices j, v, e, a.
+                                                   impact                       linear behavior of the ballistic coefficients (drag etc.)
+Likewise, let us define tmuzzle imic ;v;e;a;j and timic ;v;e;a;j for the TOAs   around M ¼ 1 (e.g., Ref. 36). Here, M is the Mach number,
+due to the muzzle blast and impact explosion of this shot,
+                                                                                i.e., the ratio of the velocity of the projectile and the local
+respectively. The matching localization consists of finding
+                                                                                apparent sound speed (accounting for the wind). In prac-
+the set of shot parameters that minimizes the sum of differ-
+                                                                                tice, the distinction between subsonic and supersonic
+ences between the observed and predicted relative TOAs for
+                                                                                regimes is probably not so clear-cut. The flow around and
+all three types of sounds over all sensors, i.e., by minimizing
+                                                                                along the projectile may be locally supersonic even if
+the following cost function:
+                                                                                M 1. Modeling the acoustic behavior of a projectile in
+                    X
+                    N                                           2             this regime is beyond the scope of the present study. From
+      Sj;v;e;a ¼                ^ ballistic  Dtballistic
+                                Dt                                              a numerical point of view, the ballistic shock wave TOA
+                                  imic          imic ;v;e;a;j
+                   imic ¼ 1                                                     tBmic for the supersonic part of a trajectory, T , at a given
+                   imic 6¼ i0                                                   microphone, is computed as
+                     N 
+                     X                                          2
+                         ^ muzzle  Dtmuzzle                                                                                      
+                þ       Dt        imic          imic ;v;e;a;j                         tBmic ¼ min tT ðx; y; zÞ þ tðx;y;zÞ!mic ;
+                    imic ¼1                                                                  ðx;y;zÞ2T
+
+                     N 
+                     X                             2
+                þ        ^ impact  Dtimpact
+                        Dt                                                      where tT ðx; y; zÞ is the time at which the projectile reaches
+                           imic       imic ;v;e;a;j ;                    (5)
+                    imic ¼1                                                     point (x, y, z) of the BALCO trajectory, and tðx;y;zÞ!mic is the
+                                                                                acoustic propagation time between the point (x, y, z) and
+where the Dt s for each type of sound are relative TOAs                         the microphone mic. No additional IFM run is required, as
+defined in a similar way to Eq. (1), with the reference TOA                     the TOAs of all mesh points to the sensors have already been
+being the TOA of the ballistic shock wave arrival at sensor i0                  computed.
+
+J. Acoust. Soc. Am. 146 (6), December 2019                                                                                    Dagallier et al.   4865
+B. Sound emissions of shot 2                                       IFM simulations use the standard atmosphere (no wind). At
+                                                                   ground level, one takes c  341 m/s.
+     For illustrative purposes, the muzzle, projectile, and
+                                                                        Figure 6 features the localization indices obtained for the
+impact TOAs are simulated with the combination BALCO-
+                                                                   three shots. As will be shown below, the ripples (or multiple
+IFM for shot 2 [Fig. 3(d)] with the following parameters:
+                                                                   peaks) are due to the precalculated database discretization.
+muzzle velocity of 625 m/s, elevation angle of 335 mils, and
+                                                                   The 10 km scatter in the weapon’s position estimates based
+azimuth angle of 38 mils (NB: 1 mil is approximately
+                                                                   solely on the muzzle blast TOAs was analyzed in Sec. III
+0:056 ), in the standard atmosphere. The various wavefronts
+                                                                   and is here shown for reference. Compared to Sec. III, the
+are shown on Fig. 5. Locally, the Mach number does not
+                                                                   weapon position estimates now obtained (with the muzzle
+vary much and the projectile’s movement is rectilinear, so
+                                                                   blast, ballistic shock wave and impact explosion TOAs) are
+that the projectile shocks superpose to form a conical Mach
+                                                                   much closer to the weapon, with an uncertainty on the order
+wave of aperture angle h given by sin h ¼ 1=M. On snapshot
+                                                                   of 1 km. The impact point for shot 2 is outside the sensor
+Fig. 5(a), the small conical aperture of the ballistic shock
+                                                                   array, whereas the impacts of shots 1 and 3 are within the
+wave reveals that the projectile’s velocity is well above the
+                                                                   array [Fig. 4(a)]. The impact position is therefore less dis-
+speed of sound.
+                                                                   criminative for shot 2, whereby the localization index tail
+     For artillery shots, the apparent speed of sound [Eq. (2)]
+                                                                   for X < 0 in Fig. 6(d), not seen on Figs. 6(b) and 6(f).
+significantly varies with height, e.g., due to the temperature
+                                                                        Along with the weapon’s position, the proposed method
+decrease. Besides, the projectile’s velocity may vary by a
+                                                                   of Sec. IV A also provides estimates of the muzzle velocity,
+factor of 3 along the trajectory, and the projectile may
+                                                                   and the elevation and azimuth angles of the barrel (parame-
+undergo several subsonic-supersonic transitions. The overall
+                                                                   ters v0 , e0 , and a0 ). For shot 1, the estimated muzzle velocity
+emission shape of the projectile is thus more complex than a
+                                                                   is of 650 m/s and the elevation is of 330 mils, very close to
+cone, and is further distorted by the wind and sound speed
+                                                                   the actual values (657 m/s and 335 mils, respectively). For
+profiles during its propagation.
+                                                                   shot 2, the corresponding estimates are 620 m/s and 330
+     From snapshot Fig. 5(b) onwards, the projectile falls
+                                                                   mils, compared to the actual values of 625 m/s and 335 mils,
+slightly behind the ballistic shock wave, as the projectile
+                                                                   respectively. For shot 3, the corresponding estimates are
+becomes subsonic. The projectile hits the ground in Fig. 5(c),
+                                                                   520 m/s and 500 mils, compared with the actual values of
+after 35 s of flight. Its impact position is highlighted on Fig.
+                                                                   534 m/s and 540 mils, respectively. Hence, the method pro-
+4, and generates the impact wave of snapshot [Fig. 5(d)].
+                                                                   vides a reliable indication of the elevation and muzzle veloc-
+                                                                   ity of the shot. Other shot parameters of potential interest for
+C. Shot sensing                                                    operational use may also be obtained as by-products of the
+     The sensing approach introduced in Sec. IV A is now           calculations, e.g., the time of flight or the propellant charge.
+tested on the three shot recordings analyzed above. For these           In summary, our results show that the matching and
+tests, the preparatory database is formed as follows. The          marching approach can be extended to consistently utilize
+source positions are discretized on a horizontal grid of 54 km     all three types of sounds emitted by an artillery shot. They
+along the shot axis (X axis), 8 km along the transverse axis       also suggest that this extension may enable to range the
+(Y axis), with a 200 m spacing in both directions. For each        weapon with an error of 1 km at ranges larger than 10 km,
+weapon position, the muzzle velocity ranges from 450 to            despite the small baseline configuration of the sensors array.
+700 m/s by steps of 10 m/s, the elevation from 250 to 700          To our knowledge, this result is unprecedented.
+mils by steps of 10 mils, and the azimuth angle from -100 to
+                                                                   V. DISCUSSION
+100 mils by steps of 50 mils. The azimuth discretization is
+refined (spacing of 5 mils) around the actual shot axis. The            In this section, the sensitivity of the weapon’s localization
+present database discretization, though by no means optimal,       error to various factors is discussed. From the results of
+is devised to ensure that consecutive (x, y, v, e, a) database     Sec. IV, the typical deviation of the observed TOA from the
+elements have impacts within 200 m (the grid spacing) from         best predicted TOA scales with 1=Cj  30–50 ms. The sensi-
+each other. Thus, approximately 8000 shot configurations           tivity analyses should therefore include all effects capable of
+are scanned for each weapon position. Both BALCO and               such alterations of the TOAs: weather effects, random TOA
+
+
+
+
+                                                                                                   FIG. 5. (Color online) Sketch of shot
+                                                                                                   2. The muzzle blast, ballistic shock
+                                                                                                   wave and impact signal (“M,” “B,”
+                                                                                                   and “I,” respectively) are displayed at
+                                                                                                   different times. The BALCO trajectory
+                                                                                                   is the black line.
+
+
+
+
+4866    J. Acoust. Soc. Am. 146 (6), December 2019                                                                        Dagallier et al.
+FIG. 6. (Color online) Normalized localization index for long range weapon localization. (a), (c), (e) Point source localization from the muzzle wave TOAs
+for shots 1, 2, 3, respectively. (b), (d), (f) Localization with processing of the trajectory and muzzle, projectile and impact TOAs for shots 1, 2, 3, respectively.
+Dots on the right are sensors, the star is the weapon and the circles are the three highest peaks from the map. Same colorbars as in Fig. 4.
+
+
+fluctuations, and database discretization effects. Other sensi-                      corresponding profiles are shown on Fig. 7(a), together with
+tivities considered hereafter are scoped toward practical appli-                     the standard atmosphere profile. These atmospheric data are
+cations. They include the number of sensors and the geometry                         not perfectly synchronized and collocated, which is unavoid-
+of the array, and the performance in the case of degraded                            able.38 In the future, recourse to a forecast regional model
+information on the TOAs: missing wave, or missing                                    with finer temporal and spatial discretizations could partly
+classification.                                                                      fill this gap.39,40
+                                                                                           The localization procedure of Sec. IV C has been recon-
+A. Weather effects                                                                   ducted for the 14 and 20 h ERA-Interim profiles. For the
+                                                                                     sake of comparison, the trajectories of shots 1 and 2
+      The effect of the wind is acknowledged in line of bear-
+ings methods (e.g., Refs. 5 and 7). In our processing, the
+weather may alter both ballistics and acoustics. On the bal-
+listic side, a wind change of 10 m/s along the shot axis can
+lead to variations of hundreds of meters in the computed
+impact’s position for 10 km shots with fixed initial parame-
+ters. On the acoustic side, the wind can alter the time delay
+between the ballistic shock wave TOAs (propagation from
+the projectile towards the ground) and the muzzle blast
+TOAs (propagation close to the ground, where winds are
+weaker). For example, a convective wind of 10 m/s alters the
+muzzle blast’s propagation time by almost 1 s over a 30 s
+propagation, which amounts to a range offset larger than 300
+m. Besides, projectiles may reach heights of several kilo-
+meters, and the variations in pressure, temperature, Mach
+number, and through the Mach number, most aerodynamic
+coefficients are significant.
+      To test the sensitivity of the above results to the atmo-
+spheric conditions, the European Center for Medium Range
+Weather Forecasts (ECMWF) Re-Analysis (ERA)-Interim
+weather dataset37 can be used. ERA-Interim is a state-of-the-
+art archive of the atmospheric state calculated by the                               FIG. 7. (Color online) (a) Sound speed (including humidity contribution)
+ECMWF. The data are here extracted at the grid-point near-                           and wind speed profiles from ERA-Interim, above Meppen, Germany, at 14
+est to Meppen Proving Ground from the 0:125  0:125                                and 20 h, local time. The X and Y components of the wind (resp. ux and uy)
+spatial resolution (approximately 14  14 km). The two                               are given. The vertical component is assumed to be negligible. The standard
+                                                                                     atmosphere corresponds to the dashed lines. Data points are at the database
+available times (14 and 20 h local time) nearest to the shot                         resolution. (b) Weapon’s normalized localization index map for shot 3 using
+times (between 15 and 16 h) are considered. The                                      the 20 h profile. Same colorbar as in Fig. 4.
+
+J. Acoust. Soc. Am. 146 (6), December 2019                                                                                                Dagallier et al.     4867
+culminate at 1.5 km, while the trajectory of shot 3 reaches         waves. The width of the distribution is thus of 50 samples,
+2.5 km. For shots 1 and 2, the ranging is improved compared         on the order of the maximal TOA measurement error identi-
+to the standard atmosphere case, as the estimated weapon            fied in Sec. III. Actually, as the localization method works
+position is within a few grid spacings (200 m) of the actual        on differences of TOAs, the selected randomization test is
+position. For shot 3, the atmospheric conditions at 14 and 20                                      pﬃﬃﬃ reference TOA and all the
+                                                                    equivalent to a test with a fixed
+h produce distinct localization results. The localization with      other TOAs following a 25 2  35 ms standard deviation
+the 14 h weather (not shown) is comparable to Fig. 6(f), the        normal distribution. This general normal distribution
+estimated position is off by more than 1 km. The localization       assumption is strong and crude as all the errors may not be
+obtained for 20 h is 200 m off the real position [Fig. 7(b)].       independent.
+This distinct behavior may be ascribed to the wind direction             For each shot and atmosphere, the localization proce-
+change on Fig. 7(a), to which shot 3 is more sensitive              dure in the 6-sensors configuration is carried out for 2500
+because of its lower muzzle velocity and longer, higher             realizations of the normally distributed TOAs. The position
+flight. Overall, the sensitivity of weapon localizations to         of the maximum is extracted from the index localization
+atmospheric conditions appears to be as expected: the locali-       maps. For each shot and atmosphere, the maximal localiza-
+zation tends to improve with the realism of the atmospheric         tion index may vary by a factor of 2 from realization to reali-
+input with no unreasonable errors.                                  zation, but the position of the maximum is very consistent:
+      Other physical parameters of the problem have impacts         the 2500 maximum positions spread over only 4–20 different
+on TOAs. For example, the detachment point of the Mach              (x, y) grid points depending on the shot and atmosphere, and
+wave from the projectile has a potential localization uncer-        85% are located on just 1 to 4 grid points. This suggests a
+tainty of tens of meters, which impacts the projectile wave         strong robustness of the peaks to TOA fluctuations. This
+TOAs. TOA alterations may also result from propagation of           robustness also holds when the number of microphones used
+the muzzle wave and impact wave over a non-perfectly flat           to form the 2500 localization maps is decreased (see also
+ground. On the ballistics side, the data of a French 155 mm         Sec. V D). Figure 8(a) shows an example with the 3-sensors
+gun are used, while the actual gun is a German weapon (of           “1, 3, 5” configuration for shot 1 in the 20 h atmosphere. In
+the same caliber). The intrinsic variability of the internal bal-   spite of the small number of sensors and the large variability
+listics and of the projectile’s aerodynamic coefficients also       of the nine TOAs, the maximum falls 79% of the time on the
+lead to different trajectories and differences in the ballistic     very same database element. Two other points contain 9% of
+and impact waves TOAs. Exactly like the weather, all these          the remaining maxima. These points correspond to second-
+physical effects may shift the TOAs of one wave with                ary peaks in Fig. 6(b).
+respect to the others. However, their TOA variation are                  In fact, it appears that the overall localization map is
+smaller than or of the same order as the weather-induced            robust to the considered TOA fluctuations. Figure 8(b) shows
+TOA variations. The robustness noted to weather therefore           the grid points whose localization index is continuously high
+supports the idea that the method is also robust to these other     for all the realizations. Here, the “high” criterion is defined as
+parameters.                                                         at least 25% of the maximum of the localization index. The
+                                                                    patterns strongly resemble those from a single, 6-sensors real-
+B. Random TOA fluctuations                                          ization [Fig. 6(b)]. Similar findings are obtained for other
+     Section V A investigated the impact of weather effects,        atmospheres and other shots. As may be expected, the high-
+and of other parameters which can alter the TOAs of one             index regions shrink when the threshold is raised. For a
+wave relative to the others. Conversely, some physical
+parameters may alter the TOAs of all waves at the various
+microphones. For example, the TOA determination may be
+sensitive to the background noise in the measurements. In
+the considered recordings, the noise largely comes from the
+acquisition chain, and the signal-to-noise ratio varies
+between 5 (e.g., muzzle blast, shot 3) and 100 (signal satu-
+rated, most of the signatures). Artificially doubling the noise
+does not change the TOAs by more than a few ms. Besides,
+observed TOAs may be impacted by the local, instantaneous
+fluctuations in the atmospheric parameters (the so-called
+pulse wander).10 It is argued in the Appendix that such fluc-
+tuations should not exceed standard deviation of 25 ms (25
+samples) in our case.
+                                                                    FIG. 8. (Color online) (a) Histogram of the position of the best element
+     The sensitivity to such random fluctuations is analyzed        from the database, for shot 1, in the 20 h atmosphere, for the 3-sensors “1, 3,
+by repeating the localization procedure on all the configura-       5” configuration. The intensity of a grid point indicates the number of times
+tions of Sec. V A (three shots, three atmospheres), but this        (in %) the maximum was located on that point. (b) Stability of the localiza-
+                                                                    tion map, for the same shot, same atmosphere and 3-sensors configuration as
+time considering that the TOAs follow independent normal
+                                                                    in (a). The intensity of a grid points indicates the number of times (in %)
+distributions around their detected value. For simplicity, a        that the localization index at this point reaches at least 25% of the maximal
+standard deviation of 25 ms is considered for all TOAs of all       localization index. The star shows the actual position of the gun.
+
+4868    J. Acoust. Soc. Am. 146 (6), December 2019                                                                                Dagallier et al.
+threshold at least 75% of the maximum, the plot of Fig. 8(b)                  D. Number of sensors and array geometry
+becomes similar to Fig. 8(a), for all tested configurations. The
+                                                                                    So far, the analysis has been conducted with three TOAs
+localization index map for a single realization may thus be
+                                                                              (from the muzzle, impact, and projectile) from the six micro-
+considered as representative, even if the actual values of the
+                                                                              phones available in the experiment. Since one TOA is used
+localization index may fluctuate. Furthermore, the persistence
+                                                                              for reference synchronization, this gives 17 degrees of free-
+of the peaks in Fig. 8(b) for random TOA fluctuations demon-
+                                                                              dom (3  6  1) for a five-dimensions database (x, y, v, e, a).
+strates that these peaks are not due to noise or turbulence.
+                                                                              One may theoretically expect to achieve localization with as
+                                                                              little as two sensors (5 degrees of freedom). To test the sensi-
+C. Database discretization
+                                                                              tivity to the number and geometry of sensors, the localization
+     The sensitivity of the localization to the discretization of             procedure is run for all possible combinations of k micro-
+the precalculated database is now investigated. Figure 9                      phones, k ¼ 2,…,6. The case k ¼ 6 corresponds to Sec. IV C.
+shows the effect of refining the database for the (v, e, a) shot              There are thus 57 combinations in total for each shot, i.e., 171
+parameters by a factor of 5 in each dimension for shot 2 and                  distinct sensing configurations. Here, only the results for the
+the 20h atmosphere. The multiple peaks from the coarse                        ERA-Interim 20 h atmospheric profile are given. The results
+database [Fig. 9(a)] disappear while the maximal localization                 for the 14 h atmosphere and the standard atmosphere are simi-
+index value rises. The other shots and atmospheric condi-                     lar. Figure 10 shows the number of configurations corre-
+tions considered above also lead to similar results. This                     sponding to a localization less than a given value. The
+shows that, at least in our tests, the cost function from Eq.                 estimated weapon positions are consistent in most cases, for
+(5) is physically smooth, and that the multiple peaks result                  all three shots, even with two microphones. For instance, the
+from the coarse discretization of the shot parameters used to                 three shot localizations obtained from microphones 4 and 5
+build the database.                                                           (230 m apart, corresponding to a ratio r  0:018), are approx-
+     In principle, refining the database could therefore                      imately the same as those obtained with the six microphones.
+improve the localization. However, the improvements                           For k ¼ 3,…,6, more than 90% of the estimated positions
+expected from such a refinement in our cases are not spectac-                 are less than 1 km away from the actual position, and 50%
+ular. With the refined precalculation, the best matching shot                 are less than 300 m away. Hence, the results of Sec. IV C are
+varies as follows compared to the coarse precalculations: the                 robust to the geometry and the number of sensors (greater or
+weapon’s position is shifted by 400 m along the Y direction,                  equal to 3). The results hold when the TOAs are normally dis-
+and its ballistic parameters (v, e, a) change by 2 m/s, 6                     tributed around their detected value, following Sec. V B.
+and 32 mils (1:75 ), respectively. Thus, as illustrated on                         The limiting factor in the downsizing of the array is the
+Fig. 9(b), the weapon’s localizations in the coarse and                       uncertainty of the estimation of the TOA. The maximal mea-
+refined databases are closer from each other than from the                    surement error was set to 50 ms in Sec. III, so about 20 m at
+actual gun’s position. This behavior is also obtained for the                 the speed of sound. This distance qualitatively scales the
+other shots, and in presence of random TOA fluctuations. In                   minimum inter-distance between sensors in our approach.
+other words, the coarse discretization of the precalculations
+contributes to, but is not the major cause of, the localization               E. Processed waves
+errors noted above. The latter probably include some contri-
+                                                                                 Section IV uses the TOAs of the muzzle blast (acronym
+butions from uncertainties in the meteorological conditions
+                                                                              “M”), ballistic shock wave (“B”), and impact explosion (“I”).
+and of the aerodynamic coefficients.
+
+
+
+
+FIG. 9. (Color online) Localization index maps for shot 2 in the 20 h atmo-
+sphere, for (a) the coarsely discretized database of Secs. IV and V A–V C     FIG. 10. (Color online) Localization results in the 20 h ERA-Interim atmo-
+and (b) a refined database (2 m/s spacing for the muzzle velocity v and 2     sphere for a varying number of sensors. For each of the three shots, there are
+mils for each angle e and a). The same measured TOAs are used in both         1 (resp. 6, 15, 20, 15) array(s) for a subset of 6 (resp. 5, 4, 3, 2) sensors.
+cases. The maximum localization index is 21 in (a) and 30 in (b). Seventy     These curves must not be interpreted as cumulative probabilities, since the
+points in (b) have a localization index above the maximum value of (a).       data are highly correlated.
+
+J. Acoust. Soc. Am. 146 (6), December 2019                                                                                        Dagallier et al.    4869
+In practical scenarii, some of these data may not be available.                  respectively. The maximum value of the localization index
+For example, the “M” wave may be too weak to be detected                         (Cj) further informs on the reliability of each configuration.
+due to a strongly upward refractive atmosphere (e.g., with                       For example, for shots 2 and 3, the maximum value of Cj is
+upwind propagation in mid-afternoon summer over land).                           from 2 to 4 orders of magnitude larger for the correct combi-
+The absence of the “B” wave corresponds to a scenario with                       nation of the impact and muzzle TOAs than for the other
+subsonic weapons like mortars. The “I” wave may be missing                       combinations. For shot 1, four distinct combinations yield
+if there is no explosive charge (e.g., inert projectile). It is                  similar maxima for Cj, but they all give very similar localiza-
+therefore of interest to assess the performance of the sensing                   tion maps. Hence, it appears that the present approach is
+method when one of these waves is omitted.                                       robust to classification, and may even be used on fully
+     When the muzzle wave is not used in Eq. (5) [Fig. 11(a),                    unclassified TOAs.
+using “B-I”, ballistic, and impact waves], the localization per-
+formance is comparable to the “M-B-I” localization. Ignoring
+the “B” wave [Fig. 11(c)] leads to similar results, as the “B”                   VI. CONCLUSION
+and “M” waves are both informative of early steps of the tra-                          The acoustic sensing of artillery shots is a long-standing
+jectory, and are thus somehow redundant in constraining the                      research challenge. One major limitation in existing techni-
+weapon’s position. Ignoring the “I” wave (using “M-B”) pro-                      ques is the need for large baseline arrays in order to deter-
+duces similar results to using only the “M” wave (Sec. III).                     mine the weapon’s position not only in bearing but also in
+The conclusions hold when the TOAs are normally distrib-                         range. In this paper, a sensing approach is introduced that
+uted around their detected value following Sec. V B.                             demonstrates that the weapon can be located by a consistent
+                                                                                 and physical processing of all the acoustic arrivals induced
+F. Wave classification                                                           by the shot.
+     An a priori assumption in Eq. (5) is that the various                             The proposed sensing approach realistically predicts the
+acoustic arrivals at the microphones have been correctly                         muzzle blast, the impact explosion, and the projectile
+classified. In practice, this classification is not always                       shock—the latter being obtained with the BALCO model for
+straightforward. To assess the robustness of the approach to                     ballistic trajectories. The propagation of these acoustic
+classification, the localization procedure is hereafter tested                   waves in the complex environment is modeled with the IFM,
+without prior classification of the TOAs.                                        which accounts for the effects of the wind, sound speed gra-
+     With three TOAs per recording, there are (3  2  1)6                       dients, and obstacles in a reasonable computational time.
+¼ 46 656 possible ways to combine all TOAs. However,                             Last, the time matching method combines the weapon, the
+some configurations are not physically possible for a given                      projectile, and the impact acoustic data in a comprehensive
+set of sensors positions. For example, TOAs from a single                        localization procedure. It determines the best-matching shot
+wave at different microphones must be less than 4 s apart,                       parameters among a precalculated database. Besides the
+since all sensors are less than 1 km apart. Such simple physi-                   weapon’s and impact’s position, it also gives estimates for
+cal considerations reduce the number of physically admissi-                      other parameters of interest, such as the shot angles, the time
+ble combinations to 96, 48, and 150 for shots 1, 2, and 3,                       of flight, or the muzzle velocity of the shell.
+                                                                                       The sensing performance of the method is tested using
+                                                                                 acoustic data from an array of six microphones for three
+                                                                                 artillery shots at the Meppen Proving Ground. The overall
+                                                                                 localization approach successfully localizes the impacts
+                                                                                 within or close to the sensors array. The weapon’s location
+                                                                                 obtained by processing of the muzzle blast only, which is
+                                                                                 similar to a standard line-of-bearing processing, confirms
+                                                                                 that ranging is very poor (uncertainties of tens of kilo-
+                                                                                 meters). On the other hand, processing all the acoustic
+                                                                                 waves, as proposed in the present method, results in a
+                                                                                 weapon localization error of less than 1 km. Hence, the pre-
+                                                                                 sent results are very promising in that they locate the weapon
+                                                                                 with a small-baseline array. The weapon’s localization
+                                                                                 uncertainties should be compared to the ballistic dispersion
+                                                                                 of 155 mm projectiles (on the order of 200 m).
+                                                                                       An extensive sensitivity analysis of the present results is
+                                                                                 conducted. It reveals that:
+                                                                                 • The weapon’s localization is robust to realistic random
+                                                                                   TOA fluctuations.
+FIG. 11. (Color online) Map of the normalized localization index for various     • Use of three to five sensors instead of six produces virtu-
+combinations of signals, for shot 2: (a) projectile and impact, (b) muzzle and
+projectile, (c) muzzle and impact. Same color map as in Fig. 4. The atmo-          ally no change in the weapon’s localization. Localization
+sphere is from ERA-Interim at 20h. Other shots lead to similar results.            with two sensors is also successful in many cases.
+
+4870     J. Acoust. Soc. Am. 146 (6), December 2019                                                                                 Dagallier et al.
+• The localization performance does not appear to feature a       variations are lower than for the wind-driven estimate
+  major sensitivity to the orientation of the sensors with        because of the lower sensitivity of the speed of sound and
+  regard to the weapon.                                           comparatively smaller temperature fluctuations. In the above
+• The method also works without prior classification of the       equation:
+  TOAs or without processing the Mach wave (as is the case
+                                                                  • ru is the root-mean-square (rms) of the wind speed in the
+  for mortar shots) or the muzzle wave.
+• The noted localization errors are caused to a large extent
+                                                                    direction of propagation. In the lower atmosphere, it takes
+                                                                    values on the order of from 0.1 to 1 m/s (depending on
+  by the imperfect knowledge on the atmospheric conditions
+                                                                    meteorological conditions, orientation, and height; see
+  at the time and location of the shot. Improving this knowl-
+                                                                    Ref. 41, Sec. 4.3.1). Hereafter, ru ’ 1 m/s is considered.
+  edge (here, by recourse to weather data from a meteoro-
+                                                                  • Lu is the outer scale of wind turbulence in the direction of
+  logical archive) directly improves the weapon’s
+                                                                    propagation. In the lower atmosphere, it takes values of
+  localization.
+• Other localization errors may be induced by the selected
+                                                                    about a hundred meters, depending on the meteorological
+  discretization in the shot parameters for the precalcula-         conditions, orientation, and height. Hereafter, Lu ’ 200 m
+  tions and an imperfect knowledge on the aerodynamic               is considered.
+                                                                  • X is the propagation range. Hereafter X ¼ 13 km is
+  coefficients of the projectile.
+                                                                    considered.
+      The present study conducts a careful analysis of three
+artillery shots. Many more configurations should be consid-            With these quantitative estimates, one obtains Dt ’ 19
+ered to quantify the method’s performance in the general          ms. This corresponds to a worst-case scenario, since it con-
+case. For example, it is still needed to investigate cases in     siders the longest propagation range (muzzle blast), assumes
+which both the impact and muzzle blasts originate from posi-      strong turbulence, with large eddy scales, and fully indepen-
+tions far from the sensors. Due to the difficulty of acquiring    dent turbulence paths (transverse positioning of the sensors,
+experimental data, a fully numerical study could be consid-       also ignoring the correlation in the atmospheric disturbances
+ered. Localizing a virtual gun from TOAs generated by a           near the weapon). Based on these considerations, a standard
+numerical model should enable the analysis of the various         deviation of Dt ¼ 25 ms is used for all TOAs in the sensitiv-
+relative influences of the model parameters in more detail        ity study of Sec. V B. It must be stressed, though, that this
+and the optimization of the database discretization. Further      value is a large overestimate as far as the impact TOA fluctu-
+studies could also be conducted to improve the database gen-      ations are concerned, if only because the propagation range
+eration and search procedure in order to efficiently scan sev-    is much smaller.
+eral types of weapons and several types of projectiles in         1
+                                                                     H. Bateman, “Mathematical theory of sound ranging,” Monthly Weather
+several predefined types of weather. Another future develop-         Review (January), 4–11 (1918).
+ment would be the recourse to meteorological data at               2
+                                                                     E. Esclangon, L’acoustique des Canons et des Projectiles (Gauthier-
+improved spatial and temporal resolutions.                           Villars, Paris, 1925), p. 388.
+                                                                   3
+                                                                     T. Damarla, Battlefield Acoustics (Springer International Publishing, New
+                                                                     York, 2015), p. 262.
+ACKNOWLEDGMENTS                                                    4
+                                                                     A. Lemer and F. Ywanne, “Acoustic/seismic ground sensors for detection,
+    We thank the BAAINBw and WTD 91 acoustic and                     localization and classification on the battlefield,” in Battlefield Acoustic
+                                                                     Sensing for ISR Applications, RTO-MP-SET-107 (US Army Research
+weather data teams for their support. The ECMWF data                 Laboratory, Adelphi, MD, 2006), pp. 17-1–17-12.
+were made available by ECMWF under the management of               5
+                                                                     B. G. Ferguson, L. G. Criswick, and K. W. Lo, “Locating far-field impul-
+MeteoFrance. The contribution of D.J. was partly supported           sive sound sources in air by triangulation,” J. Acoust. Soc. Am. 111(1),
+by the Labex CeLyA of Universite de Lyon, operated by the           104–116 (2002).
+                                                                   6
+                                                                     A. A. Thompson III and G. L. Durfee, “Techniques for evaluating line of
+French National Research Agency (ANR-10-LABX-0060/                   bearing (LOB) systems,” Ballistic Research Laboratory, Aberdeen
+ANR-16-IDEX-0005).                                                   Proving Ground, MD (1992).
+                                                                   7
+                                                                     B. G. Ferguson, “Variability in the passive ranging of acoustic sources in
+                                                                     air using a wavefront curvature technique,” J. Acoust. Soc. Am. 108(4),
+APPENDIX: TURBULENCE-INDUCED TOA                                     1535–1544 (2000).
+                                                                   8
+FLUCTUATIONS                                                         D. Grasing and B. Ellwood, “Development of acoustic sniper localization
+                                                                     methods and models,” Proc. SPIE 7693, 769312 (2010).
+     In this Appendix, an upper bound on the turbulence-           9
+                                                                     K. W. Lo, “Curvilinear trajectory estimation of a supersonic bullet using
+induced fluctuations of the TOAs is proposed. Cheinet                ballistic shock wave arrivals at asynchronous acoustic sensor nodes,”
+et al.10 discuss the turbulence-induced variations of the time-      J. Acoust. Soc. Am. 141(6), 4543–4555 (2017).
+                                                                  10
+                                                                     S. Cheinet, M. Cosnefroy, F. K€ onigstein, W. Rickert, M. Christoph, S. L.
+of-arrival of impulse signals (pulse wander). An estimate of         Collier, A. Dagallier, L. Ehrhardt, V. E. Ostashev, A. Stefanovic, T.
+the standard deviation may be found by use of their Eq. (2)          Wessling, and D. K. Wilson, “An experimental study of the atmospheric-
+                                                                     driven variability of impulse sounds,” J. Acoust. Soc. Am. 144(2),
+           1 ru pﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃ                                         822–840 (2018).
+    Dt ¼         2Lu X;                                   (A1)    11
+                                                                     H. E. Bass, L. Sutherland, J. Piercy, and L. B. Evans, “Absorption of
+           c c
+                                                                     sound by the atmosphere,” in Physical Acoustics: Principles and Methods,
+                                                                     Volume 17 (A85-28596 12-71) (Academic Press, New York, 1984), pp.
+which proposes a quantitative evaluation of the pulse wander
+                                                                     145–232.
+of impulse signals due to wind turbulence. Thermal turbu-         12
+                                                                     S. Cheinet and T. Broglin, “Sensitivity of shot detection and localization
+lence may be considered with the above equation, but the             to environmental propagation,” Appl. Acoust. 93, 97–105 (2015).
+
+J. Acoust. Soc. Am. 146 (6), December 2019                                                                            Dagallier et al.     4871
+13                                                                                 29
+   S. Cheinet, L. Ehrhardt, T. Broglin, and M. Cosnefroy, “Time matching              L. Yatziv, A. Bartesaghi, and G. Sapiro, “O(N) implementation of the fast
+   localization of impulse sounds in high-building, non-line-of-sight configu-        marching algorithm,” J. Comput. Phys. 212(2), 393–399 (2006).
+                                                                                   30
+   rations,” Acta Acust. united Ac. 102(6), 1118–1127 (2016).                         L. Ehrhardt, S. Cheinet, D. Juve, and P. Blanc-Benon, “Evaluating a line-
+14
+   S. Cheinet, L. Ehrhardt, and T. Broglin, “Impulse source localization in an        arized Euler equations model for strong turbulence effects on sound prop-
+   urban environment: Time reversal versus time matching,” J. Acoust. Soc.            agation,” J. Acoust. Soc. Am. 133(1961), 1922–1933 (2013).
+                                                                                   31
+   Am. 139(1), 128–140 (2016).                                                        ISO 2533-1975, Standard Atmosphere, Corrected (ISO, Geneva,
+15
+   J. Millet and B. Baligand, “Latest achievements in gunfire detection               Switzerland, 1978).
+                                                                                   32
+   systems,” in Battlefield Acoustic Sensing for ISR Applications, RTO-               Y. Noumir, A. Le Guilcher, N. Lardjane, R. Monneau, and A. Sarrazin,
+   MP-SET-107 (US Army Research Laboratory, Adelphi, MD, 2006), pp.                   “A fast-marching like algorithm for geometrical shock dynamics,”
+   1–14.                                                                              J. Comput. Phys. 284, 206–229 (2015).
+16                                                                                 33
+   V. E. Ostashev, Acoustics in Moving Inhomogeneous Media (E&FN                      L. Stano, J. Wind, and H.-E. de Bree, “Acoustic scoring and locating sys-
+   SPON, New York, 1997).                                                             tem for rockets, artillery & mortars,” in Wireless World Workshop (W3),
+17
+   A. D. Pierce, Acoustics. An Introduction to its Physical Principles and            edited by D. C. Dimitrova, K. C. H. Blom, and N. Meratnia (University of
+   Applications, 3rd ed. (Acoustical Society of America, Melville, NY,                Twente, Centre for Telematics and Information Technology, Enschede,
+   1981), pp. xxiiiþ642.                                                              the Netherlands, 2011), pp. 1–8.
+18                                                                                 34
+   E. W. Dijkstra, “A note on two problems in connection with graphs,”                P. Wey, D. Corriveau, T. A. Saitz, and W. D. Ruijter, “BALCO 6/7-DoF
+   Numer. Math. 1(1), 269–271 (1959).                                                 trajectory model,” in Proceedings of the 29th International Symposium on
+19
+   H. Saito, “Travel times and ray paths of first arrival seismic waves:              Ballistics, Edenborough, Scotland (May 9–13, 2016), pp. 151–162.
+                                                                                   35
+   Computation method based on Huygens’ principle,” in SEG Technical                  National Imagery and Mapping Agency, “Department of Defense World
+   Program Expanded Abstracts 1989 (Society of Exploration Geophysicists,             Geodetic System 1984, Its definition and relationships with local geodetic
+   Tulsa, OK, 1989), pp. 244–247.                                                     systems,” Technical Report 8350.2, 3rd ed. (1984).
+20                                                                                 36
+   T. J. Moser, “Shortest path calculation of seismic rays,” Geophysics 56(1),        R. F. Lieske, “Determination of aerodynamic drag and exterior ballistic tra-
+   59–67 (1991).                                                                      jectory simulation for the 155 mm, DPICM, M864 base-burn projectile,”
+21
+   P. Podvin and I. Lecomte, “Finite-difference computation of travel times           Ballistic Research Laboratory, Aberdeen Proving Ground, MD (1989).
+                                                                                   37
+   in very contrasted velocity models: A massively parallel approach and its          D. P. Dee, S. M. Uppala, A. J. Simmons, P. Berrisford, P. Poli, S.
+   associated tools,” Geophys. J. Int. 105(1), 271–284 (1991).                        Kobayashi, U. Andrae, M. A. Balmaseda, G. Balsamo, P. Bauer, P.
+22
+   J. E. Vidale, “Finite-difference calculation of travel times,” Bull. Seismol.      Bechtold, A. C. M. Beljaars, L. van de Berg, J. Bidlot, N. Bormann, C.
+   Soc. Am. 78(6), 2062–2076 (1988).                                                  Delsol, R. Dragani, M. Fuentes, A. J. Geer, L. Haimberger, S. B. Healy,
+23
+   J. A. Sethian, “A fast marching level set method for monotonically                 H. Hersbach, E. V. H     olm, L. Isaksen, P. Kållberg, M. K€  ohler, M.
+   advancing fronts,” Proc. Natl. Acad. Sci. 93(4), 1591–1595 (1996).                 Matricardi, A. P. McNally, B. M. Monge-Sanz, J.-J. Morcrette, B.-K.
+24
+   J. A. Sethian and A. B. Vladimirsky, “Ordered upwind methods for static            Park, C. Peubey, P. de Rosnay, C. Tavolato, J.-N. Thepaut, and F. Vitart,
+   Hamilton-Jacobi equations: Theory and algorithms,” SIAM J. Numer.                  “The ERA-Interim reanalysis: Configuration and performance of the data
+   Anal. 41(1), 325–363 (2003).                                                       assimilation system,” Q. J. R. Meteorol. Soc. 137(656), 553–597 (2011).
+25                                                                                 38
+   A. M. Popovici and J. A. Sethian, “3D imaging using higher order Fast              D. K. Wilson, M. S. Lewis, J. W. Weatherly, and E. L. Andreas,
+   Marching travel times,” Geophysics 67(2), 604–609 (2002).                          “Dependence of predictive skill for outdoor narrowband and broadband
+26
+   J. A. Sethian and A. M. Popovici, “3D travel time computation using the            sound levels on the atmospheric representation,” Noise Control Eng. J.
+   Fast Marching method,” Geophysics 64(2), 516–523 (1999).                           56(6), 465–477 (2008).
+27                                                                                 39
+   Y. Pailhas and Y. Petillot, “Multi-dimensional Fast-Marching approach to           D. Valente, L. M. Ronsse, L. Pater, M. J. White, R. Serwy, E. T. Nykaza,
+   wave propagation in heterogeneous multipath environment,” in                       M. E. Swearingen, and D. G. Albert, “Blast noise characteristics as a func-
+   Proceedings of the Third Underwater Acoustics Conference and                       tion of distance for temperate and desert climates,” J. Acoust. Soc. Am.
+   Exhibition, Crete, Greece (June 21–26, 2015), p. 153.                              132(1), 216–227 (2012).
+28                                                                                 40
+   E. Konukoglu, M. Sermesant, O. Clatz, J.-M. Peyrat, H. Delingette, and N.          L. M. Ronsse, D. Valente, E. T. Nykaza, and M. J. White, “Investigations
+   Ayache, “A recursive anisotropic Fast Marching approach to reaction dif-           of measured temperature and wind effects on outdoor sound propagation,”
+   fusion equation: Application to tumor growth modeling,” in Information             J. Acoust. Soc. Am. 132(3), 1904–1904 (2012).
+                                                                                   41
+   Processing in Medical Imaging, edited by N. Karssemeijer and B.                    R. B. Stull, An Introduction to Boundary Layer Meteorology (Springer,
+   Lelieveldt (Springer, Berlin-Heidelberg, 2007), pp. 687–699.                       Dordrecht, the Netherlands, 1988).
+
+
+
+
+4872      J. Acoust. Soc. Am. 146 (6), December 2019                                                                                             Dagallier et al.
+
