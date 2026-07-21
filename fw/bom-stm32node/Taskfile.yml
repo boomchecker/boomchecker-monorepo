@@ -1,0 +1,24 @@
+version: "3"
+
+tasks:
+  build:
+    desc: Build STM32 firmware (Debug)
+    aliases: [b]
+    cmds:
+      - cmake --preset Debug
+      - cmake --build --preset Debug
+
+  flash:
+    desc: Flash STM32 board over ST-Link (st-flash)
+    aliases: [f]
+    deps:
+      - build
+    cmds:
+      - arm-none-eabi-objcopy -O binary build/Debug/bom-stm32node.elf build/Debug/bom-stm32node.bin
+      - st-flash write build/Debug/bom-stm32node.bin 0x08000000
+
+  clean:
+    desc: Remove the build directory
+    aliases: [c]
+    cmds:
+      - rm -rf build

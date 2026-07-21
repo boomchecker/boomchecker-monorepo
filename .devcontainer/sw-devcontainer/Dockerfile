@@ -25,12 +25,11 @@ RUN apt-get update && apt-get install -y \
 RUN ln -sf /usr/bin/python3 /usr/local/bin/python && \
     ln -sf /usr/bin/pip3 /usr/local/bin/pip
 
-# Documentation toolchain (Sphinx + Breathe + RTD theme + Mermaid) available globally
+# Documentation toolchain (MkDocs Material + mkdoxy for the C API) available globally.
+# Doxygen + graphviz (installed above) are required by mkdoxy.
 RUN python3 -m pip install --no-cache-dir --break-system-packages \
-    sphinx \
-    breathe \
-    sphinx-rtd-theme \
-    sphinxcontrib-mermaid
+    mkdocs-material \
+    mkdoxy
 
 # Install Node.js LTS (v20) from NodeSource
 RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
@@ -52,15 +51,18 @@ RUN curl --location https://taskfile.dev/install.sh | sh -s -- -b /usr/local/bin
 # Install Changesets CLI
 RUN npm install -g @changesets/cli
 
+# AI tools: Codex CLI + Claude Code CLI
+RUN npm install -g @openai/codex @anthropic-ai/claude-code
+
 # Create dev user (minimal change, avoids root shell issues)
 RUN useradd -ms /bin/zsh dev
 # Allow dev user to sudo without password for package installs
 RUN usermod -aG sudo dev && echo "dev ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/dev
 
-# Prepare Codex config dir so a mounted volume keeps history with correct ownership
-RUN mkdir -p /home/dev/.codex && \
-    chown dev:dev /home/dev/.codex && \
-    chmod 755 /home/dev/.codex
+# Prepare Codex/Claude config dirs so the mounted volumes keep correct ownership
+RUN mkdir -p /home/dev/.codex /home/dev/.claude && \
+    chown -R dev:dev /home/dev/.codex /home/dev/.claude && \
+    chmod 755 /home/dev/.codex /home/dev/.claude
 
 USER dev
 
