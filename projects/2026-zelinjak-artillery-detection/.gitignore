@@ -1,0 +1,9 @@
+generated/
+firmware/esp32s3/build/
+firmware/esp32s3/managed_components/
+firmware/esp32s3/.vscode/
+firmware/esp32s3/sdkconfig.old
+*.pyc
+__pycache__/
+venv/
+.venv/

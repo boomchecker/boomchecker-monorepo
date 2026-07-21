@@ -1,0 +1,2651 @@
+Diplomová práca
+
+                   České
+                   vysoké
+                   učení technické
+                   v Praze
+
+                   Fakulta elektrotechnická
+F3
+
+
+
+Metódy akustickej detekcie delostreleckej
+streľby
+
+
+
+Jakub Zelinka
+
+
+
+
+Školiteľ: doc. Ing. Jakub Svatoš Ph.D.
+Odbor: Počítačové inžinierstvo
+Máj 2026
+ii
+                     Poďakovanie                     Prehlásenie
+Rád by som na tomto mieste vyjadril                  Prehlasujem, že som predloženú prácu
+úprimné poďakovanie vedúcemu mojej                   vypracoval samostatne, na základe získa-
+diplomovej práce, doc. Ing. Jakubovi                 ných poznatkov, a že som uviedol všetkú
+Svatošovi, Ph.D., za jeho odborné                    použitú literatúru.
+vedenie, cenné rady a čas, ktorý mi veno-            V Prahe dňa 11.5.2026
+val. Jeho usmernenia, trpezlivý prístup
+a priateľská podpora boli pre mňa pri
+riešení tejto problematiky neoceniteľnou               ....................
+pomocou.
+
+Moja vďaka rovnako patrí Ing. Marti-
+novi Maxovi za jeho ochotu a aktívnu
+spoluprácu, ktorou sa spoločne s nami
+podieľal na úspešnom vypracovaní tejto
+práce.
+
+V neposlednom rade by som sa chcel zo
+srdca poďakovať všetkým, ktorí mi počas
+písania pomáhali. Mojej rodine, blízkym
+a priateľom patrí obrovské ďakujem za ich
+nekonečnú podporu, povzbudzovanie a tr-
+pezlivosť nielen pri tvorení tohto projektu,
+ale počas celého môjho vysokoškolského
+štúdia.
+
+
+
+
+                                               iii
+                             Abstrakt                Abstract
+Táto diplomová práca sa zaoberá proble-              This master’s thesis focuses on acoustic
+matikou akustickej detekcie a klasifikácie           detection and classification of artillery
+delostreleckej streľby s dôrazom na                  fire, with an emphasis on deployment
+nasadenie v systémoch okrajovej umelej               in Edge Artificial Intelligence (Edge
+inteligencie (Edge AI). Prvá časť práce              AI) systems.     The first part of the
+analyzuje fyzikálne princípy šírenia zvuku           thesis analyzes the physical principles
+výstrelov a metódy detekcie paľby z                  of gunshot sound propagation and the
+ručných zbraní. Jadrom práce je návrh                methods for detecting small arms fire.
+algoritmu na extrakciu príznakov z                   The core of the work lies in the design of
+akustických signálov pomocou výpočtu                 an algorithm for extracting features from
+Mel-frekvenčných kepstrálnych koeficien-             acoustic signals using the computation
+tov (MFCC). Na spracovanie sú využité                of Mel-Frequency Cepstral Coefficients
+reálne nahrávky zo strelnice obsahujúce              (MFCC). Real-world recordings from
+impulzné udalosti delostreleckej paľby.              a shooting range containing impulsive
+                                                     events of artillery fire are utilized for
+Hlavným prínosom práce je návrh a na-                processing.
+trénovanie konvolučnej neurónovej siete
+(CNN), ktorá bola následne optimalizo-               The primary contribution of this thesis is
+vaná pre zariadenia s obmedzeným výpoč-              the design and training of a Convolutional
+tovým výkonom. Model bol podrobený ce-               Neural Network (CNN), which was sub-
+ločíselnej kvantizácii a implementovaný na           sequently optimized for devices with lim-
+mikrokontrolér ESP32-S3 s využitím fra-              ited computational resources. The model
+meworku TensorFlow Lite Micro a hardvé-              was subjected to integer quantization and
+rových vektorových inštrukcií. Záverečná             implemented on an ESP32-S3 microcon-
+časť práce sa venuje rozsiahlej evaluácii ro-        troller utilizing the TensorFlow Lite Micro
+bustnosti systému voči aditívnemu šumu.              framework and hardware vector instruc-
+                                                     tions. The final part of the thesis is ded-
+Kľúčové slová: Akustická detekcia,                   icated to a comprehensive evaluation of
+Delostrelecká streľba (Artiléria),                   the system’s robustness against additive
+Spracovanie signálu, MFCC                            noise.
+(Mel-frequency cepstral coefficients),
+Neurónové siete, Klasifikácia zvuku,                 Keywords: Acoustic detection, Artillery
+Edge AI, CNN, ESP32-S3, TensorFlow                   fire, Signal processing, MFCC
+Lite Micro, Kvantizácia                              (Mel-frequency cepstral coefficients),
+                                                     Neural networks, Sound classification,
+Školiteľ: doc. Ing. Jakub Svatoš Ph.D.               Edge AI, CNN, ESP32-S3, TensorFlow
+Praha, ČVUT, fakulta: elektrotechnická,              Lite Micro, Quantization.
+katedra: meraní, Technická 1902/2
+                                                     Title translation: Methods of Artillery
+                                                     Fire Acoustic Detection
+
+
+
+
+                                                iv
+                                            Obsah
+Poďakovanie                                              iii        4.3.4 Logaritmická transformácia
+1 Úvod                                                  1             (dB) . . . . . . . . . . . . . . . . . . . . . . . . . 17
+1.1 Motivácia . . . . . . . . . . . . . . . . . . . . . 1          4.4 Diskrétna kosínová transformácia
+1.2 Formulácia problému . . . . . . . . . . . 1                     (DCT) . . . . . . . . . . . . . . . . . . . . . . . . . 18
+1.3 Cieľ práce . . . . . . . . . . . . . . . . . . . . 2           5 Konvolučná Neurónová sieť -
+2 Teoretický rozbor akustických                                    CNN                                                        19
+javov a metodika zberu dát                                 3       5.1 Príprava a formátovanie vstupných
+2.1 Zariadenie na zber dát - Akustický                              dát . . . . . . . . . . . . . . . . . . . . . . . . . . . 19
+  detektor . . . . . . . . . . . . . . . . . . . . . . . . 3       5.2 Návrh architektúry a topológie
+  2.1.1 Senzorická časť a zber                                      CNN . . . . . . . . . . . . . . . . . . . . . . . . . . 21
+   akustického signálu . . . . . . . . . . . . . 4                  5.2.1 Prvý konvolučný blok . . . . . . 21
+  2.1.2 Vplyv meteorologických                                      5.2.2 Druhý konvolučný blok . . . . . 22
+   podmienok na šírenie zvuku . . . . . . 5                         5.2.3 Klasifikačná časť: Sploštenie a
+  2.1.3 Priestorová geometria a                                       plne prepojené vrstvy . . . . . . . . . . 24
+   synchrónne vzorkovanie . . . . . . . . . 5                      6 Trénovanie, evaluácia a
+  2.1.4 Princíp lokalizácie metódou                                porovnanie                                                 27
+   TDOA . . . . . . . . . . . . . . . . . . . . . . . . 5          6.1 Trénovanie a evaluácia základného
+  2.1.5 Detekčný algoritmus a paralelné                             modelu . . . . . . . . . . . . . . . . . . . . . . . . 27
+   spracovanie . . . . . . . . . . . . . . . . . . . . 5            6.1.1 Počiatočné výsledky a indikácia
+2.2 Charakteristika nameraných dát . 6                                pretrénovania . . . . . . . . . . . . . . . . . 27
+  2.2.1 Fyzikálny charakter výstrelu . . 7                          6.1.2 Záťažový test (Stress Test) a
+3 Súčasný stav riešenej problematiky 9                                analýza robustnosti . . . . . . . . . . . . 28
+3.1 Metódy extrakcie príznakov . . . . . 9                         6.2 Zvýšenie robustnosti: Augmentácia
+3.2 Špecifiká akustickej detekcie                                   dát . . . . . . . . . . . . . . . . . . . . . . . . . . . 29
+ delostrelectva . . . . . . . . . . . . . . . . . . 10             6.3 Trénovanie a evaluácia
+3.3 Klasifikačné algoritmy . . . . . . . . . 11                     augmentovaných dát . . . . . . . . . . . . 30
+3.4 Vstavané systémy pre akustický                                  6.3.1 Priebeh učenia a parametre
+ monitoring . . . . . . . . . . . . . . . . . . . . . 12              siete . . . . . . . . . . . . . . . . . . . . . . . . . 30
+                                                                    6.3.2 Stress test na augmentovaných
+4 Spracovanie signálu a extrakcia                                     dátach . . . . . . . . . . . . . . . . . . . . . . . 31
+príznakov                                                13         6.3.3 Pretrénovanie na zašumených
+4.1 Detekcia impulzu a časová                                         dátach . . . . . . . . . . . . . . . . . . . . . . . 31
+ segmentácia . . . . . . . . . . . . . . . . . . . . 13            6.4 Porovnanie a zhodnotenie
+4.2 Krátkodobá Fourierova                                           výsledkov . . . . . . . . . . . . . . . . . . . . . . 32
+ transformácia (STFT) . . . . . . . . . . . 14                     6.5 Zväčšenie súboru dát typu
+ 4.2.1 Rámcovanie (Framing) a                                       „non-gunshot“ . . . . . . . . . . . . . . . . . . 33
+   okienkovanie . . . . . . . . . . . . . . . . . . 14              6.5.1 Problém s nevyváženým
+ 4.2.2 Výpočet výkonového spektra 15                                  datasetom . . . . . . . . . . . . . . . . . . . . 33
+ 4.2.3 Výpočet magnitúdového                                        6.5.2 Matica zámien (Confusion
+   spektra . . . . . . . . . . . . . . . . . . . . . . . 15           Matrix) . . . . . . . . . . . . . . . . . . . . . . 33
+4.3 Melova filtračná banka a                                       6.6 Evaluácia robustnosti na
+ logaritmovanie . . . . . . . . . . . . . . . . . . 16              augmentovanom datasete pri použití
+ 4.3.1 Transformácia na Melovu škálu 16                             váh . . . . . . . . . . . . . . . . . . . . . . . . . . . 35
+ 4.3.2 Konštrukcia filtračnej banky . 16                            6.6.1 Priebeh testovania pre
+ 4.3.3 Filtrácia a integrácia energie 17                              jednotlivé váhové pomery . . . . . . . 36
+
+
+                                                               v
+ 6.6.2 Zhodnotenie experimentu a
+  analýza vplyvu váh . . . . . . . . . . . . 37
+7 Implementácia modelu na
+mikrokontrolér ESP32-S3                                39
+7.1 Popis použitého embedded
+ zariadenia . . . . . . . . . . . . . . . . . . . . . 39
+7.2 Konverzia a kvantizácia modelu 40
+7.3 Vývojové prostredie a AI
+ akcelerácia . . . . . . . . . . . . . . . . . . . . . 40
+7.4 Verifikácia modelu a komunikácia
+ cez rozhranie UART . . . . . . . . . . . . 41
+ 7.4.1 Motivácia a protokol
+   komunikácie . . . . . . . . . . . . . . . . . . 41
+ 7.4.2 Dátový balík a spracovanie na
+   strane ESP32-S3 . . . . . . . . . . . . . . 42
+7.5 Zašumenie dát a evaluácia na
+ zariadení ESP32-S3 . . . . . . . . . . . . . 42
+ 7.5.1 Zhodnotenie testovania a
+   porovnanie s PC . . . . . . . . . . . . . . . 43
+8 Validácia systému na zašumených
+audio vzorkách                                      45
+8.1 Matematický model zašumenia a
+ výpočet SNR . . . . . . . . . . . . . . . . . . . 45
+8.2 Realizácia experimentu . . . . . . . . 46
+8.3 Zhodnotenie testovania a
+ porovnanie PC vs. ESP32-S3 . . . . . 48
+8.4 Verifikácia vplyvu kvantizácie
+ (int8) na PC . . . . . . . . . . . . . . . . . . . 50
+ Zhodnotenie vplyvu kvantizácie . . . 50
+9 Diskusia                                51
+9.1 Obmedzenia navrhnutého riešenia 52
+9.2 Možnosti ďalšieho rozvoja . . . . . . 52
+10 Záver                                             53
+Literatúra                                           55
+Zoznam použitých skratiek                            59
+
+
+
+
+                                                            vi
+                                         Obrázky
+2.1 Prenosný akustický detektor[5] . .                      3          6.6 Závislosť Matthewsovho
+2.2 Blokový diagram jednotky                                            korelačného koeficientu od úrovne
+ acustického systému[3] . . . . . . . . . . . .             4           šumu pre rôzne nastavenia váh tried. 38
+2.3 Extrahovaná jedná impulzná
+ udalosť veľkosti 30 000 vzorkov . . . .                    6          7.1 Embedded zariadenie
+2.4 Zobrazenie rázovej vlny a úsťovej                                   ESP32-S3-DEVKIT. . . . . . . . . . . . . 39
+ vlny výstrelu (vo všeobecnosti).[9] .                      7          7.2 Porovnanie Matthewsovho
+                                                                        korelačného koeficientu PC vs
+3.1 Gamaton frekvenčná banka filtrov 10                                 ESP32. . . . . . . . . . . . . . . . . . . . . . . . . 43
+3.2 Akustický a seismický
+ spektrogram[13] . . . . . . . . . . . . . . . . 11                    8.1 Porovnanie Matthewsovho
+                                                                        korelačného koeficientu PC vs
+4.1 Výsek signálu okolo detekovanej                                     ESP32. . . . . . . . . . . . . . . . . . . . . . . . . 49
+ špičky - približne 1300 vzoriek . . . . 13                            8.2 Porovnanie Matthewsovho
+4.2 Samostatný rámec signálu po                                         korelačného koeficientu na PC pre
+ aplikovaní Hammingovho okna . . . 14                                   nekvantizovaný a kvantizovaný
+4.3 Výkonové spektrum prvého framu                                      model. . . . . . . . . . . . . . . . . . . . . . . . . 50
+ signálu . . . . . . . . . . . . . . . . . . . . . . . . 15
+4.4 Magnitúdove spektrum prvého
+ rámca signálu . . . . . . . . . . . . . . . . . . 15
+4.5 Melova banka filtrov . . . . . . . . . . 16
+4.6 Melová filtračná banka energií pre
+ jednotlivý rámec . . . . . . . . . . . . . . . . 17
+4.7 Mel frekvenčné kepstrálne
+ koeficienty jedného rámca . . . . . . . . 18
+
+5.1 Formát uložených dát kepstrálnych
+ koeficientov impulzných udalostí . . 19
+5.2 Topológia a architektúra
+ konvolučnej neuronovej siete . . . . . 21
+5.3 Prvá konvolučná vrstva . . . . . . . . 22
+5.4 Druhá konvolučná vrstva . . . . . . 23
+5.5 Klasifikačné vrstvy . . . . . . . . . . . . 24
+
+6.1 Úspešnosť na trénovacej a
+ validačnej vzorke . . . . . . . . . . . . . . . 27
+6.2 Bloková schéma procesu
+ augmentácie dát v kepstrálnej
+ oblasti. . . . . . . . . . . . . . . . . . . . . . . . . 29
+6.3 Úspešnosť na trénovacej a
+ validačnej vzorke augmentovaných
+ dát. . . . . . . . . . . . . . . . . . . . . . . . . . . . 30
+6.4 Priebeh evaluácie pri 500 epochách
+ na augmentovaných dátach. . . . . . . 31
+6.5 Príklad matice zámien pri
+ evaluácii . . . . . . . . . . . . . . . . . . . . . . . 33
+
+
+
+                                                                 vii
+                                        Tabuľky
+6.1 Výsledok klasifikácie pre zašumené
+ dáta (reálne podmienky). . . . . . . . . 28
+6.2 Výsledok klasifikácie
+ augmentovaných dát pri šume. . . . . 31
+6.3 Porovnanie úspešnosti klasifikácie
+ pre pôvodné/augmentované dáta. . 32
+6.4 Význam základných klasifikačných
+ metrík odvodených z matice zámien. 35
+6.5 Výsledky evaluácie pre váhový
+ pomer 1:1. . . . . . . . . . . . . . . . . . . . . . 36
+6.6 Výsledky evaluácie pre váhový
+ pomer 1:2. . . . . . . . . . . . . . . . . . . . . . 36
+6.7 Výsledky evaluácie pre váhový
+ pomer 1:3. . . . . . . . . . . . . . . . . . . . . . 36
+6.8 Výsledky evaluácie pre váhový
+ pomer 1:4. . . . . . . . . . . . . . . . . . . . . . 36
+
+7.1 Výsledky evaluácie na zariadení
+ ESP32-S3 pre rôzne úrovne šumu.                       42
+
+8.1 Výsledky evaluácie na PC pre dáta
+ zašumené v časovej oblasti (.wav). 47
+8.2 Výsledky evaluácie na ESP32-S3
+ pre dáta zašumené v časovej oblasti
+ (.wav). . . . . . . . . . . . . . . . . . . . . . . . . 47
+8.3 Výsledky evaluácie na PC pre dáta
+ zašumené v časovej oblasti (.wav) a
+ kvantizované na int8. . . . . . . . . . . . . 50
+
+
+
+
+                                                              viii
+    Kapitola 1
+    Úvod
+
+    1.1     Motivácia
+
+V kontexte moderných vojenských konfliktov predstavuje delostrelecká paľba
+jedno z najväčších ohrození nielen pre vojenské jednotky, ale aj pre civilné
+obyvateľstvo. Schopnosť včas a presne detekovať prítomnosť delostreleckej ak-
+tivity je absolútne kľúčovým faktorom pre systémy včasného varovania (Early
+Warning Systems). Získané sekundy medzi výstrelom a dopadom projektilu
+môžu zachrániť ľudské životy tým, že umožnia civilistom včasné presunutie
+do krytov.
+
+Tradičné radarové systémy na detekciu paľby sú síce presné, avšak ide o
+aktívne systémy, ktoré vyžarujú elektromagnetické vlnenie [1], čím okamžite
+prezrádzajú svoju pozíciu nepriateľovi. Navyše sú mimoriadne nákladné na
+prevádzku [2]. Z tohto dôvodu rastie dôležitosť akustických detekčných systé-
+mov. Tieto systémy sú plne pasívne, relatívne lacné na výrobu a umožňujú
+vytvorenie hustej senzorovej siete [3]. Aby však mohla byť takáto sieť v praxi
+plošne nasadená na ochranu miest a civilných zón, musí fungovať nielen na vý-
+konných počítačoch, ale aj na malých, prenosných a energeticky nenáročných
+zariadeniach (embedded systémoch). Táto skutočnosť bola hlavnou motivá-
+ciou pre hľadanie prieniku medzi modernými metódami hlbokého učenia a
+obmedzeným výpočtovým hardvérom.
+
+
+    1.2     Formulácia problému
+
+Akustická detekcia delostreleckej streľby predstavuje problém z dvoch hlav-
+ných dôvodov. Prvým problémom je variabilita environmentálneho šumu
+[3]. Akustický detektor musí vedieť spoľahlivo izolovať rázovú a úsťovú vlnu
+výstrelu od bežných ruchov, akými sú vietor, dážď, ozveny (echá) v mestskej
+zástavbe, či iné impulzné zvuky (napríklad tresknutie dvermi alebo úder
+do kovu), a to pri zachovaní minimálnej miery falošných poplachov (False
+Positives).
+
+
+
+
+                                      1
+1. Úvod   ........................................
+Druhý, nemenej dôležitý problém, spočíva v implementácii detekčných algo-
+ritmov. Moderné metódy, využívajúce extrakciu kepstrálnych koeficientov
+(MFCC) a konvolučné neurónové siete (CNN) [4], poskytujú vysokú presnosť,
+avšak vyžadujú značný výpočtový výkon a kapacitu pamäte. To je problém
+pre embedded zariadenie, na ktorom tiež bude implementovaný algoritmus
+rozpoznávania delostreleckej streľby.
+
+
+    1.3     Cieľ práce
+
+Na základe motivácie a identifikovaných problémov je hlavným cieľom tejto
+diplomovej práce návrh a implementácia systému pre akustickú detekciu
+
+
+
+
+..
+delostreleckej paľby, ako pre počítač, tak aj pre embedded zariadenie s menším
+výpočetným výkonom a pamäťou. Pre naplnenie tohto cieľa boli stanovené
+nasledujúce podúlohy, ktoré treba vyriešiť:
+
+ 1. Teoretická rešerš a analýza: Vykonať rešerš existujúcich metód akus-
+    tickej detekcie streľby so zameraním na delostrelectvo. Analyzovať fyzi-
+    kálne a akustické charakteristiky výstrelov.
+
+ 2. Spracovanie signálu a extrakcia príznakov: Navrhnúť a naprogra-
+    movať algoritmus na predspracovanie surových akustických nahrávok.
+
+
+
+
+ .
+    Implementovať matematický aparát pre transformáciu signálu z časovej
+    do kepstrálnej oblasti za účelom získania kompaktných Mel-frekvenčných
+    kepstrálnych koeficientov (MFCC).
+
+ 3. Návrh a trénovanie neurónovej siete: Na základe extrahovaných prí-
+
+
+
+
+ .
+    znakov (MFCC) navrhnúť topológiu konvolučnej neurónovej siete (CNN).
+    Implementovať metódy pre zvýšenie robustnosti klasifikátora, natrénovať
+    model na experimentálnych dátach a eliminovať riziko pretrénovania.
+
+ 4. Implementácia a optimalizácia pre embedded platformu: Modi-
+    fikovať navrhnuté riešenie do dvoch funkčných variantov. Prvý variant
+
+
+
+
+ .
+    optimalizovať pre štandardnú počítačovú platformu a druhý variant
+    pre embedded zariadenie s obmedzenými výpočtovými a pamäťovými
+    prostriedkami.
+
+ 5. Porovnanie a vyhodnotenie výsledkov: Otestovať navrhnuté riešenia
+    na reálnych dátach. Popísať rozdiely v návrhu a vykonať porovnanie
+    oboch platforiem (PC vs. Embedded) z hľadiska celkovej presnosti de-
+    tekcie a výpočtovej náročnosti.
+
+
+
+
+                                      2
+    Kapitola 2
+    Teoretický rozbor akustických javov a
+    metodika zberu dát
+
+    2.1     Zariadenie na zber dát - Akustický detektor
+
+Pre potreby tejto práce bolo využité špecializované meracie zariadenie určené
+na zachytávanie akustických prejavov delostreleckej paľby. Zariadenie je na-
+vrhnuté ako prenosná meracia stanica umožňujúca operatívne nasadenie v
+poľných podmienkach[4].
+
+
+
+
+                 Obrázok 2.1: Prenosný akustický detektor[5]
+
+
+                                     3
+2. Teoretický rozbor akustických javov a metodika zberu dát   .................
+Aby zariadenie spĺňalo prísne požiadavky na detekciu rýchlych impulzných
+javov, je jeho hardvérová a softvérová architektúra rozdelená do niekoľkých
+logických celkov:
+
+    2.1.1    Senzorická časť a zber akustického signálu
+Samotný mikrofón slúži ako menič akustického tlaku na elektrický signál.
+Pri poľných meraniach impulzných javov je kritickým faktorom dynamický
+rozsah a vzorkovacia frekvencia. Zariadenia štandardne využívajú analógovo-
+digitálne prevodníky (ADC) s vysokým, 16-bitovým až 24-bitovým rozlíšením.
+Zvuková vlna je pred digitalizáciou zosilnená nízkoenergetickým operačným
+zosilňovačom. Hoci sa pri bežnom spracovaní audia často využíva vzorkovacia
+frekvencia okolo 44 kHz, pre vnorené (embedded) zariadenia je to zbytočne
+vysoká a výpočtovo náročná hodnota. Pre spoľahlivú akustickú detekciu
+delostreleckej streľby plne postačuje vzorkovanie v rozsahu 16 až 24 kHz (v
+experimentálnej časti tejto práce bolo konkrétne využitých 22 050 Hz).[3]
+
+
+
+
+        Obrázok 2.2: Blokový diagram jednotky acustického systému[3]
+
+Zásadnou prekážkou pri zbere akustických dát v exteriéri je environmen-
+tálny šum, najmä vplyv vetra. Turbulentné prúdenie vzduchu vytvára
+nízkofrekvenčný šum, ktorý môže prekryť užitočný signál. Na zmiernenie
+tohto javu sa na senzoroch aplikujú rôzne techniky priestorového prieme-
+rovania, napríklad použitím poréznych materiálov (špeciálne hadice alebo
+protiveterné kryty), ktoré fyzikálne tlmia vplyv vzdušných vírov bez výraznej
+straty samotnej akustickej energie výstrelu.[3]
+
+
+
+                                     4
+......................                2.1. Zariadenie na zber dát - Akustický detektor
+
+
+            2.1.2    Vplyv meteorologických podmienok na šírenie zvuku
+        Tvar a charakteristika zaznamenanej akustickej vlny (N-vlna výstrelu a rázová
+        vlna) výrazne závisí od prostredia. Rýchlosť šírenia zvuku v atmosfére nie je
+        konštantná, ale je dominantne ovplyvnená aktuálnou teplotou a vektorom
+        rýchlosti vetra. Z tohto dôvodu sú profesionálne akustické detektory vybavené
+        dodatočnými meteorologickými senzormi pre meranie teploty, vlhkosti a
+        atmosférického tlaku. Tieto dáta sú nevyhnutné pre presnú korekciu výpočtov
+        pri lokalizácii, keďže prechod zvuku rôznymi teplotnými vrstvami spôsobuje
+        refrakciu (ohyb) a ohyb zvukových vĺn.[3]
+
+            2.1.3    Priestorová geometria a synchrónne vzorkovanie
+        Zariadenie využíva pole štyroch kalibrovaných mikrofónov (4-mic array).[1]
+        Tieto mikrofóny sú mechanicky uchytené na ramenách statívu v presne defi-
+        novanej priestorovej geometrii (spravidla tvoriacej trojuholníkovú základňu
+        s jedným vyvýšeným stredovým mikrofónom). Táto známa vzdialenosť a
+        poloha senzorov sa používa pre výpočet smeru, z ktorého zvuk prichádza.
+        Hoci priestorové rozloženie mikrofónov predstavuje výborný potenciál pre
+        prirodzené zväčšenie trénovacieho datasetu (keďže každý mikrofón v poli
+        zachytáva signál s odlišnými lokálnymi odrazmi a miernym fázovým posu-
+        nom), určovanie smeru prichádzajúceho zvuku nebolo primárnym cieľom tejto
+        práce. Z dôvodu zamerania sa na samotný návrh, kvantizáciu a optimalizáciu
+        klasifikačného modelu pre platformu Edge AI bol v experimentoch využitý
+        záznam iba z jedného referenčného mikrofónu.
+
+            2.1.4    Princíp lokalizácie metódou TDOA
+        Na určenie smeru streľby (azimutu a elevačného uhla) využíva zariadenie
+        matematickú metódu TDOA (Time Difference of Arrival), teda meranie
+        časového rozdielu príchodu signálu. Keďže rýchlosť šírenia zvuku vo vzduchu
+        je konečná, akustická vlna z výstrelu dorazí ku každému zo štyroch mikrofónov
+        v mierne odlišnom čase.[6]
+
+            2.1.5    Detekčný algoritmus a paralelné spracovanie
+        V poľných podmienkach je akustický senzor neustále vystavený environmen-
+        tálnemu šumu. Aby sa zabránilo zahltetiu pamäte, zariadenie nezaznamenáva
+        zvuk kontinuálne, ale využíva takzvaný spúšťací mechanizmus (Trigger).[7]
+        Dáta z mikrofónov sú nepretržite ukladané do kruhového zásobníka (Circular
+        Buffer) a súbežne analyzované v štyroch paralelných výpočtových vláknach
+        (pre každý mikrofón jedno vlákno).[7] Algoritmus je navrhnutý tak, aby kon-
+        tinuálne vyhodnocoval úroveň pozadia a dynamicky prispôsoboval detekčný
+        prah (podobne ako systémy CFAR - Constant False Alarm Rate). Akonáhle
+        algoritmus identifikuje prudkú špičku (Peak) – definovanú ako nárast akustic-
+        kej energie s prevýšením minimálne 5 dB nad aktuálnou hladinou okolitého
+        šumu - systém vyhodnotí túto udalosť ako potenciálny výstrel.[2]
+
+
+                                             5
+2. Teoretický rozbor akustických javov a metodika zberu dát   .................
+Hoci finálne cieľové zariadenie v ostrej prevádzke funguje na princípe dy-
+namického spúšťača (Trigger) a kruhového zásobníka, pre potreby vývoja
+klasifikačného modelu a extrakcie príznakov v tejto práci bola poskytnutá
+súvislá surová audionahrávka z merania na strelnici.
+
+     2.2    Charakteristika nameraných dát
+
+Základom pre následné spracovanie a trénovanie klasifikačných modelov je
+databáza reálnych akustických nahrávok získaných počas meraní na strelnici.
+Tieto dáta reprezentujú autentické podmienky s prítomnosťou okolitého šumu
+a odrazov od terénu.
+Kvantitatívne parametre databázy:
+ .   Rozsah súboru: Celkovo bolo spracovaných a do databázy zarade-
+     ných približne 70 unikátnych impulzných udalostí, ktoré zodpovedajú
+     jednotlivým výstrelom delostrelectva.
+ .   Kategória non-gunshot: Databáza bola rozšírená o súbor negatívnych
+     vzoriek, ktoré majú podobný impulzný charakter ako výstrel, no pochá-
+     dzajú z iných zdrojov. Medzi tieto udalosti patrí napríklad tresknutie
+     dvermi, ľudský výkrik alebo zvuk zvona. Tieto vzorky sú kľúčové pre
+     potlačenie falošných detekcií v reálnej prevádzke.
+ .   Dĺžka segmentu: Každá zachytená udalosť je z pôvodnej surovej na-
+     hrávky extrahovaná ako časový výsek s fixnou dĺžkou 30 000 vzoriek.
+     Keďže surové dáta z merania boli zaznamenané so vzorkovacou frekven-
+     ciou 44,1 kHz, tento extrahovaný segment predstavuje časové okno o
+     dĺžke približne 0,68 sekundy. Aby sa znížila výpočtová náročnosť pre
+     embedded zariadenie, bol tento signál neskôr softvérovo prevzorkovaný
+     na frekvenciu 22 050 Hz (downsampling).
+
+
+
+
+   Obrázok 2.3: Extrahovaná jedná impulzná udalosť veľkosti 30 000 vzorkov
+
+
+
+
+                                      6
+...........................                         2.2. Charakteristika nameraných dát
+
+
+            2.2.1    Fyzikálny charakter výstrelu
+        Pre správny návrh hardvéru a softvéru akustického detektora je nevyhnutné
+        porozumieť fyzikálnym javom, ktoré pri výstrele vznikajú. Akustický podpis
+
+
+
+
+        ..
+        výstrelu môže byť teoreticky tvorený dvoma nezávislými zložkami, pričom ich
+        reálna prítomnosť v nameranom signáli závisí od typu zbrane a priestorovej
+        geometrie merania[8]:
+
+         1. Rázová vlna (Shockwave): Akustický tresk generovaný projektilom
+            pri nadzvukovej rýchlosti, charakteristický strmým nárastom tlaku a
+            vysokofrekvenčným spektrom.
+
+         2. Úsťová vlna (Muzzle Blast): Nízkofrekvenčný impulz vznikajúci
+            expanziou plynov pri ústí hlavne, ktorý nesie dominantnú časť energie
+            signálu.
+
+        V kontexte experimentálnych dát spracovávaných v tejto práci boli merania
+        akustických prejavov realizované kanónovej húfnici (DANA). Z analýzy name-
+        raných dát vyplýva, že dominantnú a v podstate jedinú detekovateľnú zložku
+        signálu tvorí úsťová vlna, zatiaľ čo rázová vlna absentuje.
+
+
+
+
+        Obrázok 2.4: Zobrazenie rázovej vlny a úsťovej vlny výstrelu (vo všeobecnosti).[9]
+
+
+
+
+                                                7
+8
+    Kapitola 3
+    Súčasný stav riešenej problematiky
+V súčasnosti existuje už niekoľko spôsobov na extrakciu príznakov s cieľom
+získať rozpoznávacieho algoritmu. V tejto kapitole budú popísane spôsoby,
+ktorými sa riešia podobné problémy pri rozpoznávaní zvuku.
+
+
+    3.1     Metódy extrakcie príznakov
+
+Základným predpokladom úspešnej klasifikácie akustických udalostí je voľba
+vhodného algoritmu na extrakciu príznakov. Hoci teoreticky možno výstrel
+z palnej zbrane považovať za takmer ideálny impulzný signál, v reálnom
+prostredí je jeho typický akustický profil (úsťová vlna) výrazne deformovaný
+[10]. K týmto deformáciám dochádza v dôsledku disperzie šírenia zvuku v
+atmosfére a prítomnosti mnohonásobných odrazov v husto zastavaných alebo
+zalesnených oblastiach [11].
+
+V dôsledku spomínaných deformácií signálu je nepostačujúce spoliehať sa na
+jednoduchú analýzu v časovej oblasti (napríklad obyčajné prahovanie ampli-
+túdy), čo si vyžaduje nasadenie pokročilých metód číslicového spracovania. Na
+základe prieskumu doterajších aplikovaných riešení v oblasti detekcie zvuku
+sa ako najvhodnejší prístup javí extrakcia Mel-frekvenčných kepstrálnych
+koeficientov (MFCC). Táto metóda efektívne kombinuje diskrétnu Fourierovu
+transformáciu (FFT), banku Mel-filtrov a výkonové spektrum [3].
+
+Existujú aj iné metódy spracovania, ako napríklad lineárne prediktívne keps-
+trálne koeficienty (LPCC), ktoré využívajú autokorelačnú analýzu. Tie sú
+však primárne optimalizované pre aplikácie rozpoznávania ľudskej reči a iden-
+tifikácie hovoriaceho, a preto sú na modelovanie impulzných udalostí menej
+vhodné [12].
+
+Ďalšou alternatívou pre klasifikáciu iných než rečových signálov sú Gamma-
+tonové frekvenčné kepstrálne koeficienty (GFCC). Tie fungujú na podobnom
+princípe ako MFCC, avšak namiesto trojuholníkových filtrov využívajú Gam-
+matonové filtre, ktoré ešte presnejšie modelujú fyziológiu ľudského sluchu.
+Napriek ich potenciálnej robustnosti v zašumenom prostredí bolo pre túto
+prácu zvolené MFCC, a to z dôvodu jeho signifikantne nižšej výpočtovej ná-
+
+                                     9
+3. Súčasný stav riešenej problematiky   ...........................
+ročnosti, čo je kritickým parametrom pre úspešnú implementáciu na embedded
+(Edge AI) zariadeniach.[13]
+
+
+
+
+                Obrázok 3.1: Gamaton frekvenčná banka filtrov
+
+
+
+    3.2     Špecifiká akustickej detekcie delostrelectva
+
+Detekcia a lokalizácia delostrelectva na bojisku predstavuje v porovnaní s
+detekciou ručných zbraní v mestskom prostredí špecifickú výzvu. Hlavný
+rozdiel spočíva v energetickom obsahu signálu a v dominantných frekvenčných
+pásmach, ktoré sa využívajú na detekciu na veľké vzdialenosti.
+
+    Význam infrazvukového pásma a počuteľného spektra
+
+Kľúčovým prínosom moderného vojenského výskumu je zameranie sa na infra-
+zvukovú oblasť (frekvencie pod 20 Hz). Infrazvukové vlny podliehajú výrazne
+nižšiemu atmosférickému útlmu než vlny v počuteľnom spektre. To umožňuje
+strategickú detekciu húfnic a mínometov na vzdialenosti presahujúce 30 km
+[14]. Taktiež dokážu prenikať atmosférickými tieňovými zónami.
+
+
+
+
+                                        10
+................................                            3.3. Klasifikačné algoritmy
+
+
+        Na druhej strane, detekcia v infrazvukovom pásme si vyžaduje rozmerné
+        špecializované mikrofóny a je extrémne náchylná na nízkofrekvenčný hluk
+        vetra, čo komplikuje nasadenie malých a lacných senzorov.
+
+
+
+
+                      Obrázok 3.2: Akustický a seismický spektrogram[13]
+
+
+
+            3.3     Klasifikačné algoritmy
+
+
+
+        ..
+        Neurónové siete využívané na klasifikáciu si získali pozornosť v oblasti spra-
+        covania signálov v troch hlavných historických vlnách:
+
+         1. Algoritmus Perceptron: Prvotné modely inšpirované biologickými
+            neurónmi [15].
+
+
+
+
+         .
+         2. Algoritmus spätnej propagácie (Backpropagation): Zavedenie
+            efektívneho učenia viacvrstvových sietí [16].
+
+         3. Hlboké učenie (Deep Learning): Moderná éra reprezentovaná úspechmi
+            v rozpoznávaní reči a obrazu [17] pomocou konvolučných neurónových
+            sietí (CNN).
+
+        Hoci mnohé metódy hlbokého učenia boli prevzaté z oblasti spracovania ob-
+        razu, medzi týmito doménami existujú dôležité rozdiely, ktoré opodstatňujú
+        špecifický prístup k spracovaniu audia. Surové zvukové vzorky tvoria jednoroz-
+        merný signál v časovej oblasti, čo je fundamentálne odlišné od dvojrozmerných
+        obrazov. Zvukové signály sa pre účely spracovania bežne transformujú do
+        dvojrozmerných časovo-frekvenčných reprezentácií (napr. spektrogramy), av-
+        šak tieto dve osi (čas a frekvencia) nie sú homogénne tak, ako je to v prípade
+        horizontálnej a vertikálnej osi pri obrazoch [18].
+
+
+
+
+                                             11
+3. Súčasný stav riešenej problematiky   ...........................
+Okrem historického vývoja neurónových sietí sa v oblasti klasifikácie akustic-
+kých signálov dlhodobo presadzovali aj tradičné algoritmy strojového učenia.
+Medzi najvýznamnejšie patria:
+ .   Support Vector Machines (SVM) a logistická regresia: Metódy
+     založené na hľadaní optimálnej rozhodovacej nadroviny, ktoré sú efektívne
+     pri binárnej klasifikácii.[4]
+ .   GMM-HMM (Gaussian Mixture Models a Hidden Markov
+     Models): Tradičný štandard pre modelovanie štatistických vlastností a
+     časovej následnosti akustických stavov. Hoci bol tento prístup pôvodne
+     dominantný v rozpoznávaní reči, jeho architektúra sa ukázala ako vysoko
+     účinná aj pri detekcii a klasifikácii komplexných environmentálnych
+     zvukov a akustických javov v reálnom prostredí [19].
+
+Hoci tieto metódy vyžadujú menej výpočtových zdrojov, moderný výskum sa
+v poslednom desaťročí prikláňa k hlbokému učeniu (Deep Learning), ktoré
+dokáže automaticky extrahovať hierarchické príznaky priamo z dát.
+
+
+     3.4    Vstavané systémy pre akustický monitoring
+
+V poslednom desaťročí prešli systémy akustickej detekcie výrazným vývo-
+jom z hľadiska hardvérovej implementácie. V oblasti detekcie streľby boli
+publikované práce využívajúce platformy ako Raspberry Pi v kombinácii s
+klasickými algoritmami strojového učenia [20]. Zariadenia tohto typu však
+pre svoj nepretržitý chod vyžadujú inštaláciu prídavných systémov na obnovu
+energie (napríklad solárnych panelov), čo značne komplikuje a predražuje ich
+skryté nasadenie v teréne oproti nízkoenergetickým mikrokontrolérom.
+
+Túto energetickú náročnosť je možné radikálne znížiť implementáciou systému
+priamo na embedded (vstavané) zariadenia, akými sú mikrokontroléry bez
+plnohodnotného operačného systému. V takomto prípade je však kritickým
+faktorom striktne obmedzená operačná pamäť (SRAM) mikrokontroléra, čo
+pre nasadenie umelej inteligencie vyžaduje použitie techník kompresie modelu.
+
+Ako potvrdzujú moderné výskumy, pomocou techník okrajových výpočtov
+(Edge AI) a celočíselnej kvantizácie je dnes už možné vtesnať hlboké konvo-
+lučné siete pre klasifikáciu environmentálneho hluku do mikrokontrolérov s
+pamäťou len na úrovni desiatok kilobajtov.
+
+
+
+
+                                        12
+     Kapitola 4
+     Spracovanie signálu a extrakcia príznakov
+
+Cieľom spracovania signálu je redukcia dimenzionality vstupných dát pri
+zachovaní kľúčových informácií o frekvenčnom zložení akustickej udalosti. Pre
+klasifikáciu delostreleckej streľby bola zvolená metóda extrakcie kepstrálnych
+koeficientov na Melovej škále (MFCC – Mel-Frequency Cepstral Coefficients),
+ktoré dobre reprezentujú spektrálnu obálku impulzných zvukov.[4]
+
+
+     4.1    Detekcia impulzu a časová segmentácia
+
+Vzhľadom na to, že pôvodné nahrávky majú dĺžku 30 000 vzoriek, je pre
+presnú analýzu potrebné identifikovať presný moment výstrelu.
+
+ .   Detekcia špičky (Peak Detection): Algoritmus vyhľadáva maximum
+     amplitúdy v úvodných 20% záznamu, čo minimalizuje riziko zachytenia
+     neskorších odrazov (echo) ako hlavnej udalosti.
+
+ .   Asymetrické okno: Pre následnú analýzu sa extrahuje segment s dĺžkou
+     60 ms.[4] Okno je okolo detekovanej špičky rozložené asymetricky: 40%
+     pred špičkou (nábeh rázovej vlny) a 60% po špičke (doznievanie a úsťová
+     vlna). Pri vzorkovacej frekvencii 22 050 Hz to predstavuje segment o
+     dĺžke 1323 vzoriek.
+
+
+
+
+  Obrázok 4.1: Výsek signálu okolo detekovanej špičky - približne 1300 vzoriek
+
+
+
+                                      13
+4. Spracovanie signálu a extrakcia príznakov   ........................
+     4.2     Krátkodobá Fourierova transformácia (STFT)
+
+Proces extrakcie príznakov prebieha v niekoľkých krokoch.[3]
+
+     4.2.1   Rámcovanie (Framing) a okienkovanie
+Akustický signál výstrelu je proces, ktorého štatistické vlastnosti sa v čase
+rýchlo menia (je nestacionárny). Klasická Fourierova transformácia však pred-
+pokladá, že frekvenčné zložky signálu sú v čase konštantné. Z tohto dôvodu sa
+využíva metóda krátkodobej analýzy, pri ktorej sa signál rozdelí na krátke
+úseky, nazývané rámce (frames), v rámci ktorých možno signál považovať za
+kvázistacionárny.[21]
+
+Parametre rámcovania: V implementovanom algoritme boli zvolené para-
+metre s vysokým časovým rozlíšením, čo je nevyhnutné pre správne zachytenie
+rýchleho nábehu rázovej vlny (shockwave):
+ .   Dĺžka rámca (Tf = 2.5 ms): Pri vzorkovacej frekvencii 22 050 Hz
+     zodpovedá jeden rámec dĺžke približne 55 vzoriek. Táto krátka dĺžka
+     zabezpečuje, že spektrálne charakteristiky výstrelu nie sú spriemerované
+     s okolitým šumom.
+ .   Posun rámca (Ts = 1.0 ms): Určuje vzdialenosť medzi začiatkami
+     susedných rámcov.
+ .   Prekrytie (Overlap): Susedné rámce sa prekrývajú o 1,5 ms (60 %),
+     čo zabezpečuje kontinuitu informácie a kompenzuje stratu energie na
+     okrajoch rámcov spôsobenú procesom okienkovania.
+Okienkovanie (Windowing): Prechod medzi rámcami spôsobuje na ich
+okrajoch diskontinuity, ktoré vedú k nežiaducemu spektrálnemu úniku
+(spectral leakage). Tento jav sa potláča aplikáciou Hammingovho okna, ktoré
+plynule tlmí okraje každého rámca podľa vzťahu[21]:
+                                             2πn
+                       w(n) = 0.54 − 0.46 cos(   )                      (4.1)
+                                            N −1
+kde 0 ≤ n ≤ N − 1 a N je počet vzoriek v rámci.
+
+
+
+
+   Obrázok 4.2: Samostatný rámec signálu po aplikovaní Hammingovho okna
+
+
+
+                                      14
+.....................               4.2. Krátkodobá Fourierova transformácia (STFT)
+
+
+            4.2.2     Výpočet výkonového spektra
+
+        Pre každý rámec sa vypočíta diskrétna Fourierova transformácia (FFT) s
+        dĺžkou NF F T = 512. Získané komplexné spektrum sa prevedie na výkonové
+        spektrum (Power Spectrum)[21]:
+                                            1
+                                    P =            |F F T (x)|2               (4.2)
+                                          NF F T
+
+
+
+
+                     Obrázok 4.3: Výkonové spektrum prvého framu signálu
+
+
+
+            4.2.3     Výpočet magnitúdového spektra
+        Z komplexných koeficientov získaných po FFT sa vypočíta ich absolútna
+        hodnota, ktorá predstavuje magnitúdu (amplitúdu) jednotlivých frekvenčných
+        zložiek:                    q
+                           |X(k)| = Re{X(k)}2 + Im{X(k)}2                     (4.3)
+
+
+
+
+                    Obrázok 4.4: Magnitúdove spektrum prvého rámca signálu
+
+
+
+
+                                                15
+4. Spracovanie signálu a extrakcia príznakov   ........................
+    4.3     Melova filtračná banka a logaritmovanie
+
+V tomto kroku sa lineárne výkonové spektrum transformuje na reprezentáciu
+s redukovaným počtom príznakov, pričom dochádza k nelineárnej kompresii
+frekvenčnej osi[21].
+
+    4.3.1    Transformácia na Melovu škálu
+
+Prechod z lineárnej frekvencie f [Hz] na Melovu škálu M [mel] je definovaný
+logaritmickým vzťahom:
+
+                                                      f
+                        M (f ) = 2595 · log10 (1 +       )                (4.4)
+                                                     700
+Tento vzťah slúži na redistribúciu frekvenčných zložiek. Kým v nižších frekven-
+ciách (pod 1000 Hz) je mapovanie takmer lineárne, pri vyšších frekvenciách
+dochádza k výraznej kompresii. Pre spätný prechod z Melovej škály na frek-
+venciu v Hz sa používa inverzný vzťah[21]:
+                                           M
+                            f = 700 · (10 2595 − 1)                       (4.5)
+
+    4.3.2    Konštrukcia filtračnej banky
+
+
+
+
+..
+V realizovanom algoritme je definovaných nf ilt = 40 trojuholníkových filtrov.
+Proces ich návrhu prebieha v nasledujúcich krokoch[3]:
+
+ 1. Určenie hraničných frekvencií (0 Hz až fs /2) a ich prevod na Melovu
+
+
+
+
+ .. škálu.
+
+ 2. Lineárne rozdelenie Melovho rozsahu na nf ilt + 2 ekvidištantných bodov.
+
+ 3. Prevod týchto bodov späť na Hz a následne na indexy FFT binov.
+
+ 4. Konštrukcia trojuholníkových funkcií Hm (k), kde každý filter začína v
+    stredovej frekvencii predchádzajúceho filtra a končí v stredovej frekvencii
+    nasledujúceho filtra.
+
+
+
+
+                       Obrázok 4.5: Melova banka filtrov
+
+
+
+                                      16
+........................                   4.3. Melova filtračná banka a logaritmovanie
+
+
+             4.3.3   Filtrácia a integrácia energie
+
+        Aplikácia filtračnej banky na výkonové spektrum P(k) sa realizuje pomocou
+        maticového násobenia (skalárneho súčinu). Výsledná energia E v m-tom
+        Melovom pásme je daná vzťahom[21]:
+                                         NF F T /2
+                                  Em =               P (k) · Hm (k)                (4.6)
+                                           X
+
+                                           k=0
+
+        Týmto procesom sa pôvodných 257 spektrálnych binov (pre NF F T = 512)
+        redukuje na vektor 40 hodnôt, ktoré reprezentujú energetickú distribúciu
+        signálu.
+
+             4.3.4   Logaritmická transformácia (dB)
+
+
+
+
+        ..
+        Získané energie sú podrobené logaritmovaniu. Tento krok je nevyhnutný z
+        dvoch dôvodov:
+
+         1. Dynamický rozsah: Akustické signály výstrelov vykazujú obrovské
+            rozdiely v energiách medzi rázovou vlnou a šumom pozadia. Logaritmus
+            komprimuje tento rozsah, čím stabilizuje vstup pre neurónovú sieť.
+
+         2. Aditívna separácia: Logaritmovaním sa multiplikatívne zložky signálu
+            (napr. vplyv prenosového kanála alebo mikrofónu) menia na aditívne, čo
+            uľahčuje následnú analýzu pomocou DCT.
+
+        V algoritme je pred logaritmovaním implementované ošetrenie numerickej
+        stability. Hodnoty blízke nule sú nahradené minimálnym kladným číslom
+        (floating-point epsilon ϵ ≈ 2.22 · 10−16 ), aby sa predišlo operácii log(0)[21]:
+
+                                EdB = 20 · log10 (max(ϵ, Em ))                     (4.7)
+
+
+
+
+                Obrázok 4.6: Melová filtračná banka energií pre jednotlivý rámec
+
+
+
+
+                                                 17
+4. Spracovanie signálu a extrakcia príznakov     ........................
+     4.4    Diskrétna kosínová transformácia (DCT)
+
+Záverečným krokom extrakcie MFCC je aplikácia Diskrétnej kozínovej trans-
+formácie (konkrétne typu DCT-II) na vektor logaritmovaných energií EdB .
+Táto operácia prevádza dáta z frekvenčnej oblasti do kepstrálnej oblasti
+(quefrency domain) podľa vzťahu[21]:
+                             M
+                                                πn     1
+                      Cn =         EdB,m cos[      (m − )]                (4.8)
+                             X
+
+                             m=1
+                                                M      2
+
+ kde Cn je n-tý výsledný koeficient a M je počet Melových filtrov (M=40).
+Význam transformácie pre klasifikáciu:
+ .   Dekorelácia: Melove filtre sa navzájom prekrývajú, čo spôsobuje vysokú
+     koreláciu medzi susednými energetickými pásmami. DCT tieto závislosti
+     odstraňuje a poskytuje ortogonálne príznaky, ktoré sú vhodnejšie pre
+     trénovanie neurónových sietí.
+ .   Kompresia energie: Informácia o celkovom tvare spektrálnej obálky je
+     po transformácii sústredená v nízkych koeficientoch. Vyššie koeficienty
+     reprezentujú rýchle spektrálne zmeny a šum, ktoré sú pre klasifikáciu
+     typu zbrane menej podstatné.
+Formát výstupných dát: V implementácii bolo zachovaných prvých 12
+koeficientov pre každý časový rámec. Po aplikácii diskrétnej kosínusovej
+transformácie (DCT) v procese výpočtu MFCC sa energia signálu koncentruje
+do koeficientov nižšieho rádu. Týchto prvých 12 koeficientov nesie najdôležitej-
+šiu informáciu o makroskopickom tvare spektrálnej obálky (hlavný charakter
+akustického rázu). Koeficienty vyšších rádov naopak reprezentujú rýchle spek-
+trálne zmeny a jemné detaily, ktoré sú v poľných podmienkach silno náchylné
+na šum. Ich orezaním (ponechaním len prvých 12) sa tak nielen redukuje
+výpočtová a pamäťová náročnosť modelu, ale funguje to aj ako prirodzený
+filter proti vysokofrekvenčnému rušeniu. V implementácii bolo preto z pôvod-
+ného segmentu (60 ms) po procese rámcovania extrahované pole s rozmermi
+58×12. Táto matica predstavuje kompaktný akustický „odtlačok“ výstrelu,
+ktorý vstupuje do klasifikačného modelu ako dvojrozmerné pole[21].
+
+
+
+
+       Obrázok 4.7: Mel frekvenčné kepstrálne koeficienty jedného rámca
+
+
+
+                                       18
+    Kapitola 5
+    Konvolučná Neurónová sieť - CNN
+
+    5.1     Príprava a formátovanie vstupných dát
+
+Výstupom predchádzajúcej fázy spracovania signálu a extrakcie príznakov je
+kompaktný „akustický odtlačok“ výstrelu vo forme matice Mel-frekvenčných
+kepstrálnych koeficientov (MFCC). Tieto extrahované dáta predstavujú
+priamy vstup pre klasifikačný model konvolučnej neurónovej siete (CNN).
+
+Jednotlivé segmentované udalosti, zahŕňajúce reálne výstrely aj negatívne
+vzorky (non-gunshot), boli predspracované a uložené vo formáte binárnych
+súborov .npy. Tento formát umožňuje efektívne načítanie viacrozmerných
+polí do operačnej pamäte prostredníctvom knižnice NumPy. Každá načítaná
+matica disponuje fixnými rozmermi 58×12, kde hodnota 58 reprezentuje počet
+časových rámcov (časová os) a hodnota 12 zodpovedá počtu zachovaných
+kepstrálnych koeficientov (zodpovedajúce frekvenčnej obálke signálu).
+
+
+
+
+Obrázok 5.1: Formát uložených dát kepstrálnych koeficientov impulzných udalostí
+
+
+                                      19
+5. Konvolučná Neurónová sieť - CNN    ...........................
+Konvolučné neurónové siete sú architekturálne optimalizované na spracova-
+nie obrazových dát. Z tohto dôvodu vyžadujú na vstupe viacrozmerný tenzor v
+štandardizovanom tvare: (počet_vzoriek, výška, šírka, počet_kanálov).
+Keďže získaná matica MFCC koeficientov predstavuje dvojrozmernú časovo-
+frekvenčnú mapu, pristupuje sa k nej v kontexte CNN analogicky ako k
+čiernobielemu obrázku (tzv. grayscale)[22]. Pre splnenie vstupných požiada-
+viek siete bola preto vykonaná tvarová transformácia (reshape) pôvodných
+dát pridaním dodatočnej dimenzie, ktorá reprezentuje jeden dátový kanál.
+Výsledný tvar vstupného tenzoru pre jednu akustickú vzorku nadobudol for-
+mát (58,12,1).
+
+Súbežne s formátovaním vstupných matíc bol vytvorený vektor cieľových
+tried (labels), ktorý je nevyhnutný pre proces učenia s učiteľom (supervised
+learning). Keďže cieľom práce je binárna klasifikácia, dátam bola priradená
+príslušná číselná hodnota:
+ .   Trieda 1 (Pozitívna): Priradená impulzom delostreleckej paľby.
+ .   Trieda 0 (Negatívna): Priradená kategórii non-gunshot.
+
+Takto sformátovaný a označený dataset tvorí základ pre následné trénovanie a
+evaluáciu architektúry hlbokého učenia. K dispozícii bol dataset pozostávajúci
+zo 152 unikátnych vzoriek (62 výstrelov a 90 negatívnych vzoriek). Dáta boli
+rozdelené na trénovaciu (80 %) a testovaciu (20 %) množinu.
+
+
+
+
+                                     20
+.........................                     5.2. Návrh architektúry a topológie CNN
+
+
+            5.2     Návrh architektúry a topológie CNN
+
+        Pre úlohu binárnej klasifikácie delostreleckej streľby bola navrhnutá sekvenčná
+        architektúra konvolučnej neurónovej siete (CNN). Topológia siete je konci-
+        povaná tak, aby dokázala efektívne extrahovať relevantné časovo-frekvenčné
+        príznaky z matíc MFCC a zároveň si udržala primeranú výpočtovú zložitosť
+        vhodnú pre potenciálne nasadenie v prenosných detekčných zariadeniach.[23]
+
+
+
+
+               Obrázok 5.2: Topológia a architektúra konvolučnej neuronovej siete
+
+        Základom architektúry je proces postupnej extrakcie príznakov (feature ex-
+        traction) a následnej klasifikácie. Sieť prijíma na vstupe tenzory s rozmerom
+        (58,12,1) a pozostáva z nasledujúcich kľúčových blokov:
+
+            5.2.1    Prvý konvolučný blok
+        Vstupuje do neho formátovaná matica MFCC. Blok začína vrstvou 2D konvo-
+        lúcie (Conv2D), ktorá obsahuje 32 paralelných filtrov s veľkosťou jadra (kernel
+        size) 3×3[23]. Úlohou týchto filtrov je detekovať nízkoúrovňové vizuálne vzory
+        v spektrograme, akými sú napríklad strmé hrany reprezentujúce nábeh rázovej
+        vlny. Ako aktivačná funkcia bola zvolená nelineárna funkcia ReLU (Rectified
+        Linear Unit), ktorá zmierňuje problém miznúceho gradientu.
+
+
+
+
+                                              21
+5. Konvolučná Neurónová sieť - CNN    ...........................
+Na redukciu priestorovej dimenzionality a zabezpečenie čiastočnej invarian-
+tnosti voči malým časovým posunom signálu nadväzuje vrstva maximálneho
+zhlukovania (MaxPooling2D) s veľkosťou okna 2×2.[23]
+
+
+
+
+                     Obrázok 5.3: Prvá konvolučná vrstva
+
+Jeho hlavným cieľom je extrakcia nízkoúrovňových charakteristík (hrany a
+prudké zmeny amplitúdy v kepstrálnej oblasti), ktoré sú typické pre rázovú
+vlnu delostreleckého výstrelu.
+
+Ako ilustruje Obrázok 4.3, blok sa skladá z dvoch funkčných vrstiev, pričom
+každá z nich modifikuje tvar prechádzajúceho tenzoru:
+ .   Konvolučná vrstva (Conv2D): Pri konvolúcii bez doplnenia okrajov
+     nuly (tzv. "valid padding") dochádza k zmenšeniu priestorových rozmerov
+     mapy príznakov[24]. Pre os zodpovedajúcu časovým rámcom (58) sa
+     rozmer zmenší na 58−3+1 = 56. Podobne pre os kepstrálnych koeficientov
+     (12) sa rozmer zmenší na 12 − 3 + 1 = 10. Výsledkom tejto operácie
+     a následnej nelineárnej aktivácie (ReLU) je nový tenzor s rozmermi
+     (56,10,32).
+ .   Združovacia vrstva (MaxPooling2D): Pre redukciu výpočtovej ná-
+     ročnosti, zmenšenie počtu parametrov a zabezpečenie odolnosti modelu
+     voči miernemu časovému posunu výstrelu v rámci 60-milisekundového
+     okna nasleduje vrstva zhlukovania s maximom (Max Pooling).[25] S
+     využitím okna s veľkosťou 2×2 a neprekrývajúcim sa krokom (stride)
+     dôjde k polovičnému zredukovaniu rozmerov v oboch osiach. Výstupný
+     tenzor z prvého bloku, ktorý následne putuje do hlbších častí siete, tak
+     nadobúda konečné rozmery (28,5,32).
+
+     5.2.2   Druhý konvolučný blok
+Druhý konvolučný blok nadväzuje na výstupy prvého bloku a jeho primárnou
+úlohou je detekovať zložitejšie a abstraktnejšie súvislosti v dátach. Zatiaľ čo
+
+                                      22
+.........................                     5.2. Návrh architektúry a topológie CNN
+
+
+        prvý blok sa sústredil na izolované hrany a jednoduché frekvenčné výkyvy,
+        druhý blok na základe predchádzajúcich príznakov identifikuje ucelené štruk-
+        túry, akými sú napríklad typický časový rozostup a energetická korelácia
+        medzi zložkou rázovej vlny (shockwave) a úsťovej vlny (muzzle blast).
+
+
+
+
+                            Obrázok 5.4: Druhá konvolučná vrstva
+
+        Ako znázorňuje Obrázok 4.4, proces spracovania prebieha v dvoch nasledujú-
+        cich krokoch:
+         .   Konvolučná vrstva (Conv2D): Na vstupný tenzor z prvého bloku,
+             ktorý má rozmery (28,5,32), je aplikovaných 64 konvolučných filtrov.
+             Zvýšenie počtu filtrov zo 32 na 64 je štandardným architektonickým
+             postupom (tzv. "lievikový efekt"naopak), ktorý umožňuje sieti vytvoriť
+             hlbšiu priestorovú reprezentáciu napriek tomu, že fyzické rozmery mapy
+             sa zmenšujú.[25] Filtre majú opäť jadro (kernel) o veľkosti 3×3 a na
+             ich výstupy je aplikovaná aktivačná funkcia ReLU. Pri konvolúcii bez
+             doplnenia okrajov sa rozmery tenzoru v oboch osiach opäť zredukujú.
+             Časová os sa zmenší z 28 na 28 − 3 + 1 = 26 a os príznakov z 5 na
+             5 − 3 + 1 = 3. Výstupný tenzor tejto vrstvy má preto rozmer (26,3,64).
+         .   Združovacia vrstva (MaxPooling2D): Podobne ako v prvom bloku,
+             aj tu nasleduje proces redukcie dimenzionality. Združovanie s maximom
+             (Max Pooling) s oknom o veľkosti 2×2 vykoná polovičné zmenšenie pries-
+             torových rozmerov[24]. Výsledkom je výstupný tenzor o veľkosti (13,1,64),
+             ktorý predstavuje vysoko komprimovanú reprezentáciu pôvodného akus-
+             tického signálu.
+
+        Tento výsledný tenzor následne opúšťa konvolučnú časť siete a putuje do
+        klasifikačnej (plne prepojenej) časti, ktorej detail je popísaný v nasledujúcej
+        sekcii.
+
+
+
+
+                                              23
+5. Konvolučná Neurónová sieť - CNN    ...........................
+     5.2.3   Klasifikačná časť: Sploštenie a plne prepojené vrstvy
+
+Po prechode konvolučnými blokmi sieť úspešne identifikovala kľúčové lokálne
+a abstraktné vzory ukryté vo frekvenčnom spektre. Aby však mohla sieť na
+základe týchto príznakov učiniť finálne rozhodnutie, musia byť priestorové
+(3D) tenzory transformované a odovzdané klasifikačnej sekcii – takzvaným
+plne prepojeným vrstvám (Fully Connected / Dense Layers).
+
+
+
+
+                       Obrázok 5.5: Klasifikačné vrstvy
+
+Tento prechod a nasledujúce operácie sú detailne zachytené na Obrázku 4.5 a
+prebiehajú v týchto krokoch:
+
+ .   Sploštenie (Flatten): Výstupom druhého konvolučného bloku je 3D
+     tenzor o rozmeroch (13,1,64), ktorý reprezentuje 64 rôznych máp prí-
+     znakov, každú o veľkosti 13×1. Plne prepojené vrstvy, ktoré tvoria
+     klasifikátor, však matematicky vyžadujú na svojom vstupe výhradne
+     jednorozmerný vektor. Úlohou vrstvy Flatten je zoskupiť všetky hodnoty
+     z týchto dimenzií do jednej roviny[26]. Výpočet dĺžky výsledného vektora
+     je určený súčinom rozmerov predchádzajúceho tenzoru: 13 · 1 · 64 = 832.
+     Výstupom vrstvy Flatten je teda jednorozmerný vektor s 832 prvkami.
+
+ .   Plne prepojená skrytá vrstva (Dense): Tento 832-prvkový vektor
+     vstupuje do klasickej vrstvy viacvrstvového perceptrónu. Zvolená vrstva
+     obsahuje 64 skrytých neurónov, pričom každý neurón je prepojený s
+     každým vstupným prvkom. Architektúra opäť využíva aktivačnú funkciu
+     ReLU.
+
+ .   Regularizácia (Dropout): V rámci architektúry hlbokých neuróno-
+     vých sietí sú plne prepojené vrstvy obzvlášť náchylné na zapamätanie
+     si trénovacích dát, takzvané pretrénovanie (Overfitting). Preto je za
+     skrytú Dense vrstvu integrovaná technika Dropout s parametrom 0,5
+     (resp. 50 %). Táto regularizačná metóda zabezpečuje, že počas každého
+     trénovacieho kroku sa náhodne ignoruje (vypne) polovica neurónov, čím
+
+                                     24
+.........................                    5.2. Návrh architektúry a topológie CNN
+
+
+             sieť stráca možnosť spoliehať sa len na určité cesty a je nútená hľadať
+             robustnejšie kauzality v akustickom podpise výstrelu.[27]
+         .   Výstupná klasifikačná vrstva (Output Dense): Záverečným prvkom
+             architektúry je plne prepojená vrstva, ktorá obsahuje iba 1 výstupný
+             neurón. Na rozdiel od predchádzajúcich vrstiev využíva aktivačnú funkciu
+             typu Sigmoid. Táto funkcia matematicky stláča akýkoľvek reálny vstup
+             do obmedzeného intervalu 〈0,1〉[28]. Výstupná hodnota tak slúži ako
+             pravdepodobnostný indikátor: hodnoty blízke 1 predstavujú prítomnosť
+             delostreleckého výstrelu (trieda Gunshot), zatiaľ čo hodnoty blízke 0
+             indikujú inú, negatívnu udalosť (trieda Non-gunshot).
+
+
+
+
+                                             25
+26
+    Kapitola 6
+    Trénovanie, evaluácia a porovnanie
+    6.1     Trénovanie a evaluácia základného modelu
+V tejto fáze práce som pristúpil k experimentálnemu overeniu navrhnutej
+architektúry CNN na pôvodných, neupravených dátach. Cieľom tohto kroku
+bolo získať takzvanú referenčnú úspešnosť (baseline), voči ktorej budeme
+môcť porovnávať ďalšie vylepšenia.
+Pre experiment bol využitý kompletný dataset obsahujúci približne 70 unikát-
+nych impulzných udalostí delostrelectva a doplnková kategória negatívnych
+vzoriek (non-gunshot), reprezentujúca iné rušivé zvuky ako tresknutie dvermi
+či ľudský výkrik. Celkový dataset v počte 152 vzoriek bol rozdelený na tré-
+novaciu (80 %) a testovaciu (20 %) množinu. Pri rozdeľovaní bola striktne
+uplatnená metóda stratifikácie, aby bol v oboch množinách zachovaný iden-
+tický pomer pozitívnych a negatívnych tried.
+
+    6.1.1    Počiatočné výsledky a indikácia pretrénovania
+Model bol trénovaný po dobu 50 epoch s využitím optimalizátora Adam[29] a
+dávkovaním (batch size) o veľkosti 8 vzoriek. Už v raných fázach trénovania
+začala chybová funkcia (Loss) na testovacej sade rapídne klesať k nule a
+celková presnosť (Accuracy) dosiahla hranicu 100 %.
+
+
+
+
+            Obrázok 6.1: Úspešnosť na trénovacej a validačnej vzorke
+
+
+                                      27
+6. Trénovanie, evaluácia a porovnanie   ...........................
+Hoci sa takýto výsledok môže javiť ako ideálny, v kontexte strojového učenia a
+
+
+
+
+.
+analýzy signálov z reálneho prostredia ide o anomáliu. Takto vysoká presnosť
+na veľmi malom datasete (kde testovacia sada obsahovala len približne 30
+vzoriek) jednoznačne indikuje dva fundamentálne problémy:
+ 1. Pretrénovanie (Overfitting): Hlboká sieť disponuje dostatočnou ka-
+    pacitou na to, aby sa pri malom objeme dát nadmerne prispôsobila
+
+
+
+
+.   špecifickému šumu pozadia prítomnému v konkrétnych nahrávkach, na-
+    miesto toho, aby zovšeobecnila fyzikálne vlastnosti rázovej a úsťovej
+    vlny.
+ 2. Triviálna separabilita tried: Negatívne akustické vzorky sú vo svojej
+    kepstrálnej podstate natoľko odlišné od výstrelu, že na ich úspešné odlí-
+    šenie postačuje elementárna rozhodovacia hranica bez nutnosti extrakcie
+    komplexných vzorov.
+
+    6.1.2    Záťažový test (Stress Test) a analýza robustnosti
+Keďže akustický detektor musí v reálnom nasadení spoľahlivo fungovať v
+podmienkach silného environmentálneho rušenia (vietor, dážď, hluk bojiska),
+pristúpili sme k testovaniu robustnosti referenčného modelu.
+
+Navrhnutý záťažový test (Stress Test) spočíval v injekcii bieleho Gaussovho
+šumu (AWGN – Additive White Gaussian Noise) priamo do MFCC matíc[30]
+testovacej sady. Šum bol generovaný v rôznych intenzitách, aby simuloval
+klesajúci odstup užitočného signálu od šumu (SNR – Signal-to-Noise Ratio).
+
+Výsledky záťažového testu odhalili zraniteľnosť referenčného modelu:
+
+   Veľkosť šumu - SNR [db]         Úspešnosť na validačných dátach
+    30 (Takmer čisté dáta)                     96.72 %
+        20 (Stredný šum)                       75.41 %
+      10 (Veľmi zašumené)                      59.02 %
+       5 (Veľmi zašumené)                      59.02 %
+
+
+   Tabuľka 6.1: Výsledok klasifikácie pre zašumené dáta (reálne podmienky).
+
+Vzhľadom na fakt, že ide o binárnu klasifikáciu, presnosť blížiaca sa k 50 %
+predstavuje úroveň náhodného tipovania. Tento experimentálny výsledok
+potvrdil hypotézu o pretrénovaní. Referenčný model v reálnych, zašume-
+ných podmienkach úplne zlyháva, čo preukázalo nevyhnutnosť implementácie
+techník pre umelé zväčšenie datasetu a zvýšenie robustnosti. Hoci sa pri
+menších datasetoch teoreticky zvažuje využitie krížovej validácie (K-fold
+cross-validation), pre ciele tejto práce bolo nevyhnutné zachovať fixnú tes-
+tovaciu množinu (tzv. holdout set). Tento prístup zaručil metodicky čisté
+a konzistentné porovnávanie výkonnosti naprieč všetkými fázami vývoja,
+predovšetkým pri exaktnom meraní vplyvu kvantizácie na cieľovom hardvéri
+ESP32-S3.
+
+                                        28
+........................                     6.2. Zvýšenie robustnosti: Augmentácia dát
+
+
+            6.2     Zvýšenie robustnosti: Augmentácia dát
+        Záťažový test referenčného modelu popísaný v predchádzajúcej sekcii odha-
+        lil zraniteľnosť architektúry pri detekcii reálnych, zašumených signálov. Na
+        vyriešenie problému s pretrénovaním (Overfitting) a na zabezpečenie robust-
+        nosti modelu bola zvolená technika umelej augmentácie trénovacej množiny,
+        konkrétne pridávanie šumu priamo do poľa príznakov (Feature Jittering).
+        Keďže vstupom do konvolučnej siete nie je surový audio signál, ale vypo-
+        čítaná matica Mel-frekvenčných kepstrálnych koeficientov (MFCC), proces
+        pridávania šumu prebiehal odlišne ako štandardné mixovanie audia. Do matíc
+        príznakov bol iteratívne aplikovaný aditívny biely Gaussovský šum (AWGN).
+        Tento proces možno matematicky vyjadriť ako:
+                      M F CCnoisy (t, f ) = M F CCclean (t, f ) + N (0, σ 2 )     (6.1)
+        kde N predstavuje normálne rozdelenie so strednou hodnotou 0 a rozptylom
+        σ 2 [31]. Hodnota σ (smerodajná odchýlka šumu) bola škálovaná proporčne na
+        základe celkovej smerodajnej odchýlky pôvodnej čistej matice MFCC, čím sa
+        dosiahla kontrolovaná úroveň znehodnotenia príznakov.
+        Pôvodných 152 čistých vzoriek bolo najskôr rozdelených na trénovaciu a
+        testovaciu množinu (80% trénovacie dáta a 20% testovacie). Následne tré-
+        novacia množina bola augmentovaná tak, že boli algoritmicky vygenerované
+        štyri nové, zašumené verzie s rôznou úrovňou intenzity šumu (reprezentované
+        koeficientmi zosilnenia 0.1, 0.2, 0.3 a 0.5 voči smerodajnej odchýlke signálu).
+        Týmto krokom sa zväčšil počet dát – z pôvodných 152 na celkových 608.
+
+
+
+
+          Obrázok 6.2: Bloková schéma procesu augmentácie dát v kepstrálnej oblasti.
+
+        Cieľom tohto procesu nebolo len umelo zväčšiť počet dát. Hlavným zámerom
+        bolo prinútiť konvolučnú sieť počas trénovania ignorovať špecifický šum
+        pozadia v jednotlivých nahrávkach a sústrediť sa výlučne na dominantné
+        hrany a vzory, ktoré sú invariantné voči šumu.
+
+
+
+                                                29
+6. Trénovanie, evaluácia a porovnanie   ...........................
+    6.3     Trénovanie a evaluácia augmentovaných dát
+
+Po implementácii augmentačnej techniky v kepstrálnej oblasti (Feature Jitte-
+ring) bol vytvorený rozšírený dataset pozostávajúci zo 760 vzoriek (kombinácia
+čistých a zašumených MFCC matíc rôznych úrovní SNR). Tento dataset bol
+následne rozdelený na trénovaciu (80 %, cca 608 vzoriek) a testovaciu množinu
+(20 %, cca 152 vzoriek).
+
+    6.3.1    Priebeh učenia a parametre siete
+
+Finálny model so zhodnou topológiou (ako je popísaná v sekcii 4.2) bol tré-
+novaný po dobu 50 epoch s využitím optimalizačného algoritmu Adam a
+stratovej funkcie binárnej krížovej entropie (Binary Crossentropy)[32]. Vzhľa-
+dom na zväčšený objem dát bola sieť schopná lepšie využiť regularizačnú
+vrstvu Dropout (0,5), ktorá zabraňovala okamžitému zapamätaniu si vzoriek.
+
+Priebeh trénovania preukázal stabilnú konvergenciu. Zatiaľ čo pri referenčnom
+modeli klesala chybová funkcia k nule okamžite (čo indikovalo pretrénovanie),
+pri augmentovanom modeli bol pokles funkcie Loss na trénovacej aj validačnej
+množine plynulejší.
+
+
+
+
+ Obrázok 6.3: Úspešnosť na trénovacej a validačnej vzorke augmentovaných dát.
+
+
+
+
+                                        30
+......................               6.3. Trénovanie a evaluácia augmentovaných dát
+
+
+            6.3.2   Stress test na augmentovaných dátach
+        Po ukončení trénovacieho procesu bol model verifikovaný na testovacej mno-
+        žine neznámych dát. Finálna konvolučná sieť dosiahla na testovacích dátach
+        vynikajúcu celkovú presnosť blížiacu sa k 100 %.
+
+           Veľkosť šumu - SNR [db]         Úspešnosť na validačných dátach
+                      30                               96.71 %
+                      20                               96.05 %
+                      10                               94.74 %
+                      5                                94.08 %
+                      0                                90.13 %
+
+
+               Tabuľka 6.2: Výsledok klasifikácie augmentovaných dát pri šume.
+        Zásadný rozdiel oproti referenčnému modelu však spočíva v jeho správaní
+        v zhoršených akustických podmienkach. Trénovanie na umelo zašumených
+        dátach viedlo k vzniku robustného klasifikátora. Kým pôvodný model pri
+        poklese SNR na úroveň 10 dB zlyhával a jeho úspešnosť padala na úroveň
+        náhodného tipovania (cca 59 %), augmentovaný model si vďaka naučenej
+        invariancii voči bielemu šumu dokáže aj v týchto podmienkach udržať vysokú
+        mieru úspešnosti detekcie (nad 90 %).
+
+            6.3.3   Pretrénovanie na zašumených dátach
+        Pre overenie optimálnej dĺžky trénovacieho procesu bol vykonaný experiment
+        s extrémnym predĺžením trénovania na 500 epoch.
+
+
+
+
+          Obrázok 6.4: Priebeh evaluácie pri 500 epochách na augmentovaných dátach.
+
+        Po prekročení hranice približne 50 epoch začala úspešnosť na trénovacej
+        množine (modrá krivka) konvergovat k 100 %, pričom validačná úspešnosť
+        (oranžová krivka) už nevykazovala žiadne zlepšenie. Tento roztvárajúci sa
+
+                                             31
+6. Trénovanie, evaluácia a porovnanie   ...........................
+rozdiel a narastajúca nestabilita validačnej krivky jednoznačne indikujú nástup
+pretrénovania (Overfitting v čase). Model si po dlhom čase začal pamätať aj
+aplikovaný umelý šum. Z tohto dôvodu bol počet trénovacích epoch pre finálny
+model striktne obmedzený na 50 (tzv. Early Stopping[28]), čo predstavuje
+ideálny kompromis medzi naučením sa komplexných príznakov a zachovaním
+robustnosti.
+
+    6.4     Porovnanie a zhodnotenie výsledkov
+
+V tejto sekcii sú porovnané výsledky, kedy bola neurónová sieť natrénovaná
+len na pôvodných dátach a keď bola natrénovaná na augmentovaných (zašu-
+mených) dátach, ktoré boli pridané k pôvodným.
+
+Porovnanie je znázornené v nasledujúcej tabuľke:
+
+ Veľkosť šumu - SNR [db]          Pôvodné dáta       Augmentované dáta
+            30                       96.72 %              96.71 %
+            20                       75.41 %              96.05 %
+            10                       59.02 %              94.74 %
+            5                        59.02 %              94.08 %
+
+
+Tabuľka 6.3: Porovnanie úspešnosti klasifikácie pre pôvodné/augmentované dáta.
+
+Z nameraných hodnôt v tabuľke 6.3 je zrejmé, že oba modely dosahujú pri
+vysokej kvalite signálu (SNR 30 dB) takmer identickú, mimoriadne vysokú
+úspešnosť presahujúcu 96,7 %. Tento výsledok potvrdzuje, že topológia na-
+vrhnutej konvolučnej neurónovej siete je pre túto klasifikačnú úlohu zvolená
+správne.
+
+Zásadné rozdiely sa však začnú prejavovať pri zhoršených akustických pod-
+mienkach. Pri modeli trénovanom výlučne na pôvodných (nezašumených)
+dátach dochádza k rapídnemu poklesu úspešnosti. Už pri strednom zašumení
+(SNR 20 dB) klesá presnosť o viac ako 21 percentuálnych bodov. Pri sil-
+nom šume (SNR 10 dB a 5 dB) sa úspešnosť referenčného modelu prepadá
+až na úroveň 59,02 %. Tento jav experimentálne potvrdzuje predpoklad o
+pretrénovaní (overfitting) základného modelu, ktorý sa naučil rozpoznávať
+špecifický šum čistých nahrávok, no nepochopil zovšeobecniteľnú podstatu
+tvaru výstrelu.
+
+Na druhej strane, model natrénovaný na augmentovanom datasete vykazuje
+odolnosť voči degradácii signálu. Ako vidno z výsledkov, pri SNR 20 dB si
+model udržiava takmer nezmenenú presnosť 96,05 %. Ešte významnejší je fakt,
+že aj v podmienkach extrémneho šumu (SNR 5 dB), kde je akustický impulz
+výstrelu výrazne maskovaný hlukom pozadia, si augmentovaný klasifikátor
+udržiava úspešnosť detekcie na úrovni 94,08 %. V týchto náročných podmien-
+kach tak augmentácia priniesla zlepšenie o viac ako 35 percentuálnych bodov
+oproti referenčnému modelu.
+
+                                        32
+.......................                 6.5. Zväčšenie súboru dát typu „non-gunshot“
+
+
+            6.5     Zväčšenie súboru dát typu „non-gunshot“
+
+        S cieľom zvýšiť objektivitu a robustnosť výsledkov bolo rozhodnuté o rozší-
+        rení množiny vzoriek impulzných udalostí typu „non-gunshot“. Opätovnou
+        analýzou databázy poskytnutej vedúcim práce a doplnením o voľne dostupné
+        zvukové záznamy z internetových zdrojov (rôzne typy ručných palných zbraní,
+        ktoré nie sú predmetom primárnej detekcie) sa podarilo rozšíriť triedu „non-
+        gunshot“ na 644 vzoriek. Množina cieľových výstrelov z húfnice DANA
+        zostala zachovaná v počte 62 vzoriek.
+
+            6.5.1    Problém s nevyváženým datasetom
+
+        Z celkového počtu 706 vzoriek tvorí minoritnú triedu len približne 8,8 %
+        dát. Pri takto výrazne nevyváženom datasete vzniká riziko, že model bude
+        vykazovať vysokú celkovú presnosť (Accuracy) aj v prípade, ak bude nekri-
+        ticky klasifikovať všetky vzorky ako väčšinovú triedu „non-gunshot“. Takýto
+        výsledok by však bol z hľadiska detekcie cieľového javu nepoužiteľný. Na eli-
+        mináciu tohto javu bolo implementované váženie tried (class weighting[33]),
+        ktoré pri výpočte stratovej funkcie (Loss) priraďuje chybe v minoritnej triede
+        vyššiu váhu, čím núti sieť venovať zvýšenú pozornosť správnej identifikácii
+        výstrelov.
+
+            6.5.2    Matica zámien (Confusion Matrix)
+        Oveľa účinnejšia štatistika ako len úspešnosť binárnej klasifikácie je pri
+        nevyváženom datasete takzvaná „Confusion Matrix“ (Matica zámien),
+        ktorá ponúka poznatky ako precision, recall a f1-score[34].
+
+
+
+
+                       Obrázok 6.5: Príklad matice zámien pri evaluácii
+
+        Pre takto veľmi nevyvážene datasety je v strojovom učení preferovaná metrika
+        Matthewsov Korelačný koeficient (Matthews Correlation Coefficient)
+        MCC. F1-score totiž ignoruje True Negatives (správne odhadnuté ticho/h-
+        luk). MCC naopak berie do úvahy všetky štyri kvadranty matice zámien (TP,
+        TN, FP, FN).[35]
+
+
+
+                                             33
+6. Trénovanie, evaluácia a porovnanie   ...........................
+     Matthewsov Korelačný koeficient (Matthews Correlation Coefficient)
+     MCC
+
+Matthewsov korelačný koeficient (MCC) predstavuje jednu z najro-
+bustnejších metrík pre vyhodnocovanie kvality binárnych klasifikátorov, a to
+predovšetkým v prípadoch extrémne nevyvážených datasetov. Na rozdiel
+od tradičného F1-skóre, ktoré zohľadňuje iba správne klasifikované pozitívne
+vzorky (True Positives) a chyby s nimi spojené, MCC do výpočtu symetricky
+zahŕňa všetky štyri kvadranty matice zámien, teda aj správne klasifikované
+negatívne vzorky (True Negatives).[35]
+
+Matematicky je MCC definovaný vzťahom:
+                              TP × TN − FP × FN
+      M CC = p                                                           (6.2)
+                  (T P + F P )(T P + F N )(T N + F P )(T N + F N )
+
+kde premenné reprezentujú jednotlivé zložky matice zámien:
+ .   T P (True Positive) – správne detekovaný výstrel z húfnice,
+ .   T N (True Negative) – správne detekovaný hluk prostredia,
+ .   F P (False Positive) – falošný poplach (hluk označený za výstrel),
+ .   F N (False Negative) – prehliadnutý výstrel.
+
+Hodnota koeficientu nadobúda spojitý interval od −1 do +1:
+ .   +1 predstavuje dokonalú predikciu,
+ .   0 zodpovedá náhodnému tipovaniu (model nemá žiadnu predikčnú schop-
+     nosť),
+ .   −1 indikuje úplný nesúlad (model predikuje presný opak skutočnosti).
+
+V kontexte tejto práce, kde majoritnú triedu tvorí hluk prostredia
+(vysoké hodnoty T N ), poskytuje MCC oveľa objektívnejší pohľad na celkovú
+výkonnosť neurónovej siete. Na rozdiel od metriky celkovej presnosti (Accu-
+racy), ktorá by pri naivnej klasifikácii všetkých vstupov ako "hluk"dosahovala
+zdanlivo vynikajúce hodnoty, MCC by takýto nefunkčný model nekompro-
+misne penalizovalo hodnotou blížiacou sa k nule.
+
+
+
+
+                                        34
+............    6.6. Evaluácia robustnosti na augmentovanom datasete pri použití váh
+
+
+        Nasledujúca tabuľka vysvetľuje význam jednotlivých premenných v matici
+        zámien.
+
+         Názov metriky                               Význam
+           Precision         Presnosť pozitívnej predikcie. Vyjadruje pomer správne iden-
+                             tifikovaných výstrelov (True Positives) ku všetkým udalos-
+                             tiam, ktoré model označil ako výstrel (True Positives + False
+                             Positives). Udáva spoľahlivosť alarmu.
+              Recall         Senzitivita modelu. Vyjadruje pomer správne identifikova-
+                             ných výstrelov (True Positives) ku všetkým skutočným vý-
+                             strelom v dátach (True Positives + False Negatives). Udáva
+                             úspešnosť záchytu.
+             F1-score        Harmonický priemer medzi metrikami Precision a Recall.
+                             Poskytuje komplexné zhodnotenie modelu, najmä v prípade
+                             nevyvážených tried, kde by samotná celková presnosť (Accu-
+                             racy) bola zavádzajúca.
+                MCC          Komplexná metrika, ktorá zohľadňuje všetky štyri kvadranty
+                             matice zámien a je mimoriadne robustná voči extrémnej
+                             asymetrii tried. Nadobúda hodnoty od -1 do +1.
+
+
+         Tabuľka 6.4: Význam základných klasifikačných metrík odvodených z matice
+         zámien.
+
+
+
+             6.6 Evaluácia robustnosti na augmentovanom
+             datasete pri použití váh
+
+        Pred fázou trénovania bola množina vzoriek, podobne ako predtým, ešte
+        augmentovaná kvôli zvýšeniu robustnosti (pomer tried ostal rovnaký). Po
+        aplikovaní týchto dvoch kľúčových techník
+
+         .   augmentácie dát pomocou kepstrálneho šumu (Feature Jittering)
+         .   váženie tried (Class Weighting)
+
+        bol spustený proces trénovania neurónovej siete a následného monitorovania
+        štatistík matice zámien, konkrétne metrík recall a precision.
+        Trénovanie bolo znovu spustené na 50 epochách, na rovnakom modeli neuro-
+        novej siete.
+
+
+
+
+                                               35
+6. Trénovanie, evaluácia a porovnanie   ...........................
+    6.6.1    Priebeh testovania pre jednotlivé váhové pomery
+
+
+
+Úroveň šumu (SNR)        Accuracy        Precision   Recall   F1-score   MCC
+       30 dB               1.00            1.00       1.00      1.00     1.0000
+       20 dB               0.99            0.92       1.00      0.96     0.9571
+       10 dB               0.94            0.67       0.67      0.67     0.6359
+        5 dB               0.90            0.38       0.25      0.30     0.2552
+            Tabuľka 6.5: Výsledky evaluácie pre váhový pomer 1:1.
+
+
+
+
+Úroveň šumu (SNR)        Accuracy        Precision   Recall   F1-score   MCC
+       30 dB               0.99            1.00       0.92      0.96     0.9538
+       20 dB               1.00            1.00       1.00      1.00     1.0000
+       10 dB               0.97            0.75       1.00      0.86     0.8526
+        5 dB               0.96            0.71       1.00      0.83     0.8239
+            Tabuľka 6.6: Výsledky evaluácie pre váhový pomer 1:2.
+
+
+
+
+Úroveň šumu (SNR)        Accuracy        Precision   Recall   F1-score   MCC
+       30 dB               0.99            0.92       1.00      0.96     0.9571
+       20 dB               0.99            0.92       1.00      0.96     0.9571
+       10 dB               0.96            0.71       1.00      0.83     0.8239
+        5 dB               0.95            0.63       1.00      0.77     0.7730
+            Tabuľka 6.7: Výsledky evaluácie pre váhový pomer 1:3.
+
+
+
+
+Úroveň šumu (SNR)        Accuracy        Precision   Recall   F1-score   MCC
+       30 dB               0.82            0.32       1.00      0.49     0.5118
+       20 dB               0.82            0.32       1.00      0.48     0.5026
+       10 dB               0.79            0.29       1.00      0.44     0.4688
+        5 dB               0.80            0.30       1.00      0.46     0.4852
+            Tabuľka 6.8: Výsledky evaluácie pre váhový pomer 1:4.
+
+
+
+
+                                        36
+............    6.6. Evaluácia robustnosti na augmentovanom datasete pri použití váh
+
+
+            6.6.2    Zhodnotenie experimentu a analýza vplyvu váh
+
+
+          1. Zlyhanie referenčného modelu (Váha 1:1)
+        Referenčný model bez úpravy váh (Tabuľka 5.5) potvrdzuje absolútnu nevy-
+        hnutnosť riešenia asymetrie dát. Pri čistých dátach síce funguje excelentne,
+        no so stúpajúcim šumom začína zlyhávať. Akonáhle SNR klesne na 5 dB,
+        jeho úspešnosť záchytu kriticky padá (Recall 0,25). V praxi to znamená,
+        že v hlučnom prostredí sieť ignoruje až 75 % reálnych výstrelov. Tento pre-
+        pad výkonnosti objektívne odzrkadľuje aj rapídny pokles metriky MCC na
+        hodnotu 0,2552. Pre bezpečnostné nasadenie je takýto model nepoužiteľný.
+
+
+
+
+          2. Nájdenie optimálneho pracovného bodu (Váha 1:2)
+        Už mierna korekcia váhového pomeru na 1:2 (Tabuľka 5.6) priniesla radikálne
+        zlepšenie a predstavuje tzv. optimálny pracovný bod (sweet spot). Modelu
+        stačila minimálna penalizácia na dosiahnutie bezchybného záchytu (Recall
+        1,00) naprieč celým spektrom šumu, a to bez extrémneho generovania fa-
+        lošných poplachov. Excelentnú stabilitu si model udržal aj pri extrémnom
+        zarušení (5 dB), kde popri stopercentnom záchyte dosiahol vysoko akceptova-
+        teľnú Precision 0,71 a komplexné MCC skóre 0,8239.
+
+
+
+
+          3. Degradácia a hypersenzitivita (Váhy 1:3 a 1:4)
+        Ďalšie zvyšovanie váh demonštruje klasický problém známy ako Precision-
+        Recall trade-off . Pri váhe 1:3 (Tabuľka 5.7) už začína mierne klesať presnosť
+        (Precision 0,63 pri 5 dB). Extrémnym prípadom je váha 1:4 (Tabuľka 5.8), kde
+        sa model stal vyslovene hypersenzitívnym. Prehnaný strach z penalizácie
+        spôsobil, že sieť síce zachytila všetky výstrely (Recall 1,00), avšak za cenu
+        drastického nárastu falošných poplachov. Hodnota Precision klesla pri 5
+        dB na úroveň 0,30 a MCC sa prepadlo na 0,4852, čo by v reálnom nasadení
+        znamenalo neustále spúšťanie falošných alarmov.[36]
+
+
+
+
+                                             37
+6. Trénovanie, evaluácia a porovnanie   ...........................
+     4. Grafické zobrazenie výsledkov
+
+               Porovnanie vplyvu váh tried na metriku MCC pri rôznom SNR
+
+          1
+
+
+         0.8
+
+
+         0.6
+   MCC
+
+
+
+
+         0.4
+                           Váha 1:1
+                     Váha 1:2 (Optimum)
+         0.2               Váha 1:3
+                           Váha 1:4
+          0
+                      30              20              10       5
+                              Úroveň šumu (SNR) [dB]
+
+ Obrázok 6.6: Závislosť Matthewsovho korelačného koeficientu od úrovne šumu
+ pre rôzne nastavenia váh tried.
+
+
+
+  Záver
+Vzhľadom na špecifické logistické a bezpečnostné obmedzenia pri zbere akus-
+tických prejavov vojenskej techniky je získanie rozsiahleho datasetu v bežných
+podmienkach nerealizovateľné. Práca preto operuje s limitovaným, no o to
+vzácnejším súborom 62 reálnych výstrelov z húfnice DANA. Tento nedostatok
+dát bol úspešne kompenzovaný technikami augmentácie a vhodnou penalizá-
+ciou tried. Samotný experiment preukázal, že navrhnutá CNN architektúra
+si nevyžaduje extrémne váženie. Ako finálny a najrobustnejší model bol vy-
+hodnotený pomer 1:2, ktorý ponúka najlepšiu harmóniu medzi maximálnou
+ostražitosťou (nulové prehliadnutie hrozby) a odolnosťou voči šumu (minimum
+falošných poplachov).
+
+
+
+
+                                        38
+    Kapitola 7
+    Implementácia modelu na mikrokontrolér
+    ESP32-S3
+
+    7.1     Popis použitého embedded zariadenia
+Pre tento účel bol zvolený mikrokontrolér ESP32-S3 disponujúci jadrom
+Xtensa LX7, ktorého hlavnou výhodou je hardvérová podpora vektorových
+inštrukcií (SIMD – Single Instruction, Multiple Data). Architektúra SIMD
+umožňuje spracovávať viacero dátových bodov súčasne, čo v spojení s optima-
+lizačnou knižnicou esp-nn masívne urýchľuje výpočty konvolučných vrstiev
+a maticových násobení v navrhnutej sieti.[37, 39]
+
+
+
+
+           Obrázok 7.1: Embedded zariadenie ESP32-S3-DEVKIT.
+
+Okrem výpočtového výkonu disponuje ESP32-S3 kapacitou 512 KB vnútor-
+nej SRAM pamäte. Táto kapacita je nevyhnutná pre beh rámca TensorFlow
+Lite for Microcontrollers, ktorý vyžaduje dedikovaný blok operačnej pamäte
+na dynamické ukladanie tenzorov a medzivýsledkov výpočtov.[38]
+Riadenie procesov zabezpečuje operačný systém reálneho času FreeRTOS[38].
+Pre účely verifikácie modelu priamo na hardvéri sa využíva sériová zbernica
+UART, prostredníctvom ktorej mikrokontrolér obojsmerne komunikuje s
+nadradeným počítačom.
+Pri implementácii bol kladený dôraz na efektivitu s cieľom zachovať kompati-
+bilitu aj s hardvérovo obmedzenejšími embedded systémami, ako napríklad
+mikrokontroléry STM32. Tie v porovnaní s použitým modulom ESP32 typicky
+disponujú menšou kapacitou operačnej pamäte (SRAM) a úložiska (Flash).
+Kvantizácia modelu na 8-bitové celé čísla smeruje k univerzálnosti riešenia.
+
+
+                                    39
+7. Implementácia modelu na mikrokontrolér ESP32-S3   ....................
+    7.2     Konverzia a kvantizácia modelu
+
+Štandardným výstupom trénovania v prostredí Keras/TensorFlow je model
+uložený vo formáte HDF5 (.h5). Tento formát však vyžaduje plnohodnotný
+súborový systém a operačnú pamäť na úrovni osobných počítačov, čo ho robí
+pre mikrokontroléry nepoužiteľným. Z tohto dôvodu bolo nevyhnutné model
+pred nasadením transformovať.
+
+Pre tento účel bol využitý nástroj TensorFlow Lite Converter. Model bol
+najprv skonvertovaný do optimalizovaného formátu .tflite, pričom bola
+aplikovaná celočíselná kvantizácia po trénovaní (Post-Training Integer Qu-
+antization).Tento proces transformoval váhy a aktivácie modelu z 32-bitovej
+plávajúcej čiarky (float32) na 8-bitové celé čísla (int8)[40]. Tým sa do-
+siahla štvornásobná redukcia pamäťovej stopy modelu, čo je kľúčové pre
+zariadenia s obmedzenou pamäťou Flash.
+
+Riešením bolo transformovať binárny .tflite súbor do podoby hlavičkového
+súboru v jazyku C/C++ (tzv. C-array). Pomocou na mieru vytvoreného
+skriptu v jazyku Python bol model prevedený do obrovského poľa hexadecimál-
+nych hodnôt (súbor model_data.h). Takýto prístup umožňuje kompilátoru
+vložiť celú neurónovú sieť priamo do Flash pamäte mikrokontroléra určenú
+len na čítanie (Read-Only Memory), čím sa šetrí dynamická pamäť (RAM).
+
+
+    7.3     Vývojové prostredie a AI akcelerácia
+Samotný detekčný softvér bol implementovaný v jazyku C++ v produkčnom
+prostredí ESP-IDF.[41]
+
+Integrácia v prostredí ESP-IDF bola kľúčová najmä pre prepojenie frame-
+worku TensorFlow Lite Micro s nízkoúrovňovou knižnicou esp-nn[41]. Kým
+štandardný TFLite Micro vykonáva matematické operácie sekvenčne, v navr-
+hnutej implementácii sú výpočty konvolúcií (AddConv2D) a plne prepojených
+vrstiev (AddFullyConnected) automaticky presmerované na optimalizované
+jadrá knižnice esp-nn. Týmto sa softvérovo aktivuje využitie hardvérových
+vektorových inštrukcií čipu ESP32-S3 (SIMD), ktoré sú špeciálne optima-
+lizované pre prácu s 8-bitovými dátami (int8). Toto prepojenie skracuje
+dobu inferencie z desiatok milisekúnd na jednotky, pri zachovaní dostatočnej
+presnosti klasifikácie.
+
+Výzvou pri implementácii neurónových sietí na okrajových zariadeniach (Edge
+AI) je manažment operačnej pamäte. V programe bolo nutné vyhradiť sta-
+tický blok pamäte, označovaný ako tensor_arena, ktorý slúži na ukladanie
+dočasných tenzorov a medzivýsledkov výpočtov (napr. výstupy po konvoluč-
+ných filtroch). Veľkosť tejto pamäte bola empiricky stanovená na 80 KB, čo
+bezpečne pokrýva požiadavky architektúry siete bez rizika pretečenia pamäte.
+
+                                    40
+.................          7.4. Verifikácia modelu a komunikácia cez rozhranie UART
+
+
+
+        V navrhnutej implementácii bola využitá trieda MicroMutableOpResolver,
+        ktorá umožňuje explicitne definovať a načítať len tie matematické operácie,
+        ktoré model reálne využíva[42]:
+         .   AddConv2D() – pre 2D konvolúciu nad maticou MFCC,
+         .   AddMaxPool2D() – pre podvzorkovanie priestorových rozmerov,
+         .   AddFullyConnected() – pre plne prepojené vrstvy klasifikátora,
+         .   AddRelu() a AddSoftmax() – pre aktivačné funkcie,
+         .   AddReshape() – pre zmenu tvaru tenzorov.
+
+        Vďaka tomuto prístupu sa dramaticky znížila celková spotreba dynamickej
+        pamäte. Výsledná skompilovaná binárna aplikácia (zahŕňajúca operačný sys-
+        tém FreeRTOS, hardvérové ovládače ESP32-S3, framework TFLite Micro
+        aj samotné váhy modelu) dosiahla veľkosť len približne 290 KB. Vzhľadom
+        na to, že použitý vývojový modul ESP32-S3 disponuje integrovanou Flash
+        pamäťou s kapacitou 8 MB (resp. 16 MB podľa konkrétnej verzie), zaberá
+        celá implementácia menej ako 4 % celkovej fyzickej kapacity pamäte. To
+        ponecháva obrovský priestor pre budúce rozširovanie funkcionality.
+
+
+             7.4 Verifikácia modelu a komunikácia cez
+             rozhranie UART
+
+        Záverečnou fázou implementácie je overenie funkčnosti natrénovaného modelu
+        priamo na cieľovom hardvéri. Keďže v tejto fáze vývoja nebol cieľom zber
+        dát z fyzického mikrofónu, ale verifikácia matematického jadra a úspešnosti
+        klasifikácie, bolo potrebné navrhnúť mechanizmus prenosu testovacích dát z
+        počítača do mikrokontroléra.
+
+             7.4.1   Motivácia a protokol komunikácie
+
+        Pre potreby verifikácie bola zvolená sériová zbernica UART (Universal
+        Asynchronous Receiver-Transmitter). Hlavným dôvodom je jej natívna pod-
+        pora na väčšine embedded platforiem a jednoduchosť integrácie s vývojovým
+        prostredím. Komunikácia prebieha obojsmerne:
+         .   Smer PC → ESP32-S3: Prenos surových príznakov (MFCC koeficien-
+             tov) vo forme binárneho prúdu dát.
+         .   Smer ESP32-S3 → PC: Odosielanie výsledkov inferencie (pravdepo-
+             dobnosť triedy) a diagnostických údajov (napr. čas výpočtu).
+
+        Pre zabezpečenie stability prenosu a dostatočnej priepustnosti bola prenosová
+        rýchlosť nastavená na 115 200 baudov.
+
+
+                                             41
+7. Implementácia modelu na mikrokontrolér ESP32-S3    ....................
+    7.4.2    Dátový balík a spracovanie na strane ESP32-S3
+
+Jedna testovacia vzorka (akustický odtlačok výstrelu) pozostáva z matice
+MFCC s rozmermi 58 × 12. Každý prvok matice je reprezentovaný dátovým
+typom float32 (4 bajty). Celková veľkosť jedného dátového balíka vysielaného
+z PC je teda vypočítaná ako:
+                         58 × 12 × 4 = 2784 bajtov                       (7.1)
+
+
+    Kvantizácia z Float32 na Int8
+Po prijatí kompletného balíka (2784 bajtov, čo zodpovedá 696 hodnotám typu
+float32) nie je možné dáta zapísať priamo do pamäte neurónovej siete. Keďže
+implementovaný model je kvantizovaný, vstupný tenzor očakáva 8-bitové celé
+čísla (int8). Z tohto dôvodu prichádzajúce dáta najprv prechádzajú proce-
+som vstupnej kvantizácie. Na tento účel bola implementovaná obslužná
+funkcia, ktorá na základe kvantizačných parametrov siete prepočíta každé
+desatinné číslo na celočíselnú hodnotu a zabezpečí orezanie do platného inter-
+valu ⟨−128, 127⟩.
+
+Až tento prekonvertovaný vektor, ktorého veľkosť je teraz zredukovaná na 696
+bajtov, je fyzicky zapísaný do vstupného tenzora (input_tensor->data.int8).
+Následne sa zavolá funkcia interpreter->Invoke(), ktorá spustí samotnú
+inferenciu s využitím AI akcelerácie esp-nn.
+
+    7.5 Zašumenie dát a evaluácia na zariadení
+    ESP32-S3
+Pre komplexné zhodnotenie robustnosti implementovaného riešenia priamo
+na hardvérovej platforme ESP32-S3 bol vykonaný identický záťažový test
+ako v prípade simulácií na PC. Metodika spočívala v injekcii aditívneho
+bieleho Gaussovského šumu (AWGN) priamo do matíc MFCC koeficientov
+pred procesom inferencie.Výsledky sú zobrazené v nasledujúcej tabuľke.
+Úroveň šumu (SNR)        Accuracy      Precision     Recall   F1-score     MCC
+       30 dB              99.86 %        1.00         0.98      0.99       0.9912
+       20 dB              99.29 %        1.00         0.92      0.96       0.9553
+       10 dB              96.18 %        1.00         0.56      0.72       0.7361
+        5 dB              94.62 %        0.93         0.42      0.58       0.6036
+ Tabuľka 7.1: Výsledky evaluácie na zariadení ESP32-S3 pre rôzne úrovne šumu.
+
+Experiment bol realizovaný na kompletnom testovacom súbore pozostáva-
+júcom zo 706 vzoriek, pričom boli sledované kľúčové klasifikačné metriky a
+výpočtová náročnosť. Priemerný čas inferencie jedného MFCC segmentu na
+zariadení ESP32-S3 dosahoval stabilnú hodnotu približne 32 ms, čo potvr-
+dzuje vhodnosť architektúry pre reálnu detekciu v reálnom čase. Výsledky
+evaluácie pre jednotlivé úrovne SNR sú zhrnuté v tabuľke 7.1.
+
+                                     42
+...................               7.5. Zašumenie dát a evaluácia na zariadení ESP32-S3
+
+
+               7.5.1   Zhodnotenie testovania a porovnanie s PC
+        Po úspešnom nasadení modelu na mikrokontrolér ESP32-S3 a získaní výsled-
+        kov z evaluácie (Tabuľka 7.1) bolo vykonané priame porovnanie s výsledkami
+        dosiahnutými pri testovaní identického modelu (s optimalizovaným váhovým
+        pomerom tried 1:2) v prostredí osobného počítača (Tabuľka 6.6).
+        Keďže oba testy využívali rovnaké vstupné matice MFCC a rovnaké váhy ne-
+        urónovej siete, porovnanie odhaľuje vplyv samotnej hardvérovej a softvérovej
+        architektúry na proces inferencie.
+
+               Správanie v priaznivých akustických podmienkach (30 dB a 20 dB)
+        Pri nízkej úrovni šumu (SNR 30 dB a 20 dB) dosahujú obe platformy exce-
+        lentné výsledky, ktoré sú takmer identické. Celková presnosť (Accuracy) sa
+        pohybuje nad úrovňou 99 % a metrika MCC je cez 0,95. V týchto podmien-
+        kach je akustický podpis výstrelu natoľko výrazný, že drobné odchýlky vo
+        výpočtoch nemajú vplyv na finálne klasifikačné rozhodnutie siete.
+
+               Divergencia v zašumenom prostredí (10 dB a 5 dB)
+        Kľúčové rozdiely medzi platformami sa prejavujú pri výraznej degradácii
+        užitočného signálu šumom (SNR 10 dB a 5 dB). V tomto bode môžeme
+        pozorovať posun v charaktere klasifikátora:
+         .     Model na PC (Senzitívny charakter): V prostredí PC si model
+               udržiava dokonalú schopnosť záchytu (Recall = 1,00 aj pri 5 dB). Daňou
+               za túto senzitivitu je však nárast falošných poplachov (Precision 0,71).
+         .     Model na ESP32-S3 (Konzervatívny charakter): Na embedded
+               zariadení vykazuje sieť opačný trend. Dokáže si udržať extrémne vysokú
+               odolnosť voči falošným poplachom (Precision = 1,00 pri 10 dB a 0,93
+               pri 5 dB), avšak za cenu toho, že v silnom šume prehliadne značnú časť
+               skutočných výstrelov (Recall klesá na 0,56 a následne až na 0,42).
+           Porovnanie výsledkov z PC a ESP32 na metriku MCC pri rôznom SNR
+
+                1
+
+               0.8
+         MCC
+
+
+
+
+               0.6
+
+               0.4
+
+               0.2        PC
+                         ESP32
+                0
+                          30                20               10        5
+                                  Úroveň šumu (SNR) [dB]
+
+         Obrázok 7.2: Porovnanie Matthewsovho korelačného koeficientu PC vs ESP32.
+
+
+
+                                                 43
+7. Implementácia modelu na mikrokontrolér ESP32-S3    ....................
+    Analýza možných príčin odchýlok
+
+Tento jav (kedy identický model s rovnakými vstupmi produkuje posunuté
+výsledky) je v oblasti implementácie neurónových sietí na okrajové zaria-
+
+
+
+
+.
+denia (Edge AI) bežný. Vzhľadom na to, že model bol pre nasadenie na
+mikrokontrolér kvantizovaný, túto divergenciu možno pripísať nasledujúcim
+faktorom:
+
+ 1. Kvantizačný šum a strata rozlíšenia: Najzásadnejším rozdielom je
+    prechod z 32-bitovej plávajúcej rádovej čiarky (PC) na 8-bitové celé
+
+
+
+
+.
+    čísla (ESP32-S3). Pri mapovaní vstupných MFCC koeficientov a vnú-
+    torných váh modelu do diskrétneho rozsahu ⟨−128, 127⟩ dochádza k
+    nevyhnutnému zaokrúhľovaniu.
+
+ 2. Výpočtový rámec a hardvérová akcelerácia: Kým PC využíva štan-
+    dardný framework TensorFlow počítajúci v presnosti float32, ESP32-
+    S3 využíva TensorFlow Lite Micro[42] prepojený s knižnicou esp-nn.
+    Táto knižnica je striktne optimalizovaná pre celočíselné operácie a využíva
+
+
+
+
+.
+    vektorové inštrukcie (SIMD) jadra Xtensa. Matematická implementácia
+    násobenia a akumulácie (MAC operácie) nad celými číslami sa funda-
+    mentálne líši od operácií s plávajúcou rádovou čiarkou.
+
+ 3. Rekvantizácia skrytých vrstiev a posun na výstupe: Zatiaľ čo
+    pri float32 sa zachovávajú aj tie najmenšie desatinné medzivýsledky
+    po každej vrstve, pri int8 modeli sa výstup z každej konvolučnej vrstvy
+    musí opätovne rekvantizovať a orezať do 8-bitového rozsahu, aby mohol
+    vstúpiť do nasledujúcej vrstvy.[40] Tieto kaskádovité straty spôsobujú
+    posun finálnej hodnoty pred aktivačnou funkciou Sigmoid. V hraničných
+    prípadoch (silne zašumený výstrel), kde PC zachová dostatok detailov
+    na výpočet pravdepodobnosti 0, 52 (Klasifikácia: Výstrel), model na
+    ESP32-S3 stratí časť informácie a vypočíta hodnotu 0, 48 (Klasifikácia:
+    Hluk/Ignorovať).
+
+
+
+
+                                     44
+       Kapitola 8
+       Validácia systému na zašumených audio
+       vzorkách
+Z hľadiska fyzikálnej vernosti a verifikácie v reálnych podmienkach je reprezen-
+tatívnejšie testovať model na audionahrávkach, do ktorých bol šum pridaný
+ešte pred procesom extrakcie príznakov[43]. Na rozdiel od priamej in-
+jekcie šumu do vypočítaných matíc MFCC (tzv. feature-level noise injection),
+tento prístup simuluje reálny akustický reťazec, v ktorom šum prechádza
+celým matematickým aparátom spracovania signálu — od okienkovania až
+po logaritmovanie v Melovej filtračnej banke. Táto kapitola sa preto venuje
+evaluácii na dátach, ktoré boli zašumené v časovej oblasti (Waveform level),
+pričom finálny akustický odtlačok bol extrahovaný až z takto modifikovaného
+signálu.
+
+
+       8.1    Matematický model zašumenia a výpočet SNR
+
+Základným parametrom pre definovanie úrovne zašumenia je odstup užitoč-
+ného signálu od šumu (SNR – Signal-to-Noise Ratio), vyjadrený v decibeloch
+(dB). Keďže audionahrávky z prostredia strelnice majú premenlivú amplitúdu,
+intenzita pridávaného šumu nemôže byť konštantná, ale musí byť dynamicky
+škálovaná na základe výkonu (resp. smerodajnej odchýlky) konkrétneho uži-
+točného signálu.
+
+Zašumený diskrétny signál xnoisy [n] sa vypočíta podľa nasledujúceho vzťahu:
+
+                         xnoisy [n] = x[n] + k · N (0, σx2 )              (8.1)
+
+kde:
+ .     x[n] je pôvodný (čistý) diskrétny audiosignál,
+ .     N (0, σx2 ) je generovaný biely Gaussovský šum s nulovou strednou hod-
+       notou a smerodajnou odchýlkou rovnajúcou sa smerodajnej odchýlke
+       pôvodného signálu (σx ),
+ .     k predstavuje bezrozmerný multiplikátor (škálovací faktor) amplitúdy
+       šumu.
+
+                                         45
+8. Validácia systému na zašumených audio vzorkách   .....................
+Pre dosiahnutie exaktnej úrovne SNR definovanej v decibeloch je potrebné
+škálovací faktor k analyticky odvodiť. Vychádzajúc zo štandardnej definície
+SNR pre amplitúdy platí:
+                                      1
+                                      
+                                                       −SN RdB
+               SN RdB = 20 · log10         =⇒ k = 10     20            (8.2)
+                                      k
+Presné dodržanie týchto špecifických úrovní SNR pri generovaní šumu v
+časovej oblasti je kľúčové pre zabezpečenie konzistencie. Tento analytický
+prepočet umožňuje vytvoriť podmienky na priame a objektívne porovnanie
+výkonnosti modelu s predchádzajúcim experimentom (popísaným v kapitole 5
+a 6), pri ktorom bol ekvivalentný šum injektovaný až v neskoršej fáze priamo
+do matíc kepstrálnych koeficientov (Feature Jittering). Takto bude relatívne
+presne možné overiť kvalitu implementácie pre fyzikálne presnejší šum.
+
+
+     8.2    Realizácia experimentu
+
+Pre účely testovania klasifikátora na PC aj na zariadení ESP32-S3 boli na
+základe odvodenej rovnice algoritmicky vygenerované štyri zašumené varianty
+pre každú zo 706 pôvodných audionahrávok. Testované boli nasledujúce
+úrovne degradácie signálu:
+
+ .   SNR 30 dB (k ≈ 0, 0316): Predstavuje takmer čistý signál, kde je šum
+     akusticky len veľmi slabo badateľný.
+ .   SNR 20 dB (k = 0, 1000): Predstavuje mierny hluk prostredia, ampli-
+     túda šumu dosahuje 10 % smerodajnej odchýlky signálu.
+ .   SNR 10 dB (k ≈ 0, 3162): Simuluje výrazný hluk bojiska alebo silný
+     vietor pri mikrofóne.
+ .   SNR 5 dB (k ≈ 0, 5623): Predstavuje extrémne nepriaznivé podmienky
+     (limitný stav), kde energia šumu začína maskovať užitočné spektrálne
+     zložky úsťovej vlny výstrelu.
+
+Každý takto synteticky znehodnotený zvukový súbor bol následne prehnaný
+kompletným extrakčným reťazcom, čím sa zabezpečilo, že vplyv šumu priro-
+dzene prenikol cez nelineárne operácie (najmä logaritmickú transformáciu) až
+do finálnej 58 × 12 matice kepstrálnych koeficientov.
+
+
+
+
+                                     46
+...............................                            8.2. Realizácia experimentu
+
+
+             Výsledky testovania
+
+        Po úspešnej extrakcii matíc kepstrálnych koeficientov zo zašumených audiosig-
+        nálov bolo realizované testovanie klasifikačnej úspešnosti. Pre účely evaluácie
+        bol zámerne použitý už existujúci model, ktorý bol natrénovaný na dátach
+        s využitím techniky injekcie šumu priamo do príznakov (Feature Jittering),
+        detailne popísanej v kapitole 5.
+
+        Tento metodologický postup umožňuje overiť schopnosť modelu generalizovať
+        získané vedomosti. Testuje sa tým hypotéza, či si model dokáže udržať svoju
+        robustnosť a presnosť aj v situácii, keď aplikovaný šum prechádza celým neli-
+        neárnym procesom predspracovania signálu, čo presnejšie reflektuje fyzikálnu
+        realitu nasadenia.
+
+        Testovanie prebehlo paralelne na dvoch platformách – v referenčnom pro-
+        stredí osobného počítača (PC) a priamo na cieľovom hardvéri mikrokontroléra
+        ESP32-S3. Namerané výsledky pre jednotlivé úrovne degradácie signálu (SNR)
+        sú zaznamenané v tabuľkách 8.1 a 8.2.
+
+
+        Úroveň šumu (SNR)        Accuracy      Precision     Recall    F1-score    MCC
+               30 dB              84.41 %        0.35         1.00       0.52      0.5377
+               20 dB              82.86 %        0.33         1.00       0.49      0.5367
+               10 dB              81.12 %        0.31         0.99       0.47      0.4893
+               5 dB               80.44 %        0.29         0.93       0.45      0.4581
+          Tabuľka 8.1: Výsledky evaluácie na PC pre dáta zašumené v časovej oblasti
+          (.wav).
+
+
+        Úroveň šumu (SNR)        Accuracy      Precision     Recall    F1-score    MCC
+               30 dB              99,86 %        1,00         0,98       0,99      0,9912
+               20 dB              99.73 %        0.98         0.98       0.98      0.9824
+               10 dB              97.78 %        0.86         0.87       0.87      0.8554
+               5 dB               97.18 %        0.95         0.70       0.81      0.8009
+          Tabuľka 8.2: Výsledky evaluácie na ESP32-S3 pre dáta zašumené v časovej
+          oblasti (.wav).
+
+
+
+
+                                              47
+8. Validácia systému na zašumených audio vzorkách   .....................
+    8.3 Zhodnotenie testovania a porovnanie PC vs.
+    ESP32-S3
+
+Výsledky testovania na audionahrávkach zašumených v časovej oblasti od-
+halili mimoriadne zaujímavý a na prvý pohľad paradoxný jav: klasifikátor
+nasadený na mikrokontroléri ESP32-S3 dosahoval vo všetkých testovaných
+
+
+
+
+.
+úrovniach šumu výrazne lepšie a stabilnejšie výsledky (metrika MCC) než
+identický model spustený v plnej presnosti na osobnom počítači. Tento rozdiel
+v správaní je spôsobený súhrou nasledujúcich faktorov:
+
+ 1. Zlyhanie plnej presnosti (Hypersenzitivita na PC)
+    Z tabuľky 8.1 je zrejmé, že PC verzia modelu bežiaca v 32-bitovej plávajú-
+    cej rádovej čiarke (float32) si zachováva takmer stopercentnú schopnosť
+    záchytu (Recall = 0, 93 až 1, 00). Zlyháva však v metrike Precision, ktorá
+    sa pohybuje na kriticky nízkej úrovni okolo 0, 30. Vysoká výpočtová
+    presnosť na PC spôsobuje, že model zachytáva aj tie spektrálne zmeny,
+    ktoré do signálu vniesol akustický šum po prechode Fourierovou transfor-
+
+
+
+
+.
+    máciou a logaritmovaním. Model reaguje na tieto zložité šumové vzory
+    hypersenzitívne a generuje falošné poplachy, čo vedie k celkovému
+    poklesu metriky MCC na úroveň približne 0, 50.
+
+ 2. Kvantizácia ako možný šumový filter (ESP32-S3)
+    Naopak, výsledky z mikrokontroléra (Tabuľka 8.2) preukazujú vynika-
+    júcu stabilitu. Jav, pri ktorom obmedzený hardvér prekonáva výkonný
+    počítač, je priamym dôsledkom celočíselnej kvantizácie (int8). Proces
+    mapovania spojitých hodnôt MFCC do hrubšieho diskrétneho rozsahu
+    funguje v tomto prípade ako nelineárny dolnopriepustný filter, respek-
+    tíve šumová brána (Noise Gate).[44]
+
+    Pri miernom a strednom zašumení (30 dB a 20 dB) sú energetické zmeny
+    spôsobené šumom natoľko malé, že ich kvantizačný proces jednodu-
+    cho zaokrúhli a eliminuje (odreže detaily). Kým PC tieto detaily
+    rozpoznalo a reagovalo na ne, ESP32-S3 ich vďaka zníženému rozlíše-
+    niu nerozpozná. Hlavný makroskopický tvar akustického rázu (výstrelu)
+    však zostáva po kvantizácii zachovaný. Výsledkom je takmer dokonalá
+    klasifikácia (MCC 0, 9912 a 0, 9824) bez falošných poplachov.
+
+
+
+
+                                     48
+.................          8.3. Zhodnotenie testovania a porovnanie PC vs. ESP32-S3
+
+
+            Vplyv extrémneho šumu na výsledky testovania
+
+        Pri takto veľkom zašumení (SNR 5dB) amplitúda šumu už výrazne deformuje
+        maticu príznakov. Na rozdiel od PC, ktoré si aj pri veľkom zašumení zachováva
+        vysoký percentil detekovaných výstrelov (Recall 0.93), ESP32-S3 reaguje
+        tak, že za cenu zvýšenia počtu prehliadnutých výstrelov (Recall 0.7) je
+        počet falošných poplachov relatívne malý (len cca 5% - podľa tabuľky 8.2
+        Precision 0.95). Vďaka tomu si stále drží vysoký koeficient MCC (okolo 0.8),
+        no za cenu prehliadnutia približne 30% výstrelov.
+
+            Záver experimentu
+
+        Z aplikačného hľadiska tento experiment ukazuje zaujímavý fakt: Kvantizácia
+        modelu pre platformu Edge AI nielenže redukuje pamäťové nároky a urých-
+        ľuje inferenciu na jednotky milisekúnd, ale paradoxne zvyšuje fyzikálnu
+        robustnosť detektora. Tým, že zariadenie prirodzene stráca "citlivosť na
+        detaily", stáva sa odolnejším voči bežnému environmentálnemu šumu a po-
+        skytuje spoľahlivé výsledky pre systémy včasného varovania (s minimalizáciou
+        falošných poplachov).
+
+         Porovnanie MCC pre PC a ESP32 pri rôznom šume pridanom k audionahrávkam
+
+                  1
+
+
+                 0.8
+
+
+                 0.6
+           MCC
+
+
+
+
+                 0.4
+
+
+                 0.2      PC
+                         ESP32
+                  0
+                          30                20                10       5
+                                   Úroveň šumu (SNR) [dB]
+
+         Obrázok 8.1: Porovnanie Matthewsovho korelačného koeficientu PC vs ESP32.
+
+
+
+
+                                             49
+8. Validácia systému na zašumených audio vzorkách   .....................
+     8.4        Verifikácia vplyvu kvantizácie (int8) na PC
+
+S cieľom definitívne potvrdiť hypotézu, že prechod z plnej presnosti (float32)
+na kvantizovaný formát (int8) pôsobí ako prirodzená šumová brána, bol rea-
+lizovaný dodatočný verifikačný experiment. Evaluácia prebehla v referenčnom
+prostredí osobného počítača. Testovacie dáta boli najprv kvantizované na
+8-bitové celočíselné hodnoty a následne klasifikované identickým TFLite mo-
+delom, aký bol nasadený na mikrokontroléri. Dosiahnuté výsledky sú zhrnuté
+v tabuľke 8.3.
+
+Úroveň šumu (SNR)          Accuracy    Precision     Recall    F1-score    MCC
+       30 dB                98.66 %      0.86         1.00       0.93      0.9211
+       20 dB                96.77 %      0.72         1.00       0.84      0.8340
+       10 dB                92.74 %      0.54         0.97       0.69      0.6890
+        5 dB                92.41 %      0.53         0.90       0.66      0.6511
+  Tabuľka 8.3: Výsledky evaluácie na PC pre dáta zašumené v časovej oblasti
+  (.wav) a kvantizované na int8.
+
+     Zhodnotenie vplyvu kvantizácie
+
+Ako sa predpokladalo na základe testov v sekcii 8.3, zníženie rozlíšenia vstup-
+ných parametrov skutočne funguje ako efektívny filter. Výsledky evaluácie sú
+signifikantne lepšie a stabilnejšie v porovnaní s modelom využívajúcim plný
+rozsah desatinných čísel (float32). Vizuálne porovnanie celkovej robustnosti,
+reprezentovanej metrikou MCC, pre štandardný a kvantizovaný model bežiaci
+na PC, je znázornené na obrázku 8.2.
+
+                  Vplyv kvantizácie na PC pri rôznych úrovniach šumu
+
+           1
+
+          0.8
+    MCC
+
+
+
+
+          0.6
+
+          0.4
+
+          0.2       PC - float32
+                     PC - int8
+           0
+                     30               20               10        5
+                             Úroveň šumu (SNR) [dB]
+
+  Obrázok 8.2: Porovnanie Matthewsovho korelačného koeficientu na PC pre
+  nekvantizovaný a kvantizovaný model.
+
+
+                                      50
+    Kapitola 9
+    Diskusia
+
+Navrhnuté a otestované riešenie problematiky detekcie akustických prejavov
+delostreleckej paľby (konkrétne húfnice vz. 77 DANA) prinieslo významné
+poznatky, a to predovšetkým v kontexte nasadenia konvolučného modelu na
+platformu Edge AI, kde dochádzalo ku kompresii a kvantizácii dát.
+
+Úvodná fáza práce sa zameriavala na predspracovanie surového akustického
+signálu do formátu vhodného pre klasifikačný algoritmus. Aplikovaná augmen-
+tácia dát preukázateľne zvýšila robustnosť modelu a čiastočne kompenzovala
+limitovaný rozsah datasetu pre pozitívnu triedu („gunshot“). Optimalizovaná
+knižnica TensorFlow Lite Micro, určená pre vnorené systémy, poskytla mi-
+moriadne vysoký výpočtový výkon. Vďaka využitiu vektorových inštrukcií
+(SIMD) trvala inferencia jednej matice kepstrálnych koeficientov, prislúcha-
+júcej jednej impulznej udalosti, v priemere len 32 milisekúnd. Tento výkon
+jednoznačne potvrdzuje realizovateľnosť a vhodnosť nasadenia systému pre
+detekciu v reálnom čase na prenosnej mikroelektronike.
+
+Najvýznamnejším zistením experimentálnej časti bol paradoxný vplyv zníženia
+číselnej presnosti. Prechod z plnej výpočtovej presnosti (float32) na osobnom
+počítači do kvantizovaného formátu (int8) na mikrokontroléri ESP32-S3 ne-
+viedol k degradácii klasifikačnej úspešnosti. Naopak, tento proces zafungoval
+ako filter voči aditívnemu šumu, vďaka čomu sa výsledná robustnosť systému
+(reprezentovaná metrikou MCC) zlepšila. Validácia tohto javu prostredníc-
+tvom dodatočnej kvantizácie modelu priamo na PC experimentálne potvrdila,
+že stratové „zaokrúhľovanie“ hodnôt skutočne zlepšuje klasifikáciu.
+
+Otvoreným predmetom pre ďalší výskum zostáva tzv. hardvérovo špecifická
+divergencia výpočtov. Ukázalo sa totiž, že kvantizovaný int8 model bežiaci
+na platforme PC dosahoval o niečo horšie výsledky (vyššiu mieru falošných
+poplachov) než identický model na mikrokontroléri ESP32-S3. Najpravdepo-
+dobnejšou príčinou tohto javu sú rozdiely na úrovni hardvérovej implementácie.
+Vektorové inštrukcie jadra Xtensa pri operáciách maticového násobenia a
+akumulácie (MAC) zrejme využívajú odlišné pravidlá pre vnútorné zaok-
+rúhľovanie medzivýsledkov v porovnaní s architektúrou x86, čo v prípade
+akustického detektora pôsobilo ako dodatočná vrstva šumovej filtrácie.
+
+                                     51
+9. Diskusia   .......................................
+     9.1      Obmedzenia navrhnutého riešenia
+
+Napriek úspešnému splneniu stanovených cieľov vykazuje navrhnutý systém
+určité obmedzenia z hľadiska jeho priamej využiteľnosti v reálnej praxi. Prvým
+limitujúcim faktorom je samotný dataset. Ten pozostáva z relatívne malého
+počtu vzoriek, pričom všetky nahrávky boli zhotovené v kontrolovanom pro-
+stredí strelnice za akusticky ideálnych podmienok. Tieto dáta tak nemusia
+dostatočne verne reprezentovať komplexnú akustickú situáciu na reálnom
+bojisku alebo v členitom mestskom prostredí. Aj keď bola odolnosť modelu
+voči rušeniu extenzívne testovaná pomocou syntetickej injekcie aditívneho
+šumu, fyzické testovanie zariadenia priamo v teréne zatiaľ nebolo zrealizované.
+
+Druhým významným obmedzením je špecializácia klasifikátora. Keďže pozi-
+tívna trieda („gunshot“) bola vytvorená výhradne na základe akustických
+prejavov húfnice vz. 77 DANA, schopnosť modelu generalizovať detekciu aj
+na iné typy delostreleckých systémov (napríklad mínomety alebo raketomety)
+zostáva bez dodatočného trénovania a rozšírenia datasetu neoverená.
+
+     9.2      Možnosti ďalšieho rozvoja
+
+Predložená práca tvorí stabilný základ pre ďalší výskum a vývoj v oblasti
+inteligentných akustických senzorov. Existuje niekoľko smerov, ktorými by sa
+dalo zariadenie a celý systém v budúcnosti rozširovať:
+
+ .   Autonómny prenosný detekčný systém: Rozšírením hardvéru o
+     kvalitný externý mikrofón (napr. cez rozhranie I2S) by bolo možné signál
+     spracovávať nepretržite priamo na embedded zariadení. Systém by tak
+     fungoval úplne nezávisle a v reálnom čase by dokázal upozorniť na
+     blížiacu sa delostreleckú hrozbu bez nutnosti pripojenia k PC.
+ .   Multiklasifikácia a generalizácia modelu: Zväčšením datasetu o
+     nahrávky iných zbraňových systémov a adekvátnou úpravou architektúry
+     neurónovej siete by bolo možné prejsť od súčasnej binárnej klasifikácie
+     k viactriednej. Zariadenie by tak dokázalo nielen detegovať impulznú
+     udalosť, ale aj presne klasifikovať konkrétny typ zbrane.
+
+Výsledky tejto práce celkovo preukazujú, že presun výpočtovo náročných
+algoritmov strojového učenia a spracovania signálov priamo na úroveň níz-
+konákladových mikrokontrolérov (Edge AI) je nielen možný, ale z hľadiska
+vývoja moderných autonómnych senzorov aj vysoko perspektívny.
+
+
+
+
+                                      52
+    Kapitola 10
+    Záver
+Cieľom predloženej diplomovej práce bolo navrhnúť, implementovať a otesto-
+vať ucelený systém pre akustickú detekciu a klasifikáciu delostreleckej streľby
+s dôrazom na optimalizáciu pre koncové zariadenia (Edge AI). Na základe
+dosiahnutých výsledkov a zrealizovaných experimentov možno konštatovať,
+že stanovené ciele práce boli v plnom rozsahu splnené.
+
+Práca komplexne pokrýva celý reťazec spracovania signálu. Vstupom boli
+reálne audionahrávky výstrelov z húfnice vz. 77 DANA získané vo vojen-
+skom výcvikovom priestore Doupov. Tieto súvislé záznamy boli algoritmicky
+segmentované na jednotlivé impulzné udalosti, z ktorých boli extrahované
+akustické odtlačky vo forme matíc Mel-frekvenčných kepstrálnych koeficientov
+(MFCC). Takto pripravené dáta, doplnené o negatívnu triedu bežných environ-
+mentálnych ruchov, slúžili ako vstup pre konvolučnú neurónovú sieť (CNN).
+Problém výraznej asymetrie datasetu bol úspešne vyriešený implementáciou
+metódy váženia tried (Class Weighting).
+
+Najvýznamnejším prínosom práce je prenos natrénovaného modelu na plat-
+formu mikrokontroléra ESP32-S3 a následná analýza jeho správania v zašume-
+nom prostredí. Model bol pre potreby vnoreného systému podrobený 8-bitovej
+celočíselnej kvantizácii (int8) s využitím knižnice TensorFlow Lite Micro.
+Evaluácia potvrdila, že táto optimalizácia nielen znížila hardvérové nároky, ale
+paradoxne zvýšila robustnosť klasifikácie pôsobením nelineárnej filtrácie šumu.
+
+Navrhnutý a otestovaný systém dosahuje pozoruhodné výsledky a predstavuje
+stabilný základ pre ďalší výskum a vývoj, ktorého ďalším cieľom by mohla
+byť implementácia plne autonómneho detekčného zariadenia pracujúceho v
+reálnom čase.
+
+
+
+
+                                      53
+54
+    Literatúra
+
+[1] D. Adamy, EW 101: A First Course in Electronic Warfare. Norwood, MA,
+    USA: Artech House, 2001.
+
+[2] M. A. Richards, J. A. Scheer, and W. A. Holm, Principles of Modern
+    Radar: Basic Principles. Raleigh, NC, USA: SciTech Publishing, 2010.
+
+[3] J. Svatos and J. Holub, „Impulse Acoustic Event Detection, Classifi-
+    cation, and Localization System“, IEEE Transactions on Instrumen-
+    tation and Measurement, vol. 72, Art. no. 6501515, Mar. 2023, doi:
+    10.1109/TIM.2023.3252631.
+
+[4] J. Svatos and J. Holub, „Cepstral coefficients effectiveness for gunshot
+    classifying“, Measurement Science and Technology, vol. 35, no. 7, Art. no.
+    076122, Apr. 2024, doi: 10.1088/1361-6501/ad3c5d.
+
+[5] Jakub Svatoš - Habilitation Lecture. Simple Acustic Detector. [Pdf]. 2025.
+
+[6] S. Cao, X. Chen, X. Zhang, and X. Chen, „Effective audio signal arrival
+    time detection algorithm for realization of robust acoustic indoor posi-
+    tioning“ IEEE Trans. Instrum. Meas., vol. 69, no. 10, pp. 7341–7352, Oct.
+    2020, doi: 10.1109/TIM.2020.2981985.
+
+[7] Jakub Svatos, Jan Holub, Jan Belak, „System for an acoustic detection,
+    localisation and classification“, Acta IMEKO, vol. 10, no. 2, article 10,
+    June 2021, identifier: IMEKO-ACTA-10 (2021)-02-10
+
+[8] R. C. Maher, „Acoustical characterization of gunshots“, in 2007
+    IEEE Workshop on Signal Processing Applications for Public Security
+    and Forensics, Washington, DC, USA, 2007, pp. 1-5, doi: 10.1109/S-
+    PAPSF.2007.384077.
+
+[9] K. Molnár, Á. Lédeczi, L. Sujbert, and G. Péceli, „Muzzle blast detection
+    via short time Fourier transform“, in Proc. 12th PhD Mini-Symposium,
+    Budapest, Hungary, 2005, pp. 16-19.
+
+[10] R. C. Maher, „Modeling and Signal Processing of Acoustic Gunshot
+    Recordings,“ 2006 IEEE 12th Digital Signal Processing Workshop & 4th
+
+                                     55
+10. Záver   .......................................
+   IEEE Signal Processing Education Workshop, Teton National Park, WY,
+   USA, 2006, pp. 257-261, doi: 10.1109/DSPWS.2006.265386.
+
+[11] B. M. Sadler, L. C. Sadler and T. Pham, „Optimal and robust shockwave
+    detection and estimation,“ in 1997 IEEE International Conference on
+    Acoustics, Speech, and Signal Processing, Munich, Germany, Apr. 1997,
+    vol. 3, pp. 1889–1892, doi: 10.1109/ICASSP.1997.598908.
+
+[12] B. Ayoub, K. Jamal, and Z. Arsalane, „Gammatone frequency cepstral
+    coefficients for speaker identification over VoIP networks,“ in Proc. Int.
+    Conf. Inf. Technol. Org. Develop. (IT4OD), Mar. 2016, pp. 1–5, doi:
+    10.1109/IT4OD.2016.7479293.
+
+[13] X. Valero and F. Alias, „Gammatone cepstral coefficients: Biolo-
+    gically inspired features for non-speech audio classification,“ IEEE
+    Trans. Multimedia, vol. 14, no. 6, pp. 1684–1689, Dec. 2012, doi:
+    10.1109/TMM.2012.2199972.
+
+[14] P. Naz, J. Bouguereau, A. Lemer a F. Ywanne, „Acoustic detection and
+    localization of artillery guns,“ in Unattended Ground Sensor Technologies
+    and Applications V, vol. 5090, pp. 82-93, International Society for Optics
+    and Photonics, 2003.
+
+[15] F. Rosenblatt, „The perceptron: A probabilistic model for information
+    storage and organization in the brain,“ Psychol. Rev., vol. 65, no. 6, 1958,
+    Art. no. 386.
+
+[16] D. E. Rumelhart, G. E. Hinton, and R. J. Williams, „Learning repre-
+    sentations by back-propagating errors,“ Nature, vol. 323, no. 6088, 1986,
+    Art. no. 533.
+
+[17] A. Krizhevsky, I. Sutskever, and G. E. Hinton, „Imagenet classification
+    with deep convolutional neural networks,“ in Proc. 25th Int. Conf. Neural
+    Inf. Process. Syst., 2012, pp. 1097–1105.
+
+[18] H. Purwins, B. Li, T. Virtanen, J. Schlüter, S. -Y. Chang and T. Sainath,
+    "Deep Learning for Audio Signal Processing,ïn IEEE Journal of Selected
+    Topics in Signal Processing, vol. 13, no. 2, pp. 206-219, May 2019, doi:
+    10.1109/JSTSP.2019.2908700.
+
+[19] J. Schröder et al., „Classifier Architectures for Acoustic Scenes and
+    Events: Implications for DNNs, TDNNs, and Perceptual Features from
+    DCASE 2016,“ IEEE/ACM Transactions on Audio, Speech, and Lan-
+    guage Processing, vol. 25, no. 10, pp. 1953-1964, Oct. 2017, doi:
+    10.1109/TASLP.2017.2736746.
+
+[20] A. Morehead, L. Ogden, G. Magee, R. Hosler, B. White a G. Mohler,
+   „Low Cost Gunshot Detection using Deep Learning on the Raspberry Pi,“
+    in 2019 IEEE International Conference on Big Data (Big Data), 2019,
+    pp. 3038–3044, doi: 10.1109/BigData47090.2019.9006456
+
+                                      56
+.......................................                                        10. Záver
+
+
+        [21] D. Kale, G. Ganjre and R. Udani, „A Proposed Real-Time FPGA
+            System Using MFCC Features for Acoustic Anti-Poaching Monito-
+            ring“, 2026 International Conference on Communication, Computing
+            and Emerging Technologies (IC3ET), Vasai, India, 2026, pp. 215-220, doi:
+            10.1109/IC3ET64989.2026.11467226.
+
+        [22] S. Hershey et al., „CNN architectures for large-scale audio classification“,
+            in 2017 IEEE International Conference on Acoustics, Speech and Signal
+            Processing (ICASSP), New Orleans, LA, USA, 2017, pp. 131-135, doi:
+            10.1109/ICASSP.2017.7952132.
+
+        [23] K. J. Piczak, „Environmental sound classification with convolutional
+            neural networks,“ 2015 IEEE 25th International Workshop on Machine
+            Learning for Signal Processing (MLSP), Boston, MA, USA, 2015, pp. 1-6,
+            doi: 10.1109/MLSP.2015.7324337.
+
+        [24] F. Chollet, Deep Learning with Python, 2nd ed. Shelter Island, NY,
+            USA: Manning Publications, 2021.
+
+        [25] K. Simonyan and A. Zisserman, „Very deep convolutional networks for
+            large-scale image recognition,“ in 3rd International Conference on Lear-
+            ning Representations (ICLR), San Diego, CA, USA, 2015, doi: 10.48550/ar-
+            Xiv.1409.1556
+
+        [26] A. Krizhevsky, I. Sutskever, and G. E. Hinton, „ImageNet classification
+            with deep convolutional neural networks,“ Communications of the ACM,
+            vol. 60, no. 6, pp. 84–90, May 2017, doi: 10.1145/3065386.
+
+        [27] N. Srivastava, G. Hinton, A. Krizhevsky, I. Sutskever, and R. Salakhutdi-
+            nov, „Dropout: A simple way to prevent neural networks from overfitting,“
+            The Journal of Machine Learning Research, vol. 15, no. 1, pp. 1929–1958,
+            2014.
+
+        [28] I. Goodfellow, Y. Bengio, and A. Courville, Deep Learning. Cambridge,
+            MA, USA: MIT Press, 2016. (Kapitola 6.2.2.2: Sigmoid Units for Bernoulli
+            Output Distributions).
+
+        [29] D. P. Kingma and J. Ba, „Adam: A method for stochastic optimization,“
+            in 3rd International Conference on Learning Representations (ICLR), San
+            Diego, CA, USA, 2015, doi: 10.48550/arXiv.1412.6980.
+
+        [30] D. S. Park et al., „SpecAugment: A Simple Data Augmentation Method
+            for Automatic Speech Recognition,“ in Interspeech 2019, Graz, Austria,
+            2019, pp. 2613–2617.
+
+        [31] J. G. Proakis and M. Salehi, Digital Communications, 5th ed. New York,
+            NY, USA: McGraw-Hill, 2008.
+
+        [32] C. M. Bishop, Pattern Recognition and Machine Learning. New York,
+            NY, USA: Springer, 2006.
+
+                                               57
+10. Záver   .......................................
+[33] H. He and E. A. Garcia, „Learning from Imbalanced Data,“ IEEE
+    Transactions on Knowledge and Data Engineering, vol. 21, no. 9, pp.
+    1263–1284, Sept. 2009, doi: 10.1109/TKDE.2008.239.
+
+[34] D. M. W. Powers, „Evaluation: from precision, recall and F-measure to
+    ROC, informedness, markedness and correlation,“ Journal of Machine
+    Learning Technologies, vol. 2, no. 1, pp. 37–63, 2011.
+
+[35] D. Chicco and G. Jurman, "The advantages of the Matthews corre-
+    lation coefficient (MCC) over F1 score and accuracy in binary classifi-
+    cation evaluation,"BMC Genomics, vol. 21, no. 1, p. 6, Jan. 2020, doi:
+    10.1186/s12864-019-6413-7.
+
+[36] J. Davis and M. Goadrich, „The relationship between Precision-Recall
+    and ROC curves,“ in Proceedings of the 23rd International Conference
+    on Machine Learning (ICML), Pittsburgh, PA, USA, 2006, pp. 233–240,
+    doi: 10.1145/1143844.1143874.
+
+[37] C. Antonopoulos et al., „Reducing the Power Consumption of Edge
+    Devices Supporting Ambient Intelligence Applications,“ Information, vol.
+    15, no. 3, p. 161, Mar. 2024, doi: 10.3390/info15030161.
+
+[38] Espressif Systems, ESP32-S3 Series Datasheet. Shanghai, China: Espres-
+    sif Systems, 2024. [Online]. Dostupné: https://www.espressif.com/
+
+[39] Espressif Systems,      „ESP-NN:      Optimized Neural Network
+    Library,“    GitHub     repository,    2024.   [Online]. Dostupné:
+    https://github.com/espressif/esp-nn
+
+[40] B. Jacob et al., „Quantization and Training of Neural Networks for
+    Efficient Integer-Arithmetic-Only Inference,“ in Proceedings of the IEEE
+    Conference on Computer Vision and Pattern Recognition (CVPR), Salt
+    Lake City, UT, USA, 2018, pp. 2704–2713.
+
+[41] Espressif Systems, ESP-IDF Programming Guide, 2024. [Online]. Do-
+    stupné: https://docs.espressif.com/projects/esp-idf/
+
+[42] R. David et al., „TensorFlow Lite Micro: Embedded Machine Learning
+    for TinyML Systems,“ in Proceedings of Machine Learning and Systems
+    (MLSys), vol. 3, pp. 800–811, 2021.
+
+[43] J. Salamon and J. P. Bello, „Deep Convolutional Neural Networks and
+    Data Augmentation for Environmental Sound Classification,“ IEEE Signal
+    Processing Letters, vol. 24, no. 3, pp. 279-283, 2017.
+
+[44] J. Lin, C. Gan, and S. Han, „Defensive Quantization: When Efficiency
+    Meets Robustness,“ in 7th International Conference on Learning Repre-
+    sentations (ICLR), New Orleans, LA, USA, 2019.
+
+
+
+
+                                    58
+    Zoznam použitých skratiek
+.   ADC - Analog-to-Digital Converter (Analógovo-digitálny prevodník).
+.   AWGN - Additive White Gaussian Noise (Aditívny biely Gaussov šum).
+.   CFAR - Constant False Alarm Rate (Konštantná miera falošných pop-
+    lachov).
+.   CNN - Convolutional Neural Network (Konvolučná neurónová sieť).
+.   dB - Decibel (jednotka hladiny intenzity zvuku).
+.   DCT - Discrete Cosine Transform (Diskrétna kosínová transformácia).
+.   Em - Energy (Energia v m-tom Melovom pásme).
+.   FFT - Fast Fourier Transform (Rýchla Fourierova transformácia).
+.   FN - False Negative (Falošne negatívna klasifikácia).
+.   FP - False Positive (Falošne pozitívna klasifikácia).
+.   Hz - Hertz (jednotka frekvencie).
+.   Im - Imaginárna časť signálu.
+.   kB - Kilobyte (Kilobajt).
+.   MCC - Matthews Correlation Coefficient (Matthewsov korelačný koefi-
+    cient).
+.   mel - Jednotka výšky zvuku na Melovej škále.
+.   MFCC - Mel-Frequency Cepstral Coefficients (Mel-frekvenčné kepstrálne
+    koeficienty).
+.   ms - Milisekunda (jednotka času).
+.   NFFT - Number of FFT bins (Počet bodov Fourierovej transformácie).
+.   RAM - Random Access Memory (Pamäť s priamym prístupom / Ope-
+    račná pamäť).
+
+                                    59
+10. Záver   .......................................
+ .   Re - Reálna časť signálu.
+ .   ReLU - Rectified Linear Unit (Usmernená lineárna jednotka).
+ .   SIMD - Single Instruction, Multiple Data (Jedna inštrukcia, viacero
+     dát).
+ .   SNR - Signal-to-Noise Ratio (Odstup signálu od šumu).
+ .   STFT - Short-Time Fourier Transform (Krátkodobá Fourierova trans-
+     formácia).
+ .   TDOA - Time Difference of Arrival (Časový rozdiel príchodu signálu).
+ .   TN - True Negative (Správne negatívna klasifikácia).
+ .   TP - True Positive (Správne pozitívna klasifikácia).
+ .   UART - Universal Asynchronous Receiver-Transmitter (Univerzálny
+     asynchrónny prijímač a vysielač).
+
+
+
+
+                                     60
+
