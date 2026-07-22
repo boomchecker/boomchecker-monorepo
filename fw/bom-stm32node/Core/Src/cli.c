@@ -1,14 +1,14 @@
 /**
  ******************************************************************************
  * @file    cli.c
- * @brief   Konzole nad embedded-cli s vystupem pres transportni callback.
+ * @brief   Console on top of embedded-cli with output via a transport callback.
  ******************************************************************************
  */
 #include "cli.h"
 #include "embedded_cli.h"
 #include "main.h"   /* Error_Handler */
 
-/* Staticka alokace CLI (bez malloc). 1 kB pokryje rx/cmd/history nize + bindingy. */
+/* Static CLI allocation (no malloc). 1 kB covers the rx/cmd/history below plus bindings. */
 #define CLI_STATIC_BYTES  1024u
 #define CLI_TX_RING       512u
 
@@ -16,10 +16,10 @@ static EmbeddedCli *s_cli;
 static CLI_UINT     s_cli_buffer[BYTES_TO_CLI_UINTS(CLI_STATIC_BYTES)];
 static cli_tx_fn    s_tx;
 
-/* TX kruhovy buffer: writeChar plni po znaku, cli_process davkove flushuje. */
+/* TX ring: writeChar fills it byte by byte, cli_process flushes in chunks. */
 static uint8_t  s_tx_ring[CLI_TX_RING];
-static uint16_t s_tx_head; /* zapis */
-static uint16_t s_tx_tail; /* cteni */
+static uint16_t s_tx_head; /* write */
+static uint16_t s_tx_tail; /* read */
 
 static void tx_ring_push(uint8_t b)
 {
@@ -29,7 +29,7 @@ static void tx_ring_push(uint8_t b)
     s_tx_ring[s_tx_head] = b;
     s_tx_head = next;
   }
-  /* jinak plno -> znak se zahodi (radeji ztrata vypisu nez blokovani) */
+  /* otherwise full -> drop the byte (prefer losing output over blocking) */
 }
 
 static void cli_write_char(EmbeddedCli *cli, char c)
@@ -38,8 +38,8 @@ static void cli_write_char(EmbeddedCli *cli, char c)
   tx_ring_push((uint8_t)c);
 }
 
-/* Odesle jednu souvislou cast ringu (do konce bufferu). Pri busy transportu
-   necha data v ringu a zkusi to znovu pristi cli_process. */
+/* Send one contiguous span of the ring (up to its end). If the transport is
+   busy, leave the data in the ring and retry on the next cli_process. */
 static void tx_flush(void)
 {
   if (s_tx == NULL || s_tx_head == s_tx_tail)
@@ -55,7 +55,7 @@ static void tx_flush(void)
   }
 }
 
-/* --- Prikazy (help je vestaveny v embedded-cli) ---------------------------- */
+/* --- Commands (help is built into embedded-cli) ---------------------------- */
 static void cmd_version(EmbeddedCli *cli, char *args, void *context)
 {
   (void)args;
@@ -81,7 +81,7 @@ void cli_init(cli_tx_fn tx)
   s_cli = embeddedCliNew(cfg);
   if (s_cli == NULL)
   {
-    Error_Handler(); /* staticky buffer je maly - zvednout CLI_STATIC_BYTES */
+    Error_Handler(); /* static buffer too small - raise CLI_STATIC_BYTES */
   }
   s_cli->writeChar = cli_write_char;
 
@@ -94,7 +94,7 @@ void cli_init(cli_tx_fn tx)
   };
   embeddedCliAddBinding(s_cli, version_binding);
 
-  embeddedCliProcess(s_cli); /* vypise uvodni pozvanku */
+  embeddedCliProcess(s_cli); /* print the initial prompt */
 }
 
 void cli_process(void)

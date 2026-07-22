@@ -1,30 +1,30 @@
 /**
  ******************************************************************************
  * @file    mic.c
- * @brief   Akvizice z PDM mikrofonu (SAI1_A + GPDMA circular). Z Mik_stm.
+ * @brief   PDM microphone acquisition (SAI1_A + GPDMA circular). From Mik_stm.
  ******************************************************************************
  */
 #include "mic.h"
-#include "sai.h"          /* extern SAI_HandleTypeDef hsai_BlockA1 (z CubeMX) */
+#include "sai.h"          /* extern SAI_HandleTypeDef hsai_BlockA1 (from CubeMX) */
 
-/* --- Kruhovy DMA buffer a DMA linked-list ---------------------------------- */
-static uint16_t pdm_ring[PDM_RING_HALFWORDS];   /* kruhovy buffer plneny DMA    */
+/* --- Circular DMA buffer and DMA linked-list ------------------------------- */
+static uint16_t pdm_ring[PDM_RING_HALFWORDS];   /* buffer filled by DMA          */
 
-static DMA_HandleTypeDef hdma_sai_rx;           /* GPDMA1 CH0 <- SAI1_A         */
+static DMA_HandleTypeDef hdma_sai_rx;           /* GPDMA1 CH0 <- SAI1_A          */
 static DMA_QListTypeDef  pdm_dma_queue;
 static DMA_NodeTypeDef   pdm_dma_node;
 
-/* --- Stav akvizice: ISR nastavuje priznaky, main je vycita ----------------- */
+/* --- Acquisition state: ISR sets ready flags, main drains them ------------- */
 static volatile uint8_t  s_running     = 0;
-static volatile uint8_t  s_half0_ready = 0;     /* prvni polovina ringu hotova  */
-static volatile uint8_t  s_half1_ready = 0;     /* druha polovina ringu hotova  */
+static volatile uint8_t  s_half0_ready = 0;     /* first ring half ready         */
+static volatile uint8_t  s_half1_ready = 0;     /* second ring half ready        */
 static volatile uint8_t  s_overrun     = 0;
 static volatile uint32_t s_blocks      = 0;
 
 static pdm_pcm_t s_dsp;
 
-/* GPDMA1 CH0: SAI1_A -> pdm_ring, kruhovy linked-list (1 uzel), preruseni
-   v polovine a na konci bufferu. Port MIC_DMA_Init z Mik_stm. */
+/* GPDMA1 CH0: SAI1_A -> pdm_ring, circular linked-list (1 node), interrupts at
+   the half and the end of the buffer. Port of MIC_DMA_Init from Mik_stm. */
 void mic_dma_init(void)
 {
   DMA_NodeConfTypeDef node = {0};
@@ -145,7 +145,7 @@ uint32_t mic_blocks_processed(void)
   return s_blocks;
 }
 
-/* --- HAL callbacky: prvni/druha polovina kruhoveho bufferu hotova ---------- */
+/* --- HAL callbacks: first/second half of the circular buffer ready --------- */
 void HAL_SAI_RxHalfCpltCallback(SAI_HandleTypeDef *hsai)
 {
   (void)hsai;
@@ -153,7 +153,7 @@ void HAL_SAI_RxHalfCpltCallback(SAI_HandleTypeDef *hsai)
   {
     if (s_half0_ready)
     {
-      s_overrun = 1; /* main nestihl zpracovat predchozi prvni polovinu */
+      s_overrun = 1; /* main did not process the previous first half in time */
     }
     s_half0_ready = 1;
   }
@@ -175,11 +175,11 @@ void HAL_SAI_RxCpltCallback(SAI_HandleTypeDef *hsai)
 void HAL_SAI_ErrorCallback(SAI_HandleTypeDef *hsai)
 {
   (void)hsai;
-  s_overrun = 1; /* obvykle SAI overrun */
+  s_overrun = 1; /* usually a SAI overrun */
 }
 
-/* GPDMA1 Channel0 preruseni -> HAL DMA obsluha (modul si handler vlastni, aby
-   byl soberestacny; CubeMX nesmi generovat vlastni handler pro tento kanal). */
+/* GPDMA1 Channel0 interrupt -> HAL DMA handler (the module owns this handler so
+   it stays self-contained; CubeMX must not generate its own for this channel). */
 void GPDMA1_Channel0_IRQHandler(void)
 {
   HAL_DMA_IRQHandler(&hdma_sai_rx);

@@ -1,11 +1,11 @@
 /**
  ******************************************************************************
  * @file    cli.h
- * @brief   Interaktivni konzole nad embedded-cli (funbiscuit).
+ * @brief   Interactive console on top of embedded-cli (funbiscuit).
  *
- * Transportne nezavisle: vystup jde pres callback cli_tx_fn, vstup se krmi
- * pres cli_feed(). USB CDC glue (CDC_Transmit_FS / CDC_Receive_FS) zije mimo
- * tento modul, takze cli.c nema zavislost na USB stacku.
+ * Transport-agnostic: output goes through a cli_tx_fn callback, input is fed
+ * via cli_feed(). The USB CDC glue (CDC read/write) lives outside this module,
+ * so cli.c has no dependency on the USB stack.
  ******************************************************************************
  */
 #ifndef CLI_H
@@ -15,25 +15,25 @@
 #include <stddef.h>
 
 /**
- * @brief Transportni odeslani: posle `len` bajtu.
- * @return 0 pri uspechu; nenulove = zaneprazdneno (cli_process zkusi tyz blok
- *         znovu v dalsi iteraci). Pro USB CDC obaluje CDC_Transmit_FS.
+ * @brief Transport send: send `len` bytes.
+ * @return 0 on success; non-zero if busy (cli_process retries the same block
+ *         on the next iteration). For USB CDC this wraps the CDC write.
  */
 typedef int (*cli_tx_fn)(const uint8_t *buf, uint16_t len);
 
 /**
- * @brief Vytvori CLI (staticky buffer), zaregistruje prikazy, vypise pozvanku.
- * @param tx transportni odesilaci callback (nesmi byt NULL pro vystup)
+ * @brief Create the CLI (static buffer), register commands, print the prompt.
+ * @param tx transport send callback (must not be NULL for output)
  */
 void cli_init(cli_tx_fn tx);
 
 /**
- * @brief Zpracuje prikazy a vyprazdni TX buffer. Volat v hlavni smycce.
+ * @brief Process commands and flush the TX buffer. Call in the main loop.
  */
 void cli_process(void);
 
 /**
- * @brief Preda prijate bajty do CLI. Volat z RX (napr. CDC_Receive_FS).
+ * @brief Feed received bytes to the CLI. Call from RX (e.g. CDC read).
  */
 void cli_feed(const uint8_t *buf, uint32_t len);
 

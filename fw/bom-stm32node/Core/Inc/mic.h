@@ -1,16 +1,16 @@
 /**
  ******************************************************************************
  * @file    mic.h
- * @brief   Akvizice z PDM mikrofonu: SAI1_A + GPDMA circular -> PCM.
+ * @brief   PDM microphone acquisition: SAI1_A + GPDMA circular -> PCM.
  *
- * Nadstavba nad SAI1, ktere konfiguruje CubeMX (PDM master RX, 16bit ramec,
- * 1 slot, CK1 = 3.072 MHz). Tento modul si vlastni kruhovy DMA buffer,
- * postavi GPDMA1_Channel0 circular linked-list, spousti/zastavuje prijem a
- * prevadi hotove poloviny na 48 kHz PCM pres pdm_pcm.
+ * Sits on top of SAI1, which CubeMX configures (PDM master RX, 16-bit frame,
+ * 1 slot, CK1 = 3.072 MHz). This module owns the circular DMA buffer, builds
+ * the GPDMA1_Channel0 circular linked-list, starts/stops reception and
+ * converts completed halves into 48 kHz PCM via pdm_pcm.
  *
- * Predpoklady (viz docs/pdm-port-plan.md, "CubeMX kontrakt"):
+ * Assumptions (see docs/pdm-port-plan.md, "CubeMX contract"):
  *   - hsai_BlockA1: SAI1_A PDM master RX, DataSize 16, 1 slot, D1 = PE6
- *   - GPDMA1 povolene, GPDMA1_Channel0 volny (linked-list stavime zde)
+ *   - GPDMA1 enabled, GPDMA1_Channel0 free (the linked-list is built here)
  ******************************************************************************
  */
 #ifndef MIC_H
@@ -23,37 +23,37 @@
 #include "pdm_pcm.h"
 
 /**
- * @brief Postavi GPDMA1_Channel0 circular linked-list a nalinkuje ho na SAI1_A.
- *        Volat jednou po MX_SAI1_Init (v USER CODE 2 v main.c).
+ * @brief Build the GPDMA1_Channel0 circular linked-list and link it to SAI1_A.
+ *        Call once after MX_SAI1_Init (in USER CODE 2 in main.c).
  */
 void mic_dma_init(void);
 
 /**
- * @brief Resetuje DSP stav a spusti kontinualni DMA prijem do kruhoveho bufferu.
- * @return HAL_OK pri uspechu
+ * @brief Reset the DSP state and start continuous DMA reception into the ring.
+ * @return HAL_OK on success
  */
 int mic_start(void);
 
 /**
- * @brief Zastavi DMA prijem.
+ * @brief Stop DMA reception.
  */
 void mic_stop(void);
 
 /**
- * @brief Zpracuje jednu hotovou polovinu kruhoveho bufferu (pokud je pripravena).
- * @param pcm   vystupni buffer, min. PCM_SAMPLES_PER_HALF vzorku int16
- * @param nsamp [out] pocet zapsanych vzorku (PCM_SAMPLES_PER_HALF)
- * @return true pokud byla polovina zpracovana, jinak false (nic hotoveho)
+ * @brief Process one completed half of the ring (if one is ready).
+ * @param pcm   output buffer, at least PCM_SAMPLES_PER_HALF int16 samples
+ * @param nsamp [out] number of samples written (PCM_SAMPLES_PER_HALF)
+ * @return true if a half was processed, false otherwise (nothing ready)
  */
 bool mic_poll(int16_t *pcm, size_t *nsamp);
 
 /**
- * @brief true pokud od startu doslo k overrunu (main nestihal zpracovat polovinu).
+ * @brief true if an overrun happened since start (main did not keep up).
  */
 bool mic_overrun(void);
 
 /**
- * @brief Pocet dosud zpracovanych polovin (pro diagnostiku behu DMA).
+ * @brief Number of halves processed so far (to check the DMA is running).
  */
 uint32_t mic_blocks_processed(void);
 

@@ -1,15 +1,15 @@
 /**
  ******************************************************************************
  * @file    pdm_pcm.c
- * @brief   PDM -> PCM DSP (CIC5 + DC blocker + FIR). Prevzato z Mik_stm.
+ * @brief   PDM -> PCM DSP (CIC5 + DC blocker + FIR). Ported from Mik_stm.
  ******************************************************************************
  */
 #include "pdm_pcm.h"
 #include <string.h>
 
-/* FIR dolni propust 8 kHz @ 48 kHz, q15, 101 tapu (windowed sinc, Hanning,
-   stejny navrh jako v Mik_stm/tools/pdm_capture.py). Suma = 32768 -> DC zisk 1,0.
-   Suma |h| = 61684 -> nejhorsi 32bit akumulator 32767*61684 < INT32_MAX. */
+/* FIR low-pass 8 kHz @ 48 kHz, q15, 101 taps (windowed sinc, Hanning, same
+   design as Mik_stm/tools/pdm_capture.py). Sum = 32768 -> DC gain 1.0.
+   Sum |h| = 61684 -> worst-case 32-bit accumulator 32767*61684 < INT32_MAX. */
 static const int16_t fir_lp[FIR_TAPS] = {
        0,      0,      0,     -2,     -3,      0,      7,     10,      0,    -17,
      -22,      0,     32,     39,      0,    -53,    -62,      0,     81,     92,
@@ -41,22 +41,22 @@ void pdm_pcm_init(pdm_pcm_t *st, uint16_t slot_mask)
 {
   memset(st, 0, sizeof(*st));
   st->slot_mask = slot_mask;
-  st->pcm_mute = 64; /* ~1,3 ms: dobeh nabehu filtru (comb kryje seedovani DC) */
+  st->pcm_mute = 64; /* ~1.3 ms: cover the filter settling ramp (comb hides DC seed) */
 }
 
-/* Polovina ringu (8192 halfwordu = 131072 PDM bitu) -> PCM_SAMPLES_PER_HALF vzorku.
-   CIC5 D=64 (zisk 64^5 = 2^30, po >>12 stejne meritko jako drivejsi CIC3)
-   -> DC blocker (tau ~43 ms) -> FIR dolni propust 8 kHz (q15) -> gain se saturaci.
-   Bity halfwordu MSB-first = poradi prijmu. */
+/* One ring half (8192 halfwords = 131072 PDM bits) -> PCM_SAMPLES_PER_HALF samples.
+   CIC5 D=64 (gain 64^5 = 2^30, after >>12 same scale as the earlier CIC3)
+   -> DC blocker (tau ~43 ms) -> FIR 8 kHz low-pass (q15) -> gain with saturation.
+   Halfword bits MSB-first = order of reception. */
 void pdm_pcm_process_half(pdm_pcm_t *st, const uint16_t *src, int16_t *dst)
 {
   int16_t *x = &st->fir_x[FIR_TAPS - 1u];
 
   for (uint32_t s = 0; s < PCM_SAMPLES_PER_HALF; s++)
   {
-    /* 8 halfwordu = 128 bitu streamu, z nich 64 bitu vybraneho mikrofonu
-       (maska slotu) = 1 vystupni vzorek (D=64). Poradi bitu b 15..0 je
-       casove poradi prijmu, maska jen vynechava slot druheho mikrofonu. */
+    /* 8 halfwords = 128 stream bits, of which 64 belong to the selected mic
+       (slot mask) = 1 output sample (D=64). Bit order b 15..0 is the order of
+       reception; the mask just skips the other microphone's slot. */
     for (uint32_t w = 0; w < 8u; w++)
     {
       uint32_t hw = *src++;
@@ -80,9 +80,9 @@ void pdm_pcm_process_half(pdm_pcm_t *st, const uint16_t *src, int16_t *dst)
     uint64_t y5 = y4 - st->cic_c5;         st->cic_c5 = y4;
     int32_t y = (int32_t)(((int64_t)y5) >> 12); /* D=64: +-2^30 -> +-2^18 */
 
-    /* Prvni vystupy CIC jsou jeste usazovani combu - z nich se DC blocker
-       jen prubezne seeduje (finalni seed = 8. vzorek, comb je usazeny po 5),
-       jinak seed z rampy dozniva s tau 43 ms a urcuje spicku zaznamu. */
+    /* The first CIC outputs are still comb settling - seed the DC blocker from
+       them (final seed = 8th sample, comb settled after 5); otherwise the ramp
+       seed decays with tau 43 ms and sets the recording's peak. */
     if (st->dc_seeded < 8)
     {
       st->dc_seeded++;
@@ -90,8 +90,8 @@ void pdm_pcm_process_half(pdm_pcm_t *st, const uint16_t *src, int16_t *dst)
       x[s] = 0;
       continue;
     }
-    /* DC blocker: v = y - (dc_acc>>11), dc_acc += v. Akumulatorova forma
-       nema reziduum z orezavajiciho posuvu. dc_acc max 2^18 * 2^11 = 2^29. */
+    /* DC blocker: v = y - (dc_acc>>11), dc_acc += v. The accumulator form has
+       no residue from the truncating shift. dc_acc max 2^18 * 2^11 = 2^29. */
     int32_t v = y - (st->dc_acc >> 11);
     st->dc_acc += v;
     x[s] = sat16(v >> 3);
@@ -116,7 +116,7 @@ void pdm_pcm_process_half(pdm_pcm_t *st, const uint16_t *src, int16_t *dst)
     }
   }
 
-  /* poslednich FIR_TAPS-1 vzorku = historie pro dalsi blok */
+  /* Keep the last FIR_TAPS-1 samples as history for the next block. */
   memmove(st->fir_x, &st->fir_x[PCM_SAMPLES_PER_HALF],
           (FIR_TAPS - 1u) * sizeof(int16_t));
 }
