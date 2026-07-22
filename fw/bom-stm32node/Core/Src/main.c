@@ -24,6 +24,7 @@
 #include "spi.h"
 #include "usart.h"
 #include "usb.h"
+#include "app_usbx.h"
 #include "gpio.h"
 
 /* Private includes ----------------------------------------------------------*/
@@ -106,6 +107,7 @@ int main(void)
   MX_USART1_UART_Init();
   MX_UART4_Init();
   MX_SPI5_Init();
+  MX_USBX_Init();
   /* USER CODE BEGIN 2 */
   /* PDM akvizice: postavit DMA linked-list a spustit kontinualni prijem.
      Pozn.: SAI1, PLL2 (CK1 = 3.072 MHz) a boost CPU se konfiguruji v CubeMX
