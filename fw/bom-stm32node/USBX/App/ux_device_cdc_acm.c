@@ -23,7 +23,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "usb_cli.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -65,7 +65,7 @@
 VOID USBD_CDC_ACM_Activate(VOID *cdc_acm_instance)
 {
   /* USER CODE BEGIN USBD_CDC_ACM_Activate */
-  UX_PARAMETER_NOT_USED(cdc_acm_instance);
+  usb_cli_on_activate(cdc_acm_instance);
   /* USER CODE END USBD_CDC_ACM_Activate */
 
   return;
@@ -81,6 +81,7 @@ VOID USBD_CDC_ACM_Deactivate(VOID *cdc_acm_instance)
 {
   /* USER CODE BEGIN USBD_CDC_ACM_Deactivate */
   UX_PARAMETER_NOT_USED(cdc_acm_instance);
+  usb_cli_on_deactivate();
   /* USER CODE END USBD_CDC_ACM_Deactivate */
 
   return;

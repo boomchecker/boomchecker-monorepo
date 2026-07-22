@@ -48,6 +48,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     ${CMAKE_SOURCE_DIR}/Core/Src/pdm_pcm.c
     ${CMAKE_SOURCE_DIR}/Core/Src/mic.c
     ${CMAKE_SOURCE_DIR}/Core/Src/cli.c
+    ${CMAKE_SOURCE_DIR}/Core/Src/usb_cli.c
     ${CMAKE_SOURCE_DIR}/third_party/embedded-cli/lib/src/embedded_cli.c
 )
 
