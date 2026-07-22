@@ -75,15 +75,43 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     clang-format
 
 # STM32 platform support: ARM cross-toolchain + flashing/debugging tools.
-# arm-none-eabi-gcc is the bare-metal compiler; OpenOCD / st-flash handle flashing
+# arm-none-eabi-gcc is the bare-metal compiler; st-flash handles simple flashing
 # over ST-Link. CMake + Ninja are installed above, independent of ESP-IDF.
+# NOTE: the Ubuntu `openocd` package is intentionally NOT installed here — plain
+# `openocd` must keep resolving to Espressif's fork (from ESP-IDF, needed for
+# ESP32), and a third OpenOCD install would only add PATH conflicts. STM32
+# debugging uses the ST fork built below as `openocd-stm32`.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc-arm-none-eabi \
     binutils-arm-none-eabi \
     libnewlib-arm-none-eabi \
     gdb-multiarch \
-    openocd \
     stlink-tools
+
+# STMicroelectronics OpenOCD fork (the one bundled with STM32CubeIDE), built from
+# source into /opt/openocd-stm32 and exposed as `openocd-stm32`. Unlike the
+# upstream/Espressif builds it ships target/stm32h5x.cfg and supports the
+# STM32H5 flow via interface/stlink-dap.cfg + `transport select dapdirect_swd`
+# on an ST-LINK/V3. texinfo is required because git builds regenerate the docs.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    autoconf \
+    automake \
+    build-essential \
+    libhidapi-dev \
+    libtool \
+    libusb-1.0-0-dev \
+    pkg-config \
+    texinfo && \
+    git clone --depth 1 --branch openocd-cubeide-r7 \
+        https://github.com/STMicroelectronics/OpenOCD.git /tmp/openocd-stm32 && \
+    cd /tmp/openocd-stm32 && \
+    ./bootstrap && \
+    ./configure --prefix=/opt/openocd-stm32 --enable-stlink --disable-werror && \
+    make -j"$(nproc)" && \
+    make install && \
+    ln -s /opt/openocd-stm32/bin/openocd /usr/local/bin/openocd-stm32 && \
+    cd / && \
+    rm -rf /tmp/openocd-stm32 /var/lib/apt/lists/*
 
 # Extra developer tools.
 RUN apt-get update && apt-get install -y --no-install-recommends \
