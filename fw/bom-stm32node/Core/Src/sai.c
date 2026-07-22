@@ -70,7 +70,17 @@ void MX_SAI1_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN SAI1_Init 2 */
-
+  /* CubeMX cannot express the PDM MCKDIV clocking mode: force SCK =
+     kernel/Mckdiv (NODIV=1). Kernel 12.2857 MHz / 2 = 6.143 MHz SCK ->
+     CK1 = SCK/2 ~= 3.07 MHz (mic performance point, ~48 kHz after
+     decimation). See Mik_stm. */
+  hsai_BlockA1.Init.AudioFrequency = SAI_AUDIO_FREQUENCY_MCKDIV;
+  hsai_BlockA1.Init.Mckdiv         = 2;
+  hsai_BlockA1.Init.NoDivider      = SAI_MASTERDIVIDER_DISABLE;
+  if (HAL_SAI_Init(&hsai_BlockA1) != HAL_OK)
+  {
+    Error_Handler();
+  }
   /* USER CODE END SAI1_Init 2 */
 
 }
