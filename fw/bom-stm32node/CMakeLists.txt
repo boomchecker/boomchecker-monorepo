@@ -47,12 +47,15 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user sources here
     ${CMAKE_SOURCE_DIR}/Core/Src/pdm_pcm.c
     ${CMAKE_SOURCE_DIR}/Core/Src/mic.c
+    ${CMAKE_SOURCE_DIR}/Core/Src/cli.c
+    ${CMAKE_SOURCE_DIR}/third_party/embedded-cli/lib/src/embedded_cli.c
 )
 
 # Add include paths
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user defined include paths
     ${CMAKE_SOURCE_DIR}/Core/Inc
+    ${CMAKE_SOURCE_DIR}/third_party/embedded-cli/lib/include
 )
 
 # Add project symbols (macros)
