@@ -5,7 +5,7 @@
   "runServices": ["fw-devcontainer"],
   "workspaceFolder": "/workspace",
   "containerUser": "root",
-  "postCreateCommand": "mkdir -p ~boom/.ssh && cp -n ~boom/.ssh-host/* ~boom/.ssh/ 2>/dev/null; chown -R boom:boom ~boom/.ssh && chmod 700 ~boom/.ssh && find ~boom/.ssh -maxdepth 1 -type f ! -name '*.pub' -exec chmod 600 {} + ; find ~boom/.ssh -maxdepth 1 -type f -name '*.pub' -exec chmod 644 {} + ; true",
+  "postCreateCommand": "mkdir -p ~boom/.ssh && cp -n ~boom/.ssh-host/* ~boom/.ssh/ 2>/dev/null; chown -R boom:boom ~boom/.ssh && chmod 700 ~boom/.ssh && find ~boom/.ssh -maxdepth 1 -type f ! -name '*.pub' -exec chmod 600 {} + ; find ~boom/.ssh -maxdepth 1 -type f -name '*.pub' -exec chmod 644 {} + ; chown -R boom:boom ~boom/.claude ~boom/.codex ; true",
   "customizations": {
     "vscode": {
       "settings": {
