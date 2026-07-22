@@ -28,7 +28,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "mic.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -49,7 +49,10 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-
+/* Faze 1: hotove PCM vzorky drzime v RAM; vystupni transport (VCP/SD) prijde
+   ve fazich 2 a 3. Slouzi k overeni behu akvizice pres debugger. */
+static int16_t pcm[PCM_SAMPLES_PER_HALF];
+static size_t  pcm_n;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -104,7 +107,11 @@ int main(void)
   MX_UART4_Init();
   MX_SPI5_Init();
   /* USER CODE BEGIN 2 */
-
+  /* PDM akvizice: postavit DMA linked-list a spustit kontinualni prijem.
+     Pozn.: SAI1, PLL2 (CK1 = 3.072 MHz) a boost CPU se konfiguruji v CubeMX
+     dle docs/pdm-port-plan.md ("CubeMX kontrakt"). */
+  mic_dma_init();
+  mic_start();
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -114,6 +121,12 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+    if (mic_poll(pcm, &pcm_n))
+    {
+      /* Faze 1: PCM je v RAM (buffer `pcm`). Overeni pres debugger:
+         `pcm` obsahuje smysluplna data, mic_blocks_processed() roste,
+         mic_overrun() zustava false. Transport prijde ve fazich 2/3. */
+    }
   }
   /* USER CODE END 3 */
 }
