@@ -110,6 +110,11 @@ int main(void)
   MX_SPI5_Init();
   MX_USBX_Init();
   /* USER CODE BEGIN 2 */
+  /* Connect the USB device to the bus (assert the DP pull-up). MX_USBX_Init has
+     set up the stack/DCD but does not start it; without this the host sees no
+     device. USBX (standalone) is then serviced from the loop via usb_cli_process(). */
+  HAL_PCD_Start(&hpcd_USB_DRD_FS);
+
   /* PDM acquisition: build the DMA linked-list and start continuous reception.
      Note: SAI1, PLL2 (CK1 = 3.072 MHz) and the CPU boost are configured in
      CubeMX per docs/pdm-port-plan.md ("CubeMX contract"). */
