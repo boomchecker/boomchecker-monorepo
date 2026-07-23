@@ -26,6 +26,12 @@ static uint8_t  s_tx_buf[512];
 static uint16_t s_tx_len;
 static uint8_t  s_tx_busy;
 
+/* Non-blocking stream send (pcm_stream ping-pong): one block is transmitted
+   while the next is acquired. Buffer must stay valid until the send completes. */
+static const uint8_t *s_bw_buf;
+static uint32_t       s_bw_len;
+static uint8_t        s_bw_active;
+
 /* cli_tx_fn: stage one chunk for transmission. The actual USB write is driven
    in usb_cli_process(). Returns 0 if accepted, non-zero if busy (cli.c keeps
    the bytes and retries later). */
@@ -151,6 +157,66 @@ int usb_cli_write_blocking(const uint8_t *data, uint32_t len)
     off += (uint32_t)actual;
   }
   return 0;
+}
+
+int usb_cli_write_start(const uint8_t *data, uint32_t len)
+{
+  if (s_cdc == UX_NULL || data == NULL || s_bw_active)
+  {
+    return 1;
+  }
+  finish_staged_tx(); /* don't collide with a console chunk still in flight */
+  s_bw_buf    = data;
+  s_bw_len    = len;
+  s_bw_active = 1;
+  return 0;
+}
+
+int usb_cli_write_service(void)
+{
+  if (!s_bw_active)
+  {
+    return 0;
+  }
+  if (s_cdc == UX_NULL)
+  {
+    s_bw_active = 0;
+    return -1;
+  }
+  ULONG actual = 0;
+  ux_system_tasks_run();
+  /* write_run tracks its own progress; it returns UX_STATE_NEXT once the whole
+     length is accepted (call it with the original buffer/length each time). */
+  UINT st = ux_device_class_cdc_acm_write_run(s_cdc, (UCHAR *)s_bw_buf,
+                                              (ULONG)s_bw_len, &actual);
+  if (st == UX_STATE_WAIT)
+  {
+    return 1; /* still sending */
+  }
+  s_bw_active = 0;
+  return (st == UX_STATE_NEXT) ? 0 : -1;
+}
+
+bool usb_cli_write_active(void)
+{
+  return s_bw_active != 0;
+}
+
+void usb_cli_write_abort(void)
+{
+  s_bw_active = 0;
+  s_bw_buf    = UX_NULL;
+  s_bw_len    = 0;
+  if (s_cdc != UX_NULL)
+  {
+    /* Abort the bulk-IN pipe. This cancels any transfer still armed on the
+       controller AND resets the class write state machine to UX_STATE_RESET,
+       so the next usb_cli_write_blocking()/usb_cli_write_start() starts clean
+       instead of re-entering a half-finished transfer with a stale buffer. */
+    (void)ux_device_class_cdc_acm_ioctl(s_cdc,
+                                        UX_SLAVE_CLASS_CDC_ACM_IOCTL_ABORT_PIPE,
+                                        (VOID *)UX_SLAVE_CLASS_CDC_ACM_ENDPOINT_XMIT);
+  }
 }
 
 void usb_cli_flush_tx(void)
