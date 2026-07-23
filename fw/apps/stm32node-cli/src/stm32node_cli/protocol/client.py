@@ -6,7 +6,14 @@ from collections.abc import Iterator
 from dataclasses import dataclass
 
 from ..transport.base import Transport
-from .codec import ProtocolError, StreamHeader, encode_command, parse_header
+from .codec import (
+    ProtocolError,
+    StreamHeader,
+    StreamTrailer,
+    encode_command,
+    parse_header,
+    parse_trailer,
+)
 from .spec import HEADER_SIZE, MAGIC
 
 
@@ -77,6 +84,14 @@ class DeviceClient:
         rest = self._t.read_exact(HEADER_SIZE - len(MAGIC))
         header = parse_header(MAGIC + rest)
         return StreamHandle(header, self._iter_payload(header.byte_length, chunk_size))
+
+    def read_trailer(self) -> StreamTrailer | None:
+        """Read the ``PCMEND`` trailer sent after the payload.
+
+        Returns the parsed trailer, or None if the board sent none (e.g. the
+        stream was aborted) before the transport timed out.
+        """
+        return parse_trailer(self._read_line())
 
     # -- internals -----------------------------------------------------------
     def _read_line(self) -> str:

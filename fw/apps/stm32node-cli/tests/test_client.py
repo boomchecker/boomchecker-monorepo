@@ -83,6 +83,19 @@ def test_start_stream_rejects_unknown_source():
         client.start_stream(1, source="bogus")
 
 
+def test_read_trailer_parses_health():
+    t = FakeTransport(to_read=b"PCMEND overrun=1 err=0\n")
+    trailer = DeviceClient(t).read_trailer()
+    assert trailer is not None
+    assert trailer.overrun is True
+    assert trailer.err is False
+
+
+def test_read_trailer_none_when_absent():
+    # No trailer on the wire (e.g. aborted stream) -> None, no exception.
+    assert DeviceClient(FakeTransport(to_read=b"")).read_trailer() is None
+
+
 def test_resync_times_out_without_magic():
     t = FakeTransport(to_read=b"no magic here")
     client = DeviceClient(t)

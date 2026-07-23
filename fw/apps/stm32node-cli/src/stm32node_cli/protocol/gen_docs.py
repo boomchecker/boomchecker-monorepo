@@ -67,10 +67,10 @@ echo input and print a `> ` prompt.
 ## Binary stream framing (`PCM1`)
 
 `stream <sec>` and `streamtest <sec>` trigger a binary transfer: a fixed
-**{spec.HEADER_SIZE}-byte** little-endian header, immediately followed by exactly
-`byte_length` bytes of raw PCM. The transfer is length-delimited (no trailer). The
-host resyncs to the `{spec.MAGIC.decode()}` magic to skip any echoed text before
-the header.
+**{spec.HEADER_SIZE}-byte** little-endian header (the acknowledgement), immediately
+followed by exactly `byte_length` bytes of raw PCM, then a one-line `{spec.TRAILER_PREFIX.decode()}`
+trailer. The host resyncs to the `{spec.MAGIC.decode()}` magic to skip any echoed text
+before the header.
 
 ### Header layout (protocol version {spec.PROTOCOL_VERSION})
 
@@ -82,6 +82,15 @@ duration up: `byte_length = ceil(sec * {spec.SAMPLE_RATE_HZ} / {spec.SAMPLES_PER
 stream. The header value is authoritative; the host reads exactly `byte_length`
 bytes, so the captured audio can be up to one block
 (~{spec.SAMPLES_PER_BLOCK * 1000 // spec.SAMPLE_RATE_HZ} ms) longer than requested.
+
+### End-of-stream trailer
+
+After the payload the board sends one ASCII line
+`{spec.TRAILER_PREFIX.decode()} overrun=<0|1> err=<0|1>` terminated by
+`{spec.LINE_TERMINATOR!r}`. It confirms the stream finished and reports capture health:
+`overrun=1` means the acquisition dropped samples (gaps), `err=1` means the source
+produced no data (e.g. the microphone is not running) and the payload was padded with
+silence. `streamtest` always reports `0 0`.
 """
 
 

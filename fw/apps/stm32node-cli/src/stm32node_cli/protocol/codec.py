@@ -12,6 +12,7 @@ from .spec import (
     PROTOCOL_VERSION,
     SAMPLE_RATE_HZ,
     SAMPLE_WIDTH_BYTES,
+    TRAILER_PREFIX,
 )
 
 
@@ -36,6 +37,26 @@ class StreamHeader:
     def duration_s(self) -> float:
         frames = self.sample_count / max(self.channels, 1)
         return frames / self.sample_rate if self.sample_rate else 0.0
+
+
+@dataclass(frozen=True)
+class StreamTrailer:
+    """Parsed ``PCMEND`` end-of-stream trailer (capture health)."""
+
+    overrun: bool  # acquisition dropped samples (gaps)
+    err: bool  # source produced no data (payload was padded with silence)
+
+
+def parse_trailer(line: str) -> StreamTrailer | None:
+    """Parse a ``PCMEND overrun=0 err=0`` trailer line; None if it is not one."""
+    text = line.strip()
+    if not text.startswith(TRAILER_PREFIX.decode("ascii")):
+        return None
+    fields: dict[str, str] = {}
+    for token in text.split()[1:]:
+        key, _, value = token.partition("=")
+        fields[key] = value
+    return StreamTrailer(overrun=fields.get("overrun") == "1", err=fields.get("err") == "1")
 
 
 def encode_command(name: str, *args: object) -> bytes:

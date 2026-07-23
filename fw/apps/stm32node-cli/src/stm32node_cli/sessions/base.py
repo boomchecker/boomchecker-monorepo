@@ -23,13 +23,16 @@ from pathlib import Path
 class CommandContext:
     """Everything a command needs from the app, with no UI coupling.
 
-    ``emit`` appends one line to the console output; it is safe to call from a
-    worker thread (the console marshals it back to the UI).
+    ``emit`` appends one line to the console output. ``progress`` drives the
+    console's loading bar: call ``progress(done, total)`` with 0 <= done <= total,
+    or ``progress(-1, 0)`` to hide it. Both are safe to call from a worker thread
+    (the console marshals them back to the UI).
     """
 
     port: str
     out_dir: Path
     emit: Callable[[str], None]
+    progress: Callable[[int, int], None]
 
 
 # A command handler: given the context and the parsed argument list, do the work

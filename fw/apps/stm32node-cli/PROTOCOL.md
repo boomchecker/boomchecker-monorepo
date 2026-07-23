@@ -28,7 +28,7 @@ Print the firmware version string.
 
 Stream <sec> seconds of microphone PCM audio to the host.
 
-**Response:** A 16-byte `PCM1` header followed by exactly `byte_length` bytes of raw int16 little-endian PCM. After the payload the board returns to the text prompt.
+**Response:** A 16-byte `PCM1` header (the acknowledgement: parsing it confirms the command and gives `byte_length`), then exactly `byte_length` bytes of raw int16 little-endian PCM, then a `PCMEND` trailer line. The board pads silence if the microphone underruns, so the payload length is always honoured.
 
 ### `streamtest <sec>`
 
@@ -39,10 +39,10 @@ Diagnostic: stream <sec> seconds of a synthetic 1 kHz test tone instead of the m
 ## Binary stream framing (`PCM1`)
 
 `stream <sec>` and `streamtest <sec>` trigger a binary transfer: a fixed
-**16-byte** little-endian header, immediately followed by exactly
-`byte_length` bytes of raw PCM. The transfer is length-delimited (no trailer). The
-host resyncs to the `PCM1` magic to skip any echoed text before
-the header.
+**16-byte** little-endian header (the acknowledgement), immediately
+followed by exactly `byte_length` bytes of raw PCM, then a one-line `PCMEND`
+trailer. The host resyncs to the `PCM1` magic to skip any echoed text
+before the header.
 
 ### Header layout (protocol version 1)
 
@@ -61,3 +61,12 @@ duration up: `byte_length = ceil(sec * 48000 / 1024)
 stream. The header value is authoritative; the host reads exactly `byte_length`
 bytes, so the captured audio can be up to one block
 (~21 ms) longer than requested.
+
+### End-of-stream trailer
+
+After the payload the board sends one ASCII line
+`PCMEND overrun=<0|1> err=<0|1>` terminated by
+`b'\n'`. It confirms the stream finished and reports capture health:
+`overrun=1` means the acquisition dropped samples (gaps), `err=1` means the source
+produced no data (e.g. the microphone is not running) and the payload was padded with
+silence. `streamtest` always reports `0 0`.

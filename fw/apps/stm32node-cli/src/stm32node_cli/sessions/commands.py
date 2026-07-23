@@ -35,13 +35,33 @@ def _record(ctx: CommandContext, args: list[str], *, source: str, usage: str) ->
     if seconds is None:
         return
     label = "test tone" if source == "test" else "microphone"
-    ctx.emit(f"recording {seconds}s of {label} from {ctx.port} ...")
+    ctx.emit(f"-> requesting {seconds}s of {label} from {ctx.port} ...")
+
+    def on_ack(header) -> None:
+        ctx.emit(
+            f"[green]v[/green] acknowledged - {header.sample_count} samples "
+            f"({header.duration_s:.1f}s) incoming"
+        )
+        ctx.progress(0, header.byte_length)
+
     with SerialTransport(ctx.port, timeout=DEFAULT_TIMEOUT_S) as transport:
         session = RecordSession(DeviceClient(transport), ctx.out_dir)
-        result = session.record(seconds, source=source)
+        result = session.record(
+            seconds, source=source, on_ack=on_ack, on_progress=ctx.progress
+        )
+
+    trailer = result.trailer
+    if trailer is None:
+        health = " [yellow](no trailer - stream may be incomplete)[/yellow]"
+    elif trailer.err:
+        health = " [red](WARNING: source produced no data - silence)[/red]"
+    elif trailer.overrun:
+        health = " [yellow](WARNING: overrun - gaps in capture)[/yellow]"
+    else:
+        health = " [green](clean)[/green]"
     ctx.emit(
-        f"saved {result.path.name} "
-        f"({result.duration_s:.1f}s, {result.sample_count} samples)"
+        f"[green]v[/green] saved {result.path.name} "
+        f"({result.duration_s:.1f}s, {result.sample_count} samples){health}"
     )
 
 

@@ -25,6 +25,9 @@ PROTOCOL_VERSION = 1
 MAGIC = b"PCM1"
 # Text commands are ASCII lines terminated by this byte.
 LINE_TERMINATOR = b"\n"
+# End-of-stream trailer sent after the payload, e.g. b"PCMEND overrun=0 err=0".
+# Confirms the stream finished and reports capture health.
+TRAILER_PREFIX = b"PCMEND"
 
 
 @dataclass(frozen=True)
@@ -79,8 +82,10 @@ COMMANDS: tuple[CommandSpec, ...] = (
         usage="stream <sec>",
         description="Stream <sec> seconds of microphone PCM audio to the host.",
         response=(
-            "A 16-byte `PCM1` header followed by exactly `byte_length` bytes of raw "
-            "int16 little-endian PCM. After the payload the board returns to the text prompt."
+            "A 16-byte `PCM1` header (the acknowledgement: parsing it confirms the command "
+            "and gives `byte_length`), then exactly `byte_length` bytes of raw int16 "
+            "little-endian PCM, then a `PCMEND` trailer line. The board pads silence if the "
+            "microphone underruns, so the payload length is always honoured."
         ),
     ),
     CommandSpec(
