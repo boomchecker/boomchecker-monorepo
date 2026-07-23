@@ -20,6 +20,7 @@ static volatile uint8_t  s_half0_ready = 0;     /* first ring half ready        
 static volatile uint8_t  s_half1_ready = 0;     /* second ring half ready        */
 static volatile uint8_t  s_overrun     = 0;
 static volatile uint32_t s_blocks      = 0;
+static int8_t            s_expect      = -1;    /* next half to deliver (-1=latch)*/
 
 static pdm_pcm_t s_dsp;
 
@@ -90,6 +91,7 @@ int mic_start(void)
   s_half1_ready = 0;
   s_overrun     = 0;
   s_blocks      = 0;
+  s_expect      = -1;
   s_running     = 1;
 
   if (HAL_SAI_Receive_DMA(&hsai_BlockA1, (uint8_t *)pdm_ring,
@@ -111,19 +113,44 @@ bool mic_poll(int16_t *pcm, size_t *nsamp)
 {
   const uint16_t *src;
 
-  if (s_half0_ready)
+  /* Deliver halves in strict capture order (0,1,0,1,...), matching the Mik_stm
+     stream loop. The DSP state (CIC integrators, FIR history) is continuous, so
+     a half processed out of order corrupts every following sample. Latch onto
+     whichever half completes first, then alternate; if we ever lag past a wrap
+     with both halves pending, half1 is the older one and must go first. */
+  if (s_expect < 0)
   {
+    if (s_half0_ready)
+    {
+      s_expect = 0;
+    }
+    else if (s_half1_ready)
+    {
+      s_expect = 1;
+    }
+    else
+    {
+      return false;
+    }
+  }
+
+  if (s_expect == 0)
+  {
+    if (!s_half0_ready)
+    {
+      return false;
+    }
     src = &pdm_ring[0];
     s_half0_ready = 0;
   }
-  else if (s_half1_ready)
-  {
-    src = &pdm_ring[PDM_RING_HALFWORDS / 2u];
-    s_half1_ready = 0;
-  }
   else
   {
-    return false;
+    if (!s_half1_ready)
+    {
+      return false;
+    }
+    src = &pdm_ring[PDM_RING_HALFWORDS / 2u];
+    s_half1_ready = 0;
   }
 
   pdm_pcm_process_half(&s_dsp, src, pcm);
@@ -131,6 +158,7 @@ bool mic_poll(int16_t *pcm, size_t *nsamp)
   {
     *nsamp = PCM_SAMPLES_PER_HALF;
   }
+  s_expect ^= 1;
   s_blocks++;
   return true;
 }
