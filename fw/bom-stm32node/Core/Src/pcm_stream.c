@@ -167,6 +167,13 @@ void pcm_stream_run(uint32_t seconds, pcm_src_t src)
   uint8_t header[PCM_HEADER_SIZE];
   pack_header(header, byte_length);
 
+  /* Start from a clean transmit state machine. If a previous stream was
+     interrupted (host closed / Ctrl-C), the shared CDC write state can be left
+     mid-transfer; resetting it here guarantees the header below actually goes
+     out instead of re-driving a stale transfer (which showed up as an
+     intermittent "magic not found" on the host). */
+  usb_cli_write_abort();
+
   /* Flush the command echo before the binary so the host only skips leading
      text (its magic resync), never interleaved bytes. */
   usb_cli_flush_tx();
