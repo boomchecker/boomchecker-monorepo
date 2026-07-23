@@ -1,4 +1,4 @@
-"""Textual application: connect screen -> dashboard -> per-feature screens."""
+"""Textual application: connect screen -> command console."""
 
 from __future__ import annotations
 
@@ -10,11 +10,9 @@ from textual.screen import Screen
 from textual.widgets import Button, Footer, Header, Label, Select, Static
 
 from ..config import DEFAULT_PORT, default_output_dir
-from ..sessions.base import REGISTRY, iter_features
+from ..sessions import commands as _commands  # noqa: F401  (registers device commands)
 from ..transport.serial_transport import list_ports
-from . import screens as _screens  # noqa: F401  (imports register the features)
-
-_FEATURE_PREFIX = "feature-"
+from .console import ConsoleScreen
 
 
 class ConnectScreen(Screen):
@@ -68,44 +66,14 @@ class ConnectScreen(Screen):
             self.query_one("#connect-msg", Static).update("Pick a port first.")
             return
         self.app.port = str(value)
-        self.app.switch_screen(DashboardScreen())
-
-
-class DashboardScreen(Screen):
-    """Shows the connected port and the registered features."""
-
-    def compose(self) -> ComposeResult:
-        yield Header()
-        with Vertical(id="dashboard"):
-            yield Static("boomchecker-node - device tools", id="dashboard-title")
-            yield Label(f"Connected: {self.app.port}", id="dashboard-port")
-            yield Label(f"Output: {self.app.out_dir}", id="dashboard-out")
-            yield Static("Features", id="dashboard-features-title")
-            for feat in iter_features():
-                yield Button(
-                    f"{feat.info.title} - {feat.info.description}",
-                    id=f"{_FEATURE_PREFIX}{feat.info.key}",
-                )
-            yield Button("Change port", id="change-port-btn")
-        yield Footer()
-
-    def on_button_pressed(self, event: Button.Pressed) -> None:
-        button_id = event.button.id or ""
-        if button_id == "change-port-btn":
-            self.app.switch_screen(ConnectScreen())
-            return
-        if button_id.startswith(_FEATURE_PREFIX):
-            key = button_id[len(_FEATURE_PREFIX) :]
-            feature = REGISTRY.get(key)
-            if feature is not None:
-                self.app.push_screen(feature.screen_factory())
+        self.app.switch_screen(ConsoleScreen())
 
 
 class NodeApp(App):
     """Top-level app holding the shared device context (port, output folder)."""
 
     TITLE = "stm32node-cli"
-    BINDINGS = [("q", "quit", "Quit")]
+    BINDINGS = [("ctrl+c", "quit", "Quit")]
 
     CSS = """
     ConnectScreen {
@@ -141,20 +109,13 @@ class NodeApp(App):
     #connect-buttons Button {
         margin: 0 1;
     }
-    #dashboard {
-        padding: 1 2;
+    #console-log {
+        height: 1fr;
+        padding: 0 1;
+        background: $surface;
     }
-    #dashboard-title {
-        text-style: bold;
-        padding-bottom: 1;
-    }
-    #dashboard-features-title {
-        text-style: bold;
-        padding: 1 0 0 0;
-    }
-    #dashboard Button {
-        margin: 1 0 0 0;
-        width: 100%;
+    #console-input {
+        dock: bottom;
     }
     """
 

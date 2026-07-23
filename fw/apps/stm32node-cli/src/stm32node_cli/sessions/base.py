@@ -1,14 +1,14 @@
-"""Session base class and the feature registry.
+"""Session base class and the console command registry.
 
-A *feature* is one thing the board can do (record audio today; a detector
-readout tomorrow). Adding one means: write a ``Session`` subclass here, write a
-Textual screen under ``tui/screens/`` and call :func:`register_feature` from
-that screen module. The TUI dashboard renders whatever is registered, so no
-central switchboard needs editing.
+A *command* is one thing you can run from the TUI console (``record`` today, a
+detector readout tomorrow). Adding one means: write a ``Session`` subclass for
+the logic if needed, then build a :class:`Command` and call
+:func:`register_command`. The console lists and dispatches whatever is
+registered, so no central switchboard needs editing.
 
-This module deliberately does **not** import Textual: ``screen_factory`` is a
-lazy callable supplied by the UI layer, keeping the session logic importable
-(and testable) on its own.
+This module deliberately does **not** import Textual: a command's ``run`` is a
+plain callable given a :class:`CommandContext`, keeping the logic importable
+(and testable) without a UI.
 """
 
 from __future__ import annotations
@@ -16,35 +16,52 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from collections.abc import Callable
 from dataclasses import dataclass
+from pathlib import Path
 
 
 @dataclass(frozen=True)
-class FeatureInfo:
-    """User-facing metadata for a feature, shown on the dashboard."""
+class CommandContext:
+    """Everything a command needs from the app, with no UI coupling.
 
-    key: str
-    title: str
-    description: str
+    ``emit`` appends one line to the console output; it is safe to call from a
+    worker thread (the console marshals it back to the UI).
+    """
+
+    port: str
+    out_dir: Path
+    emit: Callable[[str], None]
+
+
+# A command handler: given the context and the parsed argument list, do the work
+# and report progress/results via ``ctx.emit``. Runs in a worker thread.
+CommandRun = Callable[["CommandContext", "list[str]"], None]
 
 
 @dataclass(frozen=True)
-class Feature:
-    """A registered feature: its metadata and a factory for its TUI screen."""
+class Command:
+    """A console command: its name, one-line usage/help and its handler."""
 
-    info: FeatureInfo
-    screen_factory: Callable[[], object]  # returns a textual.screen.Screen
-
-
-REGISTRY: dict[str, Feature] = {}
-
-
-def register_feature(feature: Feature) -> None:
-    """Register a feature (idempotent by key)."""
-    REGISTRY[feature.info.key] = feature
+    name: str
+    usage: str
+    help: str
+    run: CommandRun
 
 
-def iter_features() -> tuple[Feature, ...]:
-    """Return registered features in insertion order."""
+REGISTRY: dict[str, Command] = {}
+
+
+def register_command(command: Command) -> None:
+    """Register a command (idempotent by name)."""
+    REGISTRY[command.name] = command
+
+
+def get_command(name: str) -> Command | None:
+    """Look up a command by name (or None)."""
+    return REGISTRY.get(name)
+
+
+def iter_commands() -> tuple[Command, ...]:
+    """Return registered commands in insertion order."""
     return tuple(REGISTRY.values())
 
 

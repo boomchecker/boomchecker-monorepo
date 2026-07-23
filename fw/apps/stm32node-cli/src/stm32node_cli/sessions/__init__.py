@@ -1,15 +1,24 @@
-"""Feature drivers (UI-agnostic) plus the feature registry the TUI reads."""
+"""Feature drivers (UI-agnostic) plus the console command registry."""
 
-from .base import REGISTRY, Feature, FeatureInfo, Session, iter_features, register_feature
+from .base import (
+    REGISTRY,
+    Command,
+    CommandContext,
+    Session,
+    get_command,
+    iter_commands,
+    register_command,
+)
 from .record import RecordResult, RecordSession
 
 __all__ = [
     "Session",
-    "Feature",
-    "FeatureInfo",
+    "Command",
+    "CommandContext",
     "REGISTRY",
-    "register_feature",
-    "iter_features",
+    "register_command",
+    "get_command",
+    "iter_commands",
     "RecordSession",
     "RecordResult",
 ]
