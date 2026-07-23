@@ -79,6 +79,95 @@ void usb_cli_start(void)
   cli_init(usb_cli_tx);
 }
 
+/* Per-transfer host stall timeout for the blocking write path. If the host
+   stops draining the bulk-IN endpoint, give up instead of hanging the board. */
+#define USB_TX_TIMEOUT_MS 2000u
+
+bool usb_cli_connected(void)
+{
+  return s_cdc != UX_NULL;
+}
+
+void usb_cli_pump(void)
+{
+  ux_system_tasks_run();
+}
+
+/* Finish any chunk already staged by usb_cli_tx() so the blocking path does not
+   interleave with a console write that is still in flight. */
+static void finish_staged_tx(void)
+{
+  uint32_t t0 = HAL_GetTick();
+  while (s_tx_busy && s_cdc != UX_NULL)
+  {
+    ULONG actual = 0;
+    ux_system_tasks_run();
+    UINT st = ux_device_class_cdc_acm_write_run(s_cdc, s_tx_buf, s_tx_len, &actual);
+    if (st != UX_STATE_WAIT)
+    {
+      s_tx_busy = 0;
+      s_tx_len  = 0;
+      break;
+    }
+    if ((HAL_GetTick() - t0) >= USB_TX_TIMEOUT_MS)
+    {
+      break;
+    }
+  }
+}
+
+int usb_cli_write_blocking(const uint8_t *data, uint32_t len)
+{
+  if (s_cdc == UX_NULL || data == NULL)
+  {
+    return 1;
+  }
+  finish_staged_tx();
+
+  uint32_t off = 0;
+  while (off < len)
+  {
+    ULONG    actual = 0;
+    UINT     st;
+    uint32_t t0 = HAL_GetTick();
+    /* Drive one write transaction for the remaining span to completion. USBX
+       splits it into bulk packets internally and returns UX_STATE_NEXT once the
+       whole requested length has been accepted. */
+    do
+    {
+      ux_system_tasks_run();
+      st = ux_device_class_cdc_acm_write_run(s_cdc, (UCHAR *)(data + off),
+                                             (ULONG)(len - off), &actual);
+      if (s_cdc == UX_NULL)
+      {
+        return 1; /* disconnected mid-transfer */
+      }
+    } while (st == UX_STATE_WAIT && (HAL_GetTick() - t0) < USB_TX_TIMEOUT_MS);
+
+    if (st != UX_STATE_NEXT || actual == 0)
+    {
+      return 1; /* timeout, error, or no progress */
+    }
+    off += (uint32_t)actual;
+  }
+  return 0;
+}
+
+void usb_cli_flush_tx(void)
+{
+  finish_staged_tx();
+
+  uint8_t tmp[64];
+  size_t  n;
+  while ((n = cli_take_tx(tmp, sizeof(tmp))) > 0u)
+  {
+    if (usb_cli_write_blocking(tmp, (uint32_t)n) != 0)
+    {
+      break;
+    }
+  }
+}
+
 void usb_cli_process(void)
 {
   /* Drive the USBX device stack (enumeration, transfers) - required in

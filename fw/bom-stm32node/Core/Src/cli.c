@@ -7,6 +7,10 @@
 #include "cli.h"
 #include "embedded_cli.h"
 #include "main.h"   /* Error_Handler */
+#include "pcm_stream.h"
+
+#include <stdlib.h> /* strtoul */
+#include <string.h> /* memcpy  */
 
 /* Static CLI allocation (no malloc). Sized for the rx/cmd/history below plus bindings. */
 #define CLI_STATIC_BYTES  2048u
@@ -63,6 +67,39 @@ static void cmd_version(EmbeddedCli *cli, char *args, void *context)
   embeddedCliPrint(cli, "bom-stm32node CLI v0.1");
 }
 
+/* Parse "<sec>" and run a PCM stream from the given source. Shared by the
+   `stream` (microphone) and `streamtest` (synthetic tone) commands. */
+static void stream_command(EmbeddedCli *cli, char *args, pcm_src_t src)
+{
+  if (embeddedCliGetTokenCount(args) < 1)
+  {
+    embeddedCliPrint(cli, "usage: stream <sec> (1..60)");
+    return;
+  }
+  const char *tok = embeddedCliGetToken(args, 1);
+  char        *end = NULL;
+  unsigned long sec = strtoul(tok, &end, 10);
+  if (end == tok || sec == 0u || sec > PCM_STREAM_MAX_SECONDS)
+  {
+    embeddedCliPrint(cli, "usage: stream <sec> (1..60)");
+    return;
+  }
+  /* Emits a binary PCM1 frame on the same CDC pipe; see pcm_stream.c. */
+  pcm_stream_run((uint32_t)sec, src);
+}
+
+static void cmd_stream(EmbeddedCli *cli, char *args, void *context)
+{
+  (void)context;
+  stream_command(cli, args, PCM_SRC_MIC);
+}
+
+static void cmd_streamtest(EmbeddedCli *cli, char *args, void *context)
+{
+  (void)context;
+  stream_command(cli, args, PCM_SRC_TONE);
+}
+
 void cli_init(cli_tx_fn tx)
 {
   s_tx      = tx;
@@ -97,6 +134,24 @@ void cli_init(cli_tx_fn tx)
   };
   embeddedCliAddBinding(s_cli, version_binding);
 
+  CliCommandBinding stream_binding = {
+    .name         = "stream",
+    .help         = "Stream <sec> seconds of microphone PCM (binary PCM1 frame)",
+    .tokenizeArgs = true,
+    .context      = NULL,
+    .binding      = cmd_stream,
+  };
+  embeddedCliAddBinding(s_cli, stream_binding);
+
+  CliCommandBinding streamtest_binding = {
+    .name         = "streamtest",
+    .help         = "Stream <sec> seconds of a synthetic 1 kHz test tone",
+    .tokenizeArgs = true,
+    .context      = NULL,
+    .binding      = cmd_streamtest,
+  };
+  embeddedCliAddBinding(s_cli, streamtest_binding);
+
   embeddedCliProcess(s_cli); /* print the initial prompt */
 }
 
@@ -120,4 +175,22 @@ void cli_feed(const uint8_t *buf, uint32_t len)
   {
     embeddedCliReceiveChar(s_cli, (char)buf[i]);
   }
+}
+
+size_t cli_take_tx(uint8_t *dst, size_t max)
+{
+  if (dst == NULL || max == 0u || s_tx_head == s_tx_tail)
+  {
+    return 0;
+  }
+  uint16_t tail = s_tx_tail;
+  uint16_t span = (s_tx_head > tail) ? (uint16_t)(s_tx_head - tail)
+                                     : (uint16_t)(CLI_TX_RING - tail);
+  if (span > max)
+  {
+    span = (uint16_t)max;
+  }
+  memcpy(dst, &s_tx_ring[tail], span);
+  s_tx_tail = (uint16_t)((tail + span) % CLI_TX_RING);
+  return span;
 }

@@ -37,4 +37,13 @@ void cli_process(void);
  */
 void cli_feed(const uint8_t *buf, uint32_t len);
 
+/**
+ * @brief Drain pending console output. Copies up to `max` bytes of the TX ring
+ *        (one contiguous span) into `dst` and advances the read pointer.
+ *        Lets the transport push console text out synchronously before a binary
+ *        transfer, bypassing cli_process()/tx_flush().
+ * @return number of bytes copied (0 if the ring is empty).
+ */
+size_t cli_take_tx(uint8_t *dst, size_t max);
+
 #endif /* CLI_H */
