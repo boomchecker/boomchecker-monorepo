@@ -1,0 +1,42 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "stm32node-cli"
+version = "0.1.0"
+description = "TUI tool to talk to the boomchecker-node STM32 board over USB CDC serial"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "textual>=0.60",
+    "typer>=0.12",
+    "pyserial>=3.5,<4",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+    "ruff>=0.5",
+]
+
+[project.scripts]
+stm32node-cli = "stm32node_cli.__main__:app"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/stm32node_cli"]
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.lint.flake8-bugbear]
+# Typer's public API relies on these as argument defaults.
+extend-immutable-calls = ["typer.Option", "typer.Argument"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
