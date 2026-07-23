@@ -8,8 +8,8 @@
 #include "embedded_cli.h"
 #include "main.h"   /* Error_Handler */
 
-/* Static CLI allocation (no malloc). 1 kB covers the rx/cmd/history below plus bindings. */
-#define CLI_STATIC_BYTES  1024u
+/* Static CLI allocation (no malloc). Sized for the rx/cmd/history below plus bindings. */
+#define CLI_STATIC_BYTES  2048u
 #define CLI_TX_RING       512u
 
 static EmbeddedCli *s_cli;
@@ -81,7 +81,10 @@ void cli_init(cli_tx_fn tx)
   s_cli = embeddedCliNew(cfg);
   if (s_cli == NULL)
   {
-    Error_Handler(); /* static buffer too small - raise CLI_STATIC_BYTES */
+    /* Static buffer too small. Do NOT trap here: the USB device stack must keep
+       being serviced from the main loop, so a CLI failure must not dead-loop.
+       cli_process()/cli_feed() are NULL-guarded and simply no-op. */
+    return;
   }
   s_cli->writeChar = cli_write_char;
 

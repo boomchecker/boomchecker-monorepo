@@ -6,6 +6,7 @@
  */
 #include "usb_cli.h"
 #include "cli.h"
+#include "usb.h"   /* hpcd_USB_DRD_FS, HAL PCD/PCDEx */
 
 #include "ux_api.h"
 #include "ux_device_class_cdc_acm.h"
@@ -56,8 +57,25 @@ void usb_cli_on_deactivate(void)
   s_tx_len  = 0;
 }
 
-void usb_cli_init(void)
+void usb_cli_start(void)
 {
+  /* USB_DRD_FS packet memory (PMA): allocate a buffer for every endpoint. USBX's
+     STM32 DCD opens endpoints via HAL_PCD_EP_Open but never configures the PMA,
+     so without this EP0 control transfers move garbage and the host reports an
+     invalid / 0-byte device descriptor. Addresses are offsets into the 2 KB USB
+     SRAM (BTABLE kept below 0x40); spacing respects each endpoint's max packet. */
+  HAL_PCDEx_PMAConfig(&hpcd_USB_DRD_FS, 0x00U, PCD_SNG_BUF, 0x40);  /* EP0 OUT,      MPS 64 */
+  HAL_PCDEx_PMAConfig(&hpcd_USB_DRD_FS, 0x80U, PCD_SNG_BUF, 0x80);  /* EP0 IN,       MPS 64 */
+  HAL_PCDEx_PMAConfig(&hpcd_USB_DRD_FS, 0x81U, PCD_SNG_BUF, 0xC0);  /* CDC notify IN, MPS 8 */
+  HAL_PCDEx_PMAConfig(&hpcd_USB_DRD_FS, 0x82U, PCD_SNG_BUF, 0xD0);  /* CDC bulk IN,  MPS 64 */
+  HAL_PCDEx_PMAConfig(&hpcd_USB_DRD_FS, 0x03U, PCD_SNG_BUF, 0x110); /* CDC bulk OUT, MPS 64 */
+
+  /* Connect the device to the bus (assert DP pull-up). MX_USBX_Init set up the
+     stack/DCD but does not start it; without this the host sees no device.
+     USBX (standalone) is then serviced from the loop via usb_cli_process(). */
+  HAL_PCD_Start(&hpcd_USB_DRD_FS);
+
+  /* Wire the CLI to the USB CDC transport. */
   cli_init(usb_cli_tx);
 }
 

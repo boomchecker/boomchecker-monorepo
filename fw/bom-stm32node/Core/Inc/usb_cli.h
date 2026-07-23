@@ -14,8 +14,10 @@
 
 #include <stdint.h>
 
-/** Create the CLI and bind it to the USB CDC transport. Call after MX_USBX_Init(). */
-void usb_cli_init(void);
+/** Bring up the USB CDC console: configure endpoint packet memory (PMA), connect
+ *  the device to the bus (HAL_PCD_Start) and bind the CLI to the CDC transport.
+ *  Call once after MX_USBX_Init(). */
+void usb_cli_start(void);
 
 /** Main-loop pump: drives the USBX stack, the CLI and CDC read/write. */
 void usb_cli_process(void);
