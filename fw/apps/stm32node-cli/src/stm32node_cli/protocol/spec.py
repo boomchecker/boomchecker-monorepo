@@ -16,6 +16,9 @@ from dataclasses import dataclass
 SAMPLE_RATE_HZ = 48_000
 CHANNELS = 1
 SAMPLE_WIDTH_BYTES = 2  # int16, little-endian
+# The firmware acquires and streams whole half-buffers (PCM_SAMPLES_PER_HALF),
+# so a transfer is rounded up to a whole number of these blocks.
+SAMPLES_PER_BLOCK = 1024
 
 # --- Framing -----------------------------------------------------------------
 PROTOCOL_VERSION = 1
@@ -41,7 +44,13 @@ HEADER_FIELDS: tuple[HeaderField, ...] = (
     HeaderField("channels", "B", "uint8_t", "Channel count (1 = mono)."),
     HeaderField("reserved", "H", "uint16_t", "Reserved, must be 0."),
     HeaderField("sample_rate", "I", "uint32_t", f"Sample rate in Hz ({SAMPLE_RATE_HZ})."),
-    HeaderField("byte_length", "I", "uint32_t", "Number of PCM payload bytes that follow."),
+    HeaderField(
+        "byte_length",
+        "I",
+        "uint32_t",
+        "Authoritative number of PCM payload bytes that follow "
+        f"(a multiple of {SAMPLES_PER_BLOCK * SAMPLE_WIDTH_BYTES}).",
+    ),
 )
 
 HEADER_STRUCT = struct.Struct("<" + "".join(f.fmt for f in HEADER_FIELDS))
@@ -68,10 +77,20 @@ COMMANDS: tuple[CommandSpec, ...] = (
     CommandSpec(
         name="stream",
         usage="stream <sec>",
-        description="Stream <sec> seconds of PCM audio to the host.",
+        description="Stream <sec> seconds of microphone PCM audio to the host.",
         response=(
             "A 16-byte `PCM1` header followed by exactly `byte_length` bytes of raw "
             "int16 little-endian PCM. After the payload the board returns to the text prompt."
         ),
+    ),
+    CommandSpec(
+        name="streamtest",
+        usage="streamtest <sec>",
+        description=(
+            "Diagnostic: stream <sec> seconds of a synthetic 1 kHz test tone instead of the "
+            "microphone. Same PCM1 framing as `stream`; lets the host verify enumeration, "
+            "framing and decoding without depending on the mic hardware."
+        ),
+        response="Identical framing to `stream` (16-byte `PCM1` header + `byte_length` bytes).",
     ),
 )

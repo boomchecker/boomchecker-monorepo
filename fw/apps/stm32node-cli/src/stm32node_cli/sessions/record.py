@@ -39,11 +39,23 @@ class RecordSession(Session):
         self._client = client
         self._out_dir = Path(out_dir)
 
-    def run(self, seconds: int, *, on_progress: ProgressFn | None = None) -> RecordResult:
-        return self.record(seconds, on_progress=on_progress)
+    def run(
+        self,
+        seconds: int,
+        *,
+        source: str = "mic",
+        on_progress: ProgressFn | None = None,
+    ) -> RecordResult:
+        return self.record(seconds, source=source, on_progress=on_progress)
 
-    def record(self, seconds: int, *, on_progress: ProgressFn | None = None) -> RecordResult:
-        handle = self._client.start_stream(seconds)
+    def record(
+        self,
+        seconds: int,
+        *,
+        source: str = "mic",
+        on_progress: ProgressFn | None = None,
+    ) -> RecordResult:
+        handle = self._client.start_stream(seconds, source=source)
         total = handle.header.byte_length
 
         buf = bytearray()

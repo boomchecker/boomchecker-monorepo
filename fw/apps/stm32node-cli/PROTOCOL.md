@@ -26,16 +26,23 @@ Print the firmware version string.
 
 ### `stream <sec>`
 
-Stream <sec> seconds of PCM audio to the host.
+Stream <sec> seconds of microphone PCM audio to the host.
 
 **Response:** A 16-byte `PCM1` header followed by exactly `byte_length` bytes of raw int16 little-endian PCM. After the payload the board returns to the text prompt.
 
+### `streamtest <sec>`
+
+Diagnostic: stream <sec> seconds of a synthetic 1 kHz test tone instead of the microphone. Same PCM1 framing as `stream`; lets the host verify enumeration, framing and decoding without depending on the mic hardware.
+
+**Response:** Identical framing to `stream` (16-byte `PCM1` header + `byte_length` bytes).
+
 ## Binary stream framing (`PCM1`)
 
-`stream <sec>` triggers a binary transfer: a fixed **16-byte**
-little-endian header, immediately followed by exactly `byte_length` bytes of raw
-PCM. The transfer is length-delimited (no trailer). The host resyncs to the
-`PCM1` magic to skip any echoed text before the header.
+`stream <sec>` and `streamtest <sec>` trigger a binary transfer: a fixed
+**16-byte** little-endian header, immediately followed by exactly
+`byte_length` bytes of raw PCM. The transfer is length-delimited (no trailer). The
+host resyncs to the `PCM1` magic to skip any echoed text before
+the header.
 
 ### Header layout (protocol version 1)
 
@@ -46,7 +53,11 @@ PCM. The transfer is length-delimited (no trailer). The host resyncs to the
 | 5 | `channels` | `uint8_t` | Channel count (1 = mono). |
 | 6 | `reserved` | `uint16_t` | Reserved, must be 0. |
 | 8 | `sample_rate` | `uint32_t` | Sample rate in Hz (48000). |
-| 12 | `byte_length` | `uint32_t` | Number of PCM payload bytes that follow. |
+| 12 | `byte_length` | `uint32_t` | Authoritative number of PCM payload bytes that follow (a multiple of 2048). |
 
-`byte_length` equals `sec * 48000 * 2`
-for a `1`-channel stream.
+The firmware streams whole 1024-sample blocks, so it rounds the
+duration up: `byte_length = ceil(sec * 48000 / 1024)
+* 1024 * 2` for a `1`-channel
+stream. The header value is authoritative; the host reads exactly `byte_length`
+bytes, so the captured audio can be up to one block
+(~21 ms) longer than requested.

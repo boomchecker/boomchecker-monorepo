@@ -55,15 +55,24 @@ class DeviceClient:
         self._t.write(encode_command("version"))
         return self._read_line().strip()
 
-    def start_stream(self, seconds: int, *, chunk_size: int = 2048) -> StreamHandle:
-        """Send ``stream <sec>`` and return a handle to the incoming PCM stream.
+    def start_stream(
+        self, seconds: int, *, source: str = "mic", chunk_size: int = 2048
+    ) -> StreamHandle:
+        """Send a stream command and return a handle to the incoming PCM stream.
+
+        ``source="mic"`` streams the microphone (``stream``); ``source="test"``
+        streams a synthetic tone (``streamtest``) for hardware-independent
+        verification. Both use identical ``PCM1`` framing.
 
         The board may echo the command and print a prompt before the binary
         data, so we resync to the ``PCM1`` magic before parsing the header.
         """
         if seconds <= 0:
             raise ValueError("seconds must be positive")
-        self._t.write(encode_command("stream", int(seconds)))
+        if source not in ("mic", "test"):
+            raise ValueError("source must be 'mic' or 'test'")
+        command = "streamtest" if source == "test" else "stream"
+        self._t.write(encode_command(command, int(seconds)))
         self._resync_to_magic()
         rest = self._t.read_exact(HEADER_SIZE - len(MAGIC))
         header = parse_header(MAGIC + rest)

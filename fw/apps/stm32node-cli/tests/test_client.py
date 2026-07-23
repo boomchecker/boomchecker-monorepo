@@ -48,10 +48,39 @@ def test_start_stream_stops_at_byte_length():
     assert t.read(len(trailer)) == trailer
 
 
+def test_start_stream_test_source_sends_streamtest():
+    payload = _pcm(2048)
+    t = FakeTransport(to_read=pack_header(len(payload)) + payload)
+    client = DeviceClient(t)
+
+    handle = client.start_stream(1, source="test")
+    assert t.written == b"streamtest 1\n"
+    assert handle.read_all() == payload
+
+
+def test_start_stream_reads_block_aligned_length_from_header():
+    # Firmware rounds up to whole 1024-sample blocks: 1 s -> 47 blocks (not 46.875).
+    block_bytes = 1024 * 2
+    byte_length = 47 * block_bytes  # 96256, i.e. > 1 * 48000 * 2 (96000)
+    payload = _pcm(byte_length)
+    t = FakeTransport(to_read=pack_header(byte_length) + payload)
+    client = DeviceClient(t)
+
+    handle = client.start_stream(1)
+    assert handle.header.byte_length == byte_length
+    assert len(handle.read_all()) == byte_length
+
+
 def test_start_stream_rejects_nonpositive_seconds():
     client = DeviceClient(FakeTransport())
     with pytest.raises(ValueError):
         client.start_stream(0)
+
+
+def test_start_stream_rejects_unknown_source():
+    client = DeviceClient(FakeTransport())
+    with pytest.raises(ValueError):
+        client.start_stream(1, source="bogus")
 
 
 def test_resync_times_out_without_magic():

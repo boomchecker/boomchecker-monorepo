@@ -42,16 +42,23 @@ def record(
     seconds: int = typer.Argument(..., min=1, help="Seconds of audio to record."),
     port: str = typer.Option(DEFAULT_PORT, "--port", "-p", help="Serial port."),
     out: Path = typer.Option(_DEFAULT_OUT, "--out", "-o", help="Output folder for recordings."),
+    test_tone: bool = typer.Option(
+        False,
+        "--test-tone",
+        "-t",
+        help="Stream a synthetic 1 kHz tone (streamtest) instead of the microphone.",
+    ),
 ) -> None:
     """Record N seconds of PCM to a WAV file (headless)."""
     from .protocol.client import DeviceClient
     from .sessions.record import RecordSession
     from .transport.serial_transport import SerialTransport
 
+    source = "test" if test_tone else "mic"
     with SerialTransport(port, timeout=DEFAULT_TIMEOUT_S) as transport:
         client = DeviceClient(transport)
         session = RecordSession(client, out)
-        result = session.record(seconds)
+        result = session.record(seconds, source=source)
     typer.echo(f"Saved {result.path} ({result.duration_s:.1f}s, {result.sample_count} samples).")
 
 

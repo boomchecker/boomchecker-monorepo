@@ -66,17 +66,22 @@ echo input and print a `> ` prompt.
 
 ## Binary stream framing (`PCM1`)
 
-`stream <sec>` triggers a binary transfer: a fixed **{spec.HEADER_SIZE}-byte**
-little-endian header, immediately followed by exactly `byte_length` bytes of raw
-PCM. The transfer is length-delimited (no trailer). The host resyncs to the
-`{spec.MAGIC.decode()}` magic to skip any echoed text before the header.
+`stream <sec>` and `streamtest <sec>` trigger a binary transfer: a fixed
+**{spec.HEADER_SIZE}-byte** little-endian header, immediately followed by exactly
+`byte_length` bytes of raw PCM. The transfer is length-delimited (no trailer). The
+host resyncs to the `{spec.MAGIC.decode()}` magic to skip any echoed text before
+the header.
 
 ### Header layout (protocol version {spec.PROTOCOL_VERSION})
 
 {_header_table()}
 
-`byte_length` equals `sec * {spec.SAMPLE_RATE_HZ} * {spec.SAMPLE_WIDTH_BYTES}`
-for a `{spec.CHANNELS}`-channel stream.
+The firmware streams whole {spec.SAMPLES_PER_BLOCK}-sample blocks, so it rounds the
+duration up: `byte_length = ceil(sec * {spec.SAMPLE_RATE_HZ} / {spec.SAMPLES_PER_BLOCK})
+* {spec.SAMPLES_PER_BLOCK} * {spec.SAMPLE_WIDTH_BYTES}` for a `{spec.CHANNELS}`-channel
+stream. The header value is authoritative; the host reads exactly `byte_length`
+bytes, so the captured audio can be up to one block
+(~{spec.SAMPLES_PER_BLOCK * 1000 // spec.SAMPLE_RATE_HZ} ms) longer than requested.
 """
 
 
