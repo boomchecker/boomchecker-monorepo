@@ -8,13 +8,14 @@ without an SD card.
 
 ## Signal path
 
-```
-PDM mic ─▶ SAI1_A + GPDMA (circular)  ─▶  pdm_pcm DSP        ─▶ 48 kHz / 16-bit
-          (6.144 MHz bit clock)           CIC5 ▸ DC block ▸      mono PCM
-                                          101-tap FIR
-                                                 │
-                                                 ▼
-                                   USB CDC bulk-IN  ─▶  host  ─▶  .wav
+```mermaid
+flowchart LR
+    MIC[PDM mic] --> SAI["SAI1_A + GPDMA<br/>circular ring<br/>6.144 MHz bit clock"]
+    SAI --> DSP["pdm_pcm DSP<br/>CIC5 ▸ DC block ▸ 101-tap FIR"]
+    DSP --> PCM["48 kHz / 16-bit<br/>mono PCM"]
+    PCM --> USB[USB CDC bulk-IN]
+    USB --> HOST[host]
+    HOST --> WAV[".wav"]
 ```
 
 - `Core/Src/mic.c` — acquisition (SAI1 + GPDMA ring buffer, half/full callbacks).
