@@ -22,7 +22,7 @@
 #include "app_usbx.h"
 
 /* USER CODE BEGIN UX_Memory_Buffer */
-
+#include "main.h" /* HAL_GetTick for _ux_utility_time_get */
 /* USER CODE END UX_Memory_Buffer */
 #if defined ( __ICCARM__ )
 #pragma data_alignment=4
@@ -108,7 +108,10 @@ ULONG _ux_utility_time_get(VOID)
   ULONG time_tick = 0U;
 
   /* USER CODE BEGIN _ux_utility_time_get */
-
+  /* Provide a real monotonic tick (ms) so any USBX time/timeout path advances
+     instead of spinning on a constant 0. Matches the HAL_GetTick timeouts used
+     elsewhere (usb_cli.c, pcm_stream.c). */
+  time_tick = HAL_GetTick();
   /* USER CODE END _ux_utility_time_get */
 
   return time_tick;
