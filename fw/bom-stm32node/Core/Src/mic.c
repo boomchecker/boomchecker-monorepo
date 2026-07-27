@@ -20,6 +20,7 @@ static volatile uint8_t  s_half0_ready = 0;     /* first ring half ready        
 static volatile uint8_t  s_half1_ready = 0;     /* second ring half ready        */
 static volatile uint8_t  s_overrun     = 0;
 static volatile uint32_t s_blocks      = 0;
+static volatile uint32_t s_half_count  = 0;     /* DMA half-completions (ISR)     */
 static int8_t            s_expect      = -1;    /* next half to deliver (-1=latch)*/
 
 static pdm_pcm_t s_dsp;
@@ -91,6 +92,7 @@ int mic_start(void)
   s_half1_ready = 0;
   s_overrun     = 0;
   s_blocks      = 0;
+  s_half_count  = 0;
   s_expect      = -1;
   s_running     = 1;
 
@@ -153,7 +155,18 @@ bool mic_poll(int16_t *pcm, size_t *nsamp)
     s_half1_ready = 0;
   }
 
+  /* Overrun blind spot: the ready flag was cleared above, so if the DMA reaches
+     the boundary that overwrites *this* half while we are still processing it,
+     the tear would go unreported. Snapshot the ISR half-completion counter right
+     before the ~17 ms DSP; if it advanced (>=1) by the time we finish, a DMA
+     boundary landed during the read and the half we delivered may be torn.
+     Healthy case (17 ms DSP < 21.33 ms half period) leaves the counter put. */
+  uint32_t half_at_start = s_half_count;
   pdm_pcm_process_half(&s_dsp, src, pcm);
+  if (s_half_count != half_at_start)
+  {
+    s_overrun = 1;
+  }
   if (nsamp)
   {
     *nsamp = PCM_SAMPLES_PER_HALF;
@@ -179,6 +192,7 @@ void HAL_SAI_RxHalfCpltCallback(SAI_HandleTypeDef *hsai)
   (void)hsai;
   if (s_running)
   {
+    s_half_count++;
     if (s_half0_ready)
     {
       s_overrun = 1; /* main did not process the previous first half in time */
@@ -192,6 +206,7 @@ void HAL_SAI_RxCpltCallback(SAI_HandleTypeDef *hsai)
   (void)hsai;
   if (s_running)
   {
+    s_half_count++;
     if (s_half1_ready)
     {
       s_overrun = 1;
