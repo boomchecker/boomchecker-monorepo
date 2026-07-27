@@ -84,9 +84,6 @@ UINT  _ux_dcd_stm32_transfer_abort(UX_DCD_STM32 *dcd_stm32, UX_SLAVE_TRANSFER *t
 #if !defined (USBD_HAL_TRANSFER_ABORT_NOT_SUPPORTED)
 
    UX_SLAVE_ENDPOINT       *endpoint;
-#if defined(UX_DEVICE_STANDALONE)
-   UX_DCD_STM32_ED         *ed;
-#endif
 
 
     /* Get the pointer to the logical endpoint from the transfer request.  */
@@ -94,22 +91,6 @@ UINT  _ux_dcd_stm32_transfer_abort(UX_DCD_STM32 *dcd_stm32, UX_SLAVE_TRANSFER *t
 
     HAL_PCD_EP_Abort(dcd_stm32 -> pcd_handle, endpoint->ux_slave_endpoint_descriptor.bEndpointAddress);
     HAL_PCD_EP_Flush(dcd_stm32 -> pcd_handle, endpoint->ux_slave_endpoint_descriptor.bEndpointAddress);
-
-#if defined(UX_DEVICE_STANDALONE)
-    /* The standalone transfer runner keeps its own TRANSFER/DONE state in the
-       physical endpoint. HAL_PCD_EP_Abort stops the controller but does not
-       clear these flags, so the next transfer otherwise waits forever on the
-       aborted request. The stack calls us with interrupts disabled. */
-    ed = (UX_DCD_STM32_ED *)endpoint -> ux_slave_endpoint_ed;
-    if (ed != UX_NULL)
-    {
-        ed -> ux_dcd_stm32_ed_status &=
-            ~(UX_DCD_STM32_ED_STATUS_TRANSFER |
-              UX_DCD_STM32_ED_STATUS_DONE |
-              UX_DCD_STM32_ED_STATUS_TASK_PENDING);
-        ed -> ux_dcd_stm32_ed_state = UX_DCD_STM32_ED_STATE_IDLE;
-    }
-#endif
 
     /* No semaphore put here since it's already done in stack.  */
 #endif /* USBD_HAL_TRANSFER_ABORT_NOT_SUPPORTED */
