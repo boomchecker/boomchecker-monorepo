@@ -106,6 +106,19 @@ int main(void)
   MX_SPI5_Init();
   MX_USBX_Init();
   /* USER CODE BEGIN 2 */
+  /* Enable the instruction cache. The core runs code from flash at 250 MHz with
+     5 wait states (FLASH_LATENCY_5); with the cache off, every instruction fetch
+     stalls the CPU and the PDM->PCM DSP misses its 21.33 ms/ring-half real-time
+     budget (~39 ms measured -> mic overrun). Cached it takes ~17 ms and fits.
+     CubeMX leaves HAL_ICACHE_MODULE_ENABLED off in stm32h5xx_hal_conf.h, so the
+     cache is driven directly here (keeps the CubeMX-owned conf untouched). The
+     cache is invalidated on reset; wait for any pending invalidation, then
+     enable it for the whole firmware. */
+  while ((ICACHE->SR & ICACHE_SR_BUSYF) != 0u)
+  {
+  }
+  ICACHE->CR |= ICACHE_CR_EN;
+
   /* The microphone (SAI1 + GPDMA, per docs/pdm-port-plan.md "CubeMX contract")
      is started on demand by the `stream` command (see pcm_stream.c), so there
      is nothing to start here. */
