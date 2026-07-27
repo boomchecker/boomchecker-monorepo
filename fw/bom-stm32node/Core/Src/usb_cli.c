@@ -13,8 +13,21 @@
 
 #include <string.h>
 
-/* CDC ACM class instance, set on activate / cleared on deactivate. */
-static UX_SLAVE_CLASS_CDC_ACM *s_cdc;
+/* CDC ACM class instance. The USB reset/disconnect callback (HAL_PCD_ResetCallback,
+   USB IRQ, priority 0) preempts everything and runs usb_cli_on_deactivate, so this
+   is the one static the ISR writes.
+   INVARIANT: the ISR only ever writes s_cdc and s_pipe_reset_pending; every other
+   static below is main-loop-only (hence non-volatile). Every consumer must snapshot
+   s_cdc into a local once and guard the local - never re-read s_cdc between the
+   NULL-check and passing it to a USBX call. The instance lives in the static USBX
+   byte pool and is never freed on disconnect, so a stale-but-non-NULL snapshot is
+   safe: write_run/read_run bail on device_state != CONFIGURED. If you ever add an
+   ISR write to another static here, it must become volatile too. */
+static UX_SLAVE_CLASS_CDC_ACM * volatile s_cdc;
+
+/* Set on (re)activate, consumed once by usb_cli_process to reset the CDC class
+   state machines and app flags after a connect (see usb_cli_process). */
+static volatile uint8_t s_pipe_reset_pending;
 
 /* RX scratch: one bulk-OUT packet (FS wMaxPacketSize = 64). */
 static uint8_t s_rx[64];
@@ -53,17 +66,18 @@ static int usb_cli_tx(const uint8_t *buf, uint16_t len)
 
 void usb_cli_on_activate(void *cdc_acm_instance)
 {
+  /* Store the pointer first, then arm the reset so the main loop that observes a
+     non-NULL s_cdc also sees the pending flag. */
   s_cdc = (UX_SLAVE_CLASS_CDC_ACM *)cdc_acm_instance;
+  s_pipe_reset_pending = 1;
 }
 
 void usb_cli_on_deactivate(void)
 {
-  s_cdc       = UX_NULL;
-  s_tx_busy   = 0;
-  s_tx_len    = 0;
-  s_bw_buf    = UX_NULL;
-  s_bw_len    = 0;
-  s_bw_active = 0;
+  /* Runs in USB IRQ context: do the minimum - drop the connection pointer with a
+     single atomic aligned write. The app flags and the CDC class state machines
+     are reset by the main loop on the next (re)connect (usb_cli_process). */
+  s_cdc = UX_NULL;
 }
 
 void usb_cli_start(void)
@@ -115,12 +129,19 @@ void usb_cli_pump(void)
    interleave with a console write that is still in flight. */
 static bool finish_staged_tx(void)
 {
+  UX_SLAVE_CLASS_CDC_ACM *cdc = s_cdc;
+  if (cdc == UX_NULL)
+  {
+    return s_tx_busy == 0;
+  }
   uint32_t t0 = HAL_GetTick();
-  while (s_tx_busy && s_cdc != UX_NULL)
+  while (s_tx_busy)
   {
     ULONG actual = 0;
     ux_system_tasks_run();
-    UINT st = ux_device_class_cdc_acm_write_run(s_cdc, s_tx_buf, s_tx_len, &actual);
+    /* On disconnect write_run returns non-WAIT (device left CONFIGURED); we treat
+       that as failure below, so the stale-but-valid cdc snapshot is safe. */
+    UINT st = ux_device_class_cdc_acm_write_run(cdc, s_tx_buf, s_tx_len, &actual);
     if (st != UX_STATE_WAIT)
     {
       bool ok = st == UX_STATE_NEXT;
@@ -143,7 +164,8 @@ static bool finish_staged_tx(void)
 
 int usb_cli_write_blocking(const uint8_t *data, uint32_t len)
 {
-  if (s_cdc == UX_NULL || data == NULL)
+  UX_SLAVE_CLASS_CDC_ACM *cdc = s_cdc;
+  if (cdc == UX_NULL || data == NULL)
   {
     return 1;
   }
@@ -160,16 +182,13 @@ int usb_cli_write_blocking(const uint8_t *data, uint32_t len)
     uint32_t t0 = HAL_GetTick();
     /* Drive one write transaction for the remaining span to completion. USBX
        splits it into bulk packets internally and returns UX_STATE_NEXT once the
-       whole requested length has been accepted. */
+       whole requested length has been accepted. On disconnect write_run leaves
+       UX_STATE_WAIT (returns non-NEXT), so the loop below aborts and returns 1. */
     do
     {
       ux_system_tasks_run();
-      st = ux_device_class_cdc_acm_write_run(s_cdc, (UCHAR *)(data + off),
+      st = ux_device_class_cdc_acm_write_run(cdc, (UCHAR *)(data + off),
                                              (ULONG)(len - off), &actual);
-      if (s_cdc == UX_NULL)
-      {
-        return 1; /* disconnected mid-transfer */
-      }
     } while (st == UX_STATE_WAIT && (HAL_GetTick() - t0) < USB_TX_TIMEOUT_MS);
 
     if (st != UX_STATE_NEXT || actual == 0)
@@ -204,7 +223,8 @@ int usb_cli_write_service(void)
   {
     return 0;
   }
-  if (s_cdc == UX_NULL)
+  UX_SLAVE_CLASS_CDC_ACM *cdc = s_cdc;
+  if (cdc == UX_NULL)
   {
     s_bw_active = 0;
     return -1;
@@ -213,7 +233,7 @@ int usb_cli_write_service(void)
   ux_system_tasks_run();
   /* write_run tracks its own progress; it returns UX_STATE_NEXT once the whole
      length is accepted (call it with the original buffer/length each time). */
-  UINT st = ux_device_class_cdc_acm_write_run(s_cdc, (UCHAR *)s_bw_buf,
+  UINT st = ux_device_class_cdc_acm_write_run(cdc, (UCHAR *)s_bw_buf,
                                               (ULONG)s_bw_len, &actual);
   if (st == UX_STATE_WAIT)
   {
@@ -238,18 +258,19 @@ void usb_cli_write_abort(void)
   /* All callers share one CDC IN state machine. Drop the application-side
      bookkeeping together so no later writer mistakes an aborted console or
      binary transaction for its own completion. */
+  UX_SLAVE_CLASS_CDC_ACM *cdc = s_cdc;
   s_tx_busy = 0;
   s_tx_len  = 0;
   s_bw_active = 0;
   s_bw_buf    = UX_NULL;
   s_bw_len    = 0;
-  if (s_cdc != UX_NULL)
+  if (cdc != UX_NULL)
   {
     /* Abort the bulk-IN pipe. This cancels any transfer still armed on the
        controller AND resets the class write state machine to UX_STATE_RESET,
        so the next usb_cli_write_blocking()/usb_cli_write_start() starts clean
        instead of re-entering a half-finished transfer with a stale buffer. */
-    (void)ux_device_class_cdc_acm_ioctl(s_cdc,
+    (void)ux_device_class_cdc_acm_ioctl(cdc,
                                         UX_SLAVE_CLASS_CDC_ACM_IOCTL_ABORT_PIPE,
                                         (VOID *)UX_SLAVE_CLASS_CDC_ACM_ENDPOINT_XMIT);
   }
@@ -283,16 +304,37 @@ void usb_cli_process(void)
   /* Let the CLI process input and flush output (may call usb_cli_tx). */
   cli_process();
 
-  if (s_cdc == UX_NULL)
+  UX_SLAVE_CLASS_CDC_ACM *cdc = s_cdc; /* single snapshot for this iteration */
+  if (cdc == UX_NULL)
   {
     return;
+  }
+
+  /* First service after a (re)connect: reset stale app bookkeeping and the CDC
+     class write/read state machines. On unplug the deactivate ISR only nulls
+     s_cdc; without this, a stale write_state/read_state would resume a
+     half-finished transfer with a stale buffer on the first transfer after
+     replug (garbage). Runs before any write_run/read_run below, and before any
+     stream command (dispatched inside cli_process on a later iteration). */
+  if (s_pipe_reset_pending)
+  {
+    s_pipe_reset_pending = 0;
+    s_tx_busy   = 0;
+    s_tx_len    = 0;
+    s_bw_active = 0;
+    s_bw_buf    = UX_NULL;
+    s_bw_len    = 0;
+    (void)ux_device_class_cdc_acm_ioctl(cdc, UX_SLAVE_CLASS_CDC_ACM_IOCTL_ABORT_PIPE,
+                                        (VOID *)UX_SLAVE_CLASS_CDC_ACM_ENDPOINT_XMIT);
+    (void)ux_device_class_cdc_acm_ioctl(cdc, UX_SLAVE_CLASS_CDC_ACM_IOCTL_ABORT_PIPE,
+                                        (VOID *)UX_SLAVE_CLASS_CDC_ACM_ENDPOINT_RCV);
   }
 
   /* Transmit: run the write state machine until the staged chunk is sent. */
   if (s_tx_busy)
   {
     ULONG actual = 0;
-    UINT  st = ux_device_class_cdc_acm_write_run(s_cdc, s_tx_buf, s_tx_len, &actual);
+    UINT  st = ux_device_class_cdc_acm_write_run(cdc, s_tx_buf, s_tx_len, &actual);
     if (st != UX_STATE_WAIT)
     {
       /* Done, error or aborted: release the staging buffer. */
@@ -304,7 +346,7 @@ void usb_cli_process(void)
   /* Receive: run the read state machine; feed completed packets to the CLI. */
   {
     ULONG actual = 0;
-    UINT  st = ux_device_class_cdc_acm_read_run(s_cdc, s_rx, sizeof(s_rx), &actual);
+    UINT  st = ux_device_class_cdc_acm_read_run(cdc, s_rx, sizeof(s_rx), &actual);
     if (st == UX_STATE_NEXT && actual > 0)
     {
       cli_feed(s_rx, actual);
