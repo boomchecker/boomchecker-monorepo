@@ -12,3 +12,6 @@ The board integrates GNSS, LoRa, an IMU + magnetometer, and PDM microphones.
   (ARM compiler, CMake/Ninja, OpenOCD, st-flash).
 - **[Build & flash](build.md)** — generate the CMake project from CubeMX, build it, and
   flash the board.
+- **[Microphone & recording](microphone.md)** — record PDM-microphone audio to a WAV
+  over USB with the `stm32node-cli` host tool (USB setup, commands, protocol,
+  troubleshooting).
