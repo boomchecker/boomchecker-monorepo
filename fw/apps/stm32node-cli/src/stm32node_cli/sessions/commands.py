@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from ..config import DEFAULT_TIMEOUT_S
 from ..protocol.client import DeviceClient
+from ..protocol.codec import StreamAborted
 from ..transport.serial_transport import SerialTransport
 from .base import Command, CommandContext, register_command
 from .record import RecordSession
@@ -44,11 +45,26 @@ def _record(ctx: CommandContext, args: list[str], *, source: str, usage: str) ->
         )
         ctx.progress(0, header.byte_length)
 
-    with SerialTransport(ctx.port, timeout=DEFAULT_TIMEOUT_S) as transport:
-        session = RecordSession(DeviceClient(transport), ctx.out_dir)
-        result = session.record(
-            seconds, source=source, on_ack=on_ack, on_progress=ctx.progress
+    def on_retry(attempt: int, total: int) -> None:
+        ctx.emit(
+            f"[yellow]no answer (attempt {attempt}/{total}); resending - "
+            "press q then Enter to abort[/yellow]"
         )
+
+    try:
+        with SerialTransport(ctx.port, timeout=DEFAULT_TIMEOUT_S) as transport:
+            session = RecordSession(DeviceClient(transport), ctx.out_dir)
+            result = session.record(
+                seconds,
+                source=source,
+                on_ack=on_ack,
+                on_progress=ctx.progress,
+                should_abort=ctx.should_abort,
+                on_retry=on_retry,
+            )
+    except StreamAborted:
+        ctx.emit("[yellow]aborted[/yellow]")
+        return
 
     trailer = result.trailer
     if trailer is None:

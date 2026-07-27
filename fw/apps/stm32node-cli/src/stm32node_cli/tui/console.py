@@ -8,16 +8,25 @@ handled locally.
 
 from __future__ import annotations
 
+import threading
+
 from textual import work
 from textual.app import ComposeResult
 from textual.screen import Screen
 from textual.widgets import Footer, Header, Input, ProgressBar, RichLog
 
+from ..protocol.codec import StreamAborted
 from ..sessions.base import CommandContext, get_command, iter_commands
 
 
 class ConsoleScreen(Screen):
     """Type-a-command console for the connected board."""
+
+    # Set from the UI thread when the user asks to abort; polled by the running
+    # device command's worker thread (see CommandContext.should_abort).
+    _abort = threading.Event()
+    # True while a device command's worker is running (guards the abort routing).
+    _busy = False
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -27,6 +36,8 @@ class ConsoleScreen(Screen):
         yield Footer()
 
     def on_mount(self) -> None:
+        self._abort = threading.Event()
+        self._busy = False
         self.query_one("#stream-progress", ProgressBar).display = False
         self.log_line(f"[b]connected[/b] {self.app.port}")
         self.log_line(f"output folder: {self.app.out_dir}")
@@ -38,6 +49,15 @@ class ConsoleScreen(Screen):
         line = event.value.strip()
         self.query_one("#console-input", Input).value = ""
         if not line:
+            return
+        if self._busy:
+            # A device command is running. The only input we honour is an abort
+            # request; dispatching anything else would cancel it (exclusive worker).
+            if line.lower() in ("q", "abort", "cancel", "stop"):
+                self._abort.set()
+                self.log_line("[yellow]aborting - waiting for the command to stop ...[/yellow]")
+            else:
+                self.log_line("[dim]busy - press q then Enter to abort[/dim]")
             return
         self.log_line(f"[dim]>[/dim] {line}")
         parts = line.split()
@@ -56,6 +76,8 @@ class ConsoleScreen(Screen):
         elif name == "help":
             self._print_help()
         elif get_command(name) is not None:
+            self._abort.clear()
+            self._busy = True
             self._run_device_command(name, args)
         else:
             self.log_line(f"unknown command: {name} (try 'help')")
@@ -79,12 +101,16 @@ class ConsoleScreen(Screen):
             out_dir=self.app.out_dir,
             emit=self._emit_threadsafe,
             progress=self._progress_threadsafe,
+            should_abort=self._abort.is_set,
         )
         try:
             command.run(ctx, args)
+        except StreamAborted:
+            self._emit_threadsafe("[yellow]aborted[/yellow]")
         except Exception as exc:  # noqa: BLE001 - surface any failure to the log
             self._emit_threadsafe(f"error: {exc}")
         finally:
+            self._busy = False
             self._progress_threadsafe(-1, 0)  # always hide the bar when done
 
     # -- output --------------------------------------------------------------

@@ -25,14 +25,17 @@ class CommandContext:
 
     ``emit`` appends one line to the console output. ``progress`` drives the
     console's loading bar: call ``progress(done, total)`` with 0 <= done <= total,
-    or ``progress(-1, 0)`` to hide it. Both are safe to call from a worker thread
-    (the console marshals them back to the UI).
+    or ``progress(-1, 0)`` to hide it. ``should_abort`` returns True once the user
+    has asked to stop the running command (the console sets it when ``q`` is
+    entered); long-running commands should pass it to the device layer. All three
+    are safe to call from a worker thread (the console marshals them to the UI).
     """
 
     port: str
     out_dir: Path
     emit: Callable[[str], None]
     progress: Callable[[int, int], None]
+    should_abort: Callable[[], bool] = lambda: False
 
 
 # A command handler: given the context and the parsed argument list, do the work

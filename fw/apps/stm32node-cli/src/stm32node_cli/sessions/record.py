@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from ..audio.wav import timestamped_path, write_wav
-from ..protocol.client import DeviceClient
+from ..protocol.client import DEFAULT_STREAM_RETRIES, AbortFn, DeviceClient, RetryFn
 from ..protocol.codec import StreamHeader, StreamTrailer
 from .base import Session
 
@@ -49,8 +49,19 @@ class RecordSession(Session):
         source: str = "mic",
         on_ack: AckFn | None = None,
         on_progress: ProgressFn | None = None,
+        should_abort: AbortFn | None = None,
+        on_retry: RetryFn | None = None,
+        retries: int = DEFAULT_STREAM_RETRIES,
     ) -> RecordResult:
-        return self.record(seconds, source=source, on_ack=on_ack, on_progress=on_progress)
+        return self.record(
+            seconds,
+            source=source,
+            on_ack=on_ack,
+            on_progress=on_progress,
+            should_abort=should_abort,
+            on_retry=on_retry,
+            retries=retries,
+        )
 
     def record(
         self,
@@ -59,8 +70,17 @@ class RecordSession(Session):
         source: str = "mic",
         on_ack: AckFn | None = None,
         on_progress: ProgressFn | None = None,
+        should_abort: AbortFn | None = None,
+        on_retry: RetryFn | None = None,
+        retries: int = DEFAULT_STREAM_RETRIES,
     ) -> RecordResult:
-        handle = self._client.start_stream(seconds, source=source)
+        handle = self._client.start_stream(
+            seconds,
+            source=source,
+            retries=retries,
+            should_abort=should_abort,
+            on_retry=on_retry,
+        )
         total = handle.header.byte_length
         if on_ack is not None:
             on_ack(handle.header)  # device acknowledged: header parsed

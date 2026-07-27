@@ -20,6 +20,10 @@ class ProtocolError(Exception):
     """Raised when received bytes do not match the protocol spec."""
 
 
+class StreamAborted(Exception):
+    """Raised when the user aborts a transfer mid-flight (e.g. presses ``q``)."""
+
+
 @dataclass(frozen=True)
 class StreamHeader:
     """Parsed ``PCM1`` stream header."""
