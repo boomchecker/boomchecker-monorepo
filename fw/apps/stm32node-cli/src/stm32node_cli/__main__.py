@@ -7,6 +7,7 @@ from pathlib import Path
 import typer
 
 from .config import DEFAULT_PORT, DEFAULT_TIMEOUT_S, default_output_dir
+from .protocol.spec import STREAM_MAX_SECONDS
 
 app = typer.Typer(
     add_completion=False,
@@ -39,7 +40,9 @@ def tui(
 
 @app.command()
 def record(
-    seconds: int = typer.Argument(..., min=1, help="Seconds of audio to record."),
+    seconds: int = typer.Argument(
+        ..., min=1, max=STREAM_MAX_SECONDS, help="Seconds of audio to record."
+    ),
     port: str = typer.Option(DEFAULT_PORT, "--port", "-p", help="Serial port."),
     out: Path = typer.Option(_DEFAULT_OUT, "--out", "-o", help="Output folder for recordings."),
     test_tone: bool = typer.Option(

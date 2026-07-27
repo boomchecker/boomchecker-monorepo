@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import time
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
@@ -16,7 +17,11 @@ from .codec import (
     parse_header,
     parse_trailer,
 )
-from .spec import HEADER_SIZE, MAGIC
+from .spec import HEADER_SIZE, MAGIC, STREAM_MAX_SECONDS
+
+# Strips terminal control sequences the board's console echoes (embedded-cli wraps
+# each echoed key in cursor save/restore codes, e.g. b"\x1b[s\x1b[u").
+_ANSI_RE = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]")
 
 # Called when an attempt gets no acknowledgement and the command is resent:
 # (attempt_that_failed, total_attempts).
@@ -72,7 +77,7 @@ class DeviceClient:
     def version(self) -> str:
         """Send ``version`` and return the reported firmware version line."""
         self._t.write(encode_command("version"))
-        return self._read_line().strip()
+        return self._read_response("version")
 
     def start_stream(
         self,
@@ -100,6 +105,8 @@ class DeviceClient:
         """
         if seconds <= 0:
             raise ValueError("seconds must be positive")
+        if seconds > STREAM_MAX_SECONDS:
+            raise ValueError(f"seconds must be <= {STREAM_MAX_SECONDS}")
         if source not in ("mic", "test"):
             raise ValueError("source must be 'mic' or 'test'")
         if retries < 1:
@@ -137,6 +144,24 @@ class DeviceClient:
         """
         return parse_trailer(self._read_line())
 
+    def _read_response(self, sent: str, *, max_lines: int = 8) -> str:
+        """Read a text command's reply, skipping the board's echo and prompt.
+
+        embedded-cli echoes every received character (wrapped in cursor
+        save/restore escapes) and prints a ``> `` prompt, so the first line(s)
+        after a command are the echo, not the answer. Return the first line that,
+        once ANSI escapes and a leading prompt are stripped, is neither empty nor
+        the echoed command itself.
+        """
+        for _ in range(max_lines):
+            line = _ANSI_RE.sub("", self._read_line())
+            if line.startswith("> "):
+                line = line[2:]
+            line = line.strip()
+            if line and line != sent:
+                return line
+        return ""
+
     # -- internals -----------------------------------------------------------
     def _read_line(self) -> str:
         """Read bytes until a newline; returns the decoded line without it."""
@@ -162,18 +187,27 @@ class DeviceClient:
 
         Discards any echoed command / prompt text, then returns True once the
         4-byte magic has been consumed (the caller reads the rest of the header).
-        Returns False if nothing recognizable arrives within ``ack_timeout`` - or
-        on the first empty read, since a live board echoes within milliseconds,
-        so a silent transport means the command did not land and it is worth
-        resending.
+
+        Returns False (so the caller resends) only if the board stays *silent* -
+        nothing arrives within ``ack_timeout``. Once any byte has arrived the
+        command has landed, so a slow/warming-up header must NOT trigger a resend:
+        that would queue a duplicate ``stream`` on the board and play an extra
+        capture. In that case we keep waiting for the magic until the window
+        elapses instead of retrying.
         """
         deadline = time.monotonic() + ack_timeout
         window = bytearray()
+        seen = False
         while True:
             self._raise_if_aborted(should_abort)
             b = self._t.read(1)
             if not b:
-                return False
+                # Silent read. Retry only if nothing has arrived at all (command
+                # lost); otherwise the command landed - wait out the window.
+                if not seen or time.monotonic() >= deadline:
+                    return False
+                continue
+            seen = True
             window += b
             if len(window) > len(MAGIC):
                 del window[0]

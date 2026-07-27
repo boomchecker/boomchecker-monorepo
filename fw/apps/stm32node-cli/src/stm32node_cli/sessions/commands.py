@@ -11,6 +11,7 @@ from __future__ import annotations
 from ..config import DEFAULT_TIMEOUT_S
 from ..protocol.client import DeviceClient
 from ..protocol.codec import StreamAborted
+from ..protocol.spec import STREAM_MAX_SECONDS
 from ..transport.serial_transport import SerialTransport
 from .base import Command, CommandContext, register_command
 from .record import RecordSession
@@ -27,6 +28,9 @@ def _parse_seconds(ctx: CommandContext, args: list[str], usage: str) -> int | No
         return None
     if seconds <= 0:
         ctx.emit("duration must be positive")
+        return None
+    if seconds > STREAM_MAX_SECONDS:
+        ctx.emit(f"duration must be <= {STREAM_MAX_SECONDS}s")
         return None
     return seconds
 

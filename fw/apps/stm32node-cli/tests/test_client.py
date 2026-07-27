@@ -100,4 +100,38 @@ def test_resync_times_out_without_magic():
     t = FakeTransport(to_read=b"no magic here")
     client = DeviceClient(t)
     with pytest.raises(ProtocolError):
-        client.start_stream(1)
+        # Bytes arrive but never the magic: wait out the (short) window, then fail.
+        client.start_stream(1, ack_timeout=0.05)
+
+
+def test_version_skips_echo_and_prompt():
+    # embedded-cli echoes the command (wrapped in cursor escapes) behind a prompt,
+    # then prints the answer. version() must return the answer, not the echo.
+    echo = b"> \x1b[sversion\x1b[u\r\n"
+    t = FakeTransport(to_read=echo + b"bom-stm32node CLI v0.1\r\n")
+    assert DeviceClient(t).version() == "bom-stm32node CLI v0.1"
+    assert t.written == b"version\n"
+
+
+def test_start_stream_retries_then_fails_on_silence():
+    # Total silence = command never landed -> resend each attempt, then give up.
+    t = FakeTransport(to_read=b"")
+    with pytest.raises(ProtocolError):
+        DeviceClient(t).start_stream(1, retries=3, ack_timeout=0.05)
+    assert t.written == b"stream 1\n" * 3
+
+
+def test_start_stream_no_retry_when_response_present():
+    # Echo precedes the header (command landed): the magic still arrives, so the
+    # command is sent exactly once - no duplicate stream queued on the board.
+    payload = _pcm(2048)
+    t = FakeTransport(to_read=b"stream 1\r\n> " + pack_header(len(payload)) + payload)
+    client = DeviceClient(t)
+    client.start_stream(1, retries=3, ack_timeout=0.05)
+    assert t.written == b"stream 1\n"
+
+
+def test_start_stream_rejects_seconds_over_max():
+    client = DeviceClient(FakeTransport())
+    with pytest.raises(ValueError):
+        client.start_stream(61)

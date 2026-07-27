@@ -19,6 +19,10 @@ SAMPLE_WIDTH_BYTES = 2  # int16, little-endian
 # The firmware acquires and streams whole half-buffers (PCM_SAMPLES_PER_HALF),
 # so a transfer is rounded up to a whole number of these blocks.
 SAMPLES_PER_BLOCK = 1024
+# Longest stream the firmware accepts (Core/Inc/pcm_stream.h PCM_STREAM_MAX_SECONDS).
+# The board rejects anything outside 1..this with a usage line, so the host must
+# validate up front rather than mistaking that text for a missing acknowledgement.
+STREAM_MAX_SECONDS = 60
 
 # --- Framing -----------------------------------------------------------------
 PROTOCOL_VERSION = 1
