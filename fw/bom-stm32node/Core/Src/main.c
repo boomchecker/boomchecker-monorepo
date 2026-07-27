@@ -24,11 +24,12 @@
 #include "spi.h"
 #include "usart.h"
 #include "usb.h"
+#include "app_usbx.h"
 #include "gpio.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "usb_cli.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -103,8 +104,27 @@ int main(void)
   MX_USART1_UART_Init();
   MX_UART4_Init();
   MX_SPI5_Init();
+  MX_USBX_Init();
   /* USER CODE BEGIN 2 */
+  /* Enable the instruction cache. The core runs code from flash at 250 MHz with
+     5 wait states (FLASH_LATENCY_5); with the cache off, every instruction fetch
+     stalls the CPU and the PDM->PCM DSP misses its 21.33 ms/ring-half real-time
+     budget (~39 ms measured -> mic overrun). Cached it takes ~17 ms and fits.
+     CubeMX leaves HAL_ICACHE_MODULE_ENABLED off in stm32h5xx_hal_conf.h, so the
+     cache is driven directly here (keeps the CubeMX-owned conf untouched). The
+     cache is invalidated on reset; wait for any pending invalidation, then
+     enable it for the whole firmware. */
+  while ((ICACHE->SR & ICACHE_SR_BUSYF) != 0u)
+  {
+  }
+  ICACHE->CR |= ICACHE_CR_EN;
 
+  /* The microphone (SAI1 + GPDMA, per docs/pdm-port-plan.md "CubeMX contract")
+     is started on demand by the `stream` command (see pcm_stream.c), so there
+     is nothing to start here. */
+
+  /* USB CDC command console (endpoint PMA + PCD start + CLI, see usb_cli.c). */
+  usb_cli_start();
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -114,6 +134,11 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+    /* Service USB: enumeration, the CDC console, and PCM streaming. The
+       `stream`/`streamtest` commands start the microphone on demand and run the
+       whole transfer synchronously from here, so this loop has no separate
+       mic_poll drain (a second consumer would steal ring halves). */
+    usb_cli_process();
   }
   /* USER CODE END 3 */
 }
@@ -126,10 +151,11 @@ void SystemClock_Config(void)
 {
   RCC_OscInitTypeDef RCC_OscInitStruct = {0};
   RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
+  RCC_CRSInitTypeDef RCC_CRSInitStruct = {0};
 
   /** Configure the main internal regulator output voltage
   */
-  __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE3);
+  __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE0);
 
   while(!__HAL_PWR_GET_FLAG(PWR_FLAG_VOSRDY)) {}
 
@@ -145,13 +171,13 @@ void SystemClock_Config(void)
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLL1_SOURCE_HSE;
   RCC_OscInitStruct.PLL.PLLM = 2;
-  RCC_OscInitStruct.PLL.PLLN = 10;
+  RCC_OscInitStruct.PLL.PLLN = 40;
   RCC_OscInitStruct.PLL.PLLP = 2;
   RCC_OscInitStruct.PLL.PLLQ = 4;
   RCC_OscInitStruct.PLL.PLLR = 2;
   RCC_OscInitStruct.PLL.PLLRGE = RCC_PLL1_VCIRANGE_3;
   RCC_OscInitStruct.PLL.PLLVCOSEL = RCC_PLL1_VCORANGE_WIDE;
-  RCC_OscInitStruct.PLL.PLLFRACN = 5462;
+  RCC_OscInitStruct.PLL.PLLFRACN = 0;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
   {
     Error_Handler();
@@ -168,14 +194,29 @@ void SystemClock_Config(void)
   RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
   RCC_ClkInitStruct.APB3CLKDivider = RCC_HCLK_DIV2;
 
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_3) != HAL_OK)
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_5) != HAL_OK)
   {
     Error_Handler();
   }
 
+  /** Enable the CRS APB clock
+  */
+  __HAL_RCC_CRS_CLK_ENABLE();
+
+  /** Configures CRS
+  */
+  RCC_CRSInitStruct.Prescaler = RCC_CRS_SYNC_DIV1;
+  RCC_CRSInitStruct.Source = RCC_CRS_SYNC_SOURCE_USB;
+  RCC_CRSInitStruct.Polarity = RCC_CRS_SYNC_POLARITY_RISING;
+  RCC_CRSInitStruct.ReloadValue = __HAL_RCC_CRS_RELOADVALUE_CALCULATE(48000000,1000);
+  RCC_CRSInitStruct.ErrorLimitValue = 34;
+  RCC_CRSInitStruct.HSI48CalibrationValue = 32;
+
+  HAL_RCCEx_CRSConfig(&RCC_CRSInitStruct);
+
   /** Configure the programming delay
   */
-  __HAL_FLASH_SET_PROGRAM_DELAY(FLASH_PROGRAMMING_DELAY_1);
+  __HAL_FLASH_SET_PROGRAM_DELAY(FLASH_PROGRAMMING_DELAY_2);
 }
 
 /* USER CODE BEGIN 4 */

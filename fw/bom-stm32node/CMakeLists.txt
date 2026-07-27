@@ -31,6 +31,15 @@ message("Build type: " ${CMAKE_BUILD_TYPE})
 # Enable CMake support for ASM and C languages
 enable_language(C ASM)
 
+# The PDM->PCM DSP chain (CIC5 + FIR) must finish one ring half (~21.3 ms of
+# audio) faster than real time or the mic overruns - true regardless of
+# CMAKE_BUILD_TYPE. At the project-wide Debug -O0, it measurably does not
+# (disassembly showed ~2-3x over budget). Force this one hot TU to -O2 so
+# Debug builds stay debuggable everywhere else but this loop still keeps up.
+set_source_files_properties(${CMAKE_SOURCE_DIR}/Core/Src/pdm_pcm.c
+    PROPERTIES COMPILE_OPTIONS "-O2"
+)
+
 # Create an executable object type
 add_executable(${CMAKE_PROJECT_NAME})
 
@@ -45,11 +54,19 @@ target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
 # Add sources to executable
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user sources here
+    ${CMAKE_SOURCE_DIR}/Core/Src/pdm_pcm.c
+    ${CMAKE_SOURCE_DIR}/Core/Src/mic.c
+    ${CMAKE_SOURCE_DIR}/Core/Src/cli.c
+    ${CMAKE_SOURCE_DIR}/Core/Src/usb_cli.c
+    ${CMAKE_SOURCE_DIR}/Core/Src/pcm_stream.c
+    ${CMAKE_SOURCE_DIR}/third_party/embedded-cli/lib/src/embedded_cli.c
 )
 
 # Add include paths
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user defined include paths
+    ${CMAKE_SOURCE_DIR}/Core/Inc
+    ${CMAKE_SOURCE_DIR}/third_party/embedded-cli/lib/include
 )
 
 # Add project symbols (macros)
