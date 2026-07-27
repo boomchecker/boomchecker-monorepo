@@ -36,8 +36,9 @@ void usb_cli_pump(void);
 
 /** Push any pending console text out to the host synchronously. Call before a
  *  binary transfer so the CLI's text (command echo) does not interleave with
- *  the payload. */
-void usb_cli_flush_tx(void);
+ *  the payload.
+ *  @return true if the pipe is idle after the flush, false on timeout/error. */
+bool usb_cli_flush_tx(void);
 
 /** Send `len` bytes losslessly, driving the CDC write state machine to
  *  completion (unlike the drop-on-full console path). Blocks until every byte

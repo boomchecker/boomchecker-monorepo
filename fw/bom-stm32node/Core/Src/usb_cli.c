@@ -58,9 +58,12 @@ void usb_cli_on_activate(void *cdc_acm_instance)
 
 void usb_cli_on_deactivate(void)
 {
-  s_cdc     = UX_NULL;
-  s_tx_busy = 0;
-  s_tx_len  = 0;
+  s_cdc       = UX_NULL;
+  s_tx_busy   = 0;
+  s_tx_len    = 0;
+  s_bw_buf    = UX_NULL;
+  s_bw_len    = 0;
+  s_bw_active = 0;
 }
 
 void usb_cli_start(void)
@@ -73,13 +76,8 @@ void usb_cli_start(void)
   HAL_PCDEx_PMAConfig(&hpcd_USB_DRD_FS, 0x00U, PCD_SNG_BUF, 0x40);  /* EP0 OUT,      MPS 64 */
   HAL_PCDEx_PMAConfig(&hpcd_USB_DRD_FS, 0x80U, PCD_SNG_BUF, 0x80);  /* EP0 IN,       MPS 64 */
   HAL_PCDEx_PMAConfig(&hpcd_USB_DRD_FS, 0x81U, PCD_SNG_BUF, 0xC0);  /* CDC notify IN, MPS 8 */
+  HAL_PCDEx_PMAConfig(&hpcd_USB_DRD_FS, 0x82U, PCD_SNG_BUF, 0xD0);  /* CDC bulk IN,  MPS 64 */
   HAL_PCDEx_PMAConfig(&hpcd_USB_DRD_FS, 0x03U, PCD_SNG_BUF, 0x110); /* CDC bulk OUT, MPS 64 */
-  /* CDC bulk IN: double-buffered so one 64-byte packet is on the wire while the
-     next is loaded. Without this the single buffer must be reloaded between
-     packets, the host gets NAKs and backs off, throttling the PCM stream to a
-     small fraction of full-speed bulk bandwidth. Two 64-byte buffers at 0xD0
-     and 0x150 (0x150..0x190; below the bulk-OUT buffer at 0x110..0x150). */
-  HAL_PCDEx_PMAConfig(&hpcd_USB_DRD_FS, 0x82U, PCD_DBL_BUF, 0x01500000U | 0xD0U);
 
   /* Connect the device to the bus (assert DP pull-up). MX_USBX_Init set up the
      stack/DCD but does not start it; without this the host sees no device.
@@ -106,7 +104,7 @@ void usb_cli_pump(void)
 
 /* Finish any chunk already staged by usb_cli_tx() so the blocking path does not
    interleave with a console write that is still in flight. */
-static void finish_staged_tx(void)
+static bool finish_staged_tx(void)
 {
   uint32_t t0 = HAL_GetTick();
   while (s_tx_busy && s_cdc != UX_NULL)
@@ -116,15 +114,22 @@ static void finish_staged_tx(void)
     UINT st = ux_device_class_cdc_acm_write_run(s_cdc, s_tx_buf, s_tx_len, &actual);
     if (st != UX_STATE_WAIT)
     {
+      bool ok = st == UX_STATE_NEXT;
       s_tx_busy = 0;
       s_tx_len  = 0;
-      break;
+      if (!ok)
+      {
+        usb_cli_write_abort();
+      }
+      return ok;
     }
     if ((HAL_GetTick() - t0) >= USB_TX_TIMEOUT_MS)
     {
-      break;
+      usb_cli_write_abort();
+      return false;
     }
   }
+  return s_tx_busy == 0;
 }
 
 int usb_cli_write_blocking(const uint8_t *data, uint32_t len)
@@ -133,7 +138,10 @@ int usb_cli_write_blocking(const uint8_t *data, uint32_t len)
   {
     return 1;
   }
-  finish_staged_tx();
+  if (!finish_staged_tx())
+  {
+    return 1;
+  }
 
   uint32_t off = 0;
   while (off < len)
@@ -157,6 +165,7 @@ int usb_cli_write_blocking(const uint8_t *data, uint32_t len)
 
     if (st != UX_STATE_NEXT || actual == 0)
     {
+      usb_cli_write_abort();
       return 1; /* timeout, error, or no progress */
     }
     off += (uint32_t)actual;
@@ -170,7 +179,10 @@ int usb_cli_write_start(const uint8_t *data, uint32_t len)
   {
     return 1;
   }
-  finish_staged_tx(); /* don't collide with a console chunk still in flight */
+  if (!finish_staged_tx()) /* don't collide with console output */
+  {
+    return 1;
+  }
   s_bw_buf    = data;
   s_bw_len    = len;
   s_bw_active = 1;
@@ -199,7 +211,12 @@ int usb_cli_write_service(void)
     return 1; /* still sending */
   }
   s_bw_active = 0;
-  return (st == UX_STATE_NEXT) ? 0 : -1;
+  if (st == UX_STATE_NEXT)
+  {
+    return 0;
+  }
+  usb_cli_write_abort();
+  return -1;
 }
 
 bool usb_cli_write_active(void)
@@ -209,6 +226,11 @@ bool usb_cli_write_active(void)
 
 void usb_cli_write_abort(void)
 {
+  /* All callers share one CDC IN state machine. Drop the application-side
+     bookkeeping together so no later writer mistakes an aborted console or
+     binary transaction for its own completion. */
+  s_tx_busy = 0;
+  s_tx_len  = 0;
   s_bw_active = 0;
   s_bw_buf    = UX_NULL;
   s_bw_len    = 0;
@@ -224,9 +246,12 @@ void usb_cli_write_abort(void)
   }
 }
 
-void usb_cli_flush_tx(void)
+bool usb_cli_flush_tx(void)
 {
-  finish_staged_tx();
+  if (!finish_staged_tx())
+  {
+    return false;
+  }
 
   uint8_t tmp[64];
   size_t  n;
@@ -234,9 +259,10 @@ void usb_cli_flush_tx(void)
   {
     if (usb_cli_write_blocking(tmp, (uint32_t)n) != 0)
     {
-      break;
+      return false;
     }
   }
+  return true;
 }
 
 void usb_cli_process(void)

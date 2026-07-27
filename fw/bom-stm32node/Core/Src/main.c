@@ -29,7 +29,6 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "mic.h"
 #include "usb_cli.h"
 /* USER CODE END Includes */
 
@@ -51,10 +50,7 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-/* Acquired PCM samples held in RAM. Phase 1 verifies acquisition via the
-   debugger; the recording transport (SD) is added in phase 3. */
-static int16_t pcm[PCM_SAMPLES_PER_HALF];
-static size_t  pcm_n;
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -110,12 +106,9 @@ int main(void)
   MX_SPI5_Init();
   MX_USBX_Init();
   /* USER CODE BEGIN 2 */
-  /* PDM acquisition: build the DMA linked-list and start continuous reception.
-     Note: SAI1, PLL2 (CK1 = 3.072 MHz) and the CPU boost are configured in
-     CubeMX per docs/pdm-port-plan.md ("CubeMX contract"). */
-  /* TEMP: disabled to isolate USB enumeration from the mic path. */
-  /* mic_dma_init(); */
-  /* mic_start(); */
+  /* The microphone (SAI1 + GPDMA, per docs/pdm-port-plan.md "CubeMX contract")
+     is started on demand by the `stream` command (see pcm_stream.c), so there
+     is nothing to start here. */
 
   /* USB CDC command console (endpoint PMA + PCD start + CLI, see usb_cli.c). */
   usb_cli_start();
@@ -128,14 +121,11 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+    /* Service USB: enumeration, the CDC console, and PCM streaming. The
+       `stream`/`streamtest` commands start the microphone on demand and run the
+       whole transfer synchronously from here, so this loop has no separate
+       mic_poll drain (a second consumer would steal ring halves). */
     usb_cli_process();
-
-    if (mic_poll(pcm, &pcm_n))
-    {
-      /* Phase 1: PCM is in RAM (buffer `pcm`). Verify via debugger: `pcm` holds
-         plausible data, mic_blocks_processed() grows, mic_overrun() stays false.
-         Recording transport comes in phase 3. */
-    }
   }
   /* USER CODE END 3 */
 }

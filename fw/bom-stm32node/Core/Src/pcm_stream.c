@@ -167,16 +167,22 @@ void pcm_stream_run(uint32_t seconds, pcm_src_t src)
   uint8_t header[PCM_HEADER_SIZE];
   pack_header(header, byte_length);
 
-  /* Start from a clean transmit state machine. If a previous stream was
-     interrupted (host closed / Ctrl-C), the shared CDC write state can be left
-     mid-transfer; resetting it here guarantees the header below actually goes
-     out instead of re-driving a stale transfer (which showed up as an
-     intermittent "magic not found" on the host). */
-  usb_cli_write_abort();
+  /* Do not abort the shared CDC IN endpoint here. A console write may already
+     be armed and aborting it races the USB completion callback; the following
+     write can then complete that old transaction instead of sending PCM1.
+     A previous binary send is normally drained before pcm_stream_run returns.
+     If it is still active, finish it before switching the pipe to binary. */
+  if (!drain_tx())
+  {
+    return;
+  }
 
   /* Flush the command echo before the binary so the host only skips leading
      text (its magic resync), never interleaved bytes. */
-  usb_cli_flush_tx();
+  if (!usb_cli_flush_tx())
+  {
+    return;
+  }
   if (usb_cli_write_blocking(header, PCM_HEADER_SIZE) != 0)
   {
     return;
@@ -228,14 +234,17 @@ void pcm_stream_run(uint32_t seconds, pcm_src_t src)
     }
   }
 
-  if (tx_ok)
-  {
-    drain_tx(); /* flush the final block */
-  }
-
+  /* Stop acquisition as soon as the requested final block has been captured.
+     Leaving DMA running while the last block drains over USB can set overrun
+     after the useful capture has already ended, producing a false warning. */
   if (src == PCM_SRC_MIC)
   {
     mic_stop();
+  }
+
+  if (tx_ok && !drain_tx()) /* flush the final block */
+  {
+    tx_ok = false;
   }
 
   /* Explicit end-of-stream confirmation + capture health. */
