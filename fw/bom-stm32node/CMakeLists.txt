@@ -31,6 +31,20 @@ message("Build type: " ${CMAKE_BUILD_TYPE})
 # Enable CMake support for ASM and C languages
 enable_language(C ASM)
 
+# Enable the HAL USB double-buffer code path (used for the CDC bulk-IN endpoint
+# in usb_cli_start). Defined before the CubeMX subdirectory so the HAL library
+# compiles it in too. Keeps hal_conf.h (CubeMX-owned) untouched.
+add_compile_definitions(USE_USB_DOUBLE_BUFFER=1U)
+
+# The PDM->PCM DSP chain (CIC5 + FIR) must finish one ring half (~21.3 ms of
+# audio) faster than real time or the mic overruns - true regardless of
+# CMAKE_BUILD_TYPE. At the project-wide Debug -O0, it measurably does not
+# (disassembly showed ~2-3x over budget). Force this one hot TU to -O2 so
+# Debug builds stay debuggable everywhere else but this loop still keeps up.
+set_source_files_properties(${CMAKE_SOURCE_DIR}/Core/Src/pdm_pcm.c
+    PROPERTIES COMPILE_OPTIONS "-O2"
+)
+
 # Create an executable object type
 add_executable(${CMAKE_PROJECT_NAME})
 

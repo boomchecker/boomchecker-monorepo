@@ -21,3 +21,10 @@ tasks:
     aliases: [c]
     cmds:
       - rm -rf build
+
+  monitor:
+    desc: Open the stm32node-cli TUI against the board (interactive terminal - test/record commands, port picker)
+    aliases: [m]
+    dir: ../apps/stm32node-cli
+    cmds:
+      - .venv/bin/python -m stm32node_cli tui {{.CLI_ARGS}}

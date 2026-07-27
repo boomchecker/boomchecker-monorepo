@@ -76,8 +76,13 @@ void usb_cli_start(void)
   HAL_PCDEx_PMAConfig(&hpcd_USB_DRD_FS, 0x00U, PCD_SNG_BUF, 0x40);  /* EP0 OUT,      MPS 64 */
   HAL_PCDEx_PMAConfig(&hpcd_USB_DRD_FS, 0x80U, PCD_SNG_BUF, 0x80);  /* EP0 IN,       MPS 64 */
   HAL_PCDEx_PMAConfig(&hpcd_USB_DRD_FS, 0x81U, PCD_SNG_BUF, 0xC0);  /* CDC notify IN, MPS 8 */
-  HAL_PCDEx_PMAConfig(&hpcd_USB_DRD_FS, 0x82U, PCD_SNG_BUF, 0xD0);  /* CDC bulk IN,  MPS 64 */
   HAL_PCDEx_PMAConfig(&hpcd_USB_DRD_FS, 0x03U, PCD_SNG_BUF, 0x110); /* CDC bulk OUT, MPS 64 */
+  /* CDC bulk IN: double-buffered so one 64-byte packet is on the wire while the
+     next is loaded. Without this the single buffer must be reloaded between
+     packets, the host gets NAKs and backs off, throttling the PCM stream to a
+     small fraction of full-speed bulk bandwidth. Two 64-byte buffers at 0xD0
+     and 0x150 (0x150..0x190; below the bulk-OUT buffer at 0x110..0x150). */
+  HAL_PCDEx_PMAConfig(&hpcd_USB_DRD_FS, 0x82U, PCD_DBL_BUF, 0x01500000U | 0xD0U);
 
   /* Connect the device to the bus (assert DP pull-up). MX_USBX_Init set up the
      stack/DCD but does not start it; without this the host sees no device.
