@@ -77,12 +77,16 @@ void usb_cli_start(void)
   HAL_PCDEx_PMAConfig(&hpcd_USB_DRD_FS, 0x80U, PCD_SNG_BUF, 0x80);  /* EP0 IN,       MPS 64 */
   HAL_PCDEx_PMAConfig(&hpcd_USB_DRD_FS, 0x81U, PCD_SNG_BUF, 0xC0);  /* CDC notify IN, MPS 8 */
   HAL_PCDEx_PMAConfig(&hpcd_USB_DRD_FS, 0x03U, PCD_SNG_BUF, 0x110); /* CDC bulk OUT, MPS 64 */
-  /* CDC bulk IN: double-buffered so one 64-byte packet is on the wire while the
-     next is loaded. Without this the single buffer must be reloaded between
-     packets, the host gets NAKs and backs off, throttling the PCM stream to a
-     small fraction of full-speed bulk bandwidth. Two 64-byte buffers at 0xD0
-     and 0x150 (0x150..0x190; below the bulk-OUT buffer at 0x110..0x150). */
-  HAL_PCDEx_PMAConfig(&hpcd_USB_DRD_FS, 0x82U, PCD_DBL_BUF, 0x01500000U | 0xD0U);
+  /* CDC bulk IN: single-buffered. It was double-buffered as a workaround while
+     the core was accidentally running at ~83 MHz (HSE was the 8 MHz ST-Link MCO,
+     not the assumed 24 MHz): the DSP could not feed the endpoint fast enough and
+     the single buffer NAK-throttled the stream. With the clock corrected to
+     250 MHz the CPU has ample TX slack (~4 ms per 21 ms ring half), so a single
+     buffer sustains full-speed bulk with overrun=0. Double buffering also left
+     the endpoint's buffer-toggle desynced across streams (packet parity differs
+     per stream), which hung the pipe after the 2nd stream (trailer lost, then
+     the whole CDC stalled) - single buffering removes that failure mode. */
+  HAL_PCDEx_PMAConfig(&hpcd_USB_DRD_FS, 0x82U, PCD_SNG_BUF, 0xD0);
 
   /* Connect the device to the bus (assert DP pull-up). MX_USBX_Init set up the
      stack/DCD but does not start it; without this the host sees no device.
