@@ -40,6 +40,23 @@ set_source_files_properties(${CMAKE_SOURCE_DIR}/Core/Src/pdm_pcm.c
     PROPERTIES COMPILE_OPTIONS "-O2"
 )
 
+# Same reasoning for the detector's DSP: the MFCC (1024-pt FFT every 32 ms)
+# shares the real-time budget with pdm_pcm, so keep the math TUs at -O2.
+set_source_files_properties(
+    ${CMAKE_SOURCE_DIR}/Core/Src/detector.c
+    ${CMAKE_SOURCE_DIR}/Core/Src/mfcc_processor.c
+    ${CMAKE_SOURCE_DIR}/Core/Src/svm_classifier.c
+    ${CMAKE_SOURCE_DIR}/third_party/CMSIS-DSP/Source/BasicMathFunctions/BasicMathFunctions.c
+    ${CMAKE_SOURCE_DIR}/third_party/CMSIS-DSP/Source/CommonTables/CommonTables.c
+    ${CMAKE_SOURCE_DIR}/third_party/CMSIS-DSP/Source/ComplexMathFunctions/ComplexMathFunctions.c
+    ${CMAKE_SOURCE_DIR}/third_party/CMSIS-DSP/Source/FastMathFunctions/FastMathFunctions.c
+    ${CMAKE_SOURCE_DIR}/third_party/CMSIS-DSP/Source/MatrixFunctions/MatrixFunctions.c
+    ${CMAKE_SOURCE_DIR}/third_party/CMSIS-DSP/Source/StatisticsFunctions/StatisticsFunctions.c
+    ${CMAKE_SOURCE_DIR}/third_party/CMSIS-DSP/Source/SupportFunctions/SupportFunctions.c
+    ${CMAKE_SOURCE_DIR}/third_party/CMSIS-DSP/Source/TransformFunctions/TransformFunctions.c
+    PROPERTIES COMPILE_OPTIONS "-O2"
+)
+
 # Create an executable object type
 add_executable(${CMAKE_PROJECT_NAME})
 
@@ -59,7 +76,21 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     ${CMAKE_SOURCE_DIR}/Core/Src/cli.c
     ${CMAKE_SOURCE_DIR}/Core/Src/usb_cli.c
     ${CMAKE_SOURCE_DIR}/Core/Src/pcm_stream.c
+    ${CMAKE_SOURCE_DIR}/Core/Src/detector.c
+    ${CMAKE_SOURCE_DIR}/Core/Src/mfcc_processor.c
+    ${CMAKE_SOURCE_DIR}/Core/Src/svm_classifier.c
+    ${CMAKE_SOURCE_DIR}/Core/Src/dfu_boot.c
     ${CMAKE_SOURCE_DIR}/third_party/embedded-cli/lib/src/embedded_cli.c
+    # CMSIS-DSP: per-group combined TUs (only what arm_mfcc_f32 + the SVM
+    # need); --gc-sections drops the unused tables/kernels.
+    ${CMAKE_SOURCE_DIR}/third_party/CMSIS-DSP/Source/BasicMathFunctions/BasicMathFunctions.c
+    ${CMAKE_SOURCE_DIR}/third_party/CMSIS-DSP/Source/CommonTables/CommonTables.c
+    ${CMAKE_SOURCE_DIR}/third_party/CMSIS-DSP/Source/ComplexMathFunctions/ComplexMathFunctions.c
+    ${CMAKE_SOURCE_DIR}/third_party/CMSIS-DSP/Source/FastMathFunctions/FastMathFunctions.c
+    ${CMAKE_SOURCE_DIR}/third_party/CMSIS-DSP/Source/MatrixFunctions/MatrixFunctions.c
+    ${CMAKE_SOURCE_DIR}/third_party/CMSIS-DSP/Source/StatisticsFunctions/StatisticsFunctions.c
+    ${CMAKE_SOURCE_DIR}/third_party/CMSIS-DSP/Source/SupportFunctions/SupportFunctions.c
+    ${CMAKE_SOURCE_DIR}/third_party/CMSIS-DSP/Source/TransformFunctions/TransformFunctions.c
 )
 
 # Add include paths
@@ -67,6 +98,8 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user defined include paths
     ${CMAKE_SOURCE_DIR}/Core/Inc
     ${CMAKE_SOURCE_DIR}/third_party/embedded-cli/lib/include
+    ${CMAKE_SOURCE_DIR}/third_party/CMSIS-DSP/Include
+    ${CMAKE_SOURCE_DIR}/third_party/CMSIS-DSP/PrivateInclude
 )
 
 # Add project symbols (macros)

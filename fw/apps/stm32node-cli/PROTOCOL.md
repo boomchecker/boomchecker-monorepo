@@ -36,6 +36,18 @@ Diagnostic: stream <sec> seconds of a synthetic 1 kHz test tone instead of the m
 
 **Response:** Identical framing to `stream` (16-byte `PCM1` header + `byte_length` bytes).
 
+### `detect <sec>`
+
+Run on-device drone detection for <sec> seconds (1..60): microphone PCM is decimated to 16 kHz, MFCC features are extracted (1024-sample frames, hop 512) and every run of 14 frames above the RMS squelch is classified by a linear SVM.
+
+**Response:** One text line per classified window: `DET t=<s>.<ms> dec=<+d.ddd> <DRONE|noise>` (windows are ~448 ms of audio; quiet input below the squelch yields no windows), then a final `DETEND windows=<n> drones=<n> overrun=<0|1> err=<0|1>` line.
+
+### `dfu`
+
+Reboot into the STM32 ROM bootloader for USB DFU flashing over this same USB port (no ST-Link needed). Flash with `STM32_Programmer_CLI -c port=USB1 -w <elf> -v` and power-cycle/reset to return to the application.
+
+**Response:** A single `DFU: rebooting into the ROM bootloader` line, after which the CDC port disappears and the device re-enumerates as 'STM32 BOOTLOADER'.
+
 ## Binary stream framing (`PCM1`)
 
 `stream <sec>` and `streamtest <sec>` trigger a binary transfer: a fixed
