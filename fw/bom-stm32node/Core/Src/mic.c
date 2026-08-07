@@ -29,6 +29,15 @@ static pdm_pcm_t s_dsp;
    the half and the end of the buffer. Port of MIC_DMA_Init from Mik_stm. */
 void mic_dma_init(void)
 {
+  /* Both pcm_stream and detector lazy-init the DMA; building the linked list
+     twice would corrupt the node queue, so make repeated calls a no-op. */
+  static uint8_t s_dma_inited = 0u;
+  if (s_dma_inited)
+  {
+    return;
+  }
+  s_dma_inited = 1u;
+
   DMA_NodeConfTypeDef node = {0};
 
   __HAL_RCC_GPDMA1_CLK_ENABLE();

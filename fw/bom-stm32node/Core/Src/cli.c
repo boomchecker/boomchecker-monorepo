@@ -11,6 +11,9 @@
 #include "link_service.h"
 #include "main.h"   /* Error_Handler */
 #include "pcm_stream.h"
+#include "detector.h"
+#include "dfu_boot.h"
+#include "usb_cli.h" /* flush before the DFU jump */
 #include "protocol_service.h"
 #include "radio.h"
 
@@ -137,6 +140,69 @@ static void cmd_streamtest(EmbeddedCli *cli, char *args, void *context)
 {
   (void)context;
   stream_command(cli, args, PCM_SRC_TONE);
+}
+
+static void cmd_detect(EmbeddedCli *cli, char *args, void *context)
+{
+  (void)context;
+  const uint16_t ntok = embeddedCliGetTokenCount(args);
+  if (ntok < 1 || ntok > 4)
+  {
+    embeddedCliPrint(cli, "usage: detect <sec> [squelch_milli] [thr_milli] [dbg]");
+    return;
+  }
+  const char   *tok = embeddedCliGetToken(args, 1);
+  char         *end = NULL;
+  unsigned long sec = strtoul(tok, &end, 10);
+  if (end == tok || sec == 0u || sec > 60u)
+  {
+    embeddedCliPrint(cli, "usage: detect <sec> (1..60)");
+    return;
+  }
+
+  unsigned long squelch = DETECTOR_DEFAULT_SQUELCH_MILLI;
+  long          thr     = DETECTOR_DEFAULT_THR_MILLI;
+  if (ntok >= 2)
+  {
+    tok     = embeddedCliGetToken(args, 2);
+    squelch = strtoul(tok, &end, 10);
+    if (end == tok || squelch > 1000u)
+    {
+      embeddedCliPrint(cli, "squelch_milli: 0..1000 (10 = RMS 0.010)");
+      return;
+    }
+  }
+  if (ntok >= 3)
+  {
+    tok = embeddedCliGetToken(args, 3);
+    thr = strtol(tok, &end, 10);
+    if (end == tok || thr < -5000 || thr > 5000)
+    {
+      embeddedCliPrint(cli, "thr_milli: -5000..5000 (500 = 0.5)");
+      return;
+    }
+  }
+  unsigned long dbg = 0u;
+  if (ntok >= 4)
+  {
+    tok = embeddedCliGetToken(args, 4);
+    dbg = strtoul(tok, &end, 10);
+  }
+  /* Emits LVL/DET/DETEND text lines on the console; see detector.c. */
+  detector_run((uint32_t)sec, (uint32_t)squelch, (int32_t)thr, (uint32_t)dbg);
+}
+
+static void cmd_dfu(EmbeddedCli *cli, char *args, void *context)
+{
+  (void)cli;
+  (void)args;
+  (void)context;
+  /* Bypass the CLI TX ring: the jump never returns, so push the farewell out
+     synchronously before detaching from the bus. */
+  static const char msg[] = "DFU: rebooting into the ROM bootloader\n";
+  (void)usb_cli_flush_tx();
+  (void)usb_cli_write_blocking((const uint8_t *)msg, sizeof(msg) - 1u);
+  dfu_boot_enter();
 }
 
 /* Render `value` with `decimals` digits after the point (max 3) using only
@@ -908,6 +974,24 @@ void cli_init(cli_tx_fn tx)
     .binding      = cmd_streamtest,
   };
   embeddedCliAddBinding(s_cli, streamtest_binding);
+
+  CliCommandBinding detect_binding = {
+    .name         = "detect",
+    .help         = "Run drone detection for <sec> seconds (DET/DETEND lines)",
+    .tokenizeArgs = true,
+    .context      = NULL,
+    .binding      = cmd_detect,
+  };
+  embeddedCliAddBinding(s_cli, detect_binding);
+
+  CliCommandBinding dfu_binding = {
+    .name         = "dfu",
+    .help         = "Reboot into the ROM bootloader for USB DFU flashing",
+    .tokenizeArgs = false,
+    .context      = NULL,
+    .binding      = cmd_dfu,
+  };
+  embeddedCliAddBinding(s_cli, dfu_binding);
 
   CliCommandBinding radio_binding = {
     .name         = "radio",

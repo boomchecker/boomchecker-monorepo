@@ -102,4 +102,35 @@ COMMANDS: tuple[CommandSpec, ...] = (
         ),
         response="Identical framing to `stream` (16-byte `PCM1` header + `byte_length` bytes).",
     ),
+    CommandSpec(
+        name="detect",
+        usage="detect <sec> [squelch_milli] [thr_milli]",
+        description=(
+            "Run on-device drone detection for <sec> seconds (1..60): microphone PCM is "
+            "decimated to 16 kHz, MFCC features are extracted (1024-sample frames, hop 512) "
+            "and every run of 14 frames above the RMS squelch is classified by a linear SVM. "
+            "Optional overrides in units of 1/1000: squelch_milli (default 10 = RMS 0.010, "
+            "0 disables the gate) and thr_milli (default 500 = decision threshold 0.5, may "
+            "be negative)."
+        ),
+        response=(
+            "A `LVL t=<s>.<ms> rms=<d.ddd>` input-level line about once a second, one line "
+            "per classified window: `DET t=<s>.<ms> dec=<+d.ddd> <DRONE|noise>` (windows are "
+            "~448 ms of audio; input below the squelch yields no windows), then a final "
+            "`DETEND windows=<n> drones=<n> overrun=<0|1> err=<0|1>` line."
+        ),
+    ),
+    CommandSpec(
+        name="dfu",
+        usage="dfu",
+        description=(
+            "Reboot into the STM32 ROM bootloader for USB DFU flashing over this same USB "
+            "port (no ST-Link needed). Flash with `STM32_Programmer_CLI -c port=USB1 -w "
+            "<elf> -v` and power-cycle/reset to return to the application."
+        ),
+        response=(
+            "A single `DFU: rebooting into the ROM bootloader` line, after which the CDC "
+            "port disappears and the device re-enumerates as 'STM32 BOOTLOADER'."
+        ),
+    ),
 )
