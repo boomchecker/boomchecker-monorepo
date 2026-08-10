@@ -92,27 +92,47 @@ static bool det_wait_block(void)
   }
 }
 
-/* Aggregate 14 MFCC frames to [mean_c0..12, std_c0..12] (population std,
-   matching np.std and the training pipeline). */
+/* Aggregate 14 MFCC frames to the shared feature layout
+     [mean(13), std(13), dmean(13), cmax(13)]
+   (population std matching np.std; dmean = mean |frame-to-frame delta|,
+   capturing prop modulation; cmax = max - mean, level-invariant peakiness).
+   Linear SVM headers consume the first 26 entries, the v5 MLP all 52 minus
+   index 0 - so computing the full vector keeps every model include working. */
+#define DET_FEATURE_COUNT (4u * NUM_MFCC_COEFFS)
+
 static void det_aggregate(const float *frames, float *out)
 {
   for (uint32_t c = 0u; c < NUM_MFCC_COEFFS; c++)
   {
     float sum = 0.0f;
+    float mx  = frames[c];
     for (uint32_t f = 0u; f < DET_ACCUM_FRAMES; f++)
     {
-      sum += frames[f * NUM_MFCC_COEFFS + c];
+      float v = frames[f * NUM_MFCC_COEFFS + c];
+      sum += v;
+      if (v > mx)
+      {
+        mx = v;
+      }
     }
     float mean = sum / (float)DET_ACCUM_FRAMES;
     out[c] = mean;
 
     float sq = 0.0f;
+    float dsum = 0.0f;
     for (uint32_t f = 0u; f < DET_ACCUM_FRAMES; f++)
     {
-      float d = frames[f * NUM_MFCC_COEFFS + c] - mean;
+      float v = frames[f * NUM_MFCC_COEFFS + c];
+      float d = v - mean;
       sq += d * d;
+      if (f > 0u)
+      {
+        dsum += fabsf(v - frames[(f - 1u) * NUM_MFCC_COEFFS + c]);
+      }
     }
-    out[c + NUM_MFCC_COEFFS] = sqrtf(sq / (float)DET_ACCUM_FRAMES);
+    out[c + NUM_MFCC_COEFFS]      = sqrtf(sq / (float)DET_ACCUM_FRAMES);
+    out[c + 2u * NUM_MFCC_COEFFS] = dsum / (float)(DET_ACCUM_FRAMES - 1u);
+    out[c + 3u * NUM_MFCC_COEFFS] = mx - mean;
   }
 }
 
@@ -248,7 +268,7 @@ void detector_run(uint32_t seconds, uint32_t squelch_milli, int32_t thr_milli,
 
         if (accum >= DET_ACCUM_FRAMES)
         {
-          float features[2u * NUM_MFCC_COEFFS];
+          float features[DET_FEATURE_COUNT];
           det_aggregate(det_mfccs, features);
           float decision = svm_get_decision_value(features);
           int   is_drone = (decision >= threshold);

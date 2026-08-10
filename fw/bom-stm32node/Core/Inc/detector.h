@@ -20,9 +20,13 @@
 
 #include <stdint.h>
 
-/** Default operating point (units of 1/1000: 10 = RMS 0.010, 500 = 0.5). */
+/** Default operating point (units of 1/1000: 10 = RMS 0.010).
+ * The threshold default belongs to the ACTIVE MODEL (see svm_classifier.c):
+ * v6 MLP outputs raw logits and its champion operating point is +7.25
+ * (pick_champion.py 2026-08-10: bebop/membo alarms with zero >=2-window
+ * false alarms). For the legacy linear SVMs the natural default was 500. */
 #define DETECTOR_DEFAULT_SQUELCH_MILLI 10
-#define DETECTOR_DEFAULT_THR_MILLI     500
+#define DETECTOR_DEFAULT_THR_MILLI     7250
 
 /**
  * @brief Run detection for `seconds` (clamped to 1..60) and stream results.

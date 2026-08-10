@@ -176,9 +176,9 @@ static void cmd_detect(EmbeddedCli *cli, char *args, void *context)
   {
     tok = embeddedCliGetToken(args, 3);
     thr = strtol(tok, &end, 10);
-    if (end == tok || thr < -5000 || thr > 5000)
+    if (end == tok || thr < -20000 || thr > 20000)
     {
-      embeddedCliPrint(cli, "thr_milli: -5000..5000 (500 = 0.5)");
+      embeddedCliPrint(cli, "thr_milli: -20000..20000 (7250 = logit 7.25)");
       return;
     }
   }
