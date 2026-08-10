@@ -124,8 +124,18 @@ def load_audio(path: Path, gain_db: float, resample_mode: str):
 
 def classify(audio, analyzer, model, squelch, threshold):
     """Replicate audio_sai_pipeline_poll(): per-frame squelch with accumulation
-    reset, SVM decision after every run of 14 accepted frames."""
-    bias, mean, inv_std, weights = model
+    reset, decision after every run of 14 accepted frames.
+
+    `model` is either the linear-SVM 4-tuple (bias, mean, inv_std, weights)
+    or any callable mapping the 26-feature vector to a decision value
+    (e.g. the v4 MLP logit)."""
+    if callable(model):
+        score = model
+    else:
+        bias, mean, inv_std, weights = model
+
+        def score(feats):
+            return np.dot((feats - mean) * inv_std, weights) + bias
     n_frames = 1 + (len(audio) - WINDOW_SIZE) // HOP if len(audio) >= WINDOW_SIZE else 0
     if n_frames == 0:
         return None
@@ -151,7 +161,7 @@ def classify(audio, analyzer, model, squelch, threshold):
         if len(accum) >= ACCUM_FRAMES:
             block = np.stack(accum, axis=0)                    # (14, 13)
             feats = np.concatenate([block.mean(axis=0), block.std(axis=0)])  # ddof=0
-            decision = float(np.dot((feats - mean) * inv_std, weights) + bias)
+            decision = float(score(feats))
             windows.append({
                 "t0": start_frame * HOP / TARGET_FS,
                 "t1": (i * HOP + WINDOW_SIZE) / TARGET_FS,

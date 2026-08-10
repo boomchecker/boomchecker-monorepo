@@ -60,7 +60,17 @@ REAL_NEG_JITTER_DB = 3.0
 # stay as untouched validation). Files sorted by name; EVEN indices -> train,
 # ODD indices -> validation. 10 s clips are sliced into 1 s segments; drone
 # segments quieter than SEG_MIN_RMS are dropped (drone likely inaudible there).
-VERSION = "v3"
+#
+# v2nm: the v2 recipe (no unseen-train segments) with the mean-c0 feature
+# REMOVED at training time. mean-c0 is the only level-dependent feature (gain
+# g shifts it by sqrt(20)*ln g and nothing else), so dropping it makes the
+# model level-invariant by construction. The exported header keeps the
+# 26-feature layout with w[0]=0 / inv_std[0]=0, so the firmware needs no C
+# change - just the include switch in svm_classifier.c. Gain augmentation is
+# kept: the ln(x+1e-6) epsilon still bends features near the noise floor.
+VERSION = "v2nm"
+DROP_MEAN_C0 = VERSION.endswith("nm")
+USE_UNSEEN_TRAIN = VERSION.startswith("v3")
 UNSEEN_TRAIN = [
     # (glob, label)
     ("data/samples/Halmstad/DRONE_*.wav",      1),
@@ -245,16 +255,20 @@ def export_header(path, model):
         return ", ".join(f"{v:.8e}f" for v in a)
 
     guard = f"SVM_MODEL_DATA_{VERSION.upper()}_H"
+    extra = ("// mean-c0 (feature 0) dropped at training: w[0]=0, so the model is\n"
+             "// level-invariant by construction (only the squelch gates on loudness).\n"
+             if DROP_MEAN_C0 else "")
     path.write_text(
         f"#ifndef {guard}\n#define {guard}\n\n"
         "// Level-robust linear SVM (gain-augmented retrain, see\n"
-        "// src/analysis/train_svm_level_robust.py). Same 26-feature layout as v1.\n\n"
+        "// src/analysis/train_svm_level_robust.py). Same 26-feature layout as v1.\n"
+        + extra + "\n"
         "#define SVM_NUM_FEATURES 26\n"
         f"#define SVM_BIAS {bias:.8e}f\n\n"
         f"static const float svm_scaler_mean[SVM_NUM_FEATURES] = {{\n    {arr(mean)}\n}};\n\n"
         f"static const float svm_scaler_inv_std[SVM_NUM_FEATURES] = {{\n    {arr(inv_std)}\n}};\n\n"
         f"static const float svm_weights[SVM_NUM_FEATURES] = {{\n    {arr(w)}\n}};\n\n"
-        "#endif // SVM_MODEL_DATA_V2_H\n",
+        f"#endif // {guard}\n",
         encoding="utf-8",
     )
 
@@ -324,15 +338,16 @@ def main():
                 n_anchor += 1
     print(f"  {n_anchor} anchor samples from {len(REAL_NEG_FILES)} recordings", flush=True)
 
-    print("Adding unseen-dataset train segments (train halves only)...", flush=True)
-    u_segs, u_labels = load_unseen_train_segments()
-    for seg, lab in zip(u_segs, u_labels):
-        X_train.append(extract_features(seg))
-        y_train.append(lab)
-        for _ in range(K_AUG):
-            g = 10.0 ** (rng.uniform(*GAIN_DB_RANGE) / 20.0)
-            X_train.append(extract_features(seg * g))
+    if USE_UNSEEN_TRAIN:
+        print("Adding unseen-dataset train segments (train halves only)...", flush=True)
+        u_segs, u_labels = load_unseen_train_segments()
+        for seg, lab in zip(u_segs, u_labels):
+            X_train.append(extract_features(seg))
             y_train.append(lab)
+            for _ in range(K_AUG):
+                g = 10.0 ** (rng.uniform(*GAIN_DB_RANGE) / 20.0)
+                X_train.append(extract_features(seg * g))
+                y_train.append(lab)
 
     X_train = np.stack(X_train)
     y_train = np.array(y_train)
@@ -343,18 +358,34 @@ def main():
     X_test15 = np.stack([extract_features(clips[i] * g15) for i in idx_test])
     y_test = y[idx_test]
 
-    print("Training linear SVM (balanced)...", flush=True)
+    print("Training linear SVM (balanced)"
+          + (", mean-c0 dropped" if DROP_MEAN_C0 else "") + "...", flush=True)
     from sklearn.preprocessing import StandardScaler
     from sklearn.svm import SVC
-    scaler = StandardScaler().fit(X_train)
+    # With DROP_MEAN_C0 the scaler/SVM see 25 features (column 0 removed); the
+    # exported model is padded back to the 26-wide firmware layout with
+    # w[0]=0, so feature 0 contributes nothing regardless of its value.
+    X_fit = X_train[:, 1:] if DROP_MEAN_C0 else X_train
+    scaler = StandardScaler().fit(X_fit)
     clf = SVC(kernel="linear", class_weight="balanced", random_state=SEED)
-    clf.fit(scaler.transform(X_train), y_train)
+    clf.fit(scaler.transform(X_fit), y_train)
 
-    new_model = model_tuple(clf, scaler)
+    if DROP_MEAN_C0:
+        def pad0(a):
+            return np.insert(a.astype(np.float32), 0, np.float32(0.0))
+        new_model = (
+            float(clf.intercept_[0]),
+            pad0(scaler.mean_),
+            pad0(1.0 / (scaler.scale_ + 1e-8)),
+            pad0(clf.coef_[0]),
+        )
+    else:
+        new_model = model_tuple(clf, scaler)
     models = {"v1": load_svm_model(MODEL_HEADER)}
-    v2_header = Path(__file__).parent.parent / "firmware" / "Inc" / "svm_model_data_v2.h"
-    if VERSION != "v2" and v2_header.exists():
-        models["v2"] = load_svm_model(v2_header)
+    for prev in ("v2", "v3"):
+        h = Path(__file__).parent.parent / "firmware" / "Inc" / f"svm_model_data_{prev}.h"
+        if VERSION != prev and h.exists():
+            models[prev] = load_svm_model(h)
     models[VERSION] = new_model
 
     print(f"\n=== Held-out metrics (threshold 0, {len(y_test)} clips) ===", flush=True)

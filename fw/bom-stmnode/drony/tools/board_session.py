@@ -229,8 +229,10 @@ def cmd_detect(args: argparse.Namespace) -> int:
     line = f"detect {args.sec} {args.squelch} {args.thr} {1 if args.dbg else 0}"
     log(f"running `{line}` (log: {logfile})")
     try:
-        # generous margin: blocked USB writes may stretch the run past <sec>
-        lines = stream_command(ser, line, timeout=args.sec + 20, logfile=logfile)
+        # generous margin: blocked USB writes may stretch the run past <sec>,
+        # and closing mid-run wedges the console until the run ends (never
+        # abandon a running detect - see PROGRESS_REPORT 2026-08 section 6.3)
+        lines = stream_command(ser, line, timeout=args.sec + 45, logfile=logfile)
     finally:
         ser.close()
     summarize_detect(lines)
@@ -295,7 +297,8 @@ def main() -> int:
     p = sub.add_parser("detect")
     p.add_argument("sec", type=int)
     p.add_argument("--squelch", type=int, default=10, help="RMS gate in milli (10 = 0.010)")
-    p.add_argument("--thr", type=int, default=500, help="SVM threshold in milli (500 = 0.5)")
+    p.add_argument("--thr", type=int, default=7250,
+                   help="decision threshold in milli (v6 champion point: 7250 = logit 7.25)")
     p.add_argument("--dbg", action="store_true", help="per-frame F=/a=/r=/h=/m= breadcrumbs")
     p.add_argument("--timeout-connect", type=float, default=30.0)
     p.set_defaults(fn=cmd_detect)
