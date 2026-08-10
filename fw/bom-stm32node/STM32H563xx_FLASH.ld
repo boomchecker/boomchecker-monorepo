@@ -47,7 +47,11 @@ _estack = ORIGIN(RAM) + LENGTH(RAM); /* end of "RAM" Ram type memory */
 _sstack = _estack - _Min_Stack_Size;
 
 _Min_Heap_Size = 0x200;      /* required amount of heap  */
-_Min_Stack_Size = 0x400; /* required amount of stack */
+/* 16 KB: everything runs on MSP (main loop, newlib printf, USBX device stack)
+   with interrupts (HAL PCD -> USBX callbacks) nesting on top; the CubeMX
+   default 0x400 overflowed MSPLIM (UFSR.STKOF hard fault) ~0.7 s into
+   `detect` once a USB IRQ landed inside snprintf (observed 2026-08-10). */
+_Min_Stack_Size = 0x4000; /* required amount of stack */
 
 /* Sections */
 SECTIONS

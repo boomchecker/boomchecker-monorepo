@@ -21,7 +21,8 @@ Session skončila s jednou otevřenou chybou (viz §6 a §7).
 - Úrovně: ambient RMS ≈ 0,005 ≈ trénovací škála (gain +24 dB v pdm_pcm sedí).
 - **ST-Link je hardwarově mrtvý** (COM LED bliká = procesor žije; PC nevidí ani pokus
   o enumeraci; 2 kabely, jiné porty, otočení USB-C, power-cycle — bez efektu).
-  Nevadí — flash jde přes DFU (viz §5).
+  Nevadí — flash jde přes DFU (viz §5). *(Dodatek 10. 8.: neplatí — doma nefungoval,
+  v práci po výměně kabelu funguje normálně, viz §9.)*
 - Nahrána validační sada přes `stream`: 5× pozadí (ticho, ambient, řeč, tleskání, hudba
   z repra) + 3× přehrávaný bebop v různých hlasitostech → `data/recordings/`.
 
@@ -126,3 +127,49 @@ shodné s PC pipeline), `overrun=0 err=0`, zbytek korektně pod squelchem.
 5. Hygiena repa: rozhodnout commit/merge (drony na Kamil_stmfw, integrace v pracovním
    stromě), zálohovat datasety (1,5 GB jen na tomto PC), případně PR podle zvyklostí
    týmu (squash; vynechat *.o a PDF).
+
+## 9. Dodatek 10. 8. 2026 — kořen wedge nalezen (přetečení zásobníku) a opraven
+
+- **ST-Link ožil**: doma nefungoval (ani s více kabely a porty — viz §2), **v práci
+  po výměně kabelu začal fungovat** — enumeruje se vč. VCP na COM5, sonda V3J16M8
+  funguje. Diagnóza „hardwarově mrtvý" z §2 tedy neplatí; příčinou byla zjevně
+  kombinace kabel/prostředí doma. Ponaučení: při příštím selhání vyzkoušet i další
+  kabely jinde, než se HW odepíše. SWD flash s `-v -rst` nahrazuje celou DFU
+  proceduru — žádný BOOT0 drátek, žádné mačkání RESETu.
+- Build 5 flashnut přes SWD. `detect 1 1000 500 1` (squelch 1000 ⇒ **žádné MFCC**)
+  přesto po 19 rámcích (~0,6 s) zamrzl jako dřív ⇒ hypotéza §6.1 (překročení
+  real-time rozpočtu) **vyvrácena** — wedge nastával i zcela bez DSP zátěže.
+- **Forenzní analýza přes SWD na zaseklé desce** (hotplug, bez resetu):
+  jádro běželo (CYCCNT se točil), ale ICSR VECTACTIVE=3 ⇒ **HardFault handler**;
+  CFSR = 0x00100001 ⇒ **UFSR.STKOF — přetečení hlavního zásobníku** (+ IACCVIOL),
+  HFSR.FORCED=1. Mic čítače zamrzlé (32 půlek ≈ 0,68 s), `s_running=1`, USB write
+  path volná — vše důsledek HardFaultu (priorita −1 blokuje SysTick/GPDMA/USB IRQ;
+  proto zamrzlý `HAL_GetTick()` nechal detect „běžet", Windows hlásil „zařízení
+  nefunguje" a mic přestal dodávat bloky).
+- Dump zásobníku + rekonstrukce návratových adres: `main → CLI → cmd_detect →
+  detector_run → det_print → snprintf → newlib _svfprintf_r/_printf_i` a na vrcholu
+  zanořené `USB_DRD_FS_IRQHandler → HAL_PCD_IRQHandler → PCD_EP_ISR_Handler → USBX`.
+  Příčina: **`_Min_Stack_Size = 0x400` (1 KB, CubeMX default)** při všem na MSP
+  (main + newlib printf + USBX + vnořená přerušení); startup nastavuje
+  `MSPLIM = _sstack`, takže překročení = okamžitý STKOF. Nejhlubší stopa končila
+  60 B nad limitem. Hloubka je omezená (žádná rekurze).
+- **Oprava (build 6): `_Min_Stack_Size = 0x4000` (16 KB)** v STM32H563xx_FLASH.ld
+  (RAM 15,7 %). Zpětně vysvětluje VŠECHNY varianty wedge z §6: flush z bindingu
+  (§6.2) = hlubší zanoření okamžitě; nízký squelch (§6.1) = MFCC+printf řetěz;
+  „USBX starvation" i „flush state machine bug" byly falešné stopy.
+- **Ověření buildu 6 na desce** (vše `overrun=0 err=0`, logy v
+  `drony/data/detect_logs/`):
+  - `detect 1 1000 500 1`: celý průběh F=0…29 + DETEND (dřív umíral u F=18).
+  - `detect 8 0 250 1` (squelch 0 = MFCC každý rámec + dbg = maximální zátěž):
+    248 rámců, 17 oken, ticho vše noise (−1,9…−3,2). **Časy: h(mic_poll+PDM)
+    max 17 102 µs, m(MFCC) max 573 µs ⇒ worst-case 17,7 ms z 21,33 ms (17 %
+    rezerva).** MFCC stojí jen 0,57 ms — rozpočet nikdy nebyl problém.
+  - **Plné demo: `detect 20 3 250` s přehrávaným bebopem (rms 0,006–0,010):
+    44 oken, 40× DRONE (dec +0,3…+1,8), 4× noise na švech loopu.** Ticho
+    předtím: 0/17 falešných poplachů. = milník §8.1 splněn.
+- Nový nástroj `drony/tools/board_session.py` (venv stm32node-cli): čeká na
+  enumeraci (VID:PID 0483:5710), settle proti zombie-handle, `version` handshake
+  s retry, `detect` runner s h=/m= statistikou a logy, `dfu-flash` automatizace
+  (ponechána pro případ, že by ST-Link zase odešel).
+- Zbývá z §8: dohledat nic (bod 2 vyřešen = STKOF), model v4 (bod 3), sběr dat
+  (bod 4), hygiena repa (bod 5) + commit opravy stacku a board_session.py.
