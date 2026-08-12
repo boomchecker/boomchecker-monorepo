@@ -58,8 +58,10 @@ Queue depths, duplicate-cache sizes and the retry policy are sized for this scal
 for large networks.
 
 Time synchronization (GNSS/1PPS discipline, timer capture) is a **separate work track**
-and deliberately outside this communication roadmap. Detection consumes whatever time
-base is available and reports its source and uncertainty (section 12.2).
+and deliberately outside this communication roadmap. The message body carries the
+precise timestamp of the detected event itself (section 12.2), so link delivery
+latency — queueing, TX jitter, backoff, retries — has no effect on localization
+timing. When and in what order the message arrives does not matter.
 
 ## 2. Non-goals for the first implementation
 
