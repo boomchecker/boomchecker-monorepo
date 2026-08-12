@@ -1,0 +1,3 @@
+[submodule "RadioLib"]
+	path = fw/bom-stm32node/third_party/RadioLib
+	url = https://github.com/jgromes/RadioLib.git

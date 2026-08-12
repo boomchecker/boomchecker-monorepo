@@ -58,6 +58,11 @@ void MX_GPIO_Init(void)
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOC, LORA_NRST_Pin|LORA_RXEN_Pin, GPIO_PIN_RESET);
 
+  /* LORA_NSS idles high (deselected); SPI1 uses SPI_NSS_SOFT so the radio
+     adapter/RadioLib HAL toggles this pin around each transfer (see spi.c and
+     App/radio/stm32_radiolib_hal.cpp). */
+  HAL_GPIO_WritePin(LORA_NSS_GPIO_Port, LORA_NSS_Pin, GPIO_PIN_SET);
+
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOB, LORA_TXEN_Pin|GPS_WAKE_UP_Pin, GPIO_PIN_RESET);
 
@@ -135,6 +140,14 @@ void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : LORA_NSS_Pin (software NSS, driven by the radio
+    adapter around each SPI1 transfer - SPI1 is configured SPI_NSS_SOFT) */
+  GPIO_InitStruct.Pin = LORA_NSS_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(LORA_NSS_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pin : LORA_BUSY_Pin */
   GPIO_InitStruct.Pin = LORA_BUSY_Pin;
