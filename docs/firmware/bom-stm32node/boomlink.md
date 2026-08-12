@@ -41,6 +41,26 @@ The first production-quality architecture should provide:
 - an architecture that can later support authentication, encryption, CAD, TDMA or
   mesh routing without rewriting the application protocol.
 
+### 1.1 Design assumptions
+
+The first deployment target is:
+
+- **5–10 nodes** within a few hundred metres of each other;
+- nodes powered from a ~4000 mAh battery with an endurance requirement of **hours**
+  (field test), not weeks;
+- always-on RX is therefore acceptable; low-power duty-cycled listening is out of scope
+  until a longer-endurance deployment is defined;
+- traffic is event-driven and low rate (detections, occasional commands, periodic
+  telemetry), far below the airtime available in the selected band, so SF7–SF9 profiles
+  are expected to be sufficient.
+
+Queue depths, duplicate-cache sizes and the retry policy are sized for this scale, not
+for large networks.
+
+Time synchronization (GNSS/1PPS discipline, timer capture) is a **separate work track**
+and deliberately outside this communication roadmap. Detection consumes whatever time
+base is available and reports its source and uncertainty (section 12.2).
+
 ## 2. Non-goals for the first implementation
 
 Do **not** add these to the initial BoomLink implementation:
@@ -52,7 +72,9 @@ Do **not** add these to the initial BoomLink implementation:
 - automatic frequency hopping;
 - a complex distributed network coordinator;
 - OTA firmware update over LoRa;
-- a second firmware variant for a gateway/master node.
+- a second firmware variant for a gateway/master node;
+- low-power duty-cycled receive or battery-lifetime optimization (see design
+  assumptions in section 1.1).
 
 Raw/bulk audio remains on the existing USB path. LoRa carries event metadata,
 telemetry, configuration and commands.
@@ -89,6 +111,7 @@ BoomProtocol
         ▼
 BoomLink
 │
+├── link frame header codec
 ├── node addressing
 ├── sequence/session tracking
 ├── ACK handling
@@ -119,7 +142,8 @@ and the radio layer must not know anything about Protobuf message types.
 ### 3.1 Naming
 
 - **BoomProtocol**: application-level message contract and serialization.
-- **BoomLink**: LoRa P2P link layer carrying encoded BoomProtocol envelopes.
+- **BoomLink**: LoRa P2P link layer carrying encoded BoomProtocol envelopes inside a
+  small fixed binary link frame (section 7.3). BoomLink never decodes Protobuf.
 - **Radio**: thin hardware/radio abstraction implemented with RadioLib.
 
 This distinction matters because BoomProtocol should later be usable over USB or another
@@ -147,6 +171,9 @@ fw/
 │       │   └── system.proto
 │       ├── nanopb/
 │       │   └── boomlink.options
+│       ├── linkframe/
+│       │   ├── linkframe.md        # link frame header spec (section 7.3)
+│       │   └── boomlink_frame.h    # shared C header, mirrored by host parser
 │       ├── tests/
 │       │   ├── test_encode_decode.py
 │       │   ├── test_compatibility.py
@@ -205,7 +232,10 @@ The exact split of small `.c` files may evolve, but the layer boundaries should 
 - Generated `.pb.c` / `.pb.h` files are generated during the build and are not edited
   manually.
 - Third-party dependencies are pinned to reviewed versions; builds must not silently
-  consume moving `master` branches.
+  consume moving `master` branches. This applies retroactively: the already-vendored
+  `embedded-cli` has no recorded version/commit and one must be added.
+- The link frame header layout is defined once under `fw/common/boomlink/linkframe/`
+  (spec + shared C header) and mirrored by a small parser in the host CLI.
 - New application subsystems go under `App/`; avoid growing CubeMX-generated files with
   protocol logic.
 - RadioLib C++ stays behind a small C-facing radio interface. The rest of the firmware
@@ -270,7 +300,27 @@ Before RadioLib bring-up, SPI1 must be configured for the SX1262 transport:
 - CPHA first edge;
 - MSB first;
 - software-controlled NSS;
+- SPI clock at or below **16 MHz** (SX1262 maximum; with the 125 MHz SPI1 kernel clock
+  this means prescaler ≥ 8 → 15.625 MHz);
 - `LORA_NSS` controlled as GPIO by the radio adapter.
+
+The current CubeMX-generated configuration is wrong in **three** ways and all three must
+change: 4-bit data size, hardware-input NSS, and prescaler 2 (62.5 Mbit/s).
+
+`LORA_DIO1` is configured as an EXTI pin, but the EXTI interrupt is **not enabled in the
+NVIC and no handler exists** — interrupt-driven receive requires adding both. The radio
+EXTI priority must be numerically higher (less urgent) than the audio GPDMA interrupt
+(priority 5) so radio activity can never cause a microphone overrun.
+
+E22-900M22S module specifics that must be handled during bring-up:
+
+- the module's **TCXO is powered from SX1262 DIO3** — RadioLib must be configured with
+  the correct TCXO voltage or the radio will not transmit/receive on frequency;
+- `LORA_RXEN`/`LORA_TXEN` drive the RF switch and must follow RX/TX state;
+- `EN_LORA` powers the module and `LORA_NRST` resets it; the power-enable and reset
+  timing sequence must be respected before the first SPI access;
+- use a **private LoRa sync word** (not the public/LoRaWAN one) so foreign LoRa traffic
+  is mostly rejected at PHY level.
 
 DIO interrupts must only signal deferred work. Do not perform Protobuf decoding, USB
 printing or long radio operations inside the ISR.
@@ -295,6 +345,45 @@ RadioLib reads IRQ status + packet
    ▼
 BoomLink RX processing
 ```
+
+### 6.1 Band plan and regulatory constraints (CZ/EU)
+
+The E22-900M22S covers 850–930 MHz and up to +22 dBm, which is wider and stronger than
+what is legal in the Czech Republic / EU (863–870 MHz SRD band). BoomLink v1 uses:
+
+- centre frequency inside **869.4–869.65 MHz** (the ERC 70-03 sub-band with the most
+  permissive limits: up to **500 mW ERP** and **10 % duty cycle**);
+- TX power configured so that radiated power stays within 500 mW ERP (module output
+  plus antenna gain must be accounted for);
+- an antenna tuned for the 868/869 MHz band.
+
+Consequences for the implementation:
+
+- the default radio profile must not allow out-of-band frequencies or power above the
+  legal limit without an explicit lab/experimental override;
+- BoomLink statistics include a cumulative TX airtime counter so duty-cycle compliance
+  can be verified during tests; automatic duty-cycle enforcement may be added later if
+  measurements show it is needed at this scale.
+
+### 6.2 Execution model
+
+The firmware is a bare-metal cooperative superloop (no RTOS) and BoomLink must fit that
+model:
+
+- DIO1 EXTI sets a flag and returns; all radio, link and protocol processing runs in
+  the main loop (a `boomlink_process()` service function called from the superloop);
+- transmission is initiated from the main loop (for example, the detection subsystem
+  calls a send function after an event); nothing transmits from interrupt context;
+- ACK timeouts, retry backoff and TX jitter use soft timers derived from the HAL 1 ms
+  tick — millisecond resolution is sufficient for ACK timeouts in the hundreds of
+  milliseconds;
+- ACK timeout values must include worst-case main-loop iteration latency.
+
+Known limitation: the `stream N` USB audio command blocks the main loop for the whole
+stream duration. While a stream is active the radio is not serviced — RX packets may be
+missed and ACK timeouts may expire. This is accepted for the MVP because streaming is a
+development/diagnostic feature; document it in the CLI help and revisit if streaming
+becomes an operational mode.
 
 ---
 
@@ -321,40 +410,32 @@ field to the top-level envelope; it is added inside `DetectionMessage`.
 
 ### 7.1 Message header
 
-The logical header should contain at least:
+The Protobuf header carries **application-level concerns only**. Addressing, link
+identity and ACK signalling live in the fixed binary link frame header (section 7.3),
+not in Protobuf.
 
 ```protobuf
 message MessageHeader {
   uint32 protocol_version = 1;
-  uint32 source_id = 2;
-  uint32 destination_id = 3;
-  uint32 session_id = 4;
-  uint32 sequence = 5;
-  uint32 request_id = 6;
-  bool ack_requested = 7;
+  uint32 request_id = 2;
 }
 ```
 
 Field semantics:
 
 - `protocol_version`: BoomProtocol compatibility version, initially `1`;
-- `source_id`: sender node ID;
-- `destination_id`: destination node or broadcast address;
-- `session_id`: random/unique identifier generated at boot; sequence numbers are scoped
-  to this session;
-- `sequence`: monotonically increasing packet sequence within one session;
-- `request_id`: correlates request/response at the application level; zero when unused;
-- `ack_requested`: asks BoomLink for delivery acknowledgement.
+- `request_id`: correlates request/response at the application level; zero when unused.
 
-`session_id + sequence` is the unique link-level packet identity. This avoids treating
-valid packets after a node reboot as duplicates when its sequence counter restarts.
+Services that need the sender identity (gateway forwarding, response routing) receive
+it as RX metadata passed alongside the decoded Envelope — it is not duplicated inside
+the Protobuf payload.
 
 Do not duplicate message category in the header. Protobuf `oneof` already identifies
 the payload category.
 
 ### 7.2 Address space
 
-Initial addressing rules:
+Addresses are carried in the link frame header (section 7.3). Initial addressing rules:
 
 ```text
 0x00000000  invalid / unconfigured node
@@ -376,15 +457,54 @@ address acceptance rules.
 There is no special "master" address. A USB gateway is simply a normally addressed
 node with gateway/forwarding behaviour enabled in runtime configuration.
 
-### 7.3 Packet framing
+### 7.3 Packet framing — link frame
 
-For LoRa P2P v1:
+For LoRa P2P v1 every LoRa packet is one BoomLink frame:
 
 ```text
-one LoRa packet == one serialized Protobuf Envelope
++--------------------+----------------------------------+
+| link frame header  | serialized Protobuf Envelope     |
+| (fixed binary)     | (Nanopb; DATA frames only)       |
++--------------------+----------------------------------+
 ```
 
-No fragmentation is implemented in the MVP. An oversized envelope is rejected before
+The link frame header is a small fixed-layout binary structure owned by BoomLink. It is
+deliberately **not Protobuf**: BoomLink must be able to filter, acknowledge and
+deduplicate packets without invoking Nanopb, and foreign traffic must be rejectable by
+inspecting a few leading bytes. This is the only hand-packed binary structure on the
+LoRa air interface.
+
+Initial layout (little-endian, 20 bytes):
+
+```text
+offset  size  field
+0       1     magic / network ID        (runtime-configurable, default e.g. 0xB0)
+1       1     version (high nibble) | frame type (low nibble)
+2       1     flags                     (bit 0: ack_requested)
+3       1     reserved (0)
+4       4     destination_id
+8       4     source_id
+12      4     session_id
+16      4     sequence
+```
+
+Frame types:
+
+```text
+DATA  1   header + serialized Envelope payload
+ACK   2   header only, no payload (section 9.5)
+```
+
+Rules:
+
+- a packet whose magic/network ID or version does not match is dropped and counted
+  before any further processing;
+- LoRa PHY CRC is enabled; the link frame adds no CRC of its own;
+- `session_id + sequence` (scoped to `source_id`) is the unique link-level packet
+  identity; `session_id` is generated randomly at boot so packets after a reboot are
+  not treated as duplicates when the sequence counter restarts.
+
+No fragmentation is implemented in the MVP. An oversized frame is rejected before
 transmission.
 
 Do not design application messages that depend on filling the radio's theoretical
@@ -478,6 +598,10 @@ overwriting newer settings.
 
 Radio settings that would break the current link require special apply semantics. They
 must not be applied before the response confirming the change has been transmitted.
+Because that response can itself be lost, apply must use **revert-on-timeout**: the
+node applies the new radio profile, waits for a confirmation exchange on the new
+profile within a bounded window, and reverts to the previous profile if none arrives.
+This prevents stranding a remote node on a profile nobody else uses.
 A later implementation may add scheduled activation for coordinated network-wide radio
 profile changes.
 
@@ -516,20 +640,24 @@ DetectionEvent or command response.
 
 ### 8.5 System messages
 
-System messages are link/protocol housekeeping and node state, for example:
+System messages are protocol housekeeping and node state, for example:
 
-- ACK;
 - ping/pong;
 - boot/ready status;
 - protocol error;
 - firmware/hardware version information.
 
+ACK is **not** a system message — it is a link frame type handled entirely inside
+BoomLink (section 9.5).
+
 ---
 
 ## 9. BoomLink specification
 
-BoomLink operates on serialized envelopes and is responsible for P2P delivery
-behaviour. It must not inspect detection/config payload internals.
+BoomLink operates on link frames: a fixed binary header plus an opaque serialized
+Envelope payload (section 7.3). Everything BoomLink needs — addressing, packet
+identity, ACK signalling — is in the frame header. BoomLink never decodes the Protobuf
+payload and has no Nanopb dependency.
 
 ### 9.1 TX pipeline
 
@@ -545,14 +673,25 @@ Nanopb encode
       ▼
 BoomLink TX queue
       │
-      ├── assign session/sequence
       ├── enforce destination rules
       ├── select priority
+      └── queue encoded envelope
+      │
+      ▼
+dequeue for transmission
+      │
+      ├── assign session/sequence   (at dequeue, so the on-air
+      │                              sequence stays monotonic even
+      │                              when priorities reorder the queue)
+      ├── build link frame header
       └── track ACK state when required
       │
       ▼
 Radio send
 ```
+
+A retransmission reuses the already-assigned `(session_id, sequence)`; only the first
+transmission assigns a new sequence number.
 
 ### 9.2 RX pipeline
 
@@ -562,11 +701,15 @@ Radio packet
     ▼
 BoomLink RX
     │
-    ├── decode/validate envelope
+    ├── validate magic/version + frame length
+    ├── match ACK frames against the pending TX
     ├── validate destination
     ├── duplicate check
     ├── generate ACK when required
     └── update link statistics
+    │
+    ▼
+BoomProtocol codec (Nanopb decode of the payload)
     │
     ▼
 Protocol dispatcher
@@ -574,7 +717,9 @@ Protocol dispatcher
     └── target service
 ```
 
-Malformed packets are dropped and counted. They must never reach application handlers.
+Malformed packets are dropped and counted — a bad link header at the BoomLink layer, a
+failed Protobuf decode at the BoomProtocol layer. Neither may reach application
+handlers, and the two failure classes are counted separately.
 
 ### 9.3 Sequence and session
 
@@ -600,6 +745,14 @@ Retransmission can result in the same valid packet being received more than once
 Application handlers must see an ACKed message at most once.
 
 For each recently active source/session, maintain a bounded duplicate window/cache.
+Concrete initial shape:
+
+- a statically allocated table of the N most recent `(source_id, session_id)` pairs
+  (N = 16 is ample for 5–10 nodes);
+- each entry tracks the highest accepted sequence plus a small bitmap window of recently
+  accepted sequences below it (tolerates minor reordering);
+- LRU eviction when the table is full. A very stale retransmission from an evicted
+  source may be delivered twice — acceptable at this scale and traffic rate.
 
 If a duplicate packet is received:
 
@@ -618,14 +771,19 @@ A command may therefore produce both:
 1. ACK — "the packet was received";
 2. CommandResponse — "the command was executed and this was the result".
 
-ACK must identify the original packet unambiguously, for example:
+ACK is a **link frame type** (section 7.3), not a Protobuf message. An ACK frame has no
+payload; it identifies the original packet by reusing the header fields:
 
-```protobuf
-message Ack {
-  uint32 source_session_id = 1;
-  uint32 source_sequence = 2;
-}
+```text
+frame type      = ACK
+destination_id  = original source_id
+source_id       = acknowledging node
+session_id      = original packet's session_id
+sequence        = original packet's sequence
+ack_requested   = 0
 ```
+
+Duplicate ACK frames are harmless and need no duplicate suppression.
 
 Rules:
 
@@ -636,6 +794,13 @@ Rules:
 - application request/response correlation uses `request_id`, not sequence number.
 
 ### 9.6 Retry
+
+BoomLink v1 is **stop-and-wait**: at most one ACK-pending frame is outstanding at any
+time, globally. While waiting for an ACK the TX queue is held — the radio is
+half-duplex, and transmitting another frame during the ACK wait window would prevent
+hearing the ACK. Frames that do not request ACK simply wait in the queue behind the
+pending one. At this network's traffic rate the throughput cost is irrelevant and the
+state machine stays trivial.
 
 For unicast packets with `ack_requested = true`:
 
@@ -697,6 +862,10 @@ traffic.
 The queue is statically bounded. When full, the drop policy should prefer dropping or
 coalescing low-priority telemetry before detection or command traffic.
 
+Priorities reorder only the queue. Sequence numbers are assigned at dequeue (section
+9.1), so the on-air sequence remains monotonic per session regardless of priority
+reordering, and the receiver's duplicate window stays simple.
+
 ### 9.9 Broadcast
 
 Broadcast destination:
@@ -726,6 +895,8 @@ Expose at least:
 - malformed packets;
 - packets ignored for another destination;
 - ACK sent/received;
+- packets rejected by magic/network ID or version;
+- cumulative TX airtime (for duty-cycle verification, section 6.1);
 - last RSSI;
 - last SNR.
 
@@ -812,8 +983,17 @@ The host CLI should eventually use generated Protobuf classes for machine-readab
 control and event messages.
 
 A gateway with `usb_forward_enabled` forwards received application envelopes/events to
-the host without changing their semantic content. LoRa link ACK/retry metadata remains
-a radio-link concern and is not blindly replayed over USB.
+the host without changing their semantic content. Each forwarded envelope is wrapped in
+a small host-link frame carrying RX metadata — source node ID, RSSI, SNR and a receive
+timestamp — because the host needs link quality per event and the envelope itself no
+longer contains addressing. LoRa link ACK/retry metadata remains a radio-link concern
+and is not blindly replayed over USB.
+
+Note on the current USB implementation: CLI text and PCM1 audio share **one** CDC bulk
+IN endpoint via time-division multiplexing (the host resynchronizes on the `PCM1`
+magic). Adding BoomProtocol framing to the same pipe requires an explicit framing
+design (length-prefixed frames with a magic) or a second CDC interface. This decision
+belongs to PR 5 and must not be improvised.
 
 ---
 
@@ -922,6 +1102,8 @@ Never reuse a removed Protobuf field number. Mark removed numbers/names as `rese
 
 The link layer should depend on a small radio interface so a fake backend can test:
 
+- link frame header encode/parse round-trip;
+- rejection of frames with wrong magic/network ID or version;
 - unicast delivery;
 - wrong destination rejection;
 - broadcast acceptance;
@@ -960,7 +1142,8 @@ is deliberately revised in a separate PR:
 
 1. Do not create separate master/gateway and sensor firmware variants.
 2. Do not add a custom hand-packed application struct when the data belongs in
-   BoomProtocol.
+   BoomProtocol. The only hand-packed binary structure on the air interface is the
+   BoomLink frame header defined in section 7.3.
 3. Do not bypass `radio.h` to call RadioLib from application services.
 4. Do not put ACK/retry logic into detection/config handlers.
 5. Do not perform heavy work in DIO/EXTI callbacks.
@@ -986,15 +1169,23 @@ ones, but avoid mixing unrelated application features into radio bring-up.
 
 Scope:
 
-- fix SPI1 configuration for SX1262 (8-bit, software NSS);
-- verify DIO1 EXTI/NVIC configuration;
-- enable C++ in the STM32 CMake project while keeping the existing firmware C code;
-- pin/vendor RadioLib under `third_party/`;
+- fix SPI1 configuration for SX1262 — three changes: 8-bit data size (currently
+  4-bit), software NSS (currently hardware input), clock ≤ 16 MHz (currently
+  prescaler 2 = 62.5 Mbit/s);
+- add DIO1 EXTI NVIC enable and IRQ handler (the pin is configured for EXTI but the
+  interrupt is currently neither enabled nor handled); priority less urgent than the
+  audio GPDMA interrupt;
+- enable C++ in the STM32 CMake project (`enable_language(CXX)`; the toolchain file is
+  already prepared) while keeping the existing firmware C code;
+- pin/vendor RadioLib under `third_party/` with a recorded version;
 - implement `stm32_radiolib_hal`;
-- implement the E22 radio adapter including reset, BUSY and RXEN/TXEN handling;
+- implement the E22 radio adapter including EN_LORA power-up and NRST reset sequencing,
+  BUSY handling, RXEN/TXEN RF-switch control and **TCXO configuration (DIO3)**;
+- configure a private LoRa sync word;
 - expose a small C-facing `radio.h` API;
 - add minimal debug/CLI commands for radio status and raw ping/pong;
-- document the tested LoRa PHY profile.
+- document the tested LoRa PHY profile and its compliance with the 869.4–869.65 MHz
+  band limits (section 6.1).
 
 Acceptance criteria:
 
@@ -1015,8 +1206,11 @@ Scope:
 - add pinned Nanopb dependency;
 - create `fw/common/boomlink/proto/`;
 - add `common.proto`, `header.proto`, `envelope.proto`, `system.proto`;
-- define `MessageHeader`, `Envelope`, `SystemMessage`, Ping/Pong and ACK schema;
+- define `MessageHeader`, `Envelope`, `SystemMessage` and Ping/Pong schema (ACK is a
+  link frame, not Protobuf — it belongs to PR 3);
 - add Nanopb `.options` with bounded fields;
+- create the native/host test build (dual-target CMake for host `gcc` + unit tests) —
+  **no host-side C test harness exists today**, this PR creates the infrastructure;
 - integrate `.proto` -> Nanopb generation into build/tasks;
 - generate host Python Protobuf classes for tests without committing generated target
   code unnecessarily;
@@ -1038,10 +1232,14 @@ Not in scope: reliable radio delivery or application detection/config messages.
 
 Scope:
 
+- define the fixed binary link frame header (magic/network ID, version, frame type,
+  flags, addressing, session/sequence) as spec + shared C header under
+  `fw/common/boomlink/linkframe/`, with a host Python parser;
 - implement runtime `node_id` and destination filtering;
-- implement `session_id` and monotonically increasing `sequence`;
+- implement `session_id` and monotonically increasing `sequence` assigned at dequeue;
 - implement bounded duplicate suppression;
-- implement unicast ACK;
+- implement unicast ACK as a link frame type;
+- implement stop-and-wait delivery (single outstanding ACK-pending frame);
 - implement bounded retry and ACK timeout;
 - implement randomized retry backoff;
 - implement broadcast with no ACK;
@@ -1101,7 +1299,11 @@ Scope:
 
 - integrate generated Python Protobuf classes into `fw/apps/stm32node-cli`;
 - retain existing PCM1 audio streaming;
-- add machine-readable BoomProtocol framing on USB or a clearly separated CLI bridge;
+- add machine-readable BoomProtocol framing on USB or a clearly separated CLI bridge —
+  including the explicit decision how it coexists with the current single-endpoint
+  CLI/PCM1 time-division multiplexing (section 11);
+- define the gateway-to-host forwarding wrapper carrying source node ID, RSSI/SNR and
+  receive timestamp alongside the forwarded envelope;
 - add commands such as:
 
 ```text
