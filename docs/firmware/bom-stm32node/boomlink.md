@@ -1167,6 +1167,8 @@ ones, but avoid mixing unrelated application features into radio bring-up.
 
 ## PR 1 — SX1262 / RadioLib bring-up
 
+Tracked by issue [#72](https://github.com/boomchecker/boomchecker-monorepo/issues/72).
+
 **Goal:** prove reliable raw P2P RF communication between two `bom-stm32node` boards.
 
 Scope:
@@ -1201,6 +1203,8 @@ Not in scope: Protobuf, ACK/retry, runtime network config.
 
 ## PR 2 — BoomProtocol + Nanopb foundation
 
+Tracked by issue [#73](https://github.com/boomchecker/boomchecker-monorepo/issues/73).
+
 **Goal:** establish the shared typed wire protocol and reproducible code generation.
 
 Scope:
@@ -1229,6 +1233,8 @@ Acceptance criteria:
 Not in scope: reliable radio delivery or application detection/config messages.
 
 ## PR 3 — BoomLink P2P reliability MVP
+
+Tracked by issue [#74](https://github.com/boomchecker/boomchecker-monorepo/issues/74).
 
 **Goal:** turn raw RadioLib packets into a usable addressed P2P link.
 
@@ -1263,6 +1269,8 @@ Not in scope: mesh, CAD/TDMA, detection payloads, persistent config.
 
 ## PR 4 — Detection, telemetry, command and configuration API
 
+Tracked by issue [#75](https://github.com/boomchecker/boomchecker-monorepo/issues/75).
+
 **Goal:** make BoomLink useful for the actual sensor-node application while keeping one
 firmware image for every node.
 
@@ -1294,6 +1302,8 @@ Acceptance criteria:
 - reboot does not require rebuilding to preserve role/identity.
 
 ## PR 5 — Host CLI and end-to-end tooling
+
+Tracked by issue [#76](https://github.com/boomchecker/boomchecker-monorepo/issues/76).
 
 **Goal:** make development, testing and field diagnostics convenient from a PC.
 
@@ -1332,6 +1342,8 @@ Acceptance criteria:
 
 ## PR 6 — Message authentication and field-security baseline
 
+Tracked by issue [#77](https://github.com/boomchecker/boomchecker-monorepo/issues/77).
+
 **Goal:** make remote commands/configuration acceptable outside a trusted lab.
 
 Scope should be designed in a dedicated security review and include at least:
@@ -1349,6 +1361,8 @@ Acceptance criteria are defined by the security design/review before implementat
 
 ## PR 7 — Optional MAC improvements, only if measurements justify them
 
+Tracked by issue [#78](https://github.com/boomchecker/boomchecker-monorepo/issues/78).
+
 Potential follow-up after the direct P2P system is measured with realistic node counts:
 
 - Channel Activity Detection (CAD);
@@ -1361,6 +1375,8 @@ These changes belong below BoomProtocol and should not change Detection/Config/C
 schemas unless application semantics genuinely change.
 
 ## PR 8 — Optional multi-hop/mesh, only if required by deployment
+
+Tracked by issue [#79](https://github.com/boomchecker/boomchecker-monorepo/issues/79).
 
 Do not implement this pre-emptively.
 
