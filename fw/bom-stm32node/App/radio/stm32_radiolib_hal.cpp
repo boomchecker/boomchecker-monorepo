@@ -203,10 +203,12 @@ void EXTI2_IRQHandler(void) {
   HAL_GPIO_EXTI_IRQHandler(LORA_DIO1_Pin);
 }
 
-/* HAL's generic per-pin EXTI callback. Only LORA_DIO1 is enabled in the NVIC
-   today, but guard on the pin anyway in case another EXTI-configured pin
+/* This STM32H5 HAL splits the generic EXTI callback other families share into
+   separate rising/falling variants (stm32h5xx_hal_gpio.c); LORA_DIO1 is
+   configured GPIO_MODE_IT_RISING (gpio.c), so only the rising edge is ever
+   relevant here. Guard on the pin anyway in case another EXTI-configured pin
    (LORA_DIO2, IMU_INTn, GPS_1PPS) is ever enabled later. */
-void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
+void HAL_GPIO_EXTI_Rising_Callback(uint16_t GPIO_Pin) {
   if (GPIO_Pin == LORA_DIO1_Pin) {
     stm32_radiolib_hal_instance().handleDio1Isr();
   }
