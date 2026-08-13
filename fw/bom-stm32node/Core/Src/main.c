@@ -30,6 +30,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "usb_cli.h"
+#include "radio.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -123,6 +124,18 @@ int main(void)
      is started on demand by the `stream` command (see pcm_stream.c), so there
      is nothing to start here. */
 
+  /* SX1262 bring-up (SPI1 + EN_LORA/NRST/BUSY/DIO1, see App/radio/radio.h),
+     BEFORE the USB pull-up goes live (usb_cli_start(), next): RadioLib's
+     internal chip-detect retries the reset/SPI probe up to 10 times with a
+     1 s standby-verify timeout each when no module answers, so radio_init()
+     can block for several seconds. Doing that before usb_cli_start() means
+     the host never sees the device on the bus mid-enumeration during that
+     window - USB simply appears a few seconds later instead of an
+     enumeration attempt timing out because nothing was servicing the USB
+     stack. A radio failure itself is never fatal: the radio stays disabled
+     and `radio status` over the CLI reports why. */
+  (void)radio_init();
+
   /* USB CDC command console (endpoint PMA + PCD start + CLI, see usb_cli.c). */
   usb_cli_start();
   /* USER CODE END 2 */
@@ -134,6 +147,19 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+    /* Drain the DIO1 event flag and drive RadioLib's TX/RX completion
+       handling BEFORE usb_cli_process(): a `radio ping` dispatched from the
+       CLI calls radio_send(), which changes the radio's mode. Servicing any
+       event already pending from *before* this iteration first means a
+       just-arrived RX-done can never be misread as the completion of a
+       transmission the CLI is about to start in this same iteration (radio_
+       send() also flushes defensively on its own - see radio.cpp - but
+       draining here first is what keeps that from being load-bearing).
+       Never runs from interrupt context - see boomlink.md section 6.2. Not
+       serviced while a `stream`/`streamtest` command blocks the loop
+       (documented limitation, same section). */
+    radio_process();
+
     /* Service USB: enumeration, the CDC console, and PCM streaming. The
        `stream`/`streamtest` commands start the microphone on demand and run the
        whole transfer synchronously from here, so this loop has no separate

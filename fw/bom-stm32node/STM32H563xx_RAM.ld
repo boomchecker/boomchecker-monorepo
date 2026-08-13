@@ -47,7 +47,11 @@ _estack = ORIGIN(RAM) + LENGTH(RAM); /* end of "RAM" Ram type memory */
 _sstack = _estack - _Min_Stack_Size;
 
 _Min_Heap_Size = 0x200;      /* required amount of heap  */
-_Min_Stack_Size = 0x400; /* required amount of stack */
+/* See the matching comment in STM32H563xx_FLASH.ld: this is a hard,
+   MSPLIM-enforced stack limit, and RadioLib's SX1262 driver needs close
+   to 1.3 KB of it in the deepest observed call chain. Kept in sync with
+   the FLASH linker script. */
+_Min_Stack_Size = 0x2000; /* required amount of stack */
 
 /* Sections */
 SECTIONS
