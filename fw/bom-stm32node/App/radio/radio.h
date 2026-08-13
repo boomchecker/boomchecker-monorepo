@@ -38,6 +38,8 @@ typedef struct {
   uint32_t tx_errors;
   uint32_t rx_packets;
   uint32_t rx_crc_errors;
+  uint32_t rx_overruns; /* a new packet finished decoding before radio_poll_rx()
+                            drained the previous one - see radio_poll_rx(). */
   float    last_rssi_dbm;
   float    last_snr_db;
 } radio_stats_t;
@@ -87,6 +89,15 @@ int radio_send(const uint8_t *data, size_t len);
  * *out_snr_db with its signal quality, then returns true. Returns false if
  * nothing new has arrived. Any of `buf`/out_len/out_rssi_dbm/out_snr_db may
  * be NULL.
+ *
+ * Single-slot, single-consumer: only the most recently completed packet is
+ * held. A second packet finishing before this is called again silently
+ * replaces the first (counted in radio_stats_t::rx_overruns), and two
+ * independent callers polling this from the same superloop would each only
+ * ever see some of the traffic, never all of it - today only cli.c's
+ * automatic RX print calls this. A future consumer (BoomLink, PR3) must
+ * replace this single-slot model with its own queue rather than add a
+ * second poller here.
  */
 bool radio_poll_rx(uint8_t *buf, size_t max_len, size_t *out_len,
                     float *out_rssi_dbm, float *out_snr_db);

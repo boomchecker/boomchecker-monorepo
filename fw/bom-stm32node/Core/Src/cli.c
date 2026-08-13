@@ -108,9 +108,13 @@ static void cmd_streamtest(EmbeddedCli *cli, char *args, void *context)
 static void fmt_fixed(char *buf, size_t buflen, float value, unsigned decimals)
 {
   static const long pow10[4] = {1, 10, 100, 1000};
-  long  scale = pow10[decimals > 3u ? 3u : decimals];
-  bool  neg   = value < 0.0f;
-  float mag   = neg ? -value : value;
+  /* Clamp once and reuse for both the lookup and the printed field width -
+     the two must stay in lockstep, or a >3 caller would still print a wider
+     zero-padded field than `scale` actually supports. */
+  decimals = (decimals > 3u) ? 3u : decimals;
+  long  scale  = pow10[decimals];
+  bool  neg    = value < 0.0f;
+  float mag    = neg ? -value : value;
   long  scaled = (long)(mag * (float)scale + 0.5f);
   long  whole  = scaled / scale;
   long  frac   = scaled % scale;
@@ -148,9 +152,10 @@ static void print_radio_status(EmbeddedCli *cli)
   fmt_fixed(f1, sizeof(f1), stats.last_rssi_dbm, 1);
   fmt_fixed(f2, sizeof(f2), stats.last_snr_db, 1);
   snprintf(line, sizeof(line),
-           "  tx %lu (err %lu)  rx %lu (crc err %lu)  last RSSI %s dBm  SNR %s dB",
+           "  tx %lu (err %lu)  rx %lu (crc err %lu, overrun %lu)  last RSSI %s dBm  SNR %s dB",
            (unsigned long)stats.tx_packets, (unsigned long)stats.tx_errors,
-           (unsigned long)stats.rx_packets, (unsigned long)stats.rx_crc_errors, f1, f2);
+           (unsigned long)stats.rx_packets, (unsigned long)stats.rx_crc_errors,
+           (unsigned long)stats.rx_overruns, f1, f2);
   embeddedCliPrint(cli, line);
 
   /* A past send failure (radio_send() latches its RadioLib status code into

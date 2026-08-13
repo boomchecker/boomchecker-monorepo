@@ -168,6 +168,11 @@ void radio_process(void) {
       s_stats.last_rssi_dbm = s_radio->getRSSI();
       s_stats.last_snr_db   = s_radio->getSNR();
       if (state == RADIOLIB_ERR_NONE) {
+        if (s_rxPending) {
+          /* radio_poll_rx() hasn't drained the previous packet yet - it is
+             about to be silently replaced (see radio.h). */
+          s_stats.rx_overruns++;
+        }
         s_rxLen     = len;
         s_rxPending = true;
         s_stats.rx_packets++;
