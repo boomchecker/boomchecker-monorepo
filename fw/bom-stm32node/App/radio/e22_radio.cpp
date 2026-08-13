@@ -52,7 +52,15 @@ void PowerUp() {
 void ConfigureModule(SX1262 &radio) {
   /* SX126x automatically drives these on every RX/TX/standby transition
      (Module::setRfSwitchState, called from SX126x::standby/transmit/
-     startReceive) - no manual RXEN/TXEN toggling needed elsewhere. */
+     startReceive) - no manual RXEN/TXEN toggling needed elsewhere.
+
+     Note: SX1262::begin() (called right after this) unconditionally calls
+     setDio2AsRfSwitch(true) internally, which repurposes the chip's own
+     DIO2 pin as an RF-switch-state output. LORA_DIO2/PF11 is wired to the
+     MCU and configured GPIO_MODE_IT_RISING in gpio.c, but its NVIC line is
+     not enabled, so this is harmless today. If a future PR ever wants
+     LORA_DIO2 as a genuine second interrupt source, it will first need to
+     account for the chip actively driving that pin. */
   radio.setRfSwitchPins(RADIO_PIN_RXEN, RADIO_PIN_TXEN);
 }
 

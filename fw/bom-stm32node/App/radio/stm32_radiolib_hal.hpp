@@ -45,8 +45,11 @@ public:
   void spiEndTransaction() override;
   void spiEnd() override;
 
-  /* Invoked from EXTI2_IRQHandler (LORA_DIO1, PB2) via HAL_GPIO_EXTI_Callback.
-     Stays minimal on purpose: it only calls whichever callback RadioLib last
+  /* Invoked from EXTI2_IRQHandler (LORA_DIO1, PB2) via
+     HAL_GPIO_EXTI_Rising_Callback (this STM32H5 HAL splits what other STM32
+     families expose as one generic HAL_GPIO_EXTI_Callback into separate
+     rising/falling variants). Stays minimal on purpose: it only calls
+     whichever callback RadioLib last
      registered through attachInterrupt(), which per RadioLib's own usage
      pattern is itself just a flag-setter (see radio.cpp). No SPI, no BUSY
      polling, no packet handling ever happens here - that is all deferred to

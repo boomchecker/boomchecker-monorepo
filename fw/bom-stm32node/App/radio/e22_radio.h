@@ -16,7 +16,7 @@
 namespace e22_radio {
 
 /* The bring-up LoRa PHY profile. See
-   docs/firmware/bom-stm32node/radio-profile.md for the regulatory rationale
+   fw/bom-stm32node/docs/radio-profile.md for the regulatory rationale
    (869.4-869.65 MHz sub-band, ERP/duty-cycle limits) and why these values
    were picked. */
 struct Profile {
@@ -32,7 +32,7 @@ struct Profile {
 
 /* Compliant-by-default bring-up profile (869.525 MHz, BW125/SF7/CR4:5,
    14 dBm, private sync word). Not a final field profile - see
-   docs/firmware/bom-stm32node/radio-profile.md. */
+   fw/bom-stm32node/docs/radio-profile.md. */
 const Profile &DefaultProfile();
 
 /* Power up the E22 module (EN_LORA) and wait for its regulator/TCXO to
