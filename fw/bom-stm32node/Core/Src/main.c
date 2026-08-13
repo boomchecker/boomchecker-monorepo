@@ -124,14 +124,20 @@ int main(void)
      is started on demand by the `stream` command (see pcm_stream.c), so there
      is nothing to start here. */
 
+  /* SX1262 bring-up (SPI1 + EN_LORA/NRST/BUSY/DIO1, see App/radio/radio.h),
+     BEFORE the USB pull-up goes live (usb_cli_start(), next): RadioLib's
+     internal chip-detect retries the reset/SPI probe up to 10 times with a
+     1 s standby-verify timeout each when no module answers, so radio_init()
+     can block for several seconds. Doing that before usb_cli_start() means
+     the host never sees the device on the bus mid-enumeration during that
+     window - USB simply appears a few seconds later instead of an
+     enumeration attempt timing out because nothing was servicing the USB
+     stack. A radio failure itself is never fatal: the radio stays disabled
+     and `radio status` over the CLI reports why. */
+  (void)radio_init();
+
   /* USB CDC command console (endpoint PMA + PCD start + CLI, see usb_cli.c). */
   usb_cli_start();
-
-  /* SX1262 bring-up (SPI1 + EN_LORA/NRST/BUSY/DIO1, see App/radio/radio.h). A
-     failure here (no module attached, bad wiring) must not brick the rest of
-     the board: it is not fatal, the radio simply stays disabled and `radio
-     status` over the CLI reports why. */
-  (void)radio_init();
   /* USER CODE END 2 */
 
   /* Infinite loop */

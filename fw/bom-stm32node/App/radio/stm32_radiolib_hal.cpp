@@ -11,6 +11,8 @@ extern "C" {
 #include "spi.h"  /* hspi1 */
 }
 
+#include <cstring>
+
 namespace {
 
 /* GpioLevelLow/High values Stm32RadioLibHal reports to RadioLib through the
@@ -99,6 +101,12 @@ void Stm32RadioLibHal::attachInterrupt(uint32_t interruptNum, void (*interruptCb
     return;
   }
   m_dio1Callback = interruptCb;
+  /* EN_LORA/NRST transitions during power-up can latch a stale edge on this
+     line before the NVIC is armed; clear it first so the first
+     radio_process() call reacts to a real DIO1 event, not a power-up
+     artifact. */
+  __HAL_GPIO_EXTI_CLEAR_RISING_IT(LORA_DIO1_Pin);
+  HAL_NVIC_ClearPendingIRQ(EXTI2_IRQn);
   HAL_NVIC_SetPriority(EXTI2_IRQn, kDio1IrqPreemptPriority, 0);
   HAL_NVIC_EnableIRQ(EXTI2_IRQn);
 }
@@ -128,11 +136,26 @@ RadioLibTime_t Stm32RadioLibHal::millis() {
 }
 
 RadioLibTime_t Stm32RadioLibHal::micros() {
-  /* DWT->CYCCNT is a free-running 32-bit cycle counter; at 250 MHz this wraps
-     (and so does the microsecond value derived from it) roughly every 17 s.
-     RadioLib only ever compares micros() deltas against timeouts of at most a
-     few seconds, so unsigned-wraparound subtraction keeps this safe. */
-  return static_cast<RadioLibTime_t>(DWT->CYCCNT / (SystemCoreClock / 1000000UL));
+  /* DWT->CYCCNT is a free-running 32-bit HARDWARE counter, so taking deltas
+     directly on it wraps safely at the full 2^32 range. Naively returning
+     CYCCNT/250 is NOT equivalently safe: dividing shrinks the wrap period of
+     the returned VALUE to ~17.18 s (2^32 / 250 us) while its type can still
+     hold values up to ~4.29e9 - so two micros() calls straddling that
+     ~17.18 s wrap would subtract to a huge bogus delta instead of the true
+     (small) one. RADIOLIB_SPI_PARANOID (on by default) times SPI register
+     writes against micros() on every begin()/config call, so this is not
+     just a theoretical risk. Accumulate in cycle space instead, where
+     wraparound subtraction is actually valid, and only convert to
+     microseconds - and truncate to the 32-bit RadioLibTime_t - at the end;
+     the truncated value then wraps correctly like any ordinary counter. */
+  static uint32_t lastCycles  = DWT->CYCCNT;
+  static uint64_t microsAccum = 0;
+
+  uint32_t cycles      = DWT->CYCCNT;
+  uint32_t deltaCycles = cycles - lastCycles;
+  lastCycles = cycles;
+  microsAccum += deltaCycles / (SystemCoreClock / 1000000UL);
+  return static_cast<RadioLibTime_t>(microsAccum);
 }
 
 long Stm32RadioLibHal::pulseIn(uint32_t pin, uint32_t state, RadioLibTime_t timeout) {
@@ -173,7 +196,17 @@ void Stm32RadioLibHal::spiBeginTransaction() {
 }
 
 void Stm32RadioLibHal::spiTransfer(uint8_t *out, size_t len, uint8_t *in) {
-  HAL_SPI_TransmitReceive(&hspi1, out, in, static_cast<uint16_t>(len), kSpiTransferTimeoutMs);
+  HAL_StatusTypeDef status =
+      HAL_SPI_TransmitReceive(&hspi1, out, in, static_cast<uint16_t>(len), kSpiTransferTimeoutMs);
+  if (status != HAL_OK && in != nullptr && len > 0) {
+    /* RadioLibHal::spiTransfer() returns void - there is no channel to
+       report a transport failure back to RadioLib itself. Zero the receive
+       buffer instead of leaving whatever was on the stack before this call:
+       RadioLib parses `in` as the chip's status/response bytes, and an
+       untouched buffer could be misread as a valid (if wrong) reply rather
+       than the communication failure it actually is. */
+    memset(in, 0, len);
+  }
 }
 
 void Stm32RadioLibHal::spiEndTransaction() {
@@ -206,8 +239,9 @@ void EXTI2_IRQHandler(void) {
 /* This STM32H5 HAL splits the generic EXTI callback other families share into
    separate rising/falling variants (stm32h5xx_hal_gpio.c); LORA_DIO1 is
    configured GPIO_MODE_IT_RISING (gpio.c), so only the rising edge is ever
-   relevant here. Guard on the pin anyway in case another EXTI-configured pin
-   (LORA_DIO2, IMU_INTn, GPS_1PPS) is ever enabled later. */
+   relevant here. Guard on the pin anyway: LORA_DIO2/IMU_INTn/GPS_1PPS are
+   also configured GPIO_MODE_IT_RISING in gpio.c (pre-existing, unrelated to
+   the radio), just not yet enabled in the NVIC. */
 void HAL_GPIO_EXTI_Rising_Callback(uint16_t GPIO_Pin) {
   if (GPIO_Pin == LORA_DIO1_Pin) {
     stm32_radiolib_hal_instance().handleDio1Isr();
