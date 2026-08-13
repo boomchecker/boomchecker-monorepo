@@ -147,17 +147,24 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+    /* Drain the DIO1 event flag and drive RadioLib's TX/RX completion
+       handling BEFORE usb_cli_process(): a `radio ping` dispatched from the
+       CLI calls radio_send(), which changes the radio's mode. Servicing any
+       event already pending from *before* this iteration first means a
+       just-arrived RX-done can never be misread as the completion of a
+       transmission the CLI is about to start in this same iteration (radio_
+       send() also flushes defensively on its own - see radio.cpp - but
+       draining here first is what keeps that from being load-bearing).
+       Never runs from interrupt context - see boomlink.md section 6.2. Not
+       serviced while a `stream`/`streamtest` command blocks the loop
+       (documented limitation, same section). */
+    radio_process();
+
     /* Service USB: enumeration, the CDC console, and PCM streaming. The
        `stream`/`streamtest` commands start the microphone on demand and run the
        whole transfer synchronously from here, so this loop has no separate
        mic_poll drain (a second consumer would steal ring halves). */
     usb_cli_process();
-
-    /* Drain the DIO1 event flag and drive RadioLib's TX/RX completion
-       handling. Never runs from interrupt context - see boomlink.md
-       section 6.2. Not serviced while a `stream`/`streamtest` command blocks
-       the loop (documented limitation, same section). */
-    radio_process();
   }
   /* USER CODE END 3 */
 }
