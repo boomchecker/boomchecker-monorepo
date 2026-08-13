@@ -119,7 +119,10 @@ static void fmt_fixed(char *buf, size_t buflen, float value, unsigned decimals)
 
 static void print_radio_status(EmbeddedCli *cli)
 {
-  char line[96];
+  /* Worst case ~124 bytes for the stats line below (two %lu counters at
+     10 digits each plus two 15-char fmt_fixed() fields) - sized generously
+     past that. */
+  char line[160];
   char f1[16];
   char f2[16];
 
@@ -149,6 +152,17 @@ static void print_radio_status(EmbeddedCli *cli)
            (unsigned long)stats.tx_packets, (unsigned long)stats.tx_errors,
            (unsigned long)stats.rx_packets, (unsigned long)stats.rx_crc_errors, f1, f2);
   embeddedCliPrint(cli, line);
+
+  /* A past send failure (radio_send() latches its RadioLib status code into
+     the same radio_last_error() radio_is_ready() reads) would otherwise be
+     invisible here once the radio is healthy again - only the not-ready
+     branch above used to show it. */
+  int last_error = radio_last_error();
+  if (last_error != 0)
+  {
+    snprintf(line, sizeof(line), "  last error: %d", last_error);
+    embeddedCliPrint(cli, line);
+  }
 }
 
 /* Raw, unaddressed bring-up test: send `text` (default "PING") as one LoRa
@@ -177,7 +191,9 @@ static void cmd_radio(EmbeddedCli *cli, char *args, void *context)
     size_t len = strlen(payload);
     int    rc  = radio_send((const uint8_t *)payload, len);
 
-    char line[64];
+    /* Worst case ~83 bytes: fixed text plus a token up to the CLI's own
+       ~52-char remaining command-buffer budget - sized generously past that. */
+    char line[96];
     if (rc == 0)
     {
       snprintf(line, sizeof(line), "radio ping: sent \"%s\" (%u bytes)", payload, (unsigned)len);
@@ -190,7 +206,14 @@ static void cmd_radio(EmbeddedCli *cli, char *args, void *context)
     return;
   }
 
-  embeddedCliPrint(cli, "usage: radio status | radio ping [text]");
+  if (sub != NULL && strcmp(sub, "reset") == 0)
+  {
+    radio_reset_stats();
+    embeddedCliPrint(cli, "radio: stats reset");
+    return;
+  }
+
+  embeddedCliPrint(cli, "usage: radio status | radio ping [text] | radio reset");
 }
 
 /* Longest RX payload previewed in the CLI; longer packets are still fully
@@ -292,7 +315,7 @@ void cli_init(cli_tx_fn tx)
 
   CliCommandBinding radio_binding = {
     .name         = "radio",
-    .help         = "radio status | radio ping [text] - raw SX1262 bring-up test",
+    .help         = "radio status | radio ping [text] | radio reset - raw SX1262 bring-up test",
     .tokenizeArgs = true,
     .context      = NULL,
     .binding      = cmd_radio,
