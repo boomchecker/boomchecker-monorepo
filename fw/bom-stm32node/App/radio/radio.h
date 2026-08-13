@@ -18,8 +18,10 @@
 extern "C" {
 #endif
 
-/* Largest payload radio_send()/radio_poll_rx() will move in one LoRa packet. */
-#define RADIO_MAX_PAYLOAD 256u
+/* Largest payload radio_send()/radio_poll_rx() will move in one LoRa packet -
+   the SX126x's hard packet-length ceiling (RADIOLIB_SX126X_MAX_PACKET_LENGTH),
+   not a value we chose. */
+#define RADIO_MAX_PAYLOAD 255u
 
 typedef struct {
   float    frequency_mhz;

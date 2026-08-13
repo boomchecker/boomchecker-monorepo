@@ -14,6 +14,9 @@
 
 #include <cstring>
 
+static_assert(RADIO_MAX_PAYLOAD <= RADIOLIB_SX126X_MAX_PACKET_LENGTH,
+              "RADIO_MAX_PAYLOAD must not exceed the SX126x hardware packet limit");
+
 namespace {
 
 enum class Mode { kIdle, kReceiving, kTransmitting };
