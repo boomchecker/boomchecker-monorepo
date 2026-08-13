@@ -55,9 +55,16 @@ add_subdirectory(cmake/stm32cubemx)
 # under third_party/RadioLib - see fw/bom-stm32node/third_party/RadioLib.
 # RADIOLIB_STATIC_ONLY avoids heap use in RadioLib's own SPI transfer helper,
 # matching this firmware's static-allocation-only policy for protocol/radio
-# code (see docs/firmware/bom-stm32node/boomlink.md section 5.2/16).
+# code (see docs/firmware/bom-stm32node/boomlink.md section 5.2/16). PUBLIC,
+# not PRIVATE: the macro is not confined to RadioLib's own .cpp files - it
+# also toggles member layout in some of its header-only classes (e.g.
+# AX25Frame, RadioLibBCH, ITA2String). Consuming code that includes
+# <RadioLib.h> without seeing the same value would build against a
+# different layout than the library was compiled with for those classes -
+# harmless while nothing here uses them, but a silent ODR violation the
+# moment something does.
 add_subdirectory(third_party/RadioLib)
-target_compile_definitions(RadioLib PRIVATE RADIOLIB_STATIC_ONLY=1)
+target_compile_definitions(RadioLib PUBLIC RADIOLIB_STATIC_ONLY=1)
 
 # Link directories setup
 target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
