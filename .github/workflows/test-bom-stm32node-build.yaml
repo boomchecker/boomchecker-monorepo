@@ -4,6 +4,7 @@ on:
   workflow_dispatch:
   pull_request:
     paths:
+      - '.gitmodules'
       - 'fw/bom-stm32node/**'
       - '.github/workflows/test-bom-stm32node-build.yaml'
 
@@ -17,6 +18,11 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: recursive
+          # This job only reads the checkout to configure/build; it never
+          # needs authenticated git access afterwards, so don't leave the
+          # job token persisted in the workspace's git config for later
+          # steps to pick up.
+          persist-credentials: false
 
       - name: Install ARM GCC toolchain and Ninja
         run: |
