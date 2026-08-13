@@ -30,6 +30,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "usb_cli.h"
+#include "radio.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -125,6 +126,12 @@ int main(void)
 
   /* USB CDC command console (endpoint PMA + PCD start + CLI, see usb_cli.c). */
   usb_cli_start();
+
+  /* SX1262 bring-up (SPI1 + EN_LORA/NRST/BUSY/DIO1, see App/radio/radio.h). A
+     failure here (no module attached, bad wiring) must not brick the rest of
+     the board: it is not fatal, the radio simply stays disabled and `radio
+     status` over the CLI reports why. */
+  (void)radio_init();
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -139,6 +146,12 @@ int main(void)
        whole transfer synchronously from here, so this loop has no separate
        mic_poll drain (a second consumer would steal ring halves). */
     usb_cli_process();
+
+    /* Drain the DIO1 event flag and drive RadioLib's TX/RX completion
+       handling. Never runs from interrupt context - see boomlink.md
+       section 6.2. Not serviced while a `stream`/`streamtest` command blocks
+       the loop (documented limitation, same section). */
+    radio_process();
   }
   /* USER CODE END 3 */
 }

@@ -55,6 +55,13 @@ int radio_init(void);
 bool radio_is_ready(void);
 
 /**
+ * @return the status code from the most recent radio_init() or radio_send()
+ * failure (a RadioLib status code, or -1), or 0 if the last such call
+ * succeeded. For CLI/diagnostic display - see the `radio status` command.
+ */
+int radio_last_error(void);
+
+/**
  * Service the radio from the main superloop: drains the DIO1 event flag set
  * by the EXTI ISR and drives RadioLib's packet TX/RX completion handling.
  * Must be called frequently (every superloop iteration) and never from

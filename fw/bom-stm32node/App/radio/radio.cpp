@@ -23,6 +23,7 @@ Mode          s_mode  = Mode::kIdle;
 volatile bool s_dio1Event = false;
 
 radio_stats_t s_stats = {};
+int           s_lastError = 0;
 
 uint8_t s_rxBuf[RADIO_MAX_PAYLOAD];
 size_t  s_rxLen     = 0;
@@ -67,17 +68,23 @@ int radio_init(void) {
                                 profile.preambleSymbols, profile.tcxoVoltage,
                                 /*useRegulatorLDO=*/false);
   if (state != RADIOLIB_ERR_NONE) {
+    s_lastError = state;
     return state;
   }
 
   s_radio = &sx1262;
   s_radio->setDio1Action(OnDio1);
   EnterReceive();
+  s_lastError = 0;
   return 0;
 }
 
 bool radio_is_ready(void) {
   return s_radio != nullptr;
+}
+
+int radio_last_error(void) {
+  return s_lastError;
 }
 
 void radio_process(void) {
@@ -134,6 +141,7 @@ int radio_send(const uint8_t *data, size_t len) {
   int16_t state = s_radio->startTransmit(data, len);
   if (state != RADIOLIB_ERR_NONE) {
     s_stats.tx_errors++;
+    s_lastError = state;
     EnterReceive();
     return state;
   }
