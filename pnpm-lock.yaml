@@ -35,6 +35,8 @@ importers:
 
   fw/bom-node: {}
 
+  fw/bom-stm32node: {}
+
 packages:
 
   '@cloudflare/kv-asset-handler@0.5.0':
