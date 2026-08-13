@@ -52,13 +52,17 @@ the 863-870 MHz SRD allocations.
   later PR's `RadioConfig` (boomlink.md section 8.2) is where a legal-power ceiling needs
   to be enforced against operator-supplied values, using whatever die-to-antenna
   relationship is confirmed here.
-- **Duty cycle**: PR1 does not implement automatic duty-cycle enforcement (boomlink.md
-  section 6.1 explicitly defers this: "automatic duty-cycle enforcement may be added later
-  if measurements show it is needed at this scale"). `radio ping` during interactive
-  bring-up testing is inherently low-duty (operator-paced CLI commands), well under 10%,
-  but nothing currently prevents software from transmitting more aggressively. A
-  cumulative TX airtime counter (boomlink.md section 9.10) is BoomLink-layer scope (PR3+),
-  not implemented here.
+- **Duty cycle - not enforced, not a compliance guarantee**: PR1 implements no duty-cycle
+  accounting or enforcement at all - `radio_send()` accepts any request once the previous
+  transmission has finished, with no airtime tracking or rejection policy. This is a
+  deliberate scope decision, not an oversight: boomlink.md section 6.1 explicitly defers
+  it ("automatic duty-cycle enforcement may be added later if measurements show it is
+  needed at this scale"), and PR1 has no BoomLink TX queue for such a policy to live in
+  yet. In practice, manual `radio ping` testing during bring-up happens to be low-duty
+  (a human typing commands), but that is an observation about how a person currently
+  operates the CLI, not a property of the code - nothing stops software (or a future
+  automated caller) from transmitting well past 10%. A cumulative TX airtime counter
+  (boomlink.md section 9.10) plus real enforcement belong in BoomLink's TX queue (PR3+).
 
 ## TCXO voltage - please verify before first power-up
 
