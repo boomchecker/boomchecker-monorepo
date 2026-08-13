@@ -21,7 +21,16 @@ jobs:
       - name: Install ARM GCC toolchain and Ninja
         run: |
           sudo apt-get update
-          sudo apt-get install -y gcc-arm-none-eabi ninja-build
+          # libnewlib-arm-none-eabi and libstdc++-arm-none-eabi-newlib are only
+          # apt "Recommends" of gcc-arm-none-eabi, not hard dependencies, so
+          # they are named explicitly here: without them there is no C++
+          # standard library for the target and every .cpp under App/radio/
+          # (and the vendored RadioLib) fails to compile/link.
+          sudo apt-get install -y \
+            gcc-arm-none-eabi \
+            libnewlib-arm-none-eabi \
+            libstdc++-arm-none-eabi-newlib \
+            ninja-build
 
       - name: Configure
         working-directory: ./fw/bom-stm32node
