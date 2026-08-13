@@ -1,0 +1,51 @@
+name: Test bom-stm32node Firmware Build
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'fw/bom-stm32node/**'
+      - '.github/workflows/test-bom-stm32node-build.yaml'
+
+jobs:
+  test-build:
+    name: Build firmware (Debug)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install ARM GCC toolchain and Ninja
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-arm-none-eabi ninja-build
+
+      - name: Configure
+        working-directory: ./fw/bom-stm32node
+        run: cmake --preset Debug
+
+      - name: Build
+        working-directory: ./fw/bom-stm32node
+        run: cmake --build --preset Debug
+
+      - name: Verify ELF was produced
+        working-directory: ./fw/bom-stm32node
+        run: |
+          echo "Verifying build output..."
+          if [ ! -f build/Debug/bom-stm32node.elf ]; then
+            echo "❌ Build failed - bom-stm32node.elf not found"
+            exit 1
+          fi
+
+          echo "✅ ELF info:"
+          arm-none-eabi-size build/Debug/bom-stm32node.elf
+
+      - name: Build summary
+        run: |
+          echo "### ✅ Build Successful!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- STM32H563 + RadioLib/SX1262 firmware compiled (Debug) ✓" >> $GITHUB_STEP_SUMMARY
+          echo "- ELF produced ✓" >> $GITHUB_STEP_SUMMARY
