@@ -37,6 +37,8 @@ importers:
 
   fw/bom-stm32node: {}
 
+  fw/common/boomlink: {}
+
 packages:
 
   '@cloudflare/kv-asset-handler@0.5.0':
