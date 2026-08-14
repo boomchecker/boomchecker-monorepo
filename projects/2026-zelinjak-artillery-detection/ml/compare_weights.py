@@ -80,20 +80,30 @@ def main() -> None:
         deq_keras_order = np.transpose(deq, (1, 2, 3, 0)) if kind == "conv" else np.transpose(deq, (1, 0))
         kw = keras_weights[layer_name]
         diff = np.abs(deq_keras_order - kw)
+        # Correlation is a complementary signal to max/mean abs diff: a converter-version or
+        # rounding artifact on the SAME underlying weights would still correlate strongly with
+        # them, whereas genuinely different weights correlate with the reference near zero.
+        correlation = float(np.corrcoef(deq_keras_order.flatten(), kw.flatten())[0, 1])
         rows.append(
             {
                 "layer": layer_name,
                 "shape": str(kw.shape),
                 "max_abs_diff": float(diff.max()),
                 "mean_abs_diff": float(diff.mean()),
+                "correlation": correlation,
             }
         )
-        print(f"{layer_name:12s} shape={str(kw.shape):>16} max_abs_diff={diff.max():.6f} mean_abs_diff={diff.mean():.6f}")
+        print(
+            f"{layer_name:12s} shape={str(kw.shape):>16} max_abs_diff={diff.max():.6f} "
+            f"mean_abs_diff={diff.mean():.6f} correlation={correlation:.4f}"
+        )
 
     if args.output_csv:
         args.output_csv.parent.mkdir(parents=True, exist_ok=True)
         with args.output_csv.open("w", newline="", encoding="utf-8") as handle:
-            writer = csv.DictWriter(handle, fieldnames=["layer", "shape", "max_abs_diff", "mean_abs_diff"])
+            writer = csv.DictWriter(
+                handle, fieldnames=["layer", "shape", "max_abs_diff", "mean_abs_diff", "correlation"]
+            )
             writer.writeheader()
             writer.writerows(rows)
         print(f"Wrote {args.output_csv}")

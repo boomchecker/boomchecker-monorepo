@@ -17,12 +17,13 @@ FEATURE_INDEX = FEATURE_ROOT / "features_manifest.csv"
 
 def load_clean(feature_index: Path) -> tuple[np.ndarray, np.ndarray, list[str]]:
     index = pd.read_csv(feature_index)
+    feature_root = feature_index.parent
     rows = index[index["variant"] == "clean"]
     x = []
     y = []
     ids = []
     for row in rows.itertuples(index=False):
-        mfcc = np.load(FEATURE_ROOT / row.feature_path)
+        mfcc = np.load(feature_root / row.feature_path)
         x.append(np.expand_dims(mfcc, axis=-1))
         y.append(int(row.class_id))
         ids.append(row.recording_id)
