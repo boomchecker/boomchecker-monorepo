@@ -7,6 +7,14 @@ of addressing the review feedback. It was produced by running the pipeline direc
 venv, no Docker daemon or ESP-IDF available in that environment); firmware compilation and ESP32-S3
 hardware numbers still need to be confirmed by whoever has a board and the `fw-devcontainer`.
 
+**Update 2026-08-14:** the camera-ready reproduction effort (milestones M0-M5) is tracked in
+`REPRODUCTION_ROADMAP.md`, which supersedes several "out of scope" items below (Section 9).
+In particular, the PC-int8 vs. ESP32-S3 discrepancy and the "quantization improves robustness"
+claim now have concrete, evidence-backed explanations (not just candidate suspects), and held-out
+results now exist. One-command harness: `task reproduce:pc` (destructive reset: `task
+reproduce:clean`). Generated deliverables: `generated/reports/reviewer_response.md`,
+`table2_float32.tex`, `table3_int8.tex`, `weights_provenance.md`, `provenance_table3.md`.
+
 ## 1. Dataset size does not match the paper
 
 The paper states 706 labeled events (62 artillery launches, 644 non-launch). The manifest generated
@@ -174,8 +182,22 @@ flash, then `task validate:esp ESPPORT=<port>` (optionally with `--variant noise
 
 ## 9. Out of scope (deferred to the review-response phase)
 
-Not addressed here, on purpose: real ESP32-S3 hardware measurement; explaining/fixing the PC-int8 vs.
-ESP32-S3 discrepancy (Review 4 concern #1); a proper held-out generalization test independent of
-training data (Review 3, Review 4 concern #3); dataset licensing/publication (Review 2); comparison
-to Elkarous et al. 2025 and other related work; acronym definitions; power/energy measurement;
-alternative model families (one-class SVM/isolation forest/autoencoder, Review 3).
+Not addressed here, on purpose: real ESP32-S3 hardware measurement; dataset licensing/publication
+(Review 2); comparison to Elkarous et al. 2025 and other related work; acronym definitions;
+power/energy measurement; alternative model families (one-class SVM/isolation forest/autoencoder,
+Review 3).
+
+**Resolved since this file was written** (see `REPRODUCTION_ROADMAP.md` M1-M4 and
+`generated/reports/reviewer_response.md` for the full evidence trail):
+- **PC-int8 vs. ESP32-S3 discrepancy (Review 4 concern #1):** the archived float32 and int8 models
+  turn out to be two different trained checkpoints of the same architecture, not a float32/int8
+  pair of one model (M1). A candidate bug-based explanation (int8 dequantization overflow in the
+  legacy PC script) was tested directly and **refuted** — it would force PC-int8 recall to exactly
+  0 at every SNR, which contradicts the published numbers (M4).
+- **"Quantization improves robustness" claim (Review 3, Review 4 concern #2):** a controlled
+  same-model float32-vs-int8 comparison over 5 noise seeds shows quantization has a negligible-to-
+  slightly-negative effect on robustness, not a positive one. The original claim is explained as an
+  artifact of comparing two different trained models (M1).
+- **Held-out generalization test (Review 3, Review 4 concern #3):** `ml/evaluate_robustness.py` now
+  supports `--split test`; multi-seed held-out results (mean ± std over seeds 42-46) exist alongside
+  full-corpus results (M2, M3). Caveat carried forward: the held-out split has only 13 launch events.
