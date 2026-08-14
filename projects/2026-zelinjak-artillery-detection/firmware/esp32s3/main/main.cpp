@@ -196,11 +196,13 @@ extern "C" void app_main(void) {
                      
                     // Prepočet späť na percentuálnu pravdepodobnosť (0.0 až 1.0)
                     float prediction  = (out_val - out_quant_params.zero_point) * out_quant_params.scale;
-                    int infer_time_ms = (end_time - start_time) / 1000;
+                    int infer_time_us = (int)(end_time - start_time);
 
                     // === D) Odoslanie výsledkov ===
+                    // Cas v mikrosekundach (nie ms) - inferencia je len ~32 ms, celociselne
+                    // zaokrouhlenie na ms by skryto rozdiel medzi Debug a Release buildom.
                     char response[100];
-                    snprintf(response, sizeof(response), "PREDIKCIA: %.4f (Cas: %d ms)\n", prediction, infer_time_ms);
+                    snprintf(response, sizeof(response), "PREDIKCIA: %.4f (Cas: %d us)\n", prediction, infer_time_us);
                     link_write(response, strlen(response));
                 }
 

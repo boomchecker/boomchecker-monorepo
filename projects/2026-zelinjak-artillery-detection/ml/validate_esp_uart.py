@@ -17,8 +17,8 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 FEATURE_ROOT = PROJECT_ROOT / "generated" / "features"
 FEATURE_INDEX = FEATURE_ROOT / "features_manifest.csv"
 
-# Matches the board's "PREDIKCIA: 0.9961 (Cas: 32 ms)" response, see firmware/esp32s3/main/main.cpp.
-RESPONSE_RE = re.compile(r"PREDIKCIA:\s*([-\d.]+)\s*\(Cas:\s*(\d+)\s*ms\)")
+# Matches the board's "PREDIKCIA: 0.9961 (Cas: 32054 us)" response, see firmware/esp32s3/main/main.cpp.
+RESPONSE_RE = re.compile(r"PREDIKCIA:\s*([-\d.]+)\s*\(Cas:\s*(\d+)\s*us\)")
 
 
 def main() -> None:
@@ -46,7 +46,7 @@ def main() -> None:
 
     y_true: list[int] = []
     y_pred: list[int] = []
-    latencies_ms: list[int] = []
+    latencies_us: list[int] = []
     errors = 0
     per_sample_rows: list[dict] = []
 
@@ -68,7 +68,7 @@ def main() -> None:
                 continue
 
             score = float(match.group(1))
-            latency_ms = int(match.group(2))
+            latency_us = int(match.group(2))
             # >=0.5, matching the PC-side threshold in evaluate_pc.py / evaluate_robustness.py
             # (the board's own C++ dequantization widens to int32 automatically, so no overflow
             # bug applies here - this only aligns the decision threshold, not the score itself).
@@ -76,7 +76,7 @@ def main() -> None:
 
             y_true.append(int(row.class_id))
             y_pred.append(predicted)
-            latencies_ms.append(latency_ms)
+            latencies_us.append(latency_us)
             per_sample_rows.append(
                 {
                     "recording_id": row.recording_id,
@@ -85,10 +85,13 @@ def main() -> None:
                     "class_id": int(row.class_id),
                     "score": score,
                     "pred": predicted,
-                    "latency_ms": latency_ms,
+                    "latency_us": latency_us,
                 }
             )
-            print(f"{row.recording_id},expected={row.class_id},predicted={predicted},score={score:.4f},latency_ms={latency_ms}")
+            print(
+                f"{row.recording_id},expected={row.class_id},predicted={predicted},"
+                f"score={score:.4f},latency_us={latency_us}"
+            )
 
     if args.per_sample_csv:
         args.per_sample_csv.parent.mkdir(parents=True, exist_ok=True)
@@ -112,7 +115,8 @@ def main() -> None:
     print(f"Recall            : {recall_score(y_true_arr, y_pred_arr, zero_division=0):.4f}")
     print(f"F1                : {f1_score(y_true_arr, y_pred_arr, zero_division=0):.4f}")
     print(f"MCC               : {matthews_corrcoef(y_true_arr, y_pred_arr):.4f}")
-    print(f"Avg latency (ms)  : {sum(latencies_ms) / len(latencies_ms):.2f}")
+    avg_latency_us = sum(latencies_us) / len(latencies_us)
+    print(f"Avg latency (ms)  : {avg_latency_us / 1000:.3f} (min {min(latencies_us) / 1000:.3f}, max {max(latencies_us) / 1000:.3f})")
 
 
 if __name__ == "__main__":
