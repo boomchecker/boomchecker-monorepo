@@ -6,6 +6,7 @@
 #include "esp_timer.h"
 #include "esp_log.h"
 #include "driver/uart.h"
+#include "driver/usb_serial_jtag.h"
 
 #include "tensorflow/lite/micro/micro_mutable_op_resolver.h"
 #include "tensorflow/lite/micro/micro_interpreter.h"
@@ -32,9 +33,23 @@ uint8_t rx_buffer[EXPECTED_BYTES];
 
 
 // ==========================================
-// 1. Funkcia pre inicializáciu UART
+// 1. Funkcia pre inicializáciu dátového spoja
+//
+// Doska má dva USB-C porty: nativný USB-Serial/JTAG (používa ho esptool na
+// flash/monitor) a UART0 vyvedený cez samostatný USB-to-UART prevodník.
+// CONFIG_APP_DATA_LINK_USB_SERIAL_JTAG (Kconfig) prepína, ktorý z nich sa
+// použije pre výmenu MFCC dát - default je UART0 (pôvodné zapojenie pre
+// reálne nasadenie), zapnutím sa dá validovať cez ten istý port ako flash.
 // ==========================================
-void init_uart() {
+void init_data_link() {
+#if CONFIG_APP_DATA_LINK_USB_SERIAL_JTAG
+    usb_serial_jtag_driver_config_t usj_config = USB_SERIAL_JTAG_DRIVER_CONFIG_DEFAULT();
+    usj_config.rx_buffer_size = BUF_SIZE;
+    usj_config.tx_buffer_size = BUF_SIZE;
+    usb_serial_jtag_driver_install(&usj_config);
+
+    ESP_LOGI("LINK", "Datovy spoj: USB-Serial/JTAG (rovnaky port ako flash/monitor)");
+#else
     uart_config_t uart_config = {
         .baud_rate  = UART_BAUD_RATE,
         .data_bits  = UART_DATA_8_BITS,
@@ -48,8 +63,27 @@ void init_uart() {
     uart_param_config(UART_PORT_NUM, &uart_config);
     uart_set_pin(UART_PORT_NUM, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
     uart_driver_install(UART_PORT_NUM, BUF_SIZE * 2, 0, 0, NULL, 0);
-    
-    ESP_LOGI("UART", "UART úspešne inicializovaný na porte %d s rýchlosťou %d", UART_PORT_NUM, UART_BAUD_RATE);
+
+    ESP_LOGI("LINK", "Datovy spoj: UART0 na porte %d s rychlostou %d", UART_PORT_NUM, UART_BAUD_RATE);
+#endif
+}
+
+static inline int link_read(uint8_t* buf, int max_len) {
+#if CONFIG_APP_DATA_LINK_USB_SERIAL_JTAG
+    return usb_serial_jtag_read_bytes(buf, max_len, 20 / portTICK_PERIOD_MS);
+#else
+    return uart_read_bytes(UART_PORT_NUM, buf, max_len, 20 / portTICK_PERIOD_MS);
+#endif
+}
+
+static inline void link_write(const char* data, size_t len) {
+#if CONFIG_APP_DATA_LINK_USB_SERIAL_JTAG
+    usb_serial_jtag_write_bytes(data, len, pdMS_TO_TICKS(1000));
+    usb_serial_jtag_wait_tx_done(pdMS_TO_TICKS(1000));
+#else
+    uart_write_bytes(UART_PORT_NUM, data, len);
+    uart_wait_tx_done(UART_PORT_NUM, pdMS_TO_TICKS(1000));
+#endif
 }
 
 
@@ -121,8 +155,8 @@ void quantize_input(float* float_data, int num_elements) {
 
 extern "C" void app_main(void) {
 
-    // --- 1. Inicializácia UART ---
-    init_uart();
+    // --- 1. Inicializácia dátového spoja (UART0 alebo USB-Serial/JTAG) ---
+    init_data_link();
 
     // --- 2. Inicializácia TensorFlow Lite Micro ---
     if (!init_tflite()) { return; }
@@ -131,8 +165,8 @@ extern "C" void app_main(void) {
     int total_received = 0;
 
     while (1) {
-        
-        int len = uart_read_bytes(UART_PORT_NUM, rx_buffer + total_received, EXPECTED_BYTES - total_received, 20 / portTICK_PERIOD_MS);
+
+        int len = link_read(rx_buffer + total_received, EXPECTED_BYTES - total_received);
 
         if (len > 0) {
             total_received += len;
@@ -153,7 +187,7 @@ extern "C" void app_main(void) {
 
                 if (invoke_status != kTfLiteOk) {
                     const char* err_msg = "Chyba inferencie!\n";
-                    uart_write_bytes(UART_PORT_NUM, err_msg, strlen(err_msg));
+                    link_write(err_msg, strlen(err_msg));
 
                 } else {
                     // === C) Dekvantizácia Int8 -> Float32 ===
@@ -167,8 +201,7 @@ extern "C" void app_main(void) {
                     // === D) Odoslanie výsledkov ===
                     char response[100];
                     snprintf(response, sizeof(response), "PREDIKCIA: %.4f (Cas: %d ms)\n", prediction, infer_time_ms);
-                    uart_write_bytes (UART_PORT_NUM, response, strlen(response));
-                    uart_wait_tx_done(UART_PORT_NUM, pdMS_TO_TICKS(1000));
+                    link_write(response, strlen(response));
                 }
 
                 // Vynulujeme počítadlo pre ďalšiu maticu
