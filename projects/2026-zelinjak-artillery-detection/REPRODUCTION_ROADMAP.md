@@ -11,7 +11,7 @@ Vytvořeno: 2026-08-14 | Deadline camera-ready: **2026-08-31**
 
 | Milník | Název | Stav | Závisí na | Odhad |
 |---|---|---|---|---|
-| M0 | Prostředí a základna | NEZAHÁJENO | — | 0,5 h |
+| M0 | Prostředí a základna | HOTOVO | — | 0,5 h |
 | M1 | Proveniénce vah (h5 vs tflite) | NEZAHÁJENO | M0 | 1–2 h |
 | M2 | Úpravy evaluačních skriptů | NEZAHÁJENO | M0 | 1–2 h |
 | M3 | Multi-seed reprodukční běh | NEZAHÁJENO | M1, M2 | 2–4 h |
@@ -167,7 +167,7 @@ Tyto výstupy slouží jako **cross-check determinismu** nového harnessu — ne
 
 ## M0 — Prostředí a základna (repeatable baseline)
 
-**Stav:** NEZAHÁJENO
+**Stav:** HOTOVO
 
 **Cíl:** Deterministické, od nuly znovu-vytvořitelné prostředí a ochrana referenčních dat z běhu 2026-07-21.
 
@@ -207,9 +207,9 @@ Tyto výstupy slouží jako **cross-check determinismu** nového harnessu — ne
 - Potvrzený deterministický manifest: 854 eventů (63 launch / 791 non-launch), split 80/20 seed 42.
 
 **Akceptační kritéria:**
-- [ ] Importy TF/librosa/sklearn/pandas/numpy projdou v novém venv.
-- [ ] `git diff` manifestu a splits je prázdný.
-- [ ] Referenční výsledky zálohované; žádný další milník do nich nezapisuje.
+- [x] Importy TF/librosa/sklearn/pandas/numpy projdou v novém venv.
+- [x] `git diff` manifestu a splits je prázdný.
+- [x] Referenční výsledky zálohované; žádný další milník do nich nezapisuje.
 
 **Odhad:** cca 30 min (většinu času zabere pip install TensorFlow).
 
@@ -440,3 +440,4 @@ Formát záznamu: `YYYY-MM-DD | milník | co se stalo / zjištění / rozhodnut�
 
 - 2026-08-14 | příprava | Roadmapa vytvořena (průzkum repa, recenzí a kódu; rozhodnutí uzamčena po grill session). Ověřeno: PyPI dostupné; `generated/features` je symlink na `features_seed42`; manifest a splits čisté v gitu; nalezeno `/opt/esp` ESP-IDF prostředí (relevantní pro M6).
 - 2026-08-14 | M0 (částečně, mimo pořadí) | Při přerušeném pokusu o implementaci byl smazán starý venv (měl rozbitý pip) a `task setup` doběhl s exit 0 — fresh venv existuje, ale smoke test (M0 krok 3) zatím neproveden. Záloha `results_ref_20260721` byla vytvořena a následně odstraněna při návratu změn — krok 1 je potřeba provést znovu.
+- 2026-08-14 | M0 (dokončeno) | Záloha `generated/results_ref_20260721/` vytvořena znovu (7 CSV, shodné s `generated/results/`). Smoke test na existujícím venv prošel: tensorflow 2.21.0, librosa 0.11.0, sklearn 1.9.0, pandas 3.0.3, numpy 2.4.6 — přesně odpovídá pinovaným verzím v `requirements.txt`, venv nebylo nutné znovu budovat. `task manifest` regeneroval 854 řádků (63 launch: 13 dana_artillery test + 50 train, plus other_gunshot 18 test/67 train; impulse_noise 140 test/566 train) a `splits.csv`; `git diff --exit-code` na obou souborech prošel s exit 0 — manifest je deterministický. Všechna akceptační kritéria M0 splněna, milník HOTOVO.
