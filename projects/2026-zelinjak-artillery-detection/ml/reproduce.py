@@ -18,7 +18,6 @@ DEFAULT_SEEDS = [42, 43, 44, 45, 46]
 MODEL_KERAS = PROJECT_ROOT / "archive" / "models" / "najlepsi_model.h5"
 MODEL_TFLITE = PROJECT_ROOT / "archive" / "models" / "model.tflite"
 
-MODE_LABELS = {"keras": "PC float32", "tflite": "PC int8"}
 SCOPE_TO_SPLIT = {"full": "all", "test": "test"}
 
 
@@ -53,23 +52,27 @@ def prepare_features_for_seed(seed: int, force: bool) -> Path:
     return feature_index
 
 
-def evaluate_seed(seed: int, feature_index: Path) -> tuple[list[dict], list[dict], list[dict]]:
-    """Run both canonical models over both scopes and all variants for one seed.
+def evaluate_seed(
+    seed: int, feature_index: Path, model_keras: Path, model_tflite: Path, keras_label: str, tflite_label: str
+) -> tuple[list[dict], list[dict], list[dict]]:
+    """Run both models over both scopes and all variants for one seed.
 
     Returns (legacy_full_rows, aggregate_rows, per_sample_rows) where legacy_full_rows matches
     the pre-M3 metrics_seedN.csv schema (mode, snr_db, accuracy, ..., samples) for a direct
-    byte-level cross-check against generated/results_ref_20260721/, and aggregate_rows matches
-    the mode/variant/seed/scope/n/... schema already used by the 2026-07-21 per_seed_metrics.csv.
+    byte-level cross-check against generated/results_ref_20260721/ (only meaningful for the
+    canonical archive/model.tflite pair), and aggregate_rows matches the mode/variant/seed/
+    scope/n/... schema already used by the 2026-07-21 per_seed_metrics.csv.
     """
     legacy_full_rows: list[dict] = []
     aggregate_rows: list[dict] = []
     per_sample_rows: list[dict] = []
+    mode_labels = {"keras": keras_label, "tflite": tflite_label}
 
     for scope, split in SCOPE_TO_SPLIT.items():
         for label, variant in variants_with_labels():
-            for model_format, model_path in (("keras", MODEL_KERAS), ("tflite", MODEL_TFLITE)):
+            for model_format, model_path in (("keras", model_keras), ("tflite", model_tflite)):
                 metrics, per_sample = run_regime(model_path, model_format, variant, feature_index, split)
-                mode = MODE_LABELS[model_format]
+                mode = mode_labels[model_format]
 
                 if scope == "full":
                     legacy_full_rows.append({"mode": mode, "snr_db": label, **metrics})
@@ -135,6 +138,23 @@ def main() -> None:
     parser.add_argument(
         "--force-features", action="store_true", help="Regenerate features even if the seed directory already exists."
     )
+    parser.add_argument("--model-keras", type=Path, default=MODEL_KERAS)
+    parser.add_argument("--model-tflite", type=Path, default=MODEL_TFLITE)
+    parser.add_argument("--keras-label", default="PC float32")
+    parser.add_argument("--tflite-label", default="PC int8")
+    parser.add_argument(
+        "--results-root",
+        type=Path,
+        default=RESULTS_ROOT,
+        help="Where to write output CSVs. Use a non-default path for model pairs other than the canonical one.",
+    )
+    parser.add_argument(
+        "--no-legacy-csv",
+        action="store_false",
+        dest="legacy_csv",
+        default=True,
+        help="Skip metrics_seedN.csv (pre-M3 schema); only meaningful as a cross-check for the canonical pair.",
+    )
     args = parser.parse_args()
 
     all_aggregate_rows: list[dict] = []
@@ -142,22 +162,25 @@ def main() -> None:
 
     for seed in args.seeds:
         feature_index = prepare_features_for_seed(seed, args.force_features)
-        print(f"seed {seed}: evaluating (full-corpus + held-out, float32 + int8)...")
-        legacy_full_rows, aggregate_rows, per_sample_rows = evaluate_seed(seed, feature_index)
+        print(f"seed {seed}: evaluating (full-corpus + held-out, {args.keras_label} + {args.tflite_label})...")
+        legacy_full_rows, aggregate_rows, per_sample_rows = evaluate_seed(
+            seed, feature_index, args.model_keras, args.model_tflite, args.keras_label, args.tflite_label
+        )
 
-        write_csv(legacy_full_rows, RESULTS_ROOT / f"metrics_seed{seed}.csv")
-        write_csv(per_sample_rows, RESULTS_ROOT / f"per_sample_seed{seed}.csv")
+        if args.legacy_csv:
+            write_csv(legacy_full_rows, args.results_root / f"metrics_seed{seed}.csv")
+        write_csv(per_sample_rows, args.results_root / f"per_sample_seed{seed}.csv")
 
         all_aggregate_rows.extend(aggregate_rows)
         all_per_sample_rows.extend(per_sample_rows)
         print(f"seed {seed}: done ({len(aggregate_rows)} metric rows, {len(per_sample_rows)} per-sample rows)")
 
-    write_csv(all_aggregate_rows, RESULTS_ROOT / "per_seed_metrics.csv")
+    write_csv(all_aggregate_rows, args.results_root / "per_seed_metrics.csv")
     summary = summarize(all_aggregate_rows)
-    summary_path = RESULTS_ROOT / "summary_mean_std.csv"
+    summary_path = args.results_root / "summary_mean_std.csv"
     summary.to_csv(summary_path, index=False)
 
-    print(f"\nWrote {RESULTS_ROOT / 'per_seed_metrics.csv'} ({len(all_aggregate_rows)} rows)")
+    print(f"\nWrote {args.results_root / 'per_seed_metrics.csv'} ({len(all_aggregate_rows)} rows)")
     print(f"Wrote {summary_path}")
     print(summary.to_string(index=False))
 
