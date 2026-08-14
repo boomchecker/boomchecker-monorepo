@@ -1,0 +1,57 @@
+name: Test BoomLink Protocol Build
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.gitmodules'
+      - 'fw/common/boomlink/**'
+      - '.github/workflows/test-boomlink-protocol-build.yaml'
+
+jobs:
+  test-build:
+    name: Build and test (host, Debug)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          # This job only reads the checkout to configure/build/test; it
+          # never needs authenticated git access afterwards.
+          persist-credentials: false
+
+      - name: Install Ninja
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Install Python dependencies
+        working-directory: ./fw/common/boomlink
+        run: pip install --quiet -r requirements.txt
+
+      - name: Configure
+        working-directory: ./fw/common/boomlink
+        run: cmake --preset Debug
+
+      - name: Build
+        working-directory: ./fw/common/boomlink
+        run: cmake --build --preset Debug
+
+      - name: Test
+        working-directory: ./fw/common/boomlink
+        run: ctest --preset Debug --output-on-failure
+
+      - name: Build summary
+        run: |
+          echo "### ✅ Build and tests successful!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- Nanopb code generated from fw/common/boomlink/proto/*.proto ✓" >> $GITHUB_STEP_SUMMARY
+          echo "- boomlink_protocol (host-native) built ✓" >> $GITHUB_STEP_SUMMARY
+          echo "- C self-test + Python cross-language/compatibility suite passed ✓" >> $GITHUB_STEP_SUMMARY

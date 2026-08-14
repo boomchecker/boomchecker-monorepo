@@ -6,6 +6,7 @@ on:
     paths:
       - '.gitmodules'
       - 'fw/bom-stm32node/**'
+      - 'fw/common/boomlink/**'
       - '.github/workflows/test-bom-stm32node-build.yaml'
 
 jobs:
@@ -37,6 +38,22 @@ jobs:
             libnewlib-arm-none-eabi \
             libstdc++-arm-none-eabi-newlib \
             ninja-build
+
+      - name: Set up Python for Nanopb code generation
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Install Nanopb generator dependencies
+        run: |
+          # The firmware build now add_subdirectory()'s into
+          # fw/common/boomlink, which runs the Nanopb generator (and protoc,
+          # via grpcio-tools' bundled copy) at build time to turn
+          # fw/common/boomlink/proto/*.proto into the *.pb.c/.pb.h the
+          # boomlink_protocol library compiles - see
+          # fw/common/boomlink/CMakeLists.txt and
+          # fw/bom-stm32node/third_party/nanopb/requirements.txt.
+          pip install --quiet protobuf grpcio-tools
 
       - name: Configure
         working-directory: ./fw/bom-stm32node
