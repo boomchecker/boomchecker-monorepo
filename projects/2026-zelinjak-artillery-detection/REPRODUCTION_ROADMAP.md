@@ -13,7 +13,7 @@ Vytvořeno: 2026-08-14 | Deadline camera-ready: **2026-08-31**
 |---|---|---|---|---|
 | M0 | Prostředí a základna | HOTOVO | — | 0,5 h |
 | M1 | Proveniénce vah (h5 vs tflite) | HOTOVO — potvrzena větev (b), různé váhy | M0 | 1–2 h |
-| M2 | Úpravy evaluačních skriptů | NEZAHÁJENO | M0 | 1–2 h |
+| M2 | Úpravy evaluačních skriptů | HOTOVO | M0 | 1–2 h |
 | M3 | Multi-seed reprodukční běh | NEZAHÁJENO | M1, M2 | 2–4 h |
 | M4 | Legacy proveniénční běh | NEZAHÁJENO | M2 | 2–3 h |
 | M5 | Deliverables | NEZAHÁJENO | M3, M4 | 3–4 h |
@@ -268,7 +268,7 @@ Tyto výstupy slouží jako **cross-check determinismu** nového harnessu — ne
 
 ## M2 — Úpravy evaluačních skriptů (held-out, multi-seed, per-sample audit)
 
-**Stav:** NEZAHÁJENO
+**Stav:** HOTOVO
 
 **Cíl:** Rozšířit `ml/evaluate_robustness.py` o held-out eval, podporu multi-seed feature rootů a per-sample výstup — při zachování stoprocentní zpětné kompatibility (stávající Taskfile tasky se nesmí změnit chováním).
 
@@ -279,23 +279,25 @@ Tyto výstupy slouží jako **cross-check determinismu** nového harnessu — ne
 
 **Metoda:** Minimální, zpětně kompatibilní změny — všechny nové parametry mají defaulty odpovídající dnešnímu chování.
 
-**Kroky:**
+**Kroky (provedeno):**
 
 1. `ml/evaluate_robustness.py`:
-   - Nový argument `--split {all,train,test}` (default `all`). V `load_variant()` (dnes ř. 22–36) filtrovat `index["split"] == split` pro `split != "all"`.
-   - `FEATURE_ROOT` odvozovat z adresáře `--features` (rodič manifestu featur) místo modulové konstanty — cesty `feature_path` v manifestu jsou relativní k němu; tím začnou fungovat `generated/features_seedN/`.
-   - Nový argument `--per-sample-csv PATH`: zapsat řádek na vzorek se sloupci `mode, variant, split, recording_id, class_id, score, pred`.
-2. Regresní kontrola: běh bez nových flagů na seed42 featurách musí dát **identická čísla** jako před úpravou (porovnat výstup před/po).
-3. Sanity kontrola held-out: `--split test` na clean variantě vrátí 171 vzorků (13 launch / 158 non-launch).
+   - Nový argument `--split {all,train,test}` (default `all`). `load_variant()` nyní filtruje `rows[rows["split"] == split]` pro `split != "all"` a navíc vrací seznam `split` per vzorek (pro audit při `split=all`).
+   - `feature_root` se odvozuje uvnitř `load_variant()` jako `feature_index.parent` místo modulové konstanty `FEATURE_ROOT` — cesty `feature_path` v manifestu jsou relativní k němu; funguje tak jak s výchozím `generated/features/`, tak s `generated/features_seedN/`.
+   - Nový argument `--per-sample-csv PATH`: `run_regime()` vrací kromě metrik i `per_sample` (recording_id, split, class_id, score, pred); `main()` je sbírá přes všechny varianty/režimy do `per_sample_rows` se sloupci `mode, variant, split, recording_id, class_id, score, pred`.
+2. Regresní kontrola: běh bez nových flagů (`--model-tflite archive/models/model.tflite --include-clean`) dal **bitově shodná čísla** s referencí `generated/results_ref_20260721/metrics_seed42.csv` (např. 30 dB accuracy 0,977751756440281, MCC 0,8624502463394716) i s `REPRODUCTION_NOTES.md` (30 dB Acc 97,78 % / MCC 0,86; 5 dB Acc 85,71 % / MCC 0,42) — žádná regrese.
+3. Sanity kontrola held-out: `--split test` na clean variantě vrátila přesně **171 vzorků** (odpovídá `splits.csv`: 13 launch / 158 non-launch v test splitu).
+4. Sanity kontrola per-sample CSV: běh se 2 režimy (keras+tflite) × 5 variant × `--split test` dal **1710 řádků** (= 10 × 171), sloupce `split` obsahují jen `test` (žádný leak z train).
+5. Sanity kontrola multi-seed feature rootu: `--features generated/features_seed43/features_manifest.csv` načetl featury ze správného adresáře (jiná čísla než seed 42 na stejné variantě, jak se čeká u jiné realizace šumu) — potvrzuje, že smyčka přes seedy v M3 může fungovat beze zvláštní úpravy.
 
-**Výstupy:** Upravený `ml/evaluate_robustness.py`.
+**Výstupy:** Upravený `ml/evaluate_robustness.py` (zpětně kompatibilní, commitnuto).
 
 **Akceptační kritéria:**
-- [ ] Bez nových flagů je výstup bitově shodný s chováním před úpravou (žádná regrese).
-- [ ] `--split test` vrací správně filtrované počty vzorků.
-- [ ] Per-sample CSV obsahuje řádek pro každý vzorek každého variantu.
+- [x] Bez nových flagů je výstup bitově shodný s chováním před úpravou (žádná regrese).
+- [x] `--split test` vrací správně filtrované počty vzorků.
+- [x] Per-sample CSV obsahuje řádek pro každý vzorek každého variantu.
 
-**Odhad:** 1–2 h. Lze dělat souběžně s M1.
+**Odhad:** 1–2 h. Skutečnost: cca 45 min.
 
 ---
 
@@ -459,3 +461,4 @@ Formát záznamu: `YYYY-MM-DD | milník | co se stalo / zjištění / rozhodnut�
 - 2026-08-14 | M0 (dokončeno) | Záloha `generated/results_ref_20260721/` vytvořena znovu (7 CSV, shodné s `generated/results/`). Smoke test na venv prošel: tensorflow 2.21.0, librosa 0.11.0, sklearn 1.9.0, pandas 3.0.3, numpy 2.4.6 — přesně odpovídá pinovaným verzím v `requirements.txt`. Venv byl přebudován (`rm -rf venv && task setup`) už ráno v rámci přerušeného pokusu; smoke test tuto instalaci jen potvrdil, další rebuild nebyl potřeba. `task manifest` regeneroval 854 řádků (63 launch: 13 dana_artillery test + 50 train, plus other_gunshot 18 test/67 train; impulse_noise 140 test/566 train) a `splits.csv`; `git diff --exit-code` na obou souborech prošel s exit 0. Pozor: tento determinismus dokazuje reprodukovatelnost na tomto stroji a této verzi sklearn/knihoven (fixní `random_state=42` ve `generate_manifest.py`), nikoli přenositelnost mezi prostředími — to se ověřuje až v M3 cross-checkem proti `results_ref_20260721`. Nezávisle zkontrolováno review agentem (Opus): žádný blokující nález, plná shoda s `requirements.txt` (9/9 pinovaných balíčků), záloha bit-identická, manifest nezávisle reprodukován. Všechna akceptační kritéria M0 splněna, milník HOTOVO.
 - 2026-08-14 | M1 (dokončeno) | **Zásadní zjištění: `archive/models/model.tflite` (firmware) nevznikl z `archive/models/najlepsi_model.h5`.** Rekonverze h5 stejným skriptem/representative datasetem dala jiný soubor (81 400 B vs 81 008 B originál) s odlišnou kalibrací vstupní aktivace (scale 8,92 vs 5,33) a 127/854 (15 %) přehozenými predikcemi proti archivnímu modelu na clean datech. Rozhodující test — přímé dekvantizování Conv2D/Dense kernelů a srovnání s float32 vahami z h5 (`ml/compare_weights.py`) — ukázal, že `reconverted.tflite` se od h5 liší jen o kvantizační šum (max diff 0,001–0,004 při scale ~0,002, kontrolní pár funguje jak se čeká), zatímco `archive/model.tflite` se od h5 liší o stovky kvantizačních kroků (max diff až 1,25 při scale ~0,001). Potvrzena větev (b): jde o dva různé natrénované modely stejné architektury, ne kvantizační artefakt. Toto posouvá narativ pro R4-major2 — srovnání Tabulky II (float32) a Tabulky III (int8) v původním článku nesrovnává float32/int8 verzi téhož modelu, ale dva různé modely. Podklad zapsán do `generated/reports/weights_provenance.md`. Nové skripty `ml/compare_tflite_weights.py`, `ml/compare_weights.py` — obojí commitnuto do gitu; výstupní CSV a rekonvertovaný `.tflite` jsou v `generated/` (gitignored), reprodukovatelné přiloženými příkazy.
 - 2026-08-14 | M1 (doplněno, na dotaz uživatele) | **Identifikován pravděpodobný mechanismus vzniku dvou různých sad vah.** Originální trénovací skript `ml/main_cnn.py` (needitovaná verze z diplomky, odlišná od portované `ml/train_model.py`) na řádku 66 bezpodmínečně přepisuje `najlepsi_model.h5` (`model.save(...)`) při každém běhu, ale nikde nevolá `tf.random.set_seed()` — seedovaný je jen `train_test_split` (rozdělení dat), ne inicializace vah/trénovací trajektorie. Vlastní dřívější investigace (`REPRODUCTION_NOTES.md`, sekce 4, řádky 98–105) nezávisle potvrzuje, že tato citlivost je na tomto malém nevyváženém datasetu velká: retrénink na identických datech/hyperparametrech, lišící se jen seedem inicializace, dal val_accuracy 0,795 vs. 1,000. Pravděpodobný scénář: jeden běh `main_cnn.py` dal váhy kvantizované do firmware, pozdější běh přepsal `najlepsi_model.h5` bez zpětné rekvantizace. Git historie toto nerozliší (všechny tři archivní soubory pocházejí z jednoho squashnutého importního commitu `1146019`), ale mechanismus je podložen přímo kódem a nezávislým nálezem, ne spekulací. Doplněno do `generated/reports/weights_provenance.md` (nová sekce "Mechanismus vzniku") a do bodu 1.4.3 výše. Žádné nové skripty, jen text reportu a roadmapy.
+- 2026-08-14 | M2 (dokončeno) | `ml/evaluate_robustness.py` rozšířen o `--split {all,train,test}`, odvozený feature root (`feature_index.parent` místo modulové konstanty) a `--per-sample-csv`. Regresní test beze nových flagů dal bitově shodná čísla s referencí (`results_ref_20260721/metrics_seed42.csv`, např. 30 dB accuracy 0,977751756440281) — žádná regrese. `--split test` na clean variantě vrátil přesně 171 vzorků. Per-sample CSV s 2 režimy × 5 variant × test split dal 1710 řádků, sloupec `split` obsahoval jen `test`. Feature root ověřen i na `generated/features_seed43/features_manifest.csv` — načetl jiná (očekávaně odlišná) čísla než seed 42, čímž je potvrzeno, že M3 může iterovat přes seedy beze zvláštní úpravy skriptu. Všechna akceptační kritéria splněna, milník HOTOVO.
