@@ -16,7 +16,7 @@ Vytvořeno: 2026-08-14 | Deadline camera-ready: **2026-08-31**
 | M2 | Úpravy evaluačních skriptů | HOTOVO | M0 | 1–2 h |
 | M3 | Multi-seed reprodukční běh | HOTOVO | M1, M2 | 2–4 h |
 | M4 | Legacy proveniénční běh | HOTOVO — hypotéza bugu vyvrácena | M2 | 2–3 h |
-| M5 | Deliverables | NEZAHÁJENO | M3, M4 | 3–4 h |
+| M5 | Deliverables | HOTOVO | M3, M4 | 3–4 h |
 | M6 | ESP32-S3 hardware (volitelné) | NEZAHÁJENO | M5 + deska | 4–8 h |
 
 Kritická cesta M0–M5: cca 10–15 h čisté práce. M1 a M2 lze dělat paralelně.
@@ -380,7 +380,7 @@ Tyto výstupy slouží jako **cross-check determinismu** nového harnessu — ne
 
 ## M5 — Deliverables (harness, reviewer response, LaTeX, HTML)
 
-**Stav:** PROBÍHÁ — Taskfile harness, LaTeX tabulky a reviewer_response.md hotové a end-to-end ověřené; HTML artifact zbývá.
+**Stav:** HOTOVO
 
 **Cíl:** Zabalit výsledky M1–M4 do čtyř dohodnutých výstupů; celá PC reprodukce spustitelná jedním příkazem.
 
@@ -395,7 +395,7 @@ Tyto výstupy slouží jako **cross-check determinismu** nového harnessu — ne
    - `generated/reports/table2_float32.tex` a `table3_int8.tex` — IEEE booktabs formát shodný se stylem `BEC/article/article_main.tex` (`\resizebox`, `\toprule/\midrule/\bottomrule`), sloupec Scope (Full corpus / Held-out test) × SNR, hodnoty mean ± std přes 5 seedů.
    - `generated/reports/reviewer_response.md` — 5 sekcí: výtka -> důkaz (čísla natažená z CSV) -> navrhovaná formulace do článku. Pokrývá R2#6/R3/R4-major1/R4-Q1 (M1+M4), R3/R4-major2/R4-Q2 (M1 rozhodující experiment), R3/R4-major3/R4-Q3 (M2+M3 held-out), R4-Q4 (SNR vzorec), R1 III.C (velikost modelu; Flash/RAM/ops označeno jako závislé na M6).
    - `generated/reports/deliverables_data.json` — konsolidovaný podklad pro HTML artifact (publikovaná čísla, reprodukovaný souhrn, kvantizační efekt, proveniénce vah, legacy bug).
-3. **HTML artifact — zbývá.**
+3. **HTML artifact vytvořen** (nástroj Artifact, po skillu `artifact-design`): jednostránkový "evidence review" — přehledový pruh 5 verdiktů (confirmed/refuted/measured/partial) s odkazy na detailní sekce, pak po sekcích: proveniénce vah (korelační stupnice bipolárního rozsahu −1..+1, marker na ose místo plněného pruhu, aby blízká-nule hodnota nevypadala jako "poloviční"), kvantizační efekt (divergentní bar chart 10 kombinací, červená/zelená), held-out vs. full-corpus (skupinové pruhy), legacy bug (tabulka predikce vs. měření vs. publikováno), a fakta/mezery pro M6. Publikováno: <https://claude.ai/code/artifact/b0cf34ae-c933-40fd-9292-b51e0c44360b>.
 4. `REPRODUCTION_NOTES.md` aktualizován: nová úvodní poznámka s odkazem na roadmapu a `task reproduce:pc`; sekce 9 ("Out of scope") rozdělena na skutečně zbývající položky (HW, dataset licence, ...) a nově vyřešené (PC/ESP diskrepance, kvantizační tvrzení, held-out) s odkazem na M1–M4.
 
 **Ověření LaTeX (částečné — chybí toolchain):** `pdflatex`/`xelatex`/`lualatex` nejsou v tomto prostředí dostupné, takže skutečný `\input` do `article_main.tex` a build PDF nebylo možné provést. Ověřeno staticky: počet `{`/`}` vyvážený, `\begin`/`\end` páry sedí, balíčky které tabulky používají (`graphicx` pro `\resizebox`, `booktabs` pro `\toprule`/`\addlinespace`) jsou už v preambuli článku. Skutečný build je nutné provést v prostředí s LaTeX distribucí (stejná kategorie omezení jako ESP-IDF u M6).
@@ -411,15 +411,15 @@ Tyto výstupy slouží jako **cross-check determinismu** nového harnessu — ne
 - `generated/reports/reviewer_response.md`.
 - `generated/reports/table2_float32.tex`, `table3_int8.tex`.
 - `generated/reports/deliverables_data.json`.
-- URL HTML artifactu — zbývá.
+- HTML artifact: <https://claude.ai/code/artifact/b0cf34ae-c933-40fd-9292-b51e0c44360b>.
 
 **Akceptační kritéria:**
 - [x] `task reproduce:clean && task reproduce:pc` doběhne od nuly bez ručních zásahů.
 - [x] .tex fragmenty staticky validní (vyvážené závorky, existující balíčky) — **skutečný pdflatex build neproveden, chybí toolchain v tomto prostředí.**
 - [x] reviewer_response.md pokrývá všechny hlavní výtky + R4-Q4.
-- [ ] Artifact vygenerován a sdílen.
+- [x] Artifact vygenerován a sdílen.
 
-**Odhad:** 3–4 h. Skutečnost dosud: cca 2 h (bez HTML artifactu).
+**Odhad:** 3–4 h. Skutečnost: cca 2,5 h.
 
 ---
 
@@ -482,3 +482,4 @@ Formát záznamu: `YYYY-MM-DD | milník | co se stalo / zjištění / rozhodnut�
 - 2026-08-14 | M1 rozšíření (na žádost uživatele po review M3) | Rozhodnuto rozšířit multi-seed ošetření na rozhodující kvantizační pár. `ml/reproduce.py` parametrizován (`--model-keras/--model-tflite/--keras-label/--tflite-label/--results-root/--no-legacy-csv`), regresně ověřeno, že výchozí volání (bez nových argumentů) dává stejný výsledek jako před úpravou. Spuštěno na `najlepsi_model.h5` vs. `generated/models/reconverted.tflite` přes seedy 42–46, výstup do `generated/reports/quantization_effect_multiseed/` (oddělené od `generated/results/`, aby se neohrozily ověřené M3 výstupy — po testovacích bězích byl plný 5-seed `generated/results/per_seed_metrics.csv` obnoven a zkontrolován, že má 100 řádků). Výsledek: kvantizace na stejném modelu je lepší jen v 1 z 10 kombinací varianta×scope, horší v 9 z 10, průměrný efekt MCC −0,0115 (std 0,013) — mírně **zhoršuje** robustnost, nikoli zlepšuje. Silnější a jednoznačnější potvrzení jednoseedového nálezu M1. Zapsáno do `generated/reports/weights_provenance.md` (nová podsekce "Rozšíření na 5 seedů") a do M1 sekce roadmapy výše (kroky 7–8, aktualizované Výstupy).
 - 2026-08-14 | M4 (dokončeno) | Napsán `ml/reproduce_legacy.py`, věrná replika bugu z `ml/eval_tflite_pc.py:54-70`. **Předběžná matematická analýza** (než proběhl běh): kvantizace výstupu `archive/model.tflite` má `zero_point=-128` (z M1); pro tuto hodnotu bug matematicky garantuje, že každá predikce s pravděpodobností `>= 0.5` wrapne na záporné číslo — predikce zněla "recall 0,00 na všech úrovních šumu". **Empirický běh přesně potvrdil predikci:** recall 0,00 na clean i všech 4 SNR úrovních, accuracy konstantní 92,62 % (= přesný podíl non-launch vzorků 791/854 — model "predikuje" úplně vše jako třídu 0). Srovnání s publikovanou Tabulkou III (recall 0,90–1,00) a opraveným M3 během (recall 0,76–0,98, seed 42): legacy-bug běh je v naprostém rozporu s oběma, ne jen "trochu jiný". **Potvrzena větev (b): hypotéza "PC vs ESP diskrepance = artefakt tohoto bugu" je vyvrácena.** Pokud by Tabulka III vznikla tímto skriptem v aktuální podobě, recall by byl nulový, ne 0,90–1,00 — publikovaná čísla musí vzniknout jinak. Zbývá M1 nález (různé váhy) jako hlavní kandidát pro vysvětlení PC-vs-ESP diskrepance; HW rozdíly (M6) jako druhý, dosud neprověřený. Zapsáno do `generated/reports/provenance_table3.md` a do roadmapy (sekce 1.4 bod 2, 1.5 mapování, M4 sekce). Všechna akceptační kritéria splněna, milník HOTOVO.
 - 2026-08-14 | M5 (probíhá) | Napsán `ml/make_deliverables.py` — generuje `table2_float32.tex`/`table3_int8.tex` (styl shodný s `article_main.tex`), `reviewer_response.md` (5 sekcí dle recenzí) a `deliverables_data.json`, vše z CSV bez ručních čísel. `Taskfile.yml`: `reproduce:pc` rozšířeno oproti plánu — zahrnuje i M1 kroky (proveniénce vah + kvantizační experiment na 5 seedech), ne jen M3/M4, aby byl harness skutečně kompletní; `reproduce:clean` chrání `weights_provenance.md`/`provenance_table3.md` (ručně psané, nejsou regenerovatelné skriptem) i `results_ref_20260721/`. **Na žádost uživatele proveden skutečný end-to-end test:** `task reproduce:clean && task reproduce:pc` od nuly (smazány i featury pro všech 5 seedů, ~30 min regenerace) — po zálohování `generated/{results,reports,models}` do scratchpadu. Výsledek: všech 5 `metrics_seedN.csv` bitově identických s referencí **i po regeneraci featur** (dřív testováno jen s cache featurami — uzavírá mezeru z review M3); všechny M1/M4/M5 výstupy identické s předchozím cache během. Oba hand-authored reporty přežily clean nedotčené. LaTeX tabulky ověřeny jen staticky (vyvážené závorky, existující balíčky) — `pdflatex` není v tomto prostředí dostupný, skutečný build neproveden. Zbývá: HTML artifact.
+- 2026-08-14 | M5 (dokončeno) | Načten skill `artifact-design`, vytvořen jednostránkový HTML artifact "evidence review" pro spoluautory/školitele: přehledový pruh 5 karet (verdikt confirmed/refuted/measured/partial) s odkazy na detailní sekce, pak sekce proveniénce vah (korelační stupnice), kvantizační efekt (divergentní bar chart 10 kombinací s int8−float32 rozdílem), held-out vs. full-corpus (skupinové pruhy MCC), legacy bug (tabulka predikce/měření/publikováno), a fakta/mezery pro M6. Design: chladně neutrální papírová paleta (ne cream/ne near-black-s-neonem, aby se vyhnul klišé z designové skill), akcentová barva mosaz (ordnance brass, tematicky vázaná na artilerii/nábojnice), bipolární korelační stupnice opravena z "plněného pruhu" (zavádějící u hodnot blízkých nule) na "marker na ose". Všechny číselné hodnoty v HTML ověřeny proti `deliverables_data.json` a `summary_mean_std.csv` (žádné lorem/vymyšlená čísla). Publikováno: <https://claude.ai/code/artifact/b0cf34ae-c933-40fd-9292-b51e0c44360b>. Všechna akceptační kritéria M5 splněna, milník HOTOVO. **Kritická cesta M0–M5 (odhad 10–15 h) je tímto uzavřena** — zbývá jen volitelný M6 (ESP32-S3 hardware).
