@@ -17,7 +17,7 @@ Vytvořeno: 2026-08-14 | Deadline camera-ready: **2026-08-31**
 | M3 | Multi-seed reprodukční běh | HOTOVO | M1, M2 | 2–4 h |
 | M4 | Legacy proveniénční běh | HOTOVO — hypotéza bugu vyvrácena | M2 | 2–3 h |
 | M5 | Deliverables | HOTOVO | M3, M4 | 3–4 h |
-| M6 | ESP32-S3 hardware (volitelné) | NEZAHÁJENO | M5 + deska | 4–8 h |
+| M6 | ESP32-S3 hardware (volitelné) | PROBÍHÁ (pozastaveno) — build+flash OK, UART blokováno spojením | M5 + deska | 4–8 h |
 
 Kritická cesta M0–M5: cca 10–15 h čisté práce. M1 a M2 lze dělat paralelně.
 
@@ -425,32 +425,31 @@ Tyto výstupy slouží jako **cross-check determinismu** nového harnessu — ne
 
 ## M6 — ESP32-S3 hardware (volitelné; vyžaduje desku)
 
-**Stav:** NEZAHÁJENO (blokováno dostupností hardwaru)
+**Stav:** PROBÍHÁ (pozastaveno) — build a flash na reálnou desku hotové a ověřené; živá UART validace blokovaná nespolehlivým spojením k desce.
 
 **Cíl:** Reálná embedded čísla pro Tabulku III a definitivní uzavření PC vs ESP diskrepance per-sample důkazem; Release-build latence a Flash/RAM čísla pro R1 III.C.
 
 **Známé blokery a fakta:**
 - `.devcontainer/fw-devcontainer/` referencovaný v REPRODUCTION_NOTES neexistuje v repu.
-- Nekonzistentní ESP-IDF verze: `firmware/esp32s3/main/idf_component.yml` deklaruje `>=4.1.0`, `dependencies.lock` je resolvnutý proti 5.2.1, poznámky zmiňují Docker s v5.4.
-- V tomto prostředí nalezeno `/opt/esp/python_env/idf5.4_py3.12_env` — build lze možná ověřit i bez fyzické desky (flash a UART validace desku vyžadují).
+- Nekonzistentní ESP-IDF verze v repu: `firmware/esp32s3/main/idf_component.yml` deklaruje `>=4.1.0`, `dependencies.lock` je resolvnutý proti 5.2.1, poznámky zmiňují Docker s v5.4. **Vyřešeno empiricky (2026-08-14): `/opt/esp` prostředí s v5.4 firmware sestavilo bez úprav** — verze inkonzistence v deklaracích se v praxi neprojevila jako blokující.
 - Firmware je aktuálně Debug build (`CONFIG_COMPILER_OPTIMIZATION_DEBUG=y`) — publikovaná latence cca 32 ms je měřena v Debug režimu a jen kolem `Invoke()`.
 - Firmware `model_data.h` je bit-identický s `archive/models/model_data.h` — na desce běží kanonický archivní model, žádná výměna není potřeba.
+- Deska je připojena přes USB/IP passthrough (typicky WSL2 ↔ Windows host) — spojení je nestabilní: kontrolní operace (`esptool` flash, krátké request/response sekvence) fungují spolehlivě, ale udržovaný obousměrný datový tok (UART app data, boot log) nefunguje vůbec — nula bajtů oběma směry i po opakovaných pokusech (reset přes RTS, čerstvé otevření portu). Nelze odlišit "firmware neběží" od "tunel nepřenáší tento typ provozu" bez fyzického přístupu k desce (LED, reset tlačítko), který v tuto chvíli není k dispozici.
 
-**Kroky (checklist):**
+**Kroky (checklist, stav k 2026-08-14):**
 
-1. Zprovoznit ESP-IDF toolchain (preferovaně v5.2.1 dle lock souboru; případně ověřit funkčnost `/opt/esp` prostředí s v5.4 a výsledek zapsat do logu).
-2. `task firmware:build`; při úspěchu `task firmware:flash ESPPORT=<port>`.
-3. Upravit `ml/validate_esp_uart.py`: threshold `>` -> `>=` (ř. 69, sjednocení s PC evalem), logovat raw skóre per sample do CSV.
-4. Přehrát identické featury (seed 42, stejné .npy jako v M3) přes UART; per-sample porovnat |PC-int8 skóre − ESP-int8 skóre|:
-   - Cíl: rozdíl <= 1 LSB u všech vzorků -> diskrepance uzavřena, do článku jde jedna sloučená int8 tabulka.
-   - Jinak: bisekce — vstupní kvantizace, verze TFLM operátorů, zaokrouhlování (numpy banker's rounding vs C round).
-5. Release build (`CONFIG_COMPILER_OPTIMIZATION_PERF`): přeměřit latenci; `idf.py size` -> Flash/RAM čísla; ověřit nativní podporu všech ops v TFLM na ESP32-S3 (R1 III.C).
+1. [x] Zprovoznit ESP-IDF toolchain — `/opt/esp/idf` v5.4 aktivován přes `source /opt/esp/idf/export.sh`, bez úprav funguje.
+2. [x] `task firmware:build` — **úspěšný**, binárka 0x65ef0 B (60 % volno v 0x100000 B app partition), žádné chyby, jen jedno neškodné compiler warning (`uart_config_t::flags` neinicializováno).
+3. [x] `task firmware:flash ESPPORT=/dev/ttyACM0` (přímo přes `idf.py -p /dev/ttyACM0 flash`) — **úspěšný**. Deska se identifikovala jako reálný **ESP32-S3 (QFN56, revize v0.2), WiFi/BLE, 8 MB embedded PSRAM, MAC `98:3d:ae:61:1d:18`**. Bootloader (21 008 B), app (417 520 B) a partition table (3 072 B) nahrány a hash ověřen.
+4. [x] `ml/validate_esp_uart.py` upraven: threshold `>` -> `>=` (sjednocení s PC evalem — potvrzeno v `firmware/esp32s3/main/main.cpp:164`, že C++ dequantizace `(out_val - zero_point) * scale` je bezpečná, `int8_t` se automaticky promuje na `int32_t`, takže na desce žádný overflow bug z M4 nehrozí); doplněno `--per-sample-csv` pro log raw skóre.
+5. [ ] **Blokováno:** přehrání featur přes UART a per-sample srovnání — smoke test (3 vzorky) i passivní poslech (bez odesílání dat) vrátily 0 bajtů. `write()` hlásí úspěch (2784 B odesláno, `out_waiting=0`), ale žádná odpověď ani boot log. Diagnostika (RTS reset, čerstvé otevření portu, přímý `os.open()`) nerozlišila příčinu — může to být firmware/boot problém nebo (pravděpodobněji, viz blokery výše) nespolehlivost USB/IP tunelu pro sustained data, na rozdíl od krátkých esptool operací. Vyžaduje fyzický přístup k desce (LED, reset) nebo stabilnější spojení — uživatel v tuto chvíli není u desky, **pozastaveno**.
+6. [ ] Release build (`CONFIG_COMPILER_OPTIMIZATION_PERF`): přeměřit latenci; `idf.py size` -> Flash/RAM čísla; ověřit nativní podporu všech ops v TFLM na ESP32-S3 (R1 III.C) — nezahájeno, navazuje na krok 5.
 
 **Akceptační kritéria:**
 - [ ] Per-sample shoda <= 1 LSB, nebo zdokumentovaná a vysvětlená příčina rozdílu.
 - [ ] Release latence + Flash/RAM čísla připravená pro článek.
 
-**Odhad:** 4–8 h.
+**Odhad:** 4–8 h. Skutečnost dosud: cca 1,5 h (build + flash + debug), zbytek pozastaven na dostupnosti fyzického přístupu k desce.
 
 ---
 
@@ -483,3 +482,4 @@ Formát záznamu: `YYYY-MM-DD | milník | co se stalo / zjištění / rozhodnut�
 - 2026-08-14 | M4 (dokončeno) | Napsán `ml/reproduce_legacy.py`, věrná replika bugu z `ml/eval_tflite_pc.py:54-70`. **Předběžná matematická analýza** (než proběhl běh): kvantizace výstupu `archive/model.tflite` má `zero_point=-128` (z M1); pro tuto hodnotu bug matematicky garantuje, že každá predikce s pravděpodobností `>= 0.5` wrapne na záporné číslo — predikce zněla "recall 0,00 na všech úrovních šumu". **Empirický běh přesně potvrdil predikci:** recall 0,00 na clean i všech 4 SNR úrovních, accuracy konstantní 92,62 % (= přesný podíl non-launch vzorků 791/854 — model "predikuje" úplně vše jako třídu 0). Srovnání s publikovanou Tabulkou III (recall 0,90–1,00) a opraveným M3 během (recall 0,76–0,98, seed 42): legacy-bug běh je v naprostém rozporu s oběma, ne jen "trochu jiný". **Potvrzena větev (b): hypotéza "PC vs ESP diskrepance = artefakt tohoto bugu" je vyvrácena.** Pokud by Tabulka III vznikla tímto skriptem v aktuální podobě, recall by byl nulový, ne 0,90–1,00 — publikovaná čísla musí vzniknout jinak. Zbývá M1 nález (různé váhy) jako hlavní kandidát pro vysvětlení PC-vs-ESP diskrepance; HW rozdíly (M6) jako druhý, dosud neprověřený. Zapsáno do `generated/reports/provenance_table3.md` a do roadmapy (sekce 1.4 bod 2, 1.5 mapování, M4 sekce). Všechna akceptační kritéria splněna, milník HOTOVO.
 - 2026-08-14 | M5 (probíhá) | Napsán `ml/make_deliverables.py` — generuje `table2_float32.tex`/`table3_int8.tex` (styl shodný s `article_main.tex`), `reviewer_response.md` (5 sekcí dle recenzí) a `deliverables_data.json`, vše z CSV bez ručních čísel. `Taskfile.yml`: `reproduce:pc` rozšířeno oproti plánu — zahrnuje i M1 kroky (proveniénce vah + kvantizační experiment na 5 seedech), ne jen M3/M4, aby byl harness skutečně kompletní; `reproduce:clean` chrání `weights_provenance.md`/`provenance_table3.md` (ručně psané, nejsou regenerovatelné skriptem) i `results_ref_20260721/`. **Na žádost uživatele proveden skutečný end-to-end test:** `task reproduce:clean && task reproduce:pc` od nuly (smazány i featury pro všech 5 seedů, ~30 min regenerace) — po zálohování `generated/{results,reports,models}` do scratchpadu. Výsledek: všech 5 `metrics_seedN.csv` bitově identických s referencí **i po regeneraci featur** (dřív testováno jen s cache featurami — uzavírá mezeru z review M3); všechny M1/M4/M5 výstupy identické s předchozím cache během. Oba hand-authored reporty přežily clean nedotčené. LaTeX tabulky ověřeny jen staticky (vyvážené závorky, existující balíčky) — `pdflatex` není v tomto prostředí dostupný, skutečný build neproveden. Zbývá: HTML artifact.
 - 2026-08-14 | M5 (dokončeno) | Načten skill `artifact-design`, vytvořen jednostránkový HTML artifact "evidence review" pro spoluautory/školitele: přehledový pruh 5 karet (verdikt confirmed/refuted/measured/partial) s odkazy na detailní sekce, pak sekce proveniénce vah (korelační stupnice), kvantizační efekt (divergentní bar chart 10 kombinací s int8−float32 rozdílem), held-out vs. full-corpus (skupinové pruhy MCC), legacy bug (tabulka predikce/měření/publikováno), a fakta/mezery pro M6. Design: chladně neutrální papírová paleta (ne cream/ne near-black-s-neonem, aby se vyhnul klišé z designové skill), akcentová barva mosaz (ordnance brass, tematicky vázaná na artilerii/nábojnice), bipolární korelační stupnice opravena z "plněného pruhu" (zavádějící u hodnot blízkých nule) na "marker na ose". Všechny číselné hodnoty v HTML ověřeny proti `deliverables_data.json` a `summary_mean_std.csv` (žádné lorem/vymyšlená čísla). Publikováno: <https://claude.ai/code/artifact/b0cf34ae-c933-40fd-9292-b51e0c44360b>. Všechna akceptační kritéria M5 splněna, milník HOTOVO. **Kritická cesta M0–M5 (odhad 10–15 h) je tímto uzavřena** — zbývá jen volitelný M6 (ESP32-S3 hardware).
+- 2026-08-14 | M6 (probíhá, pozastaveno) | Deska se objevila připojená přes USB/IP passthrough (`/dev/ttyACM0`), ale `open()` nejdřív visel na neurčito (ověřeno přes pyserial i syscall `os.open()`, i bez sandboxu) — diagnostikováno jako nestabilní USB/IP tunel (dmesg ukazoval opakované "connection reset by peer" cykly), ne aplikační/kódový problém. Po uživatelově zásahu na hostitelské straně se port stabilizoval. **`task firmware:build` úspěšný** — ESP-IDF v5.4 z `/opt/esp` sestavilo firmware bez úprav (binárka 0x65ef0 B, 60 % volno), čímž se v praxi vyřešila nejasnost verze ESP-IDF z blokerů (deklarace >=4.1.0 vs lock 5.2.1 vs Docker v5.4 — v5.4 funguje). **Flash úspěšný** — `idf.py -p /dev/ttyACM0 flash` nahrál bootloader+app+partition table na reálnou desku, identifikovanou jako ESP32-S3 (QFN56 rev v0.2, WiFi/BLE, 8 MB PSRAM, MAC 98:3d:ae:61:1d:18) — potvrzuje, že jde o skutečný hardware, ne emulátor. Ověřen firmware kód (`main.cpp:164`): C++ dequantizace výstupu se automaticky promuje `int8_t`→`int32_t` při odečtení od `zero_point`, takže na desce int8 overflow bug z M4 nehrozí (jen na PC/numpy straně). Opraven `ml/validate_esp_uart.py` (threshold `>`→`>=`, `--per-sample-csv`). **Živá UART komunikace blokovaná:** smoke test (3 vzorky) i passivní poslech vrátily 0 bajtů oběma směry; `write()` hlásí úspěch, ale nic se nevrací, ani boot log. Diagnostika (RTS reset, čerstvé otevření, přímý syscall) nerozlišila příčinu (firmware vs. tunel). Uživatel není fyzicky u desky (nemůže zkontrolovat LED/reset tlačítko) — **na jeho žádost pozastaveno**, dokud nebude možná fyzická kontrola nebo stabilnější spojení. M6 zůstává mimo kritickou cestu k camera-ready deadline.

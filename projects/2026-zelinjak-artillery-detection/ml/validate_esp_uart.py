@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import csv
 import re
 import struct
 import time
@@ -31,6 +32,7 @@ def main() -> None:
     parser.add_argument("--features", type=Path, default=FEATURE_INDEX)
     parser.add_argument("--limit", type=int, default=0)
     parser.add_argument("--timeout", type=float, default=3.0)
+    parser.add_argument("--per-sample-csv", type=Path, default=None, help="Write one row per sample with the raw score.")
     args = parser.parse_args()
 
     index = pd.read_csv(args.features)
@@ -46,6 +48,7 @@ def main() -> None:
     y_pred: list[int] = []
     latencies_ms: list[int] = []
     errors = 0
+    per_sample_rows: list[dict] = []
 
     with serial.Serial(args.port, args.baud, timeout=args.timeout) as uart:
         time.sleep(1.0)
@@ -66,12 +69,34 @@ def main() -> None:
 
             score = float(match.group(1))
             latency_ms = int(match.group(2))
-            predicted = 1 if score > 0.5 else 0
+            # >=0.5, matching the PC-side threshold in evaluate_pc.py / evaluate_robustness.py
+            # (the board's own C++ dequantization widens to int32 automatically, so no overflow
+            # bug applies here - this only aligns the decision threshold, not the score itself).
+            predicted = 1 if score >= 0.5 else 0
 
             y_true.append(int(row.class_id))
             y_pred.append(predicted)
             latencies_ms.append(latency_ms)
+            per_sample_rows.append(
+                {
+                    "recording_id": row.recording_id,
+                    "variant": args.variant,
+                    "split": row.split,
+                    "class_id": int(row.class_id),
+                    "score": score,
+                    "pred": predicted,
+                    "latency_ms": latency_ms,
+                }
+            )
             print(f"{row.recording_id},expected={row.class_id},predicted={predicted},score={score:.4f},latency_ms={latency_ms}")
+
+    if args.per_sample_csv:
+        args.per_sample_csv.parent.mkdir(parents=True, exist_ok=True)
+        with args.per_sample_csv.open("w", newline="", encoding="utf-8") as handle:
+            writer = csv.DictWriter(handle, fieldnames=list(per_sample_rows[0].keys()))
+            writer.writeheader()
+            writer.writerows(per_sample_rows)
+        print(f"Wrote {args.per_sample_csv}")
 
     if not y_true:
         print("No valid responses received; no statistics to report.")
