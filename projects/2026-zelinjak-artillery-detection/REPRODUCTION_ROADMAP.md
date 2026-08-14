@@ -12,7 +12,7 @@ Vytvořeno: 2026-08-14 | Deadline camera-ready: **2026-08-31**
 | Milník | Název | Stav | Závisí na | Odhad |
 |---|---|---|---|---|
 | M0 | Prostředí a základna | HOTOVO | — | 0,5 h |
-| M1 | Proveniénce vah (h5 vs tflite) | NEZAHÁJENO | M0 | 1–2 h |
+| M1 | Proveniénce vah (h5 vs tflite) | HOTOVO — potvrzena větev (b), různé váhy | M0 | 1–2 h |
 | M2 | Úpravy evaluačních skriptů | NEZAHÁJENO | M0 | 1–2 h |
 | M3 | Multi-seed reprodukční běh | NEZAHÁJENO | M1, M2 | 2–4 h |
 | M4 | Legacy proveniénční běh | NEZAHÁJENO | M2 | 2–3 h |
@@ -74,7 +74,7 @@ Tabulka III — ESP32-S3 int8:
 
 1. **Počet eventů:** článek uvádí 706 eventů (62 launch / 644 non-launch); manifest v repu má **854** (63 `dana_artillery` / 85 `other_gunshot` / 706 `impulse_noise`). Číslo 706 v článku odpovídá pouze počtu `impulse_noise`. Korpus 854 je referenční.
 2. **Podezření na bug v publikovaných PC-int8 číslech:** legacy skript `ml/eval_tflite_pc.py:68` dequantizuje `(output - zero_point) * scale` bez rozšíření typu; pod numpy 2.x (NEP 50) int8 aritmetika přetéká (např. 127 − (−128) wrapne). Opraveno v `ml/evaluate_pc.py:49-53`. Pokud Table III PC-int8 vznikla legacy skriptem, diskrepance PC vs ESP je artefakt bugu.
-3. **Podezření na různé váhy:** firmware `model_data.h` (81 008 B, bit-identický s `archive/models/model.tflite`) vs. výstup `ml/convert_model.py` z `najlepsi_model.h5` (cca 81 400 B). PC eval a ESP mohly srovnávat různé modely.
+3. **Potvrzeno v M1 (2026-08-14): různé váhy.** Firmware `model_data.h` (81 008 B, bit-identický s `archive/models/model.tflite`) **nevznikl** kvantizací `archive/models/najlepsi_model.h5`. Dekvantizované Conv2D/Dense kernely `model.tflite` se od float32 vah v `najlepsi_model.h5` liší o desítky až stovky kvantizačních kroků (max diff 0,40–1,25 při scale ~0,0008–0,0022) — o dva až tři řády víc než u kontrolního páru (rekonverze `najlepsi_model.h5` sama proti sobě: max diff 0,001–0,004). 15 % vzorků (127/854) má přehozenou predikci mezi oběma `.tflite` soubory. Jde o dva různé natrénované modely stejné architektury, ne o kvantizační artefakt. Detaily a plný postup: `generated/reports/weights_provenance.md`.
 4. **Eval na trénovacích datech:** robustnostní sweep běžel na celém korpusu (většina vzorků viděna při tréninku). Split existuje (80/20 stratified, seed 42, `datasets/recordings/splits.csv`), ale test split má jen **13 launch eventů** — held-out čísla budou statisticky slabá, nutný caveat.
 5. Předchozí reprodukce (archivní model, korpus 854, opravený eval) dává stejné trendy, ale čísla o něco nižší než v článku — např. int8 full-corpus: 30 dB Acc 97,78 % / MCC 0,86; 5 dB Acc 85,71 % / MCC 0,42.
 
@@ -217,36 +217,52 @@ Tyto výstupy slouží jako **cross-check determinismu** nového harnessu — ne
 
 ## M1 — Proveniénce vah (je float32 .h5 a int8 .tflite tentýž model?)
 
-**Stav:** NEZAHÁJENO
+**Stav:** HOTOVO — potvrzena **větev (b)**: různé váhy.
 
 **Cíl:** Doložit, zda `archive/models/model.tflite` (= model nasazený ve firmware) vznikl kvantizací `archive/models/najlepsi_model.h5`.
 
 **Proč:** Audit z 2026-07-21 uvádí jako podezřelého č. 2 pro PC/ESP diskrepanci "různé váhy": firmware model má 81 008 B, ale rekonverze z .h5 dává cca 81 400 B. Pokud float32 a int8 čísla v článku pocházejí z **různých modelů**, je celé srovnání float32 vs int8 (výtka R4-major2 "kvantizace zlepšuje robustnost") nevalidní. Tento milník rozhoduje narativ odpovědi na R4-major1 i R4-major2 — proto jde před hlavním během M3.
 
-**Metoda:** Rekonverze .h5 do int8 TFLite stejným skriptem a stejným representative datasetem jako původně (`ml/convert_model.py`, prvních 100 train MFCC z clean variantu). Poté per-sample porovnání výstupních skóre obou .tflite na clean featurách (seed 42). Rozdíl velikosti souboru sám o sobě není průkazný (metadata, verze converteru) — rozhodují skóre.
+**Metoda:** Rekonverze .h5 do int8 TFLite stejným skriptem a stejným representative datasetem jako původně (`ml/convert_model.py`, prvních 100 train MFCC z clean variantu). Dva nezávislé testy: (1) per-sample skóre obou .tflite na clean featurách; (2) přímé dekvantizování Conv2D/Dense kernelů obou .tflite a srovnání s float32 vahami načtenými přímo z `najlepsi_model.h5` — tento test je necitlivý na kalibraci aktivací a měří shodu vah samotných.
 
-**Kroky:**
+**Kroky (provedeno):**
 
-1. Ověřit přesné CLI `ml/convert_model.py` (vstupní/výstupní cesty); v případě potřeby minimální úprava, aby šlo zadat výstup mimo `generated/models/model.tflite`.
+1. CLI `ml/convert_model.py` již podporovalo `--output`/`--header` bez úprav.
 2. Rekonverze:
    ```
-   venv/bin/python ml/convert_model.py --model archive/models/najlepsi_model.h5 [--output generated/models/reconverted.tflite]
+   venv/bin/python ml/convert_model.py --model archive/models/najlepsi_model.h5 \
+       --output generated/models/reconverted.tflite --header generated/models/reconverted_model_data.h
    ```
-3. Per-sample inference obou .tflite (`archive/models/model.tflite` vs rekonvertovaný) na `generated/features/clean/**` pomocí `predict_tflite()` z `ml/evaluate_pc.py` (opravená dequantizace). Malý ad-hoc skript nebo rozšíření M2 per-sample výstupu.
-4. Vyhodnotit: max |delta skóre| přes všech 854 vzorků, počet vzorků s přehozenou predikcí při thresholdu 0,5.
-5. Sepsat závěr do `generated/reports/weights_provenance.md`:
-   - Větev (a): shoda skóre v rámci kvantizačního kroku (cca 1 LSB, tj. |delta| <= scale) -> modely jsou týž; PC/ESP diskrepance jde za bugem v dequantizaci nebo za HW; pokračovat M3/M4 beze změn.
-   - Větev (b): neshoda -> publikovaná float32 a int8 čísla mohla vzniknout z různých vah; do reviewer-response to uvést jako součást vysvětlení; v M3 se pak oba kanonické artefakty (h5 i tflite) reportují explicitně jako "as-shipped", bez tvrzení o identitě.
+   Výsledek: 81 400 B (archivní `model.tflite` má 81 008 B; rozdíl velikosti sám o sobě needůkazný).
+3. Per-sample inference obou .tflite na `generated/features/clean/**` (854 vzorků, seed 42) — nový skript `ml/compare_tflite_weights.py` (používá `evaluate_pc.predict_tflite`, opravená dequantizace):
+   ```
+   venv/bin/python ml/compare_tflite_weights.py --model-a archive/models/model.tflite \
+       --model-b generated/models/reconverted.tflite --output-csv generated/reports/weights_provenance_per_sample.csv
+   ```
+   Výsledek: max |delta skóre| = 0,50; shoda skóre jen 657/854 (77 %); **127/854 (15 %) přehozených predikcí**.
+4. Přímé srovnání vah — nový skript `ml/compare_weights.py` (dekvantizuje int8 kernely a porovná s `layer.get_weights()` z h5):
+   ```
+   venv/bin/python ml/compare_weights.py --keras-model archive/models/najlepsi_model.h5 \
+       --tflite-model archive/models/model.tflite --output-csv generated/reports/weights_layers_archive_vs_h5.csv
+   venv/bin/python ml/compare_weights.py --keras-model archive/models/najlepsi_model.h5 \
+       --tflite-model generated/models/reconverted.tflite --output-csv generated/reports/weights_layers_reconverted_vs_h5.csv
+   ```
+   Výsledek: `reconverted` vs h5 max diff 0,001–0,004 (řádově kvantizační krok, scale ~0,0017–0,0036 — kontrolní pár se chová jak se čeká). `archive` vs h5 max diff 0,40–1,25 při scale ~0,0008–0,0022, tj. **stovky kvantizačních kroků** — o dva až tři řády víc, žádná kvantizace to nevysvětlí.
+5. Závěr zapsán do `generated/reports/weights_provenance.md`:
+   - **Potvrzena větev (b):** `archive/models/model.tflite` nevznikl z `najlepsi_model.h5`. Jde o dva různé natrénované modely stejné architektury (72 193 parametrů). Do reviewer-response (M5) jde jako přímý podklad pro R4-major2 — silnější, než audit předpokládal (ne artefakt preprocessingu, ale nesrovnatelné modely). V M3 se oba kanonické artefakty reportují explicitně jako "as-shipped", bez tvrzení o identitě; zvážit doplňkovou třetí sadu čísel z `generated/models/reconverted.tflite` jako opravdový float32/int8 pár téhož modelu (rozhodnutí uživatele, mimo rozsah M1).
 
 **Výstupy:**
-- `generated/reports/weights_provenance.md` (závěr + čísla).
-- Per-sample diff CSV (skóre obou modelů vedle sebe).
+- `generated/reports/weights_provenance.md` (plný závěr, tabulky, reprodukční příkazy).
+- `generated/reports/weights_provenance_per_sample.csv` (854 řádků, skóre obou modelů vedle sebe).
+- `generated/reports/weights_layers_archive_vs_h5.csv`, `weights_layers_reconverted_vs_h5.csv` (per-vrstva diff).
+- Nové skripty: `ml/compare_tflite_weights.py`, `ml/compare_weights.py`.
+- `generated/models/reconverted.tflite`, `reconverted_model_data.h` (gitignored, reprodukovatelné z `najlepsi_model.h5`).
 
 **Akceptační kritéria:**
-- [ ] Jednoznačný závěr "stejné váhy ano/ne" podložený per-sample statistikou (max delta, počet flipů).
-- [ ] Závěr formulovaný tak, aby šel přímo citovat v odpovědi recenzentům.
+- [x] Jednoznačný závěr "stejné váhy ano/ne" podložený per-sample statistikou (max delta, počet flipů) i přímým srovnáním vah.
+- [x] Závěr formulovaný tak, aby šel přímo citovat v odpovědi recenzentům (`generated/reports/weights_provenance.md`, sekce "Důsledky pro camera-ready a odpověď recenzentům").
 
-**Odhad:** 1–2 h.
+**Odhad:** 1–2 h. Skutečnost: cca 1 h.
 
 ---
 
@@ -441,3 +457,4 @@ Formát záznamu: `YYYY-MM-DD | milník | co se stalo / zjištění / rozhodnut�
 - 2026-08-14 | příprava | Roadmapa vytvořena (průzkum repa, recenzí a kódu; rozhodnutí uzamčena po grill session). Ověřeno: PyPI dostupné; `generated/features` je symlink na `features_seed42`; manifest a splits čisté v gitu; nalezeno `/opt/esp` ESP-IDF prostředí (relevantní pro M6).
 - 2026-08-14 | M0 (částečně, mimo pořadí) | Při přerušeném pokusu o implementaci byl smazán starý venv (měl rozbitý pip) a `task setup` doběhl s exit 0 — fresh venv existuje, ale smoke test (M0 krok 3) zatím neproveden. Záloha `results_ref_20260721` byla vytvořena a následně odstraněna při návratu změn — krok 1 je potřeba provést znovu.
 - 2026-08-14 | M0 (dokončeno) | Záloha `generated/results_ref_20260721/` vytvořena znovu (7 CSV, shodné s `generated/results/`). Smoke test na venv prošel: tensorflow 2.21.0, librosa 0.11.0, sklearn 1.9.0, pandas 3.0.3, numpy 2.4.6 — přesně odpovídá pinovaným verzím v `requirements.txt`. Venv byl přebudován (`rm -rf venv && task setup`) už ráno v rámci přerušeného pokusu; smoke test tuto instalaci jen potvrdil, další rebuild nebyl potřeba. `task manifest` regeneroval 854 řádků (63 launch: 13 dana_artillery test + 50 train, plus other_gunshot 18 test/67 train; impulse_noise 140 test/566 train) a `splits.csv`; `git diff --exit-code` na obou souborech prošel s exit 0. Pozor: tento determinismus dokazuje reprodukovatelnost na tomto stroji a této verzi sklearn/knihoven (fixní `random_state=42` ve `generate_manifest.py`), nikoli přenositelnost mezi prostředími — to se ověřuje až v M3 cross-checkem proti `results_ref_20260721`. Nezávisle zkontrolováno review agentem (Opus): žádný blokující nález, plná shoda s `requirements.txt` (9/9 pinovaných balíčků), záloha bit-identická, manifest nezávisle reprodukován. Všechna akceptační kritéria M0 splněna, milník HOTOVO.
+- 2026-08-14 | M1 (dokončeno) | **Zásadní zjištění: `archive/models/model.tflite` (firmware) nevznikl z `archive/models/najlepsi_model.h5`.** Rekonverze h5 stejným skriptem/representative datasetem dala jiný soubor (81 400 B vs 81 008 B originál) s odlišnou kalibrací vstupní aktivace (scale 8,92 vs 5,33) a 127/854 (15 %) přehozenými predikcemi proti archivnímu modelu na clean datech. Rozhodující test — přímé dekvantizování Conv2D/Dense kernelů a srovnání s float32 vahami z h5 (`ml/compare_weights.py`) — ukázal, že `reconverted.tflite` se od h5 liší jen o kvantizační šum (max diff 0,001–0,004 při scale ~0,002, kontrolní pár funguje jak se čeká), zatímco `archive/model.tflite` se od h5 liší o stovky kvantizačních kroků (max diff až 1,25 při scale ~0,001). Potvrzena větev (b): jde o dva různé natrénované modely stejné architektury, ne kvantizační artefakt. Toto posouvá narativ pro R4-major2 — srovnání Tabulky II (float32) a Tabulky III (int8) v původním článku nesrovnává float32/int8 verzi téhož modelu, ale dva různé modely. Podklad zapsán do `generated/reports/weights_provenance.md`. Nové skripty `ml/compare_tflite_weights.py`, `ml/compare_weights.py` — obojí commitnuto do gitu; výstupní CSV a rekonvertovaný `.tflite` jsou v `generated/` (gitignored), reprodukovatelné přiloženými příkazy.
