@@ -110,7 +110,12 @@ def latex_table(df: pd.DataFrame, mode: str, label: str, caption: str) -> str:
             )
         if scope != SCOPE_ORDER[-1]:
             lines.append("\\addlinespace")
-    lines += ["\\bottomrule", "\\end{tabular}", "}", "\\end{table}"]
+    lines += ["\\bottomrule", "\\end{tabular}", "}"]
+    lines.append(
+        "\\footnotesize Held-out test metrics are computed on only 13 launch events; adjacent SNR "
+        "levels can fluctuate non-monotonically from this sample size alone, not measurement error."
+    )
+    lines.append("\\end{table}")
     return "\n".join(lines)
 
 
@@ -271,11 +276,13 @@ def make_reviewer_response(summary: pd.DataFrame) -> str:
             "the original Table III were produced from different trained checkpoints of the same "
             "architecture (traced to a missing `tf.random.set_seed()` in the pre-cleanup training "
             "script), not the same quantized model as originally described. A controlled hardware "
-            "test on the corrected, unified pipeline (M6) confirms this is not a platform effect: "
-            "the same model agrees to within 1 LSB on PC and ESP32-S3 across all tested noise "
-            "levels. The camera-ready reports a single unified int8 table (PC and ESP32-S3 rows "
-            "collapse to the same numbers within measurement precision) instead of two disagreeing "
-            "int8 tables."
+            "test on the corrected, unified pipeline (M6, held-out split, noise seed 42) confirms "
+            "this is not a platform effect: the same model agrees to within 1 LSB on PC and "
+            "ESP32-S3 across all 5 tested noise levels for that seed. The camera-ready reports a "
+            "single unified int8 table (PC and ESP32-S3 rows collapse to the same numbers within "
+            "measurement precision on the tested seed) instead of two disagreeing int8 tables; "
+            "extending the 1-LSB check to the other 4 noise seeds is straightforward future work "
+            "if a reviewer asks for it."
         )
     else:
         proposed_wording = (

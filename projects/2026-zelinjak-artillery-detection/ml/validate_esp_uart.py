@@ -36,6 +36,7 @@ def main() -> None:
     args = parser.parse_args()
 
     index = pd.read_csv(args.features)
+    feature_root = args.features.parent
     rows = index[index["variant"] == args.variant]
     if args.split != "all":
         rows = rows[rows["split"] == args.split]
@@ -53,7 +54,7 @@ def main() -> None:
     with serial.Serial(args.port, args.baud, timeout=args.timeout) as uart:
         time.sleep(1.0)
         for row in rows.itertuples(index=False):
-            mfcc = np.load(FEATURE_ROOT / row.feature_path).astype(np.float32).flatten()
+            mfcc = np.load(feature_root / row.feature_path).astype(np.float32).flatten()
             if len(mfcc) != 696:
                 print(f"skip {row.recording_id}: expected 696 floats, got {len(mfcc)}")
                 continue
