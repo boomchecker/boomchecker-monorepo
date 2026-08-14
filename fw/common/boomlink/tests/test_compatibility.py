@@ -123,6 +123,42 @@ def test_truncated_input_is_rejected(tmp_path, codec_tool_path):
     assert result.returncode != 0
 
 
+def test_missing_header_is_rejected(tmp_path, codec_tool_path):
+    """A wire-valid Envelope with no `header` submessage at all is malformed
+    at the application level (boomlink.md section 7 has every message carry
+    one) - boomlink_codec.c must reject it, not hand back a decoded value
+    with a meaningless zeroed header."""
+    envelope = envelope_pb2.Envelope()
+    envelope.system.ping.payload = b"\xde\xad\xbe\xef"  # header untouched
+    assert not envelope.HasField("header")
+
+    path = tmp_path / "envelope.bin"
+    path.write_bytes(envelope.SerializeToString())
+
+    result = _run(codec_tool_path, "decode", str(path))
+    assert result.returncode != 0
+
+
+def test_zero_protocol_version_is_rejected(tmp_path, codec_tool_path):
+    """protocol_version starts at 1 (header.proto); 0 is proto3's default for
+    an omitted scalar, i.e. "never actually set" - accepting it would treat a
+    caller's mistake as protocol version 0. Checked on both the decode side
+    (a peer sent it) and the encode side (this codec would produce it)."""
+    envelope = envelope_pb2.Envelope()
+    envelope.header.request_id = 1  # marks `header` present; protocol_version stays 0
+    assert envelope.HasField("header")
+    assert envelope.header.protocol_version == 0
+
+    path = tmp_path / "envelope.bin"
+    path.write_bytes(envelope.SerializeToString())
+    decode_result = _run(codec_tool_path, "decode", str(path))
+    assert decode_result.returncode != 0
+
+    encode_out = tmp_path / "encoded.bin"
+    encode_result = _run(codec_tool_path, "encode", "ping", "0", "1", "", str(encode_out))
+    assert encode_result.returncode != 0
+
+
 def test_unknown_field_is_forward_compatible(tmp_path, codec_tool_path):
     """A peer running a newer schema (a hypothetical future Envelope field)
     must not break an older decoder - the field is skipped, not an error, on
