@@ -15,7 +15,7 @@ Vytvořeno: 2026-08-14 | Deadline camera-ready: **2026-08-31**
 | M1 | Proveniénce vah (h5 vs tflite) | HOTOVO — potvrzena větev (b), různé váhy | M0 | 1–2 h |
 | M2 | Úpravy evaluačních skriptů | HOTOVO | M0 | 1–2 h |
 | M3 | Multi-seed reprodukční běh | HOTOVO | M1, M2 | 2–4 h |
-| M4 | Legacy proveniénční běh | NEZAHÁJENO | M2 | 2–3 h |
+| M4 | Legacy proveniénční běh | HOTOVO — hypotéza bugu vyvrácena | M2 | 2–3 h |
 | M5 | Deliverables | NEZAHÁJENO | M3, M4 | 3–4 h |
 | M6 | ESP32-S3 hardware (volitelné) | NEZAHÁJENO | M5 + deska | 4–8 h |
 
@@ -73,7 +73,7 @@ Tabulka III — ESP32-S3 int8:
 ### 1.4 Známé problémy (z REPRODUCTION_NOTES.md a auditu 2026-07-21)
 
 1. **Počet eventů:** článek uvádí 706 eventů (62 launch / 644 non-launch); manifest v repu má **854** (63 `dana_artillery` / 85 `other_gunshot` / 706 `impulse_noise`). Číslo 706 v článku odpovídá pouze počtu `impulse_noise`. Korpus 854 je referenční.
-2. **Podezření na bug v publikovaných PC-int8 číslech:** legacy skript `ml/eval_tflite_pc.py:68` dequantizuje `(output - zero_point) * scale` bez rozšíření typu; pod numpy 2.x (NEP 50) int8 aritmetika přetéká (např. 127 − (−128) wrapne). Opraveno v `ml/evaluate_pc.py:49-53`. Pokud Table III PC-int8 vznikla legacy skriptem, diskrepance PC vs ESP je artefakt bugu.
+2. **Vyvráceno v M4 (2026-08-14): legacy bug NENÍ příčinou publikovaných PC-int8 čísel.** Legacy skript `ml/eval_tflite_pc.py:68` dequantizuje `(output - zero_point) * scale` bez rozšíření typu; pod numpy 2.x (NEP 50) int8 aritmetika přetéká. Pro `zero_point=-128` tohoto modelu bug matematicky způsobuje recall 0,00 na všech úrovních šumu (empiricky potvrzeno) — to je v přímém rozporu s publikovaným recall 0,90–1,00. Pokud by Tabulka III vznikla tímto skriptem v jeho aktuální podobě, čísla by vypadala úplně jinak. Hypotéza "PC vs ESP diskrepance = artefakt tohoto bugu" padá; zbývá M1 nález (různé váhy) jako hlavní vysvětlení. Detaily: `generated/reports/provenance_table3.md`.
 3. **Potvrzeno v M1 (2026-08-14): různé váhy, mechanismus identifikován.** Firmware `model_data.h` (81 008 B, bit-identický s `archive/models/model.tflite`) **nevznikl** kvantizací `archive/models/najlepsi_model.h5`. Dekvantizované Conv2D/Dense kernely `model.tflite` se od float32 vah v `najlepsi_model.h5` liší o desítky až stovky kvantizačních kroků (max diff 0,40–1,25 při scale ~0,0008–0,0022) — o dva až tři řády víc než u kontrolního páru (rekonverze `najlepsi_model.h5` sama proti sobě: max diff 0,001–0,004). 15 % vzorků (127/854) má přehozenou predikci mezi oběma `.tflite` soubory. Jde o dva různé natrénované modely stejné architektury, ne o kvantizační artefakt. **Příčina:** originální trénovací skript `ml/main_cnn.py` nikde nevolá `tf.random.set_seed()` (seedovaný je jen `train_test_split`) a na konci bezpodmínečně přepisuje `najlepsi_model.h5` (`model.save(...)`, řádek 66) — dva různé běhy tohoto skriptu na identických datech tedy dají různé váhy. Že je tato citlivost velká, dokládá nezávisle i vlastní retrénink v `REPRODUCTION_NOTES.md` sekce 4 (val_accuracy 0,795 vs. 1,000 při změně jen seedu inicializace). Nejpravděpodobněji: jeden běh `main_cnn.py` dal váhy zapečené do firmware, druhý (pozdější) běh přepsal `najlepsi_model.h5` bez rekvantizace. Detaily a plný postup: `generated/reports/weights_provenance.md`.
 4. **Eval na trénovacích datech:** robustnostní sweep běžel na celém korpusu (většina vzorků viděna při tréninku). Split existuje (80/20 stratified, seed 42, `datasets/recordings/splits.csv`), ale test split má jen **13 launch eventů** — held-out čísla budou statisticky slabá, nutný caveat.
 5. Předchozí reprodukce (archivní model, korpus 854, opravený eval) dává stejné trendy, ale čísla o něco nižší než v článku — např. int8 full-corpus: 30 dB Acc 97,78 % / MCC 0,86; 5 dB Acc 85,71 % / MCC 0,42.
@@ -82,7 +82,7 @@ Tabulka III — ESP32-S3 int8:
 
 | Výtka | Recenzenti | Milník |
 |---|---|---|
-| PC-int8 vs ESP32-int8 diskrepance stejného modelu | R2#6, R3, R4-major1, R4-Q1 | M1 (váhy), M4 (bug), M6 (HW důkaz) |
+| PC-int8 vs ESP32-int8 diskrepance stejného modelu | R2#6, R3, R4-major1, R4-Q1 | M1 (váhy — hlavní vysvětlení), M4 (bug — vyvráceno), M6 (HW důkaz, chybí) |
 | "Kvantizace zlepšuje robustnost" neprokázáno, možný artefakt preprocessingu | R3, R4-major2, R4-Q2 | M1 + M3 + M4 |
 | Eval na trénovacích datech, chybí held-out výsledky | R3, R4-major3, R4-Q3 | M2 + M3 |
 | Definice "acoustic SNR" | R4-Q4 | M5 (vzorec z `ml/prepare_features.py:31-36`) |
@@ -348,31 +348,33 @@ Tyto výstupy slouží jako **cross-check determinismu** nového harnessu — ne
 
 ## M4 — Legacy proveniénční běh (původ publikovaných čísel)
 
-**Stav:** NEZAHÁJENO
+**Stav:** HOTOVO — potvrzena **větev (b)**: hypotéza bugu vyvrácena.
 
 **Cíl:** Rozhodnout, zda publikovaná PC-int8 čísla (Tabulka III) jsou artefakt int8 overflow bugu v legacy evaluačním skriptu.
 
 **Proč:** Nejtvrdší výtka recenzí (R2#6, R4-major1): tři inferenční režimy si odporují, ačkoli stejný int8 model na stejných vstupech musí dávat prakticky identická čísla. Kandidátní mechanismus: `ml/eval_tflite_pc.py:68` — `pred_prob = (output_data[0][0] - zero_point) * scale` s úzkými int8 operandy; pod numpy 2.x (NEP 50) rozdíl přetéká (např. 127 − (−128) = wrap místo 255). ESP32 C kód (`firmware/esp32s3/main/main.cpp:160-164`) typ rozšiřuje správně — bug se týká jen PC strany. Pokud legacy běh reprodukuje publikovaná PC-int8 čísla a opravený běh dává čísla blízká ESP32, je diskrepance vysvětlena mechanicky a "quantization improves robustness" se reframuje.
 
-**Metoda:** Nový `ml/reproduce_legacy.py` — věrně replikuje legacy dequantizaci (úzké int8 odečítání, NEP 50 chování), ale načítá featury z manifest-based struktury (legacy hardcoded složky `gunshots_mfcc_audio_noise` atd. neexistují). Full-corpus, featury seed 42, model `archive/models/model.tflite`. Vedle toho identický běh s opravenou dequantizací (z M3) pro přímý diff.
+**Metoda:** Nový `ml/reproduce_legacy.py` — věrně replikuje legacy dequantizaci (úzké int8 odečítání, NEP 50 chování), ale načítá featury z manifest-based struktury (legacy hardcoded složky `gunshots_mfcc_audio_noise` atd. neexistují). Full-corpus, featury seed 42, model `archive/models/model.tflite`. Vedle toho srovnání s opravenou dequantizací (z M3, seed 42, full-corpus) pro přímý diff.
 
-**Kroky:**
+**Kroky (provedeno):**
 
-1. Napsat `ml/reproduce_legacy.py`; bug replikovat přesně (datové typy, pořadí operací dle `eval_tflite_pc.py:66-68`); zbytek pipeline (načítání, threshold `>=`, metriky) shodný s opraveným evalem, aby jediný rozdíl byla dequantizace.
-2. Běh na `generated/features_seed42`, full-corpus, `archive/models/model.tflite`, všechny varianty (clean + 4 SNR).
-3. Sestavit srovnávací tabulku per SNR: publikovaná Table III (PC int8) vs legacy-bug běh vs opravený běh (z M3, seed 42, full-corpus).
-4. Zapsat závěr do `generated/reports/provenance_table3.md`:
-   - Větev (a): legacy ~ publikovaná čísla -> bug artefakt potvrzen; do camera-ready jde opravená tabulka + vysvětlení diskrepance; float32 vs int8 srovnání se přehodnotí na opravených číslech.
-   - Větev (b): legacy != publikovaná -> hypotéza padá; diskrepance se v článku poctivě reframuje jako "open observation" (dle rozhodnutí v camera-ready plánu z 21. 7. je to přijatelné); zbývající podezřelí (váhy z M1, HW z M6).
+1. Napsán `ml/reproduce_legacy.py`; bug replikován přesně (datové typy, pořadí operací dle `eval_tflite_pc.py:54-70`); zbytek pipeline (kvantizace vstupu, threshold `>=0.5`, metriky) shodný s opraveným evalem, aby jediný rozdíl byla dequantizace výstupu.
+2. **Předběžná matematická analýza před během:** kvantizace výstupu tohoto modelu má `zero_point=-128` (z M1). Pro tuto hodnotu je `raw - (-128) = raw + 128`; pro `raw` odpovídající pravděpodobnosti `>= 0.5` (tj. `raw ∈ [0,127]`) dá `raw+128 ∈ [128,255]`, což **vždy** přeteče int8 rozsah a wrapne na záporné číslo — bez ohledu na jistotu modelu. Predikce: bug způsobí **recall 0,00 na všech úrovních šumu** pro tento konkrétní model.
+3. Běh: `venv/bin/python ml/reproduce_legacy.py --output-csv generated/reports/legacy_bug_metrics.csv --per-sample-csv generated/reports/legacy_bug_per_sample.csv` na `generated/features_seed42`, full-corpus, `archive/models/model.tflite`, všechny varianty (clean + 4 SNR). **Predikce z kroku 2 se potvrdila přesně:** recall 0,00 na všech 5 variantách, accuracy konstantní 92,62 % (= přesně podíl non-launch vzorků 791/854 — model "predikuje" úplně všechno jako třídu 0).
+4. Srovnávací tabulka per SNR: publikovaná Tabulka III (PC int8) vs. legacy-bug běh vs. opravený běh (M3, seed 42, full-corpus) — viz `generated/reports/provenance_table3.md`. Legacy-bug MCC/recall je nulové na všech úrovních, publikovaná i opravená čísla jsou v rozsahu 0,65–0,92 / 0,90–1,00 — naprostý nesoulad.
+5. Závěr zapsán do `generated/reports/provenance_table3.md`:
+   - **Potvrzena větev (b):** legacy bug != publikovaná čísla. Hypotéza "PC vs ESP diskrepance je artefakt tohoto bugu" padá — pokud by Tabulka III vznikla tímto skriptem v jeho aktuální podobě, recall by byl nulový, ne 0,90–1,00. Publikovaná čísla tedy vznikla jinak (opravenou verzí kódu, nebo skriptem, který se nezachoval). Zbývající vysvětlení PC-vs-ESP diskrepance: M1 nález (různé váhy) jako hlavní kandidát; HW rozdíly (M6) jako druhý, dosud neprověřený.
 
 **Výstupy:**
-- `generated/reports/provenance_table3.md` + srovnávací CSV.
+- `generated/reports/provenance_table3.md` (plný závěr, srovnávací tabulky, matematická predikce vs. empirie).
+- `generated/reports/legacy_bug_metrics.csv`, `legacy_bug_per_sample.csv`.
+- Nový skript `ml/reproduce_legacy.py` (commitnuto).
 
 **Akceptační kritéria:**
-- [ ] Tři sady čísel (publikovaná / legacy-bug / opravená) vedle sebe per SNR.
-- [ ] Jednoznačný závěr větve (a)/(b), formulovaný pro přímé použití v Section V/VI článku a v odpovědi recenzentům.
+- [x] Tři sady čísel (publikovaná / legacy-bug / opravená) vedle sebe per SNR.
+- [x] Jednoznačný závěr větve (a)/(b), formulovaný pro přímé použití v Section V/VI článku a v odpovědi recenzentům (`provenance_table3.md`, sekce "Závěr: větev (b)").
 
-**Odhad:** 2–3 h.
+**Odhad:** 2–3 h. Skutečnost: cca 45 min (matematická predikce zúžila potřebu experimentování).
 
 ---
 
@@ -469,3 +471,4 @@ Formát záznamu: `YYYY-MM-DD | milník | co se stalo / zjištění / rozhodnut�
 - 2026-08-14 | M3 (dokončeno, formulace v tomto záznamu následně opravena po review — viz další záznam) | Napsán `ml/reproduce.py`, orchestrátor volající `run_regime()` z M2 přímo (import, ne subprocess). Všech 5 seed feature adresářů již existovalo, generování featur se přeskočilo. Kompletní běh: 100 řádků metrik (5 seedů x 2 režimy x 2 scopes x 5 variant). Cross-check proti referenci z 21. 7.: `metrics_seedN.csv` pro N=42..46 bitově identické (diff bez výstupu); agregát `per_seed_metrics.csv` hodnotově identický (nulový absolutní rozdíl ve všech metrikách přes všech 100 kombinací), ale ne bitově (pořadí řádků/konce řádků se liší — upřesněno v M3 kroku 2 výše). Objeveno zajímavé zjištění: referenční `per_seed_metrics.csv` z 21. 7. už měl přesně cílové schéma (`mode,variant,seed,scope,n,accuracy,...`), což naznačuje, že podobný orchestrátor už jednou vznikl v dřívější, jinak nezachované session — `ml/reproduce.py` teď tento výstup formálně reprodukuje a je committnutý. Opakovatelnost ověřena (druhý běh seed 42 bitově identický). Všechna akceptační kritéria splněna, milník HOTOVO.
 - 2026-08-14 | validace M3 (dva nezávislé Opus review agenty) | Na žádost uživatele proběhl dvojitý review M3, stejný vzorec jako u M0-M2. **Engineering review:** kód potvrzen správný a deterministický (formát variant sedí mezi všemi 3 skripty, `write_csv` nelze zavolat s prázdným seznamem, `groupby(sort=False)` je deterministické, subprocess volání `prepare_features.py` ověřeno dry-run testem na dočasném seedu, git hygiena čistá) — žádný must-fix nález. **Metodologický review přinesl 2 zásadní opravy a 2 doporučení:** (1) tvrzení "bitově identické" bylo v pracovním logu použito jako zastřešující nadpis i pro agregát `per_seed_metrics.csv`, který je ve skutečnosti jen hodnotově identický (jiné pořadí řádků, CRLF vs LF) — opraveno výše i v tomto zápisu; (2) sanity kontrola "v rámci 1 std" byla chybná i početně (přepočítáno: seed42 vs. mean 5 seedů se liší o 1,00 std při 30 dB int8, 0,84 std při 5 dB int8 — ne "v rámci", ale přesně v očekávaném řádu odchylky jednoho vzorku od průměru) a navíc kruhová (čísla v REPRODUCTION_NOTES JSOU seed 42, ne nezávislý zdroj) — opraveno na čestnou formulaci v M3 kroku 3. Doporučení: (3) cross-check nepřegeneroval featury (byly na disku), takže testuje jen "stejný stroj, stejné cache soubory" — ne přenositelnost ani determinismus MFCC/šum extrakce; zdokumentováno jako mezera pro budoucí re-run. (4) std přes seedy zachycuje jen šumovou varianci, ne nejistotu z 13 launch eventů v test splitu — held-out int8 @30dB má std přesně 0, což by se dalo mylně číst jako "žádná nejistota"; caveat doplněn do M3 kroku 5 pro použití v M5. (5) Oba review doporučili zvážit rozšíření multi-seed ošetření i na `reconverted.tflite` (rozhodující kvantizační pár z M1, dosud jen seed 42) — vyřešeno v následujícím záznamu.
 - 2026-08-14 | M1 rozšíření (na žádost uživatele po review M3) | Rozhodnuto rozšířit multi-seed ošetření na rozhodující kvantizační pár. `ml/reproduce.py` parametrizován (`--model-keras/--model-tflite/--keras-label/--tflite-label/--results-root/--no-legacy-csv`), regresně ověřeno, že výchozí volání (bez nových argumentů) dává stejný výsledek jako před úpravou. Spuštěno na `najlepsi_model.h5` vs. `generated/models/reconverted.tflite` přes seedy 42–46, výstup do `generated/reports/quantization_effect_multiseed/` (oddělené od `generated/results/`, aby se neohrozily ověřené M3 výstupy — po testovacích bězích byl plný 5-seed `generated/results/per_seed_metrics.csv` obnoven a zkontrolován, že má 100 řádků). Výsledek: kvantizace na stejném modelu je lepší jen v 1 z 10 kombinací varianta×scope, horší v 9 z 10, průměrný efekt MCC −0,0115 (std 0,013) — mírně **zhoršuje** robustnost, nikoli zlepšuje. Silnější a jednoznačnější potvrzení jednoseedového nálezu M1. Zapsáno do `generated/reports/weights_provenance.md` (nová podsekce "Rozšíření na 5 seedů") a do M1 sekce roadmapy výše (kroky 7–8, aktualizované Výstupy).
+- 2026-08-14 | M4 (dokončeno) | Napsán `ml/reproduce_legacy.py`, věrná replika bugu z `ml/eval_tflite_pc.py:54-70`. **Předběžná matematická analýza** (než proběhl běh): kvantizace výstupu `archive/model.tflite` má `zero_point=-128` (z M1); pro tuto hodnotu bug matematicky garantuje, že každá predikce s pravděpodobností `>= 0.5` wrapne na záporné číslo — predikce zněla "recall 0,00 na všech úrovních šumu". **Empirický běh přesně potvrdil predikci:** recall 0,00 na clean i všech 4 SNR úrovních, accuracy konstantní 92,62 % (= přesný podíl non-launch vzorků 791/854 — model "predikuje" úplně vše jako třídu 0). Srovnání s publikovanou Tabulkou III (recall 0,90–1,00) a opraveným M3 během (recall 0,76–0,98, seed 42): legacy-bug běh je v naprostém rozporu s oběma, ne jen "trochu jiný". **Potvrzena větev (b): hypotéza "PC vs ESP diskrepance = artefakt tohoto bugu" je vyvrácena.** Pokud by Tabulka III vznikla tímto skriptem v aktuální podobě, recall by byl nulový, ne 0,90–1,00 — publikovaná čísla musí vzniknout jinak. Zbývá M1 nález (různé váhy) jako hlavní kandidát pro vysvětlení PC-vs-ESP diskrepance; HW rozdíly (M6) jako druhý, dosud neprověřený. Zapsáno do `generated/reports/provenance_table3.md` a do roadmapy (sekce 1.4 bod 2, 1.5 mapování, M4 sekce). Všechna akceptační kritéria splněna, milník HOTOVO.
