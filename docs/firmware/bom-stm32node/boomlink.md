@@ -482,8 +482,8 @@ Initial layout (little-endian, 20 bytes):
 offset  size  field
 0       1     magic / network ID        (runtime-configurable, default e.g. 0xB0)
 1       1     version (high nibble) | frame type (low nibble)
-2       1     flags                     (bit 0: ack_requested)
-3       1     reserved (0)
+2       1     flags                     (bit 0: ack_requested; bit 1: more_fragments)
+3       1     fragment_index            (0)
 4       4     destination_id
 8       4     source_id
 12      4     session_id
@@ -507,7 +507,13 @@ Rules:
   not treated as duplicates when the sequence counter restarts.
 
 No fragmentation is implemented in the MVP. An oversized frame is rejected before
-transmission.
+transmission. `flags` bit 1 (`more_fragments`) and the `fragment_index` byte are
+reserved wire-format space for a later PR to add fragmentation/reassembly without a
+breaking header change - a sender that never fragments always sends `more_fragments =
+0` and `fragment_index = 0`, indistinguishable from today's unfragmented frame. Until
+that PR lands, both fields are always zero and every receiver must ignore
+`fragment_index` and treat `more_fragments = 1` as "unsupported, drop" rather than
+attempting partial reassembly.
 
 Do not design application messages that depend on filling the radio's theoretical
 maximum payload. Keep normal messages small to preserve airtime and reliability.
