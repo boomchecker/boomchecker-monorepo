@@ -14,7 +14,7 @@ Vytvořeno: 2026-08-14 | Deadline camera-ready: **2026-08-31**
 | M0 | Prostředí a základna | HOTOVO | — | 0,5 h |
 | M1 | Proveniénce vah (h5 vs tflite) | HOTOVO — potvrzena větev (b), různé váhy | M0 | 1–2 h |
 | M2 | Úpravy evaluačních skriptů | HOTOVO | M0 | 1–2 h |
-| M3 | Multi-seed reprodukční běh | NEZAHÁJENO | M1, M2 | 2–4 h |
+| M3 | Multi-seed reprodukční běh | HOTOVO | M1, M2 | 2–4 h |
 | M4 | Legacy proveniénční běh | NEZAHÁJENO | M2 | 2–3 h |
 | M5 | Deliverables | NEZAHÁJENO | M3, M4 | 3–4 h |
 | M6 | ESP32-S3 hardware (volitelné) | NEZAHÁJENO | M5 + deska | 4–8 h |
@@ -307,43 +307,39 @@ Tyto výstupy slouží jako **cross-check determinismu** nového harnessu — ne
 
 ## M3 — Multi-seed reprodukční běh (nová sjednocená camera-ready čísla)
 
-**Stav:** NEZAHÁJENO
+**Stav:** HOTOVO
 
 **Cíl:** Kompletní robustnostní sweep: {clean, 30, 20, 10, 5 dB} x {float32, int8} x {full-corpus, held-out test} x {seed 42–46}, agregovaný na mean ± std. Toto jsou čísla pro novou Tabulku II/III camera-ready verze.
 
 **Proč:** Sjednocený eval (jeden model, jeden preprocessing, opravená dequantizace, jednotný threshold `>=`) odstraňuje všechny známé zdroje nekonzistence mezi režimy — přímá odpověď na R4-major2. Held-out sloupec odpovídá R3/R4-major3. Multi-seed kvantifikuje varianci šumu — nutné, protože test split má jen 13 launch eventů a jedna realizace šumu je statisticky slabá.
 
-**Metoda:** Nový orchestrátor `ml/reproduce.py` (čisté CLI bez config souboru — konzistentní se stylem repa). Featury per seed se regenerují deterministicky (`np.random.seed(seed)` v `prepare_features.py`, ř. 65; pořadí dané manifestem). Kanonické modely z `archive/models/` (rozhodnutí #2).
+**Metoda:** Nový orchestrátor `ml/reproduce.py` (čisté CLI bez config souboru — konzistentní se stylem repa), volá `run_regime()` z `ml/evaluate_robustness.py` přímo (import, ne subprocess) — využívá přesně refaktoring z M2. Featury per seed se regenerují deterministicky (`np.random.seed(seed)` v `prepare_features.py`, ř. 65; pořadí dané manifestem); všech 5 seed adresářů již existovalo z předchozí session, takže se generování featur přeskočilo (`--force-features` by je vynutilo znovu). Kanonické modely z `archive/models/` (rozhodnutí #2) — vědomě "as-shipped" pár, ne tvrzení o identitě vah (M1, větev b).
 
-**Kroky:**
+**Kroky (provedeno):**
 
-1. Napsat `ml/reproduce.py`:
-   - Pro každý seed z {42, 43, 44, 45, 46}:
-     ```
-     prepare_features --include-noisy --snr-db 30 20 10 5 --seed N --output generated/features_seedN
-     ```
-     Přeskočit, pokud adresář existuje a není zadán `--force` (šetří cca 1 h výpočtu při opakovaných bězích).
-   - Pro každý seed 4 kombinace evalu přes `evaluate_robustness`:
-     - `--model-keras archive/models/najlepsi_model.h5` x `--split all` a `--split test`
-     - `--model-tflite archive/models/model.tflite` x `--split all` a `--split test`
-     - vždy s `--include-clean` a `--per-sample-csv`.
-   - Agregace: `generated/results/per_seed_metrics.csv` (všechny kombinace) a `generated/results/summary_mean_std.csv` (group by mode x variant x scope, mean ± std přes seedy).
-2. **Cross-check determinismu:** porovnat nové `metrics_seedN.csv` (full-corpus část) s referencí `generated/results_ref_20260721/`. Shoda -> pipeline je stabilní napříč prostředími. Neshoda -> analyzovat příčinu (verze knihoven, oprava splitu, pořadí vzorků) a **zdokumentovat v Pracovním logu — ne zamlčet ani nepřizpůsobovat**.
-3. Sanity kontroly proti REPRODUCTION_NOTES (sekce 3): int8 full-corpus při 30 dB má vyjít cca Acc 97,8 % / MCC 0,86; float32 při 30 dB cca Acc 84,4 % / MCC 0,52.
-4. Opakovatelnost: druhý běh stejného seedu musí dát bitově identické CSV.
+1. Napsán `ml/reproduce.py`:
+   - Pro každý seed z {42, 43, 44, 45, 46}: `prepare_features_for_seed()` přeskočí generování, pokud `generated/features_seedN/features_manifest.csv` existuje (bylo tomu tak u všech 5).
+   - Pro každý seed 4 kombinace evalu přes přímo importovaný `run_regime()`: `{keras najlepsi_model.h5, tflite archive/model.tflite}` x `{split=all, split=test}`, vždy přes všech 5 variant (clean + 4 SNR).
+   - Zapisuje **dva formáty současně**: (a) `metrics_seedN.csv` v přesném schématu původního (pre-M2) `evaluate_robustness.py --output-csv` (`mode,snr_db,accuracy,precision,recall,f1,mcc,samples`, jen scope=full) — pro přímý cross-check proti referenci; (b) `per_seed_metrics.csv` v schématu `mode,variant,seed,scope,n,accuracy,precision,recall,f1,mcc` (objeveno již existující v `generated/results_ref_20260721/per_seed_metrics.csv` z 21. 7. — ukázalo se, že toto přesné schéma tam již bylo připravené z dřívější, jinak nezachované session).
+   - Agregace: `summarize()` (`groupby(mode,variant,scope).agg(mean,std)`) → `generated/results/summary_mean_std.csv`.
+2. **Cross-check determinismu:** `diff generated/results/metrics_seedN.csv generated/results_ref_20260721/metrics_seedN.csv` pro N=42..46 — **všech 5 bitově identických** (`diff` bez výstupu). Nezávisle ověřeno i pro plný agregát: `per_seed_metrics.csv` (100 řádků) má **nulový absolutní rozdíl** ve všech metrikách (`n,accuracy,precision,recall,f1,mcc`) proti referenčnímu souboru z 21. 7. napříč všemi kombinacemi mode×variant×seed×scope.
+3. Sanity kontrola: int8 full-corpus @ 30 dB vyšlo mean 97,89 % / MCC 0,869 (std 0,006) přes 5 seedů — v rámci jednoho std od referenčního jednosezónního REPRODUCTION_NOTES čísla (97,78 % / 0,86). Float32 clean/30dB `std=0` napříč seedy (clean varianta je bez šumu, seed nemá vliv) — očekávané chování, ne bug.
+4. Opakovatelnost: druhý běh `--seeds 42` dal bitově identický `metrics_seed42.csv` jako první běh (`diff` bez výstupu).
 
 **Výstupy:**
-- `generated/features_seed42..46/` (regenerované featury).
-- `generated/results/metrics_seed42..46.csv`, `per_sample_seed42..46.csv`.
-- `generated/results/summary_mean_std.csv` — hlavní zdroj čísel pro M5.
+- Nový skript `ml/reproduce.py` (orchestrátor, commitnuto).
+- `generated/features_seed42..46/` (beze změny, již existovaly).
+- `generated/results/metrics_seed42..46.csv` (schéma kompatibilní s referencí, pro cross-check), `per_sample_seed42..46.csv` (10 250 řádků na seed = 2 režimy x 2 scopes x 5 variant x [854 nebo 171 vzorků]).
+- `generated/results/per_seed_metrics.csv` — 100 řádků (5 seedů x 2 režimy x 2 scopes x 5 variant), hlavní zdroj čísel pro M5.
+- `generated/results/summary_mean_std.csv` — 20 řádků (2 režimy x 2 scopes x 5 variant), mean ± std přes 5 seedů, `n_seeds=5` u všech.
 
 **Akceptační kritéria:**
-- [ ] Kompletních 5 seedů x 2 režimy x 2 scopes x 5 variant = 100 řádků metrik.
-- [ ] Dvojí běh stejného seedu = bitově identické CSV.
-- [ ] Shoda s referencí 2026-07-21 potvrzena, nebo odchylka vysvětlena v logu.
-- [ ] Sanity čísla v očekávaném pásmu (viz krok 3).
+- [x] Kompletních 5 seedů x 2 režimy x 2 scopes x 5 variant = 100 řádků metrik.
+- [x] Dvojí běh stejného seedu = bitově identické CSV.
+- [x] Shoda s referencí 2026-07-21 potvrzena (bitově identická, žádná odchylka k vysvětlení).
+- [x] Sanity čísla v očekávaném pásmu (viz krok 3).
 
-**Odhad:** 2–4 h (z toho cca 1 h čistý výpočet: 854 WAV x 5 variant x 5 seedů MFCC extrakce + inference).
+**Odhad:** 2–4 h. Skutečnost: cca 1 h (generování featur nebylo potřeba, jen psaní orchestrátoru + běh inference přes existující featury).
 
 ---
 
@@ -467,3 +463,4 @@ Formát záznamu: `YYYY-MM-DD | milník | co se stalo / zjištění / rozhodnut�
 - 2026-08-14 | M1 (doplněno, na dotaz uživatele) | **Identifikován pravděpodobný mechanismus vzniku dvou různých sad vah.** Originální trénovací skript `ml/main_cnn.py` (needitovaná verze z diplomky, odlišná od portované `ml/train_model.py`) na řádku 66 bezpodmínečně přepisuje `najlepsi_model.h5` (`model.save(...)`) při každém běhu, ale nikde nevolá `tf.random.set_seed()` — seedovaný je jen `train_test_split` (rozdělení dat), ne inicializace vah/trénovací trajektorie. Vlastní dřívější investigace (`REPRODUCTION_NOTES.md`, sekce 4, řádky 98–105) nezávisle potvrzuje, že tato citlivost je na tomto malém nevyváženém datasetu velká: retrénink na identických datech/hyperparametrech, lišící se jen seedem inicializace, dal val_accuracy 0,795 vs. 1,000. Pravděpodobný scénář: jeden běh `main_cnn.py` dal váhy kvantizované do firmware, pozdější běh přepsal `najlepsi_model.h5` bez zpětné rekvantizace. Git historie toto nerozliší (všechny tři archivní soubory pocházejí z jednoho squashnutého importního commitu `1146019`), ale mechanismus je podložen přímo kódem a nezávislým nálezem, ne spekulací. Doplněno do `generated/reports/weights_provenance.md` (nová sekce "Mechanismus vzniku") a do bodu 1.4.3 výše. Žádné nové skripty, jen text reportu a roadmapy.
 - 2026-08-14 | M2 (dokončeno) | `ml/evaluate_robustness.py` rozšířen o `--split {all,train,test}`, odvozený feature root (`feature_index.parent` místo modulové konstanty) a `--per-sample-csv`. Regresní test beze nových flagů dal bitově shodná čísla s referencí (`results_ref_20260721/metrics_seed42.csv`, např. 30 dB accuracy 0,977751756440281) — žádná regrese. `--split test` na clean variantě vrátil přesně 171 vzorků. Per-sample CSV s 2 režimy × 5 variant × test split dal 1710 řádků, sloupec `split` obsahoval jen `test`. Feature root ověřen i na `generated/features_seed43/features_manifest.csv` — načetl jiná (očekávaně odlišná) čísla než seed 42, čímž je potvrzeno, že M3 může iterovat přes seedy beze zvláštní úpravy skriptu. Všechna akceptační kritéria splněna, milník HOTOVO.
 - 2026-08-14 | validace M0-M2 (dva nezávislé Opus review agenty) | Na žádost uživatele proběhl dvojitý nezávislý review celého postupu M0–M2 — jeden agent na metodologickou/vědeckou správnost závěrů, druhý na kód/engineering/git hygienu; oba spustily skripty samy, nevěřily jen textu roadmapy. **Metodologický review:** potvrdil M1 závěr a zesílil ho (korelace dekvantizovaných vah archiv-vs-h5 -0,02 až 0,09 na všech 4 vrstvách, vs. 0,9999–1,0000 u kontrolního páru); sám spustil chybějící experiment float32 h5 vs. skutečný int8 `reconverted.tflite` a zjistil, že kvantizace na stejném modelu MCC prakticky nezmění — doporučil povýšit tento experiment z "volitelného" na klíčový nález; upozornil, že analogie na seed-sensitivity z `REPRODUCTION_NOTES.md` je slabší, než jak byla prezentovaná (jiný běh, jiný korpus). M0 determinismus a M2 regresní test oba nezávisle potvrdil jako genuinní, ne fragilní. **Engineering review:** potvrdil správnost dekvantizace/transpozice os v `compare_weights.py`, bit-identický M2 regresní test, čistou git hygienu (autorství jen Martin Maxa, žádný AI co-author, conventional commits bez scope, žádné `generated/`/`venv/` v gitu); našel jeden reálný bug — `ml/compare_tflite_weights.py` četla `.npy` z natvrdo zapsané `FEATURE_ROOT` konstanty místo `feature_index.parent` (stejná chyba jako před M2 úpravou), neškodilo aktuálnímu výsledku ale bylo nášlapnou minou pro M3. **Akce po review:** oprava feature-root bugu (ověřeno na seed43 — funguje, čísla se nezměnila), doplnění korelační statistiky do `compare_weights.py` a `weights_provenance.md`, zmírnění formulace seed-sensitivity analogie, formální doběhnutí a zdokumentování rozhodujícího experimentu (`generated/reports/quantization_effect_same_model.csv`) — vše zapsáno zpět do M1 sekce výše a do `generated/reports/weights_provenance.md`.
+- 2026-08-14 | M3 (dokončeno) | Napsán `ml/reproduce.py`, orchestrátor volající `run_regime()` z M2 přímo (import, ne subprocess). Všech 5 seed feature adresářů již existovalo, generování featur se přeskočilo. Kompletní běh: 100 řádků metrik (5 seedů x 2 režimy x 2 scopes x 5 variant). **Cross-check proti referenci z 21. 7. vyšel bitově identický** — `metrics_seedN.csv` pro N=42..46 (diff bez výstupu) i celý agregát `per_seed_metrics.csv` (nulový absolutní rozdíl ve všech metrikách přes všech 100 kombinací) — žádná odchylka k analýze, pipeline je stabilní. Objeveno zajímavé zjištění: referenční `per_seed_metrics.csv` z 21. 7. už měl přesně cílové schéma (`mode,variant,seed,scope,n,accuracy,...`), což naznačuje, že podobný orchestrátor už jednou vznikl v dřívější, jinak nezachované session — `ml/reproduce.py` teď tento výstup formálně reprodukuje a je committnutý. Sanity: int8 30 dB full-corpus mean 97,89 %/MCC 0,869 (std 0,006), v rámci 1 std od referenčního jednosezónního čísla. Clean varianta má `std=0` napříč seedy (očekávané — clean nezávisí na šumovém seedu). Opakovatelnost ověřena (druhý běh seed 42 bitově identický). Všechna akceptační kritéria splněna, milník HOTOVO.
