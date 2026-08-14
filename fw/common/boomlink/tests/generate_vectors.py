@@ -32,7 +32,7 @@ VECTORS = {
         "protocol_version": 1,
         "request_id": 4,
         "kind": "pong",
-        "payload": b"\xaa" * 64,
+        "payload": b"\xaa" * 192,  # nanopb/boomlink.options' max_size
     },
 }
 

@@ -23,6 +23,12 @@
 
 #include "boomlink_codec.h"
 
+/* Matches nanopb/boomlink.options' Ping/Pong payload max_size. Not derived
+   from the generated headers here (boomlink_Ping_payload_t's array length
+   isn't exposed as its own macro) - if the bound in boomlink.options ever
+   changes, update this too. */
+#define BOOMLINK_TEST_MAX_PAYLOAD 192
+
 static int hex_nibble(char c) {
   if (c >= '0' && c <= '9') return c - '0';
   if (c >= 'a' && c <= 'f') return c - 'a' + 10;
@@ -144,7 +150,7 @@ static int run_encode(int argc, char **argv) {
     return 2;
   }
 
-  int decoded_len = hex_decode(payload_hex, payload_bytes, 64);
+  int decoded_len = hex_decode(payload_hex, payload_bytes, BOOMLINK_TEST_MAX_PAYLOAD);
   if (decoded_len < 0) {
     fprintf(stderr, "encode: malformed or oversized payload_hex\n");
     return 2;
@@ -208,7 +214,7 @@ static int run_decode(int argc, char **argv) {
   }
 
   const boomlink_SystemMessage *system = &envelope.payload.system;
-  char hex[2 * 64 + 1];
+  char hex[2 * BOOMLINK_TEST_MAX_PAYLOAD + 1];
   if (system->which_message == boomlink_SystemMessage_ping_tag) {
     hex_encode(system->message.ping.payload.bytes, system->message.ping.payload.size, hex);
     printf("kind=ping\n");

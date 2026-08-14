@@ -18,6 +18,9 @@ import pytest
 
 VECTORS_DIR = pathlib.Path(__file__).parent / "vectors"
 
+# Matches nanopb/boomlink.options' Ping/Pong payload max_size.
+MAX_PAYLOAD_SIZE = 192
+
 # Never edit an existing entry here to match a "fixed" vector file - if an
 # old vector stops decoding to these values, the schema broke backward
 # compatibility, which is exactly what this test exists to catch. Add new
@@ -35,7 +38,7 @@ GOLDEN_VECTORS = {
         "protocol_version": 1,
         "request_id": 4,
         "kind": "pong",
-        "payload": b"\xaa" * 64,
+        "payload": b"\xaa" * MAX_PAYLOAD_SIZE,
     },
 }
 
@@ -74,23 +77,23 @@ def test_golden_vector_decodes_with_nanopb(codec_tool_path, filename, expected):
 
 
 def test_max_bounded_field_size_is_accepted(tmp_path, codec_tool_path):
-    """Exactly nanopb/boomlink.options' max_size (64 bytes) must round-trip -
+    """Exactly nanopb/boomlink.options' max_size (192 bytes) must round-trip -
     the bound is inclusive, not exclusive."""
     envelope = envelope_pb2.Envelope()
     envelope.header.protocol_version = 1
-    envelope.system.ping.payload = b"\x01" * 64
+    envelope.system.ping.payload = b"\x01" * MAX_PAYLOAD_SIZE
     path = tmp_path / "envelope.bin"
     path.write_bytes(envelope.SerializeToString())
 
     result = _run(codec_tool_path, "decode", str(path))
     assert result.returncode == 0, result.stderr
-    assert _parse_kv(result.stdout)["payload"] == ("01" * 64)
+    assert _parse_kv(result.stdout)["payload"] == ("01" * MAX_PAYLOAD_SIZE)
 
 
 def test_field_size_one_over_bound_is_rejected(tmp_path, codec_tool_path):
     envelope = envelope_pb2.Envelope()
     envelope.header.protocol_version = 1
-    envelope.system.ping.payload = b"\x01" * 65
+    envelope.system.ping.payload = b"\x01" * (MAX_PAYLOAD_SIZE + 1)
     path = tmp_path / "envelope.bin"
     path.write_bytes(envelope.SerializeToString())
 

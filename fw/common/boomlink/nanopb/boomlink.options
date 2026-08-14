@@ -6,11 +6,16 @@
 # maximum size ahead of time. MessageHeader's fields are fixed-width uint32s
 # and need no entry.
 #
-# 64 bytes leaves large headroom under the real budget: the SX126x hard packet
-# limit is 255 bytes (RADIO_MAX_PAYLOAD, fw/bom-stm32node/App/radio/radio.h),
-# the link frame header reserves 20 of those (boomlink.md section 7.3), and
-# Envelope/MessageHeader/SystemMessage framing overhead is only a handful of
-# bytes - see the static_assert in boomlink_codec.c that checks the generated
-# boomlink_Envelope_size against this budget at compile time.
-boomlink.Ping.payload  max_size:64
-boomlink.Pong.payload  max_size:64
+# 192 bytes is a deliberate ceiling, not "whatever technically still fits":
+# the SX126x hard packet limit is 255 bytes (RADIO_MAX_PAYLOAD,
+# fw/bom-stm32node/App/radio/radio.h), the link frame header reserves 20 of
+# those (boomlink.md section 7.3, including its still-unused fragmentation
+# flag/index reservation - the header stays 20 bytes either way), leaving 235
+# for the whole Envelope - 192 keeps a margin for Envelope/MessageHeader/
+# SystemMessage framing overhead rather than chasing the exact theoretical
+# maximum (boomlink.md section 7.3 explicitly warns against designing
+# messages that depend on filling the radio's max payload). See the
+# static_assert in boomlink_codec.c that checks the generated
+# boomlink_Envelope_size against the real budget at compile time.
+boomlink.Ping.payload  max_size:192
+boomlink.Pong.payload  max_size:192

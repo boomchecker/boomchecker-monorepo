@@ -12,6 +12,9 @@ import subprocess
 import envelope_pb2
 import pytest
 
+# Matches nanopb/boomlink.options' Ping/Pong payload max_size.
+MAX_PAYLOAD_SIZE = 192
+
 
 def _run(codec_tool_path, *args):
     result = subprocess.run(
@@ -36,7 +39,7 @@ def _make_ping_envelope(protocol_version, request_id, payload: bytes) -> envelop
     return envelope
 
 
-@pytest.mark.parametrize("payload", [b"", b"\xde\xad\xbe\xef", b"\x00" * 64])
+@pytest.mark.parametrize("payload", [b"", b"\xde\xad\xbe\xef", b"\x00" * MAX_PAYLOAD_SIZE])
 def test_python_encode_nanopb_decode_ping(tmp_path, codec_tool_path, payload):
     envelope = _make_ping_envelope(protocol_version=1, request_id=7, payload=payload)
     encoded_path = tmp_path / "envelope.bin"
@@ -72,9 +75,9 @@ def test_nanopb_encode_python_decode(tmp_path, codec_tool_path, kind):
 def test_nanopb_rejects_payload_over_bound(tmp_path, codec_tool_path):
     """Python protobuf's `bytes` fields have no built-in max-size - a peer
     running an older/different implementation could send more than Nanopb's
-    compiled `nanopb/boomlink.options` bound (64 bytes) allows. Nanopb must
+    compiled `nanopb/boomlink.options` bound (192 bytes) allows. Nanopb must
     fail closed instead of overflowing its fixed-size buffer."""
-    oversized = b"\x41" * 100
+    oversized = b"\x41" * (MAX_PAYLOAD_SIZE + 8)
     envelope = _make_ping_envelope(protocol_version=1, request_id=1, payload=oversized)
     encoded_path = tmp_path / "envelope.bin"
     encoded_path.write_bytes(envelope.SerializeToString())
