@@ -1,0 +1,6 @@
+# Generation (nanopb_generator.py, protoc --python_out) and the host test
+# suite. Matches fw/bom-stm32node/third_party/nanopb/requirements.txt for the
+# two packages the generator itself needs.
+protobuf>=5,<7
+grpcio-tools>=1.60
+pytest>=8

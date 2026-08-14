@@ -1,0 +1,16 @@
+# Nanopb generator options (see nanopb docs: docs/concepts.html#defining-the-options).
+#
+# Every variable-size field (string/bytes/repeated) on the wire must be given
+# a static bound here - boomlink.md section 5.2 forbids protocol `malloc` on
+# the target, and nanopb only stack/struct-allocates a field when it knows its
+# maximum size ahead of time. MessageHeader's fields are fixed-width uint32s
+# and need no entry.
+#
+# 64 bytes leaves large headroom under the real budget: the SX126x hard packet
+# limit is 255 bytes (RADIO_MAX_PAYLOAD, fw/bom-stm32node/App/radio/radio.h),
+# the link frame header reserves 20 of those (boomlink.md section 7.3), and
+# Envelope/MessageHeader/SystemMessage framing overhead is only a handful of
+# bytes - see the static_assert in boomlink_codec.c that checks the generated
+# boomlink_Envelope_size against this budget at compile time.
+boomlink.Ping.payload  max_size:64
+boomlink.Pong.payload  max_size:64
