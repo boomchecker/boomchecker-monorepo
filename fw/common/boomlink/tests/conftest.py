@@ -10,21 +10,57 @@ file. Import them directly in test modules, e.g. `import envelope_pb2`.
 import os
 
 import pytest
+from _support import query_codec_tool_limits
+
+
+def pytest_configure(config):
+    """Fail fast with one actionable message covering BOTH ways this
+    environment is normally missing, instead of whichever happens to be
+    checked/imported first: a bare `import envelope_pb2` failing with an
+    unhelpful ModuleNotFoundError at collection time (if PYTHONPATH isn't
+    set), or a misleadingly partial-green run if only BOOMLINK_CODEC_TOOL is
+    unset (tests not using that fixture would still pass)."""
+    del config
+    missing = []
+    try:
+        import envelope_pb2  # noqa: F401
+    except ImportError:
+        missing.append(
+            "  - PYTHONPATH does not include the generated Python protobuf classes "
+            "(envelope_pb2 and friends). These are generated at build time, not "
+            "committed - see CMakeLists.txt's boomlink_python_pb2 target."
+        )
+    if not os.environ.get("BOOMLINK_CODEC_TOOL"):
+        missing.append(
+            "  - BOOMLINK_CODEC_TOOL is not set. Point it at the compiled "
+            "boomlink_codec_tool binary."
+        )
+    if missing:
+        pytest.exit(
+            "Test environment is not set up:\n"
+            + "\n".join(missing)
+            + "\n\nRun the suite via `ctest` in the CMake build directory (sets both "
+            "automatically), or `task test` in fw/common/boomlink (see Taskfile.yml), "
+            "rather than invoking pytest directly.",
+            returncode=1,
+        )
 
 
 @pytest.fixture(scope="session")
 def codec_tool_path():
     """Path to the compiled boomlink_codec_tool binary (see
-    tests/test_encode_decode.c) - the "Nanopb side" of the cross-language
-    interop tests."""
-    path = os.environ.get("BOOMLINK_CODEC_TOOL")
-    if not path:
-        pytest.fail(
-            "BOOMLINK_CODEC_TOOL is not set. These tests shell out to the "
-            "compiled boomlink_codec_tool binary and its Python protobuf "
-            "classes; both are generated/built, not committed. Run the "
-            "suite via `ctest` in the CMake build directory, or `task test` "
-            "in fw/common/boomlink (see Taskfile.yml), rather than invoking "
-            "pytest directly."
-        )
-    return path
+    tests/codec_tool.c) - the "Nanopb side" of the cross-language interop
+    tests. pytest_configure() above already guarantees this is set."""
+    return os.environ["BOOMLINK_CODEC_TOOL"]
+
+
+@pytest.fixture(scope="session")
+def codec_tool_limits(codec_tool_path):
+    """The tool's real compiled Ping/Pong payload bounds, so tests read the
+    limit from the one place it is actually defined - the compiled struct
+    layout - instead of each hardcoding its own copy of
+    nanopb/system.options' max_size."""
+    try:
+        return query_codec_tool_limits(codec_tool_path)
+    except RuntimeError as exc:
+        pytest.fail(str(exc))

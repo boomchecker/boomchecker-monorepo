@@ -3,56 +3,28 @@
 - maximum bounded field sizes;
 - malformed/truncated input;
 - unknown fields for forward compatibility;
-- old golden vectors decoding with the current schema.
+- old golden vectors decoding with the current schema, and never silently
+  replaced.
 
 Encode/decode round-trips and the two encode-A/decode-B interop directions
 live in test_encode_decode.py; this file is specifically the regression
-guard against breaking those five rules.
+guard against breaking those rules.
 """
-
-import pathlib
-import subprocess
 
 import envelope_pb2
 import pytest
-
-VECTORS_DIR = pathlib.Path(__file__).parent / "vectors"
-
-# Matches nanopb/boomlink.options' Ping/Pong payload max_size.
-MAX_PAYLOAD_SIZE = 192
-
-# Never edit an existing entry here to match a "fixed" vector file - if an
-# old vector stops decoding to these values, the schema broke backward
-# compatibility, which is exactly what this test exists to catch. Add new
-# vectors (and new entries) instead - see generate_vectors.py.
-GOLDEN_VECTORS = {
-    "ping_basic.bin": {"protocol_version": 1, "request_id": 1, "kind": "ping", "payload": b""},
-    "ping_with_payload.bin": {
-        "protocol_version": 1,
-        "request_id": 2,
-        "kind": "ping",
-        "payload": bytes.fromhex("deadbeef"),
-    },
-    "pong_basic.bin": {"protocol_version": 1, "request_id": 3, "kind": "pong", "payload": b""},
-    "pong_max_payload.bin": {
-        "protocol_version": 1,
-        "request_id": 4,
-        "kind": "pong",
-        "payload": b"\xaa" * MAX_PAYLOAD_SIZE,
-    },
-}
+from _support import parse_kv, run_codec_tool
+from vectors_spec import GOLDEN_VECTORS, VECTORS_DIR, verify_vector_hashes
 
 
-def _run(codec_tool_path, *args):
-    return subprocess.run([codec_tool_path, *args], capture_output=True, text=True, timeout=10)
-
-
-def _parse_kv(stdout):
-    fields = {}
-    for line in stdout.strip().splitlines():
-        key, _, value = line.partition("=")
-        fields[key] = value
-    return fields
+def test_golden_vector_hashes_are_unchanged():
+    """Catches a committed vector being silently replaced (e.g.
+    `rm vectors/foo.bin && python generate_vectors.py` producing a fresh
+    "historical" encoding) before the more permissive decode-based tests
+    below even run - those would still pass against a replaced vector as
+    long as it happens to decode to the same field values, which defeats
+    the point of freezing historical bytes in the first place."""
+    verify_vector_hashes()
 
 
 @pytest.mark.parametrize("filename,expected", GOLDEN_VECTORS.items())
@@ -67,37 +39,38 @@ def test_golden_vector_decodes_with_python(filename, expected):
 
 @pytest.mark.parametrize("filename,expected", GOLDEN_VECTORS.items())
 def test_golden_vector_decodes_with_nanopb(codec_tool_path, filename, expected):
-    result = _run(codec_tool_path, "decode", str(VECTORS_DIR / filename))
+    result = run_codec_tool(codec_tool_path, "decode", str(VECTORS_DIR / filename))
     assert result.returncode == 0, result.stderr
-    fields = _parse_kv(result.stdout)
+    fields = parse_kv(result.stdout)
     assert fields["kind"] == expected["kind"]
     assert fields["protocol_version"] == str(expected["protocol_version"])
     assert fields["request_id"] == str(expected["request_id"])
     assert fields["payload"] == expected["payload"].hex()
 
 
-def test_max_bounded_field_size_is_accepted(tmp_path, codec_tool_path):
-    """Exactly nanopb/boomlink.options' max_size (192 bytes) must round-trip -
-    the bound is inclusive, not exclusive."""
+def test_max_bounded_field_size_is_accepted(tmp_path, codec_tool_path, codec_tool_limits):
+    """Exactly the compiled bound must round-trip - the bound is inclusive,
+    not exclusive."""
+    max_size = codec_tool_limits["ping_payload_max"]
     envelope = envelope_pb2.Envelope()
     envelope.header.protocol_version = 1
-    envelope.system.ping.payload = b"\x01" * MAX_PAYLOAD_SIZE
+    envelope.system.ping.payload = b"\x01" * max_size
     path = tmp_path / "envelope.bin"
     path.write_bytes(envelope.SerializeToString())
 
-    result = _run(codec_tool_path, "decode", str(path))
+    result = run_codec_tool(codec_tool_path, "decode", str(path))
     assert result.returncode == 0, result.stderr
-    assert _parse_kv(result.stdout)["payload"] == ("01" * MAX_PAYLOAD_SIZE)
+    assert parse_kv(result.stdout)["payload"] == ("01" * max_size)
 
 
-def test_field_size_one_over_bound_is_rejected(tmp_path, codec_tool_path):
+def test_field_size_one_over_bound_is_rejected(tmp_path, codec_tool_path, codec_tool_limits):
     envelope = envelope_pb2.Envelope()
     envelope.header.protocol_version = 1
-    envelope.system.ping.payload = b"\x01" * (MAX_PAYLOAD_SIZE + 1)
+    envelope.system.ping.payload = b"\x01" * (codec_tool_limits["ping_payload_max"] + 1)
     path = tmp_path / "envelope.bin"
     path.write_bytes(envelope.SerializeToString())
 
-    result = _run(codec_tool_path, "decode", str(path))
+    result = run_codec_tool(codec_tool_path, "decode", str(path))
     assert result.returncode != 0
 
 
@@ -105,7 +78,7 @@ def test_malformed_input_is_rejected(tmp_path, codec_tool_path):
     path = tmp_path / "garbage.bin"
     path.write_bytes(b"\xff\xff\xff\xff\xff\xff\xff\xff")
 
-    result = _run(codec_tool_path, "decode", str(path))
+    result = run_codec_tool(codec_tool_path, "decode", str(path))
     assert result.returncode != 0
 
 
@@ -119,7 +92,7 @@ def test_truncated_input_is_rejected(tmp_path, codec_tool_path):
     path = tmp_path / "truncated.bin"
     path.write_bytes(full[:-1])
 
-    result = _run(codec_tool_path, "decode", str(path))
+    result = run_codec_tool(codec_tool_path, "decode", str(path))
     assert result.returncode != 0
 
 
@@ -135,7 +108,7 @@ def test_missing_header_is_rejected(tmp_path, codec_tool_path):
     path = tmp_path / "envelope.bin"
     path.write_bytes(envelope.SerializeToString())
 
-    result = _run(codec_tool_path, "decode", str(path))
+    result = run_codec_tool(codec_tool_path, "decode", str(path))
     assert result.returncode != 0
 
 
@@ -151,12 +124,27 @@ def test_zero_protocol_version_is_rejected(tmp_path, codec_tool_path):
 
     path = tmp_path / "envelope.bin"
     path.write_bytes(envelope.SerializeToString())
-    decode_result = _run(codec_tool_path, "decode", str(path))
+    decode_result = run_codec_tool(codec_tool_path, "decode", str(path))
     assert decode_result.returncode != 0
 
     encode_out = tmp_path / "encoded.bin"
-    encode_result = _run(codec_tool_path, "encode", "ping", "0", "1", "", str(encode_out))
+    encode_result = run_codec_tool(codec_tool_path, "encode", "ping", "0", "1", "", str(encode_out))
     assert encode_result.returncode != 0
+
+
+def test_encode_rejects_malformed_numeric_arguments(tmp_path, codec_tool_path):
+    """A typo'd CLI argument must fail loudly, not silently become some
+    other value - otherwise a test asserting "protocol_version 0 is
+    rejected" (above) would pass identically for a typo'd argument instead
+    of the value it claims to be testing."""
+    out_path = tmp_path / "out.bin"
+    for bad_protocol_version in ("xyz", "-1", "99999999999999999999", "1.5", ""):
+        result = run_codec_tool(codec_tool_path, "encode", "ping", bad_protocol_version, "1", "",
+                                 str(out_path))
+        assert result.returncode == 2, (
+            f"protocol_version={bad_protocol_version!r} should be a parse error, "
+            f"got rc={result.returncode}"
+        )
 
 
 def test_unknown_field_is_forward_compatible(tmp_path, codec_tool_path):
@@ -182,6 +170,6 @@ def test_unknown_field_is_forward_compatible(tmp_path, codec_tool_path):
 
     path = tmp_path / "envelope_with_unknown_field.bin"
     path.write_bytes(with_unknown_field)
-    result = _run(codec_tool_path, "decode", str(path))
+    result = run_codec_tool(codec_tool_path, "decode", str(path))
     assert result.returncode == 0, result.stderr
-    assert _parse_kv(result.stdout)["payload"] == "deadbeef"
+    assert parse_kv(result.stdout)["payload"] == "deadbeef"

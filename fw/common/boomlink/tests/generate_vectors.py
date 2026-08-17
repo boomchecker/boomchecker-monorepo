@@ -1,40 +1,25 @@
 #!/usr/bin/env python3
-"""One-shot generator for tests/vectors/*.bin.
+"""One-shot generator that ADDS new entries to tests/vectors/*.bin.
 
 Run this ONLY to add a new golden vector for a newly introduced message
 shape. NEVER re-run it to regenerate an existing vector: the whole point of
 a golden vector is that it is a fixed, historical encoding the CURRENT
 schema must still be able to decode (boomlink.md section 15.1,
 "old golden vectors decoding with the current schema"). Overwriting one
-would silently delete the regression test it exists to provide.
+would silently delete the regression test it exists to provide - it already
+skips any filename that exists, and test_compatibility.py's
+verify_vector_hashes() independently catches a vector's bytes changing even
+if this skip is ever bypassed (e.g. the file was deleted first).
 
 Requires the generated `envelope_pb2` module on PYTHONPATH (see
-CMakeLists.txt's `boomlink_python_pb2` target, or run
-`task generate` first).
+CMakeLists.txt's `boomlink_python_pb2` target, or `task generate`).
+
+After adding a new vector, add its entry (including a `sha256` of the
+resulting file) to vectors_spec.py's GOLDEN_VECTORS.
 """
 
-import pathlib
-
 import envelope_pb2
-
-VECTORS_DIR = pathlib.Path(__file__).parent / "vectors"
-
-VECTORS = {
-    "ping_basic.bin": {"protocol_version": 1, "request_id": 1, "kind": "ping", "payload": b""},
-    "ping_with_payload.bin": {
-        "protocol_version": 1,
-        "request_id": 2,
-        "kind": "ping",
-        "payload": bytes.fromhex("deadbeef"),
-    },
-    "pong_basic.bin": {"protocol_version": 1, "request_id": 3, "kind": "pong", "payload": b""},
-    "pong_max_payload.bin": {
-        "protocol_version": 1,
-        "request_id": 4,
-        "kind": "pong",
-        "payload": b"\xaa" * 192,  # nanopb/boomlink.options' max_size
-    },
-}
+from vectors_spec import GOLDEN_VECTORS, VECTORS_DIR
 
 
 def build(spec: dict) -> bytes:
@@ -47,7 +32,7 @@ def build(spec: dict) -> bytes:
 
 def main():
     VECTORS_DIR.mkdir(exist_ok=True)
-    for filename, spec in VECTORS.items():
+    for filename, spec in GOLDEN_VECTORS.items():
         path = VECTORS_DIR / filename
         if path.exists():
             print(f"skip (already exists): {filename}")
