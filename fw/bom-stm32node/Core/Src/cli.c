@@ -9,6 +9,8 @@
 #include "main.h"   /* Error_Handler */
 #include "pcm_stream.h"
 #include "detector.h"
+#include "gps.h"
+#include "mic.h"     /* mic_diag_run */
 #include "dfu_boot.h"
 #include "usb_cli.h" /* flush before the DFU jump */
 
@@ -16,7 +18,7 @@
 #include <string.h> /* memcpy  */
 
 /* Static CLI allocation (no malloc). Sized for the rx/cmd/history below plus bindings. */
-#define CLI_STATIC_BYTES  2048u
+#define CLI_STATIC_BYTES  3072u
 #define CLI_TX_RING       512u
 
 static EmbeddedCli *s_cli;
@@ -153,6 +155,92 @@ static void cmd_detect(EmbeddedCli *cli, char *args, void *context)
   detector_run((uint32_t)sec, (uint32_t)squelch, (int32_t)thr, (uint32_t)dbg);
 }
 
+/* Optional "[baud]" token shared by `gps` and `gpstx`. Returns 0 on error. */
+static uint32_t parse_baud(EmbeddedCli *cli, const char *tok)
+{
+  char         *end  = NULL;
+  unsigned long baud = strtoul(tok, &end, 10);
+  if (end == tok || baud < 1200u || baud > 921600u)
+  {
+    embeddedCliPrint(cli, "baud: 1200..921600 (Teseo-LIV3R default 9600)");
+    return 0u;
+  }
+  return (uint32_t)baud;
+}
+
+static void cmd_gps(EmbeddedCli *cli, char *args, void *context)
+{
+  (void)context;
+  const uint16_t ntok = embeddedCliGetTokenCount(args);
+  if (ntok < 1 || ntok > 2)
+  {
+    embeddedCliPrint(cli, "usage: gps <sec> [baud]");
+    return;
+  }
+  const char   *tok = embeddedCliGetToken(args, 1);
+  char         *end = NULL;
+  unsigned long sec = strtoul(tok, &end, 10);
+  if (end == tok || sec == 0u || sec > GPS_MAX_SECONDS)
+  {
+    embeddedCliPrint(cli, "usage: gps <sec> (1..300)");
+    return;
+  }
+  uint32_t baud = GPS_DEFAULT_BAUD;
+  if (ntok >= 2)
+  {
+    baud = parse_baud(cli, embeddedCliGetToken(args, 2));
+    if (baud == 0u)
+    {
+      return;
+    }
+  }
+  /* Emits raw NMEA lines and a GPSEND trailer on the console; see gps.c. */
+  gps_run((uint32_t)sec, baud);
+}
+
+static void cmd_gpstx(EmbeddedCli *cli, char *args, void *context)
+{
+  (void)context;
+  const uint16_t ntok = embeddedCliGetTokenCount(args);
+  if (ntok < 1 || ntok > 2)
+  {
+    embeddedCliPrint(cli, "usage: gpstx <sentence> [baud]");
+    return;
+  }
+  uint32_t baud = GPS_DEFAULT_BAUD;
+  if (ntok >= 2)
+  {
+    baud = parse_baud(cli, embeddedCliGetToken(args, 2));
+    if (baud == 0u)
+    {
+      return;
+    }
+  }
+  if (gps_send(embeddedCliGetToken(args, 1), baud) != 0)
+  {
+    embeddedCliPrint(cli, "GPSERR tx failed");
+    return;
+  }
+  embeddedCliPrint(cli, "GPSTX ok");
+}
+
+static void cmd_micdiag(EmbeddedCli *cli, char *args, void *context)
+{
+  (void)cli;
+  (void)args;
+  (void)context;
+  /* Emits MICDIAG lines + MICDIAGEND trailer on the console; see mic.c. */
+  mic_diag_run();
+}
+
+static void cmd_gpsrst(EmbeddedCli *cli, char *args, void *context)
+{
+  (void)args;
+  (void)context;
+  gps_reset_pulse();
+  embeddedCliPrint(cli, "GPSRST done (SYS_RSTn pulsed 100 ms)");
+}
+
 static void cmd_dfu(EmbeddedCli *cli, char *args, void *context)
 {
   (void)cli;
@@ -178,7 +266,7 @@ void cli_init(cli_tx_fn tx)
   cfg->rxBufferSize      = 64;
   cfg->cmdBufferSize     = 64;
   cfg->historyBufferSize = 128;
-  cfg->maxBindingCount   = 8;
+  cfg->maxBindingCount   = 10;
   cfg->invitation        = "> ";
 
   s_cli = embeddedCliNew(cfg);
@@ -226,6 +314,42 @@ void cli_init(cli_tx_fn tx)
     .binding      = cmd_detect,
   };
   embeddedCliAddBinding(s_cli, detect_binding);
+
+  CliCommandBinding gps_binding = {
+    .name         = "gps",
+    .help         = "Stream <sec> seconds of raw NMEA from the GNSS module",
+    .tokenizeArgs = true,
+    .context      = NULL,
+    .binding      = cmd_gps,
+  };
+  embeddedCliAddBinding(s_cli, gps_binding);
+
+  CliCommandBinding gpstx_binding = {
+    .name         = "gpstx",
+    .help         = "Send one NMEA/$PSTM sentence to the GNSS module",
+    .tokenizeArgs = true,
+    .context      = NULL,
+    .binding      = cmd_gpstx,
+  };
+  embeddedCliAddBinding(s_cli, gpstx_binding);
+
+  CliCommandBinding micdiag_binding = {
+    .name         = "micdiag",
+    .help         = "PDM wiring diagnostics: toggle counts on D1/D2 + pull test",
+    .tokenizeArgs = false,
+    .context      = NULL,
+    .binding      = cmd_micdiag,
+  };
+  embeddedCliAddBinding(s_cli, micdiag_binding);
+
+  CliCommandBinding gpsrst_binding = {
+    .name         = "gpsrst",
+    .help         = "Pulse the GNSS module reset line (bring-up fallback)",
+    .tokenizeArgs = false,
+    .context      = NULL,
+    .binding      = cmd_gpsrst,
+  };
+  embeddedCliAddBinding(s_cli, gpsrst_binding);
 
   CliCommandBinding dfu_binding = {
     .name         = "dfu",
