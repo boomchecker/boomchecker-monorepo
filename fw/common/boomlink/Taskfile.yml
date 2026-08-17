@@ -26,6 +26,18 @@ tasks:
     cmds:
       - PATH=$PWD/.venv/bin:$PATH ctest --preset Debug
 
+  generate:
+    desc: Add any new golden vectors under tests/vectors/ (never overwrites existing ones - see generate_vectors.py)
+    deps:
+      - build
+    cmds:
+      - PYTHONPATH=$PWD/build/Debug/python_pb2 .venv/bin/python tests/generate_vectors.py
+
+  lint:
+    desc: Run ruff over the test suite
+    cmds:
+      - .venv/bin/ruff check tests
+
   clean:
     desc: Remove the build directory
     aliases: [c]
