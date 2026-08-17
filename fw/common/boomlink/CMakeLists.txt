@@ -39,6 +39,17 @@ if(BOOMLINK_STANDALONE AND BOOMLINK_SANITIZE)
   add_link_options(-fsanitize=address,undefined)
 endif()
 
+# -Wall -Wextra for the host build only (the ARM cross build already
+# inherits -Wall from fw/bom-stm32node/cmake/gcc-arm-none-eabi.cmake, so
+# without this the host build - the only one that compiles the CLI tool
+# doing hand-rolled buffer/argument-parsing work in tests/codec_tool.c -
+# was the weaker of the two on a package whose test suite exists
+# specifically to catch C-safety bugs. Verified this produces zero warnings
+# against the current source before enabling it unconditionally.
+if(BOOMLINK_STANDALONE)
+  add_compile_options(-Wall -Wextra)
+endif()
+
 # Nanopb is vendored once, under bom-stm32node/third_party/ (git submodule
 # pinned to release 0.4.9), and referenced from here by relative path rather
 # than duplicating the submodule: both this host-native build and the ARM
@@ -46,13 +57,19 @@ endif()
 # (not a plain `set`) so this package can be relocated or paired with a
 # differently-laid-out sibling without editing this file - e.g. a future
 # host-only consumer that doesn't live under fw/bom-stm32node at all.
-set(NANOPB_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../bom-stm32node/third_party/nanopb
+# Namespaced BOOMLINK_NANOPB_DIR, not a bare NANOPB_DIR: a CACHE variable
+# with a generic name is a real collision risk the moment anything else in
+# a parent build sets its own same-named NANOPB_DIR before this file's
+# add_subdirectory() runs - CACHE variables are first-write-wins, so this
+# package would either silently build against the wrong (and unpinned)
+# path, or fail loudly if that path doesn't contain a Nanopb checkout.
+set(BOOMLINK_NANOPB_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../bom-stm32node/third_party/nanopb
     CACHE PATH "Path to the vendored Nanopb submodule")
-set(NANOPB_GENERATOR ${NANOPB_DIR}/generator/nanopb_generator.py)
+set(BOOMLINK_NANOPB_GENERATOR ${BOOMLINK_NANOPB_DIR}/generator/nanopb_generator.py)
 
-if(NOT EXISTS ${NANOPB_GENERATOR})
+if(NOT EXISTS ${BOOMLINK_NANOPB_GENERATOR})
   message(FATAL_ERROR
-    "Nanopb submodule not found at ${NANOPB_DIR}. Run: "
+    "Nanopb submodule not found at ${BOOMLINK_NANOPB_DIR}. Run: "
     "git submodule update --init fw/bom-stm32node/third_party/nanopb")
 endif()
 
@@ -62,16 +79,26 @@ endif()
 # hard `add_library cannot create target "nanopb" because another target
 # with that name already exists` the moment any sibling package vendors
 # Nanopb the same way, or itself add_subdirectory()'s the real upstream
-# CMakeLists.txt. Guarded for the same reason: two consumers pulling in this
-# same fw/common/boomlink directory would otherwise redefine every target
-# here a second time.
+# CMakeLists.txt. Guarded against exactly that: a consumer that already
+# defines its own target literally named boomlink_nanopb (however unlikely)
+# is trusted instead of fought.
+#
+# The library and the alias are guarded SEPARATELY, not as one block: if a
+# consumer's own boomlink_nanopb already exists but boomlink::nanopb does
+# not, only wrapping the whole thing in a single
+# `if(NOT TARGET boomlink_nanopb)` would skip creating the alias too,
+# leaving target_link_libraries(boomlink_protocol PUBLIC boomlink::nanopb)
+# below referencing a target that was never created - a new failure this
+# guard would have introduced instead of prevented.
 if(NOT TARGET boomlink_nanopb)
   add_library(boomlink_nanopb STATIC
-    ${NANOPB_DIR}/pb_common.c
-    ${NANOPB_DIR}/pb_encode.c
-    ${NANOPB_DIR}/pb_decode.c
+    ${BOOMLINK_NANOPB_DIR}/pb_common.c
+    ${BOOMLINK_NANOPB_DIR}/pb_encode.c
+    ${BOOMLINK_NANOPB_DIR}/pb_decode.c
   )
-  target_include_directories(boomlink_nanopb PUBLIC ${NANOPB_DIR})
+  target_include_directories(boomlink_nanopb PUBLIC ${BOOMLINK_NANOPB_DIR})
+endif()
+if(NOT TARGET boomlink::nanopb)
   add_library(boomlink::nanopb ALIAS boomlink_nanopb)
 endif()
 
@@ -111,6 +138,17 @@ set(BOOMLINK_PROTO_NAMES common header system envelope)
 list(TRANSFORM BOOMLINK_PROTO_NAMES PREPEND ${BOOMLINK_PROTO_DIR}/ OUTPUT_VARIABLE BOOMLINK_PROTO_FILES)
 list(TRANSFORM BOOMLINK_PROTO_FILES APPEND .proto)
 
+# Every *.options file in nanopb/ (today, just system.options - see below),
+# not hardcoded to that one name: CONFIGURE_DEPENDS means CMake reconfigures
+# (and this glob re-runs) if one is added, removed, or renamed, not just
+# when an already-known one's contents change. Without this, adding a new
+# nanopb/<name>.options for a future .proto per this file's own pattern (and
+# README.md's "Adding a new message group" instructions) would silently
+# never be tracked: the .options file could be edited any number of times
+# after that and the generator would keep using whatever bounds it read the
+# first time a full clean build happened to run.
+file(GLOB BOOMLINK_NANOPB_OPTIONS_FILES CONFIGURE_DEPENDS ${BOOMLINK_NANOPB_OPTIONS_DIR}/*.options)
+
 set(BOOMLINK_GENERATED_DIR ${CMAKE_CURRENT_BINARY_DIR}/generated)
 file(MAKE_DIRECTORY ${BOOMLINK_GENERATED_DIR})
 
@@ -118,10 +156,12 @@ set(BOOMLINK_GENERATED_SOURCES "")
 foreach(proto_name IN LISTS BOOMLINK_PROTO_NAMES)
   set(out_c ${BOOMLINK_GENERATED_DIR}/${proto_name}.pb.c)
   set(out_h ${BOOMLINK_GENERATED_DIR}/${proto_name}.pb.h)
-  # Every generated file depends on all four .proto sources (not just its
-  # own), rather than tracking envelope.proto's imports precisely: simpler,
-  # and the cost of an occasional unnecessary regeneration of these four tiny
-  # files is not worth the extra bookkeeping.
+  # Every generated file depends on all four .proto sources and all
+  # nanopb/*.options files (not just its own), rather than tracking
+  # envelope.proto's imports or each proto's own single options file
+  # precisely: simpler, and the cost of an occasional unnecessary
+  # regeneration of these four tiny files is not worth the extra
+  # bookkeeping.
   #
   # No explicit -f<options file>: passing one global options file to every
   # invocation made the generator warn "did not match any fields" on the
@@ -134,12 +174,12 @@ foreach(proto_name IN LISTS BOOMLINK_PROTO_NAMES)
   # other three simply find nothing and stay silent.
   add_custom_command(
     OUTPUT ${out_c} ${out_h}
-    COMMAND ${Python3_EXECUTABLE} ${NANOPB_GENERATOR}
+    COMMAND ${Python3_EXECUTABLE} ${BOOMLINK_NANOPB_GENERATOR}
             -I${BOOMLINK_PROTO_DIR}
             -I${BOOMLINK_NANOPB_OPTIONS_DIR}
             -D${BOOMLINK_GENERATED_DIR}
             ${BOOMLINK_PROTO_DIR}/${proto_name}.proto
-    DEPENDS ${BOOMLINK_PROTO_FILES} ${BOOMLINK_NANOPB_OPTIONS_DIR}/system.options ${NANOPB_GENERATOR}
+    DEPENDS ${BOOMLINK_PROTO_FILES} ${BOOMLINK_NANOPB_OPTIONS_FILES} ${BOOMLINK_NANOPB_GENERATOR}
     COMMENT "Generating Nanopb code for ${proto_name}.proto"
     VERBATIM
   )
