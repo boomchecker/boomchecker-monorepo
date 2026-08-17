@@ -58,9 +58,11 @@ jobs:
           # boomlink_protocol library compiles - see
           # fw/common/boomlink/CMakeLists.txt. Installed from the same
           # requirements.txt as the host protocol build (not a hand-picked
-          # `pip install protobuf grpcio-tools`) so the two CI jobs can never
-          # silently diverge on which protobuf/grpcio-tools version they run
-          # against.
+          # `pip install protobuf grpcio-tools`) so both jobs are pinned to
+          # the same version RANGES (requirements.txt still uses ranges, so
+          # this doesn't guarantee an identical resolved version on every
+          # run - just removes the one hardcoded, unpinned-anywhere copy
+          # that could drift from that shared range on its own).
           pip install --quiet -r fw/common/boomlink/requirements.txt
 
       - name: Configure
@@ -83,9 +85,27 @@ jobs:
           echo "✅ ELF info:"
           arm-none-eabi-size build/Debug/bom-stm32node.elf
 
+      - name: Verify BoomProtocol is actually linked in, not just compiled
+        working-directory: ./fw/bom-stm32node
+        run: |
+          # boomlink_protocol previously compiled for ARM without a single
+          # symbol from it being referenced anywhere in the firmware (see
+          # `proto` in Core/Src/cli.c) - the PR 2 acceptance criterion
+          # "STM32 build can encode/decode an Envelope using Nanopb" was
+          # unmet despite the build being green. A future refactor could
+          # silently reintroduce that by dropping the `proto` CLI binding;
+          # this step fails the build if boomlink_encode_envelope stops
+          # being present in the linked ELF, not just compiled somewhere.
+          if ! arm-none-eabi-nm build/Debug/bom-stm32node.elf | grep -q boomlink_encode_envelope; then
+            echo "❌ boomlink_encode_envelope is not linked into bom-stm32node.elf"
+            exit 1
+          fi
+          echo "✅ BoomProtocol symbols are linked into the firmware image"
+
       - name: Build summary
         run: |
           echo "### ✅ Build Successful!" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "- STM32H563 + RadioLib/SX1262 firmware compiled (Debug) ✓" >> $GITHUB_STEP_SUMMARY
           echo "- ELF produced ✓" >> $GITHUB_STEP_SUMMARY
+          echo "- BoomProtocol linked and referenced (not just compiled) ✓" >> $GITHUB_STEP_SUMMARY

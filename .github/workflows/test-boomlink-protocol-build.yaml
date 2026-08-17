@@ -59,6 +59,14 @@ jobs:
         working-directory: ./fw/common/boomlink
         run: ctest --preset Debug --output-on-failure
 
+      - name: Lint
+        working-directory: ./fw/common/boomlink
+        # ruff is configured (pyproject.toml) and available via `task lint`
+        # for local use, but nothing previously ran it in CI - so it could
+        # only ever catch a style issue if a developer remembered to run it
+        # by hand.
+        run: ruff check tests
+
       - name: Build summary
         run: |
           echo "### ✅ Build and tests successful!" >> $GITHUB_STEP_SUMMARY
@@ -67,3 +75,4 @@ jobs:
           echo "- boomlink_protocol (host-native) built ✓" >> $GITHUB_STEP_SUMMARY
           echo "- C self-test + Python cross-language/compatibility suite passed ✓" >> $GITHUB_STEP_SUMMARY
           echo "- built with AddressSanitizer + UndefinedBehaviorSanitizer (BOOMLINK_SANITIZE, on by default for the Debug preset) ✓" >> $GITHUB_STEP_SUMMARY
+          echo "- ruff lint clean ✓" >> $GITHUB_STEP_SUMMARY
