@@ -107,7 +107,9 @@ holding, and `tests/test_compatibility.py` is what enforces them:
    [boomlink.md section 7](../../../docs/firmware/bom-stm32node/boomlink.md#7-boomprotocol-message-model).
 3. Add any variable-size field's bound to a new `nanopb/<name>.options` file
    (nanopb auto-discovers it by the proto's name - see CMakeLists.txt's
-   comment - so it does not need registering anywhere else).
+   comment - so it does not need registering anywhere else; CMake picks up
+   the new file automatically on the next build via `CONFIGURE_DEPENDS`,
+   no manual reconfigure needed).
 4. Add the new proto's name to `CMakeLists.txt`'s `BOOMLINK_PROTO_NAMES` list
    - the one place both the Nanopb and Python generation steps read it from.
 5. Add golden vectors (`vectors_spec.py` + `generate_vectors.py`) and tests
