@@ -36,21 +36,40 @@
   (BOOMLINK_PING_PAYLOAD_CAP > BOOMLINK_PONG_PAYLOAD_CAP ? BOOMLINK_PING_PAYLOAD_CAP \
                                                           : BOOMLINK_PONG_PAYLOAD_CAP)
 
-/* Parses `s` as a base-10 uint32_t. Rejects empty input, leading/trailing
-   junk, negative signs, and anything out of uint32_t range - `strtoul`
-   alone silently accepts all of these (e.g. "12abc" -> 12, "-1" -> wraps,
-   an out-of-range value saturates to ULONG_MAX without necessarily setting
-   errno on every libc). A test asserting this tool rejects a specific value
-   is worthless if a typo'd argument silently becomes some other value
-   instead of failing loudly. */
+/* `decode`'s read cap - see its own comment for why this is not simply
+   boomlink_Envelope_size. */
+#define BOOMLINK_DECODE_READ_CAP 512
+
+/* Parses `s` as a base-10 uint32_t. Rejects empty input, any leading
+   character that isn't a digit (whitespace, '+', '-'), trailing junk, and
+   anything out of uint32_t range.
+
+   `strtoul`/`strtoull` alone accept far more than that: leading whitespace
+   ("  5"), a leading '+' ("+5"), and - the sharpest edge - a leading '-'
+   does NOT get rejected by the standard library. `strtoul("-1", ...)`
+   successfully parses the entire string as a negated-then-wrapped
+   unsigned value (`ULONG_MAX`), with `errno` left untouched, so a
+   range-only check does not catch it either; the previous version of this
+   function only rejected "-1" by accident, because wrapping happened to
+   land above 0xFFFFFFFF on this build's 64-bit `unsigned long` - the exact
+   same input would have been silently ACCEPTED as a large-but-in-range
+   value on a platform where `unsigned long` is 32 bits. Requiring the
+   first character to be '0'-'9' rejects all of the above in one check,
+   portably.
+
+   Uses `strtoull`/`unsigned long long` (guaranteed >= 64 bits by the C
+   standard) rather than `strtoul`/`unsigned long` for the same portability
+   reason: the `> 0xFFFFFFFFULL` range check needs a type wider than
+   uint32_t to mean anything, and plain `unsigned long` is only 32 bits on
+   some real platforms (e.g. Windows LLP64). */
 static bool parse_u32(const char *s, uint32_t *out) {
-  if (s == NULL || *s == '\0') {
+  if (s == NULL || s[0] < '0' || s[0] > '9') {
     return false;
   }
-  errno              = 0;
-  char         *end  = NULL;
-  unsigned long value = strtoul(s, &end, 10);
-  if (*end != '\0' || errno == ERANGE || value > 0xFFFFFFFFUL) {
+  errno                    = 0;
+  char              *end   = NULL;
+  unsigned long long value = strtoull(s, &end, 10);
+  if (*end != '\0' || errno == ERANGE || value > 0xFFFFFFFFULL) {
     return false;
   }
   *out = (uint32_t)value;
@@ -109,6 +128,13 @@ static int run_selftest(void) {
   envelope.which_payload                = boomlink_Envelope_system_tag;
   envelope.payload.system.which_message = boomlink_SystemMessage_ping_tag;
   const uint8_t kPayload[]              = {0xDE, 0xAD, 0xBE, 0xEF};
+  /* This hardcoded payload has no inherent relationship to the compiled
+     Ping payload bound (unlike run_encode/run_decode below, which size
+     everything from BOOMLINK_PING_PAYLOAD_CAP) - shrinking that bound
+     enough would silently overflow the memcpy below. Caught here instead
+     of at runtime: a build with too small a bound now fails to compile. */
+  _Static_assert(BOOMLINK_PING_PAYLOAD_CAP >= sizeof(kPayload),
+                 "selftest's fixed payload no longer fits the compiled Ping payload bound");
   memcpy(envelope.payload.system.message.ping.payload.bytes, kPayload, sizeof(kPayload));
   envelope.payload.system.message.ping.payload.size = sizeof(kPayload);
 
@@ -250,21 +276,34 @@ static int run_decode(int argc, char **argv) {
     fprintf(stderr, "decode: could not open '%s' for reading\n", in_path);
     return 1;
   }
-  /* boomlink_Envelope_size is the schema's own worst-case encoding size for
-     the current build - anything larger literally cannot be a valid
-     Envelope under this schema, so it doubles as the read cap. */
-  uint8_t buf[boomlink_Envelope_size];
-  size_t  len   = fread(buf, 1, sizeof(buf), f);
-  int     eof   = feof(f);
-  int     ferr  = ferror(f);
+  /* Deliberately NOT sized to exactly boomlink_Envelope_size: that is only
+     this build's own schema's worst case, not a ceiling on what a valid
+     frame from a newer peer could look like - a message carrying a field
+     this schema doesn't recognize yet (section 15.1's "unknown fields for
+     forward compatibility" rule) can legitimately be larger, and rejecting
+     it here - before boomlink_decode_envelope() ever sees it - would make
+     forward compatibility impossible to exercise through this tool.
+     BOOMLINK_DECODE_READ_CAP is generously above the real on-air ceiling
+     (255-byte SX126x limit - 20-byte link frame header = 235 bytes)
+     instead.
+
+     Reads one byte past that cap so an oversized file is detected by "we
+     read more than the cap allows" rather than by feof() after a read
+     that exactly fills a same-sized buffer - fread() does not set EOF in
+     that case, which is why the previous version of this cap rejected a
+     legitimately-sized input of precisely boomlink_Envelope_size bytes as
+     "too large". */
+  uint8_t buf[BOOMLINK_DECODE_READ_CAP + 1];
+  size_t  len  = fread(buf, 1, sizeof(buf), f);
+  int     ferr = ferror(f);
   fclose(f);
   if (ferr) {
     fprintf(stderr, "decode: read error on '%s'\n", in_path);
     return 1;
   }
-  if (!eof) {
-    fprintf(stderr, "decode: '%s' is larger than the maximum possible envelope size (%d bytes)\n",
-            in_path, (int)boomlink_Envelope_size);
+  if (len > BOOMLINK_DECODE_READ_CAP) {
+    fprintf(stderr, "decode: '%s' exceeds the maximum test input size (%d bytes)\n", in_path,
+            BOOMLINK_DECODE_READ_CAP);
     return 1;
   }
 
