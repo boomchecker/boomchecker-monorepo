@@ -13,7 +13,7 @@ guard against breaking those rules.
 
 import envelope_pb2
 import pytest
-from _support import parse_kv, run_codec_tool
+from _support import BOOMLINK_PROTOCOL_VERSION, assert_clean_rejection, parse_kv, run_codec_tool
 from vectors_spec import GOLDEN_VECTORS, VECTORS_DIR, verify_vector_hashes
 
 
@@ -25,6 +25,20 @@ def test_golden_vector_hashes_are_unchanged():
     long as it happens to decode to the same field values, which defeats
     the point of freezing historical bytes in the first place."""
     verify_vector_hashes()
+
+
+def test_no_untracked_vector_files():
+    """vectors_spec.py calls GOLDEN_VECTORS the single source of truth for
+    tests/vectors/*.bin, but that is only true if every file actually in
+    that directory has an entry - otherwise a stray, renamed, or
+    accidentally-committed .bin file sits there completely untested,
+    silently, forever."""
+    on_disk = {path.name for path in VECTORS_DIR.glob("*.bin")}
+    assert on_disk == set(GOLDEN_VECTORS), (
+        f"tests/vectors/*.bin does not match vectors_spec.py's GOLDEN_VECTORS - "
+        f"on disk but not in the spec: {on_disk - set(GOLDEN_VECTORS)}; "
+        f"in the spec but missing on disk: {set(GOLDEN_VECTORS) - on_disk}"
+    )
 
 
 @pytest.mark.parametrize("filename,expected", GOLDEN_VECTORS.items())
@@ -53,7 +67,7 @@ def test_max_bounded_field_size_is_accepted(tmp_path, codec_tool_path, codec_too
     not exclusive."""
     max_size = codec_tool_limits["ping_payload_max"]
     envelope = envelope_pb2.Envelope()
-    envelope.header.protocol_version = 1
+    envelope.header.protocol_version = BOOMLINK_PROTOCOL_VERSION
     envelope.system.ping.payload = b"\x01" * max_size
     path = tmp_path / "envelope.bin"
     path.write_bytes(envelope.SerializeToString())
@@ -65,13 +79,13 @@ def test_max_bounded_field_size_is_accepted(tmp_path, codec_tool_path, codec_too
 
 def test_field_size_one_over_bound_is_rejected(tmp_path, codec_tool_path, codec_tool_limits):
     envelope = envelope_pb2.Envelope()
-    envelope.header.protocol_version = 1
+    envelope.header.protocol_version = BOOMLINK_PROTOCOL_VERSION
     envelope.system.ping.payload = b"\x01" * (codec_tool_limits["ping_payload_max"] + 1)
     path = tmp_path / "envelope.bin"
     path.write_bytes(envelope.SerializeToString())
 
     result = run_codec_tool(codec_tool_path, "decode", str(path))
-    assert result.returncode != 0
+    assert_clean_rejection(result)
 
 
 def test_malformed_input_is_rejected(tmp_path, codec_tool_path):
@@ -79,12 +93,12 @@ def test_malformed_input_is_rejected(tmp_path, codec_tool_path):
     path.write_bytes(b"\xff\xff\xff\xff\xff\xff\xff\xff")
 
     result = run_codec_tool(codec_tool_path, "decode", str(path))
-    assert result.returncode != 0
+    assert_clean_rejection(result)
 
 
 def test_truncated_input_is_rejected(tmp_path, codec_tool_path):
     envelope = envelope_pb2.Envelope()
-    envelope.header.protocol_version = 1
+    envelope.header.protocol_version = BOOMLINK_PROTOCOL_VERSION
     envelope.system.ping.payload = b"\xde\xad\xbe\xef"
     full = envelope.SerializeToString()
     assert len(full) > 1
@@ -93,7 +107,7 @@ def test_truncated_input_is_rejected(tmp_path, codec_tool_path):
     path.write_bytes(full[:-1])
 
     result = run_codec_tool(codec_tool_path, "decode", str(path))
-    assert result.returncode != 0
+    assert_clean_rejection(result)
 
 
 def test_missing_header_is_rejected(tmp_path, codec_tool_path):
@@ -109,7 +123,7 @@ def test_missing_header_is_rejected(tmp_path, codec_tool_path):
     path.write_bytes(envelope.SerializeToString())
 
     result = run_codec_tool(codec_tool_path, "decode", str(path))
-    assert result.returncode != 0
+    assert_clean_rejection(result)
 
 
 def test_zero_protocol_version_is_rejected(tmp_path, codec_tool_path):
@@ -125,20 +139,30 @@ def test_zero_protocol_version_is_rejected(tmp_path, codec_tool_path):
     path = tmp_path / "envelope.bin"
     path.write_bytes(envelope.SerializeToString())
     decode_result = run_codec_tool(codec_tool_path, "decode", str(path))
-    assert decode_result.returncode != 0
+    assert_clean_rejection(decode_result)
 
     encode_out = tmp_path / "encoded.bin"
     encode_result = run_codec_tool(codec_tool_path, "encode", "ping", "0", "1", "", str(encode_out))
-    assert encode_result.returncode != 0
+    assert_clean_rejection(encode_result)
 
 
 def test_encode_rejects_malformed_numeric_arguments(tmp_path, codec_tool_path):
     """A typo'd CLI argument must fail loudly, not silently become some
     other value - otherwise a test asserting "protocol_version 0 is
     rejected" (above) would pass identically for a typo'd argument instead
-    of the value it claims to be testing."""
+    of the value it claims to be testing. Includes cases a first version of
+    this parser accepted by accident: `strtoul`/`strtoull` alone parse a
+    leading '-' as a negated-then-wrapped unsigned value rather than
+    rejecting it (so "-1" only failed here because the wrapped result
+    happened to still be out of uint32 range on a 64-bit build - a
+    genuinely portable check must reject the '-' itself), plus leading
+    whitespace and a leading '+', which `strtoul` also accepts silently."""
     out_path = tmp_path / "out.bin"
-    for bad_protocol_version in ("xyz", "-1", "99999999999999999999", "1.5", ""):
+    bad_protocol_versions = (
+        "xyz", "-1", "99999999999999999999", "1.5", "",
+        "-0", " 5", "\t7", "+5", "5 ", "0x10", "1e3", "5abc", "1,000",
+    )
+    for bad_protocol_version in bad_protocol_versions:
         result = run_codec_tool(codec_tool_path, "encode", "ping", bad_protocol_version, "1", "",
                                  str(out_path))
         assert result.returncode == 2, (
@@ -152,7 +176,7 @@ def test_unknown_field_is_forward_compatible(tmp_path, codec_tool_path):
     must not break an older decoder - the field is skipped, not an error, on
     both the Python and the Nanopb side."""
     envelope = envelope_pb2.Envelope()
-    envelope.header.protocol_version = 1
+    envelope.header.protocol_version = BOOMLINK_PROTOCOL_VERSION
     envelope.system.ping.payload = b"\xde\xad\xbe\xef"
     base = envelope.SerializeToString()
 
@@ -173,3 +197,42 @@ def test_unknown_field_is_forward_compatible(tmp_path, codec_tool_path):
     result = run_codec_tool(codec_tool_path, "decode", str(path))
     assert result.returncode == 0, result.stderr
     assert parse_kv(result.stdout)["payload"] == "deadbeef"
+
+
+def test_unknown_field_is_forward_compatible_near_the_real_budget(
+    tmp_path, codec_tool_path, codec_tool_limits
+):
+    """Same as test_unknown_field_is_forward_compatible, but sized close to
+    the real on-air budget (235 bytes = 255-byte SX126x limit - 20-byte link
+    frame header) rather than a few bytes over this schema's own worst case
+    (boomlink_Envelope_size, 215 bytes today). A previous version of
+    codec_tool's `decode` sized its read buffer to exactly
+    boomlink_Envelope_size and rejected anything larger as "too large" -
+    which made it impossible to exercise this exact compatibility rule
+    (section 15.1) at a realistic size: any legitimately-larger frame from a
+    newer peer was rejected by the test tool itself, before
+    boomlink_decode_envelope() ever got to prove it handles the extra field
+    correctly."""
+    max_size = codec_tool_limits["ping_payload_max"]
+    envelope = envelope_pb2.Envelope()
+    envelope.header.protocol_version = BOOMLINK_PROTOCOL_VERSION
+    envelope.system.ping.payload = b"\x01" * max_size
+    base = envelope.SerializeToString()
+
+    # Field 20, wire type 2, with a 21-byte payload - pushes the total past
+    # boomlink_Envelope_size while staying under the real 235-byte ceiling.
+    unknown_payload = b"\x02" * 21
+    unknown_field = bytes([0xA2, 0x01, len(unknown_payload)]) + unknown_payload
+    with_unknown_field = base + unknown_field
+    assert len(with_unknown_field) > 215  # would have tripped the old, too-tight read cap
+    assert len(with_unknown_field) <= 235  # still within the real on-air budget
+
+    reparsed = envelope_pb2.Envelope()
+    reparsed.ParseFromString(with_unknown_field)
+    assert reparsed.system.ping.payload == b"\x01" * max_size
+
+    path = tmp_path / "envelope_with_large_unknown_field.bin"
+    path.write_bytes(with_unknown_field)
+    result = run_codec_tool(codec_tool_path, "decode", str(path))
+    assert result.returncode == 0, result.stderr
+    assert parse_kv(result.stdout)["payload"] == ("01" * max_size)

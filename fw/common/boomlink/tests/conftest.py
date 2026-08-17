@@ -30,10 +30,20 @@ def pytest_configure(config):
             "(envelope_pb2 and friends). These are generated at build time, not "
             "committed - see CMakeLists.txt's boomlink_python_pb2 target."
         )
-    if not os.environ.get("BOOMLINK_CODEC_TOOL"):
+    codec_tool = os.environ.get("BOOMLINK_CODEC_TOOL")
+    if not codec_tool:
         missing.append(
             "  - BOOMLINK_CODEC_TOOL is not set. Point it at the compiled "
             "boomlink_codec_tool binary."
+        )
+    elif not (os.path.isfile(codec_tool) and os.access(codec_tool, os.X_OK)):
+        # Set but stale/wrong (e.g. left over from a `rm -rf build` since the
+        # last time it was exported) - checking non-empty alone isn't enough,
+        # or every test using it fails with a raw FileNotFoundError instead
+        # of this actionable message.
+        missing.append(
+            f"  - BOOMLINK_CODEC_TOOL={codec_tool!r} does not point to an "
+            "existing, executable file."
         )
     if missing:
         pytest.exit(

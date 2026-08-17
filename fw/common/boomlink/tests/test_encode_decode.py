@@ -11,7 +11,13 @@ import os
 
 import envelope_pb2
 import pytest
-from _support import parse_kv, query_codec_tool_limits, run_codec_tool
+from _support import (
+    BOOMLINK_PROTOCOL_VERSION,
+    assert_clean_rejection,
+    parse_kv,
+    query_codec_tool_limits,
+    run_codec_tool,
+)
 
 
 def pytest_generate_tests(metafunc):
@@ -39,7 +45,9 @@ def _make_ping_envelope(protocol_version, request_id, payload: bytes) -> envelop
 
 
 def test_python_encode_nanopb_decode_ping(tmp_path, codec_tool_path, payload):
-    envelope = _make_ping_envelope(protocol_version=1, request_id=7, payload=payload)
+    envelope = _make_ping_envelope(
+        protocol_version=BOOMLINK_PROTOCOL_VERSION, request_id=7, payload=payload
+    )
     encoded_path = tmp_path / "envelope.bin"
     encoded_path.write_bytes(envelope.SerializeToString())
 
@@ -48,7 +56,7 @@ def test_python_encode_nanopb_decode_ping(tmp_path, codec_tool_path, payload):
     fields = parse_kv(result.stdout)
 
     assert fields["kind"] == "ping"
-    assert fields["protocol_version"] == "1"
+    assert fields["protocol_version"] == str(BOOMLINK_PROTOCOL_VERSION)
     assert fields["request_id"] == "7"
     assert fields["payload"] == payload.hex()
 
@@ -76,9 +84,11 @@ def test_nanopb_rejects_payload_over_bound(tmp_path, codec_tool_path, codec_tool
     compiled bound allows. Nanopb must fail closed instead of overflowing
     its fixed-size buffer."""
     oversized = b"\x41" * (codec_tool_limits["ping_payload_max"] + 8)
-    envelope = _make_ping_envelope(protocol_version=1, request_id=1, payload=oversized)
+    envelope = _make_ping_envelope(
+        protocol_version=BOOMLINK_PROTOCOL_VERSION, request_id=1, payload=oversized
+    )
     encoded_path = tmp_path / "envelope.bin"
     encoded_path.write_bytes(envelope.SerializeToString())
 
     result = run_codec_tool(codec_tool_path, "decode", str(encoded_path))
-    assert result.returncode != 0
+    assert_clean_rejection(result)
