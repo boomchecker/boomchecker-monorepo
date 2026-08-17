@@ -4,8 +4,8 @@
  * @brief   Console on top of embedded-cli with output via a transport callback.
  ******************************************************************************
  */
-#include "boomlink_codec.h"
 #include "cli.h"
+#include "boomlink_codec.h"
 #include "embedded_cli.h"
 #include "main.h"   /* Error_Handler */
 #include "pcm_stream.h"
@@ -24,8 +24,16 @@
    RADIO_MAX_PAYLOAD can live - if a future change shrinks that constant
    without anyone remembering to also update boomlink_codec.c, this fails
    the build instead of the drift going unnoticed until a real Envelope no
-   longer fits on the air. */
-_Static_assert(RADIO_MAX_PAYLOAD - BOOMLINK_LINK_FRAME_HEADER_SIZE >= boomlink_Envelope_size,
+   longer fits on the air.
+
+   Written as an addition compared against RADIO_MAX_PAYLOAD, not a
+   subtraction compared against boomlink_Envelope_size: RADIO_MAX_PAYLOAD
+   and BOOMLINK_LINK_FRAME_HEADER_SIZE are both unsigned, so
+   "RADIO_MAX_PAYLOAD - BOOMLINK_LINK_FRAME_HEADER_SIZE" would silently
+   wrap to a huge value (and the assert would wrongly pass) if
+   RADIO_MAX_PAYLOAD were ever smaller than the header size - exactly the
+   kind of drift this check exists to catch. */
+_Static_assert(RADIO_MAX_PAYLOAD >= BOOMLINK_LINK_FRAME_HEADER_SIZE + boomlink_Envelope_size,
                "BoomLink Envelope no longer fits the real RADIO_MAX_PAYLOAD budget");
 
 /* Static CLI allocation (no malloc). Sized for the rx/cmd/history below plus bindings. */
@@ -243,11 +251,8 @@ static void cmd_radio(EmbeddedCli *cli, char *args, void *context)
    symbols would otherwise never be referenced by anything in the image.
    No BoomLink/radio transport involved yet (that is PR 3); this never
    touches the radio. */
-static void cmd_proto(EmbeddedCli *cli, char *args, void *context)
+static void proto_selftest(EmbeddedCli *cli)
 {
-  (void)args;
-  (void)context;
-
   boomlink_Envelope envelope = boomlink_Envelope_init_zero;
   boomlink_envelope_init(&envelope);
   envelope.header.request_id            = 1;
@@ -279,11 +284,30 @@ static void cmd_proto(EmbeddedCli *cli, char *args, void *context)
       decoded.payload.system.message.ping.payload.size == sizeof(kPayload) &&
       memcmp(decoded.payload.system.message.ping.payload.bytes, kPayload, sizeof(kPayload)) == 0;
 
+  /* RADIO_MAX_PAYLOAD - BOOMLINK_LINK_FRAME_HEADER_SIZE cannot underflow
+     here: the _Static_assert above already guarantees
+     RADIO_MAX_PAYLOAD >= BOOMLINK_LINK_FRAME_HEADER_SIZE (it requires the
+     sum of that and boomlink_Envelope_size to fit), so any binary that
+     compiled this file at all satisfies it. */
   char line[96];
   snprintf(line, sizeof(line), "proto selftest: %s (%u bytes encoded, %u byte budget)",
            round_trip_ok ? "ok" : "FAILED", (unsigned)len,
            (unsigned)(RADIO_MAX_PAYLOAD - BOOMLINK_LINK_FRAME_HEADER_SIZE));
   embeddedCliPrint(cli, line);
+}
+
+static void cmd_proto(EmbeddedCli *cli, char *args, void *context)
+{
+  (void)context;
+  const char *sub = embeddedCliGetToken(args, 1);
+
+  if (sub != NULL && strcmp(sub, "selftest") == 0)
+  {
+    proto_selftest(cli);
+    return;
+  }
+
+  embeddedCliPrint(cli, "usage: proto selftest");
 }
 
 /* Longest RX payload previewed in the CLI; longer packets are still fully
@@ -394,8 +418,8 @@ void cli_init(cli_tx_fn tx)
 
   CliCommandBinding proto_binding = {
     .name         = "proto",
-    .help         = "Encode/decode a BoomProtocol Envelope round-trip (bring-up self-test)",
-    .tokenizeArgs = false,
+    .help         = "proto selftest - encode/decode a BoomProtocol Envelope round-trip (bring-up self-test)",
+    .tokenizeArgs = true,
     .context      = NULL,
     .binding      = cmd_proto,
   };
