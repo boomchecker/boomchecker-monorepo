@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+package boomlink;
+
+// Application-level header carried inside every Envelope (see envelope.proto).
+// Addressing, link identity and ACK signalling live in BoomLink's fixed
+// binary link frame header instead (boomlink.md section 7.3, added by PR 3) -
+// deliberately not here, so BoomLink can filter/ACK/deduplicate packets
+// without ever invoking Nanopb.
+message MessageHeader {
+  // BoomProtocol compatibility version. Starts at 1; bump on a breaking wire
+  // format change (boomlink.md section 7.1).
+  uint32 protocol_version = 1;
+
+  // Correlates a request with its response at the application level. Zero
+  // when unused, e.g. an unsolicited message or a broadcast.
+  uint32 request_id = 2;
+}

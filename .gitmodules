@@ -1,3 +1,6 @@
 [submodule "fw/bom-stm32node/third_party/RadioLib"]
 	path = fw/bom-stm32node/third_party/RadioLib
 	url = https://github.com/jgromes/RadioLib.git
+[submodule "fw/bom-stm32node/third_party/nanopb"]
+	path = fw/bom-stm32node/third_party/nanopb
+	url = https://github.com/nanopb/nanopb.git

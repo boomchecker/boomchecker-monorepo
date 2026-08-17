@@ -121,6 +121,15 @@ add_library(radio_layer STATIC
 target_include_directories(radio_layer PUBLIC ${CMAKE_SOURCE_DIR}/App/radio)
 target_link_libraries(radio_layer PRIVATE RadioLib stm32cubemx)
 
+# BoomProtocol/Nanopb foundation (docs/firmware/bom-stm32node/boomlink.md PR 2):
+# .proto schema, generated Nanopb codec and boomlink_codec.h/.c live in
+# fw/common/boomlink so the host-native test build (fw/common/boomlink's own
+# CMakePresets.json) and this ARM cross build share one copy instead of
+# duplicating the generation logic. Produces only the `boomlink_protocol`
+# static library here - see fw/common/boomlink/CMakeLists.txt for why no
+# test targets are built under add_subdirectory().
+add_subdirectory(${CMAKE_SOURCE_DIR}/../common/boomlink boomlink)
+
 # Link directories setup
 target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user defined library search paths
@@ -156,6 +165,7 @@ list(REMOVE_ITEM CMAKE_C_IMPLICIT_LINK_LIBRARIES ob)
 target_link_libraries(${CMAKE_PROJECT_NAME}
     stm32cubemx
     radio_layer
+    boomlink_protocol
 
     # Add user defined libraries
 )
