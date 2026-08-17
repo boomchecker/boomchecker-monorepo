@@ -172,7 +172,12 @@ fw/
 │       │   ├── telemetry.proto
 │       │   └── system.proto
 │       ├── nanopb/
-│       │   └── boomlink.options
+│       │   └── <name>.options      # one per .proto that needs bounds, auto-
+│       │                           # discovered by name (avoids a spurious
+│       │                           # Nanopb warning on every .proto that
+│       │                           # doesn't need one - PR 2 started with a
+│       │                           # single shared boomlink.options and hit
+│       │                           # exactly that warning)
 │       ├── linkframe/
 │       │   ├── linkframe.md        # link frame header spec (section 7.3)
 │       │   └── boomlink_frame.h    # shared C header, mirrored by host parser
@@ -510,10 +515,17 @@ No fragmentation is implemented in the MVP. An oversized frame is rejected befor
 transmission. `flags` bit 1 (`more_fragments`) and the `fragment_index` byte are
 reserved wire-format space for a later PR to add fragmentation/reassembly without a
 breaking header change - a sender that never fragments always sends `more_fragments =
-0` and `fragment_index = 0`, indistinguishable from today's unfragmented frame. Until
-that PR lands, both fields are always zero and every receiver must ignore
-`fragment_index` and treat `more_fragments = 1` as "unsupported, drop" rather than
-attempting partial reassembly.
+0` and `fragment_index = 0`, indistinguishable from today's unfragmented frame.
+`flags` bits 2-7 are likewise reserved and always 0 until a future PR assigns them.
+
+Until fragmentation is implemented, every receiver must drop (not attempt partial
+reassembly of) any frame where `more_fragments = 1` **or** `fragment_index != 0` -
+checking `more_fragments` alone is not enough: a fragmented message's *last* fragment
+correctly sets `more_fragments = 0` (no more follow) while `fragment_index` is
+non-zero, and a receiver that only looks at `more_fragments` would accept that
+fragment as if it were a complete, standalone Envelope instead of the tail of one it
+never reassembled. Checking both fields together is what keeps an old (non-fragmenting)
+receiver from misinterpreting fragmented traffic from a newer sender.
 
 Do not design application messages that depend on filling the radio's theoretical
 maximum payload. Keep normal messages small to preserve airtime and reliability.
