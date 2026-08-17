@@ -121,6 +121,61 @@ COMMANDS: tuple[CommandSpec, ...] = (
         ),
     ),
     CommandSpec(
+        name="gps",
+        usage="gps <sec> [baud]",
+        description=(
+            "Stream raw NMEA sentences from the on-board Teseo-LIV3R GNSS module for <sec> "
+            "seconds (1..300). The board re-inits UART4 at [baud] (default 9600, the "
+            "module's ROM default; 1200..921600) and forwards each received line verbatim. "
+            "The Teseo-LIV3R is a ROM part - its configuration does not persist without "
+            "VBAT, so hosts should adapt to 9600 rather than reconfigure the module."
+        ),
+        response=(
+            "A `GPS baud=<baud> sec=<sec>` acknowledgement line, then raw NMEA lines "
+            "(`$G...*hh`, `$PSTM...*hh`) as they arrive, then a final `GPSEND lines=<n> "
+            "bytes=<n> ne=<n> fe=<n> ore=<n> pe=<n> overrun=<n> err=<0|1>` trailer. The "
+            "per-flag UART error counters separate marginal signal levels (ne, noise) "
+            "from a wrong baud rate (fe, framing) and IRQ starvation (ore); err=1 means "
+            "the host disconnected mid-run. `GPSERR ...` on init failure."
+        ),
+    ),
+    CommandSpec(
+        name="gpstx",
+        usage="gpstx <sentence> [baud]",
+        description=(
+            "Send one NMEA sentence to the GNSS module (e.g. `gpstx $PSTMGETSWVER`). The "
+            "leading `$` is optional; the NMEA checksum and CRLF are appended by the board. "
+            "The sentence must not contain spaces. UART reception stays armed afterwards, "
+            "so the module's reply is buffered and delivered by the next `gps` run."
+        ),
+        response="`GPSTX ok` on success, `GPSERR tx failed` or a usage line otherwise.",
+    ),
+    CommandSpec(
+        name="micdiag",
+        usage="micdiag",
+        description=(
+            "PDM microphone wiring diagnostics. With the PDM clock running, samples the "
+            "PDM_D1 (PE6) and PDM_D2 (PE4) data pins directly as GPIO inputs and counts "
+            "level transitions (a transmitting mic toggles constantly; the count is "
+            "qualitative). Then, with the clock stopped, a pull-up/pull-down test tells a "
+            "floating/tri-stated line apart from one driven or shorted."
+        ),
+        response=(
+            "Four `MICDIAG <pin> ...` lines (toggle counts with clk=on, pull test with "
+            "clk=off) and a `MICDIAGEND` trailer."
+        ),
+    ),
+    CommandSpec(
+        name="gpsrst",
+        usage="gpsrst",
+        description=(
+            "Pulse the GNSS module's SYS_RSTn line low for 100 ms (hardware restart of the "
+            "Teseo-LIV3R). Bring-up fallback for a module that stays silent on every baud "
+            "rate; the module cold-starts afterwards (RTC/time is lost without VBAT)."
+        ),
+        response="A single `GPSRST done (SYS_RSTn pulsed 100 ms)` line.",
+    ),
+    CommandSpec(
         name="dfu",
         usage="dfu",
         description=(

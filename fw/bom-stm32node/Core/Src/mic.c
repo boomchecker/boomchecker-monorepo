@@ -6,6 +6,11 @@
  */
 #include "mic.h"
 #include "sai.h"          /* extern SAI_HandleTypeDef hsai_BlockA1 (from CubeMX) */
+#include "main.h"         /* PDM_D1/D2 pin defines (mic_diag_run) */
+#include "usb_cli.h"      /* console prints for mic_diag_run */
+
+#include <stdio.h>
+#include <string.h>
 
 /* --- Circular DMA buffer and DMA linked-list ------------------------------- */
 static uint16_t pdm_ring[PDM_RING_HALFWORDS];   /* buffer filled by DMA          */
@@ -235,4 +240,93 @@ void HAL_SAI_ErrorCallback(SAI_HandleTypeDef *hsai)
 void GPDMA1_Channel0_IRQHandler(void)
 {
   HAL_DMA_IRQHandler(&hdma_sai_rx);
+}
+
+/* --- Wiring diagnostics (mic bring-up) -------------------------------------- */
+
+static void diag_print(const char *line)
+{
+  (void)usb_cli_write_blocking((const uint8_t *)line, (uint32_t)strlen(line));
+}
+
+/* Observe the PDM data pins directly: with CK1 running, temporarily switch
+   PE6 (D1) and PE4 (D2) to GPIO inputs and count level transitions - a
+   transmitting PDM mic toggles its line constantly, so toggles==0 means no
+   data arrives on that pin at all (the sampling loop is slower than the
+   3.072 MHz bit clock, so the count is qualitative, not a bit rate). A
+   static pull-up/pull-down test with the clock stopped then distinguishes a
+   tri-stated/unconnected line (follows the pull) from one driven or shorted
+   (ignores it). */
+void mic_diag_run(void)
+{
+  static const uint16_t pin_mask[2] = { PDM_D1_Pin, PDM_D2_Pin };
+  static const uint32_t pin_pos[2]  = { 6u, 4u }; /* PE6, PE4 */
+  static const char    *pin_name[2] = { "PE6/D1", "PE4/D2" };
+  char line[96];
+
+  mic_dma_init();
+  if (mic_start() != 0)
+  {
+    diag_print("MICDIAG mic start failed\n");
+    return;
+  }
+  HAL_Delay(30); /* IM67D130A: startup <= 20 ms after VDD+CLOCK */
+
+  for (uint32_t k = 0u; k < 2u; k++) /* AF -> input, AFR stays configured */
+  {
+    MODIFY_REG(GPIOE->MODER, 3u << (2u * pin_pos[k]), 0u);
+  }
+
+  uint32_t togg[2] = { 0u, 0u };
+  uint32_t hi[2]   = { 0u, 0u };
+  uint32_t prev    = GPIOE->IDR;
+  const uint32_t samples = 200000u; /* ~10 ms at 250 MHz */
+  for (uint32_t i = 0u; i < samples; i++)
+  {
+    uint32_t idr = GPIOE->IDR;
+    for (uint32_t k = 0u; k < 2u; k++)
+    {
+      uint32_t bit = (idr >> pin_pos[k]) & 1u;
+      togg[k] += bit ^ ((prev >> pin_pos[k]) & 1u);
+      hi[k]   += bit;
+    }
+    prev = idr;
+  }
+
+  for (uint32_t k = 0u; k < 2u; k++) /* back to AF (SAI) */
+  {
+    MODIFY_REG(GPIOE->MODER, 3u << (2u * pin_pos[k]), 2u << (2u * pin_pos[k]));
+  }
+  mic_stop();
+
+  for (uint32_t k = 0u; k < 2u; k++)
+  {
+    snprintf(line, sizeof(line), "MICDIAG %s clk=on toggles=%lu hi=%lu/%lu\n",
+             pin_name[k], (unsigned long)togg[k], (unsigned long)hi[k],
+             (unsigned long)samples);
+    diag_print(line);
+  }
+
+  /* Static pull test with the PDM clock idle. */
+  for (uint32_t k = 0u; k < 2u; k++)
+  {
+    uint32_t pos2 = 2u * pin_pos[k];
+    MODIFY_REG(GPIOE->MODER, 3u << pos2, 0u);           /* input        */
+    MODIFY_REG(GPIOE->PUPDR, 3u << pos2, 1u << pos2);   /* pull-up      */
+    HAL_Delay(2);
+    uint32_t pu = (GPIOE->IDR & pin_mask[k]) ? 1u : 0u;
+    MODIFY_REG(GPIOE->PUPDR, 3u << pos2, 2u << pos2);   /* pull-down    */
+    HAL_Delay(2);
+    uint32_t pd = (GPIOE->IDR & pin_mask[k]) ? 1u : 0u;
+    MODIFY_REG(GPIOE->PUPDR, 3u << pos2, 0u);           /* no pull      */
+    MODIFY_REG(GPIOE->MODER, 3u << pos2, 2u << pos2);   /* back to AF   */
+    snprintf(line, sizeof(line),
+             "MICDIAG %s clk=off pu=%lu pd=%lu (%s)\n", pin_name[k],
+             (unsigned long)pu, (unsigned long)pd,
+             (pu == 1u && pd == 0u) ? "floating/tri-state"
+             : (pu == 0u)           ? "driven/shorted LOW"
+                                    : "driven HIGH");
+    diag_print(line);
+  }
+  diag_print("MICDIAGEND\n");
 }

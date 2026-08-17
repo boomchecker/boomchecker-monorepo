@@ -198,6 +198,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     ${CMAKE_SOURCE_DIR}/Core/Src/mfcc_processor.c
     ${CMAKE_SOURCE_DIR}/Core/Src/svm_classifier.c
     ${CMAKE_SOURCE_DIR}/Core/Src/dfu_boot.c
+    ${CMAKE_SOURCE_DIR}/Core/Src/gps.c
     ${CMAKE_SOURCE_DIR}/third_party/embedded-cli/lib/src/embedded_cli.c
     # CMSIS-DSP: per-group combined TUs (only what arm_mfcc_f32 + the SVM
     # need); --gc-sections drops the unused tables/kernels.
