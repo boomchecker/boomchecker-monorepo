@@ -1,4 +1,7 @@
-cmake_minimum_required(VERSION 3.20)
+# 3.21, not 3.20: CMakePresets.json's testPresets (used by `ctest --preset`)
+# need 3.21 - a lower cmake_minimum_required here would understate what this
+# file actually needs to be usable end-to-end.
+cmake_minimum_required(VERSION 3.21)
 
 # This file is consumed two different ways:
 #
@@ -24,11 +27,27 @@ else()
   set(BOOMLINK_STANDALONE FALSE)
 endif()
 
+# ASan+UBSan for the host test suite - this package's whole reason to exist
+# as a host-testable build is exercising a wire-format parser on
+# hostile/malformed bytes (see tests/test_compatibility.py); a memory-safety
+# bug in that parser (or in the C tool driving it) is exactly what a
+# sanitizer catches and a plain pass/fail exit code does not. Host-only:
+# never applied to the ARM cross build, which has no sanitizer runtime.
+option(BOOMLINK_SANITIZE "Build with AddressSanitizer + UndefinedBehaviorSanitizer" OFF)
+if(BOOMLINK_STANDALONE AND BOOMLINK_SANITIZE)
+  add_compile_options(-fsanitize=address,undefined -fno-sanitize-recover=all -g -O1)
+  add_link_options(-fsanitize=address,undefined)
+endif()
+
 # Nanopb is vendored once, under bom-stm32node/third_party/ (git submodule
 # pinned to release 0.4.9), and referenced from here by relative path rather
 # than duplicating the submodule: both this host-native build and the ARM
-# firmware build need the exact same runtime/generator.
-set(NANOPB_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../bom-stm32node/third_party/nanopb)
+# firmware build need the exact same runtime/generator. A CACHE variable
+# (not a plain `set`) so this package can be relocated or paired with a
+# differently-laid-out sibling without editing this file - e.g. a future
+# host-only consumer that doesn't live under fw/bom-stm32node at all.
+set(NANOPB_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../bom-stm32node/third_party/nanopb
+    CACHE PATH "Path to the vendored Nanopb submodule")
 set(NANOPB_GENERATOR ${NANOPB_DIR}/generator/nanopb_generator.py)
 
 if(NOT EXISTS ${NANOPB_GENERATOR})
@@ -37,18 +56,40 @@ if(NOT EXISTS ${NANOPB_GENERATOR})
     "git submodule update --init fw/bom-stm32node/third_party/nanopb")
 endif()
 
-add_library(nanopb STATIC
-  ${NANOPB_DIR}/pb_common.c
-  ${NANOPB_DIR}/pb_encode.c
-  ${NANOPB_DIR}/pb_decode.c
-)
-target_include_directories(nanopb PUBLIC ${NANOPB_DIR})
+# Named boomlink_nanopb (not the generic "nanopb" nanopb's own vendored
+# CMakeLists.txt would use) since this package is designed to be
+# add_subdirectory()'d into other builds - a bare "nanopb" target risks a
+# hard `add_library cannot create target "nanopb" because another target
+# with that name already exists` the moment any sibling package vendors
+# Nanopb the same way, or itself add_subdirectory()'s the real upstream
+# CMakeLists.txt. Guarded for the same reason: two consumers pulling in this
+# same fw/common/boomlink directory would otherwise redefine every target
+# here a second time.
+if(NOT TARGET boomlink_nanopb)
+  add_library(boomlink_nanopb STATIC
+    ${NANOPB_DIR}/pb_common.c
+    ${NANOPB_DIR}/pb_encode.c
+    ${NANOPB_DIR}/pb_decode.c
+  )
+  target_include_directories(boomlink_nanopb PUBLIC ${NANOPB_DIR})
+  add_library(boomlink::nanopb ALIAS boomlink_nanopb)
+endif()
 
 # The Nanopb generator shells out to protoc (via grpcio-tools' bundled copy,
 # falling back to a system install) and needs the `protobuf` package to parse
 # what protoc produces - see fw/bom-stm32node/third_party/nanopb/requirements.txt.
 # Checked at configure time so a missing dependency is one clear error instead
 # of a confusing generator stack trace mid-build.
+#
+# Code generation always runs on the build host, never the target - true
+# even under fw/bom-stm32node's ARM cross build. Today's toolchain files
+# (fw/bom-stm32node/cmake/*.cmake) don't set CMAKE_FIND_ROOT_PATH, so this
+# has never actually mattered, but say so explicitly rather than relying on
+# that being an accident of the current toolchain files: a Python
+# interpreter never lives in an embedded sysroot. Scoped to this directory
+# only (no PARENT_SCOPE), so it can't affect find_program() calls made by
+# whatever included this file.
+set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
 find_package(Python3 COMPONENTS Interpreter REQUIRED)
 execute_process(
   COMMAND ${Python3_EXECUTABLE} -c "import google.protobuf, grpc_tools.protoc"
@@ -59,13 +100,13 @@ if(BOOMLINK_PYTHON_DEPS_MISSING)
   message(FATAL_ERROR
     "Python packages 'protobuf' and 'grpcio-tools' are required to generate "
     "Nanopb code from fw/common/boomlink/proto/*.proto. Install them "
-    "(matching fw/common/boomlink/pyproject.toml) with:\n"
-    "    pip install protobuf grpcio-tools\n"
+    "(matching fw/common/boomlink/requirements.txt) with:\n"
+    "    pip install -r requirements.txt\n"
     "or run `task setup` in fw/common/boomlink.")
 endif()
 
 set(BOOMLINK_PROTO_DIR ${CMAKE_CURRENT_SOURCE_DIR}/proto)
-set(BOOMLINK_OPTIONS_FILE ${CMAKE_CURRENT_SOURCE_DIR}/nanopb/boomlink.options)
+set(BOOMLINK_NANOPB_OPTIONS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/nanopb)
 set(BOOMLINK_PROTO_NAMES common header system envelope)
 list(TRANSFORM BOOMLINK_PROTO_NAMES PREPEND ${BOOMLINK_PROTO_DIR}/ OUTPUT_VARIABLE BOOMLINK_PROTO_FILES)
 list(TRANSFORM BOOMLINK_PROTO_FILES APPEND .proto)
@@ -81,14 +122,24 @@ foreach(proto_name IN LISTS BOOMLINK_PROTO_NAMES)
   # own), rather than tracking envelope.proto's imports precisely: simpler,
   # and the cost of an occasional unnecessary regeneration of these four tiny
   # files is not worth the extra bookkeeping.
+  #
+  # No explicit -f<options file>: passing one global options file to every
+  # invocation made the generator warn "did not match any fields" on the
+  # three proto files with no matching options entry, every single build -
+  # noise that buries the one thing that warning is supposed to catch (a
+  # genuinely stale/typo'd entry). Nanopb auto-discovers a same-named
+  # `<proto>.options` via its `-I`/`--options-path` search list instead
+  # (verified against the vendored generator source): only system.proto has
+  # one (nanopb/system.options, matched via the extra -I below), so the
+  # other three simply find nothing and stay silent.
   add_custom_command(
     OUTPUT ${out_c} ${out_h}
     COMMAND ${Python3_EXECUTABLE} ${NANOPB_GENERATOR}
             -I${BOOMLINK_PROTO_DIR}
-            -f${BOOMLINK_OPTIONS_FILE}
+            -I${BOOMLINK_NANOPB_OPTIONS_DIR}
             -D${BOOMLINK_GENERATED_DIR}
             ${BOOMLINK_PROTO_DIR}/${proto_name}.proto
-    DEPENDS ${BOOMLINK_PROTO_FILES} ${BOOMLINK_OPTIONS_FILE} ${NANOPB_GENERATOR}
+    DEPENDS ${BOOMLINK_PROTO_FILES} ${BOOMLINK_NANOPB_OPTIONS_DIR}/system.options ${NANOPB_GENERATOR}
     COMMENT "Generating Nanopb code for ${proto_name}.proto"
     VERBATIM
   )
@@ -97,11 +148,16 @@ endforeach()
 
 add_custom_target(boomlink_proto_gen DEPENDS ${BOOMLINK_GENERATED_SOURCES})
 
-# Isolated the same way PR 1's radio_layer isolates RadioLib (see
-# fw/bom-stm32node/CMakeLists.txt): consuming code only ever sees
-# boomlink_codec.h + the generated *.pb.h headers it re-exports, never
-# Nanopb's own headers directly, and never hand-writes pb_encode/pb_decode
-# calls outside this library.
+# NOT fully isolated the way PR 1's radio_layer isolates RadioLib behind a
+# PRIVATE link (fw/bom-stm32node/CMakeLists.txt) - that isolation is
+# enforced by the compiler there (consuming code can't even see RadioLib's
+# headers). Here it can't be: boomlink_codec.h itself includes
+# envelope.pb.h, which includes Nanopb's <pb.h>, so that header is
+# necessarily on every consumer's include path via this PUBLIC link below.
+# What IS true, and worth keeping true, is that consuming code has no
+# reason to include Nanopb's headers or call pb_encode/pb_decode directly -
+# boomlink_codec.h's two functions are the whole intended surface - just
+# that nothing stops it at compile time the way radio_layer's boundary does.
 add_library(boomlink_protocol STATIC
   ${BOOMLINK_GENERATED_SOURCES}
   ${CMAKE_CURRENT_SOURCE_DIR}/boomlink_codec.c
@@ -111,12 +167,20 @@ target_include_directories(boomlink_protocol PUBLIC
   ${BOOMLINK_GENERATED_DIR}
   ${CMAKE_CURRENT_SOURCE_DIR}
 )
-target_link_libraries(boomlink_protocol PUBLIC nanopb)
+target_link_libraries(boomlink_protocol PUBLIC boomlink::nanopb)
+# boomlink_codec.c uses _Static_assert (C11). Self-contained via
+# target_compile_features rather than relying on whichever CMAKE_C_STANDARD
+# happens to be set in the including scope: the standalone branch above sets
+# it explicitly, but fw/bom-stm32node/CMakeLists.txt (a CubeMX-generated
+# file - see its own header comment) is exactly the kind of file that gets
+# silently regenerated, and this target should not depend on it staying at
+# C11 by accident.
+target_compile_features(boomlink_protocol PUBLIC c_std_11)
 
 if(BOOMLINK_STANDALONE)
   enable_testing()
 
-  add_executable(boomlink_codec_tool tests/test_encode_decode.c)
+  add_executable(boomlink_codec_tool tests/codec_tool.c)
   target_link_libraries(boomlink_codec_tool PRIVATE boomlink_protocol)
 
   add_test(NAME boomlink_codec_selftest COMMAND boomlink_codec_tool selftest)
