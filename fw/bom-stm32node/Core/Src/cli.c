@@ -4,6 +4,7 @@
  * @brief   Console on top of embedded-cli with output via a transport callback.
  ******************************************************************************
  */
+#include "boomlink_codec.h"
 #include "cli.h"
 #include "embedded_cli.h"
 #include "main.h"   /* Error_Handler */
@@ -12,7 +13,20 @@
 
 #include <stdio.h>  /* snprintf */
 #include <stdlib.h> /* strtoul */
-#include <string.h> /* memcpy, strcmp, strlen */
+#include <string.h> /* memcmp, memcpy, strcmp, strlen */
+
+/* Live cross-check between two independently-vendored packages:
+   boomlink_codec.c can only hardcode its own assumed copy of the SX126x
+   hard packet limit (see its comment on BOOMLINK_RADIO_MAX_PAYLOAD) since
+   fw/common/boomlink must not depend on this firmware's App/ layer
+   (boomlink.md section 4). This file already includes both radio.h and
+   boomlink_codec.h, so it is where a check against the REAL compiled
+   RADIO_MAX_PAYLOAD can live - if a future change shrinks that constant
+   without anyone remembering to also update boomlink_codec.c, this fails
+   the build instead of the drift going unnoticed until a real Envelope no
+   longer fits on the air. */
+_Static_assert(RADIO_MAX_PAYLOAD - BOOMLINK_LINK_FRAME_HEADER_SIZE >= boomlink_Envelope_size,
+               "BoomLink Envelope no longer fits the real RADIO_MAX_PAYLOAD budget");
 
 /* Static CLI allocation (no malloc). Sized for the rx/cmd/history below plus bindings. */
 #define CLI_STATIC_BYTES  2048u
@@ -221,6 +235,57 @@ static void cmd_radio(EmbeddedCli *cli, char *args, void *context)
   embeddedCliPrint(cli, "usage: radio status | radio ping [text] | radio reset");
 }
 
+/* BoomProtocol bring-up smoke test: build a Ping-carrying Envelope, encode
+   it, decode the bytes back, and check every field survived. Exists so the
+   PR 2 acceptance criterion "STM32 build can encode/decode an Envelope
+   using Nanopb" is something this firmware actually does at runtime, not
+   just a library the linker happens to include - proto.c's boomlink_protocol
+   symbols would otherwise never be referenced by anything in the image.
+   No BoomLink/radio transport involved yet (that is PR 3); this never
+   touches the radio. */
+static void cmd_proto(EmbeddedCli *cli, char *args, void *context)
+{
+  (void)args;
+  (void)context;
+
+  boomlink_Envelope envelope = boomlink_Envelope_init_zero;
+  boomlink_envelope_init(&envelope);
+  envelope.header.request_id            = 1;
+  envelope.which_payload                = boomlink_Envelope_system_tag;
+  envelope.payload.system.which_message = boomlink_SystemMessage_ping_tag;
+  const uint8_t kPayload[]              = {'h', 'i'};
+  memcpy(envelope.payload.system.message.ping.payload.bytes, kPayload, sizeof(kPayload));
+  envelope.payload.system.message.ping.payload.size = sizeof(kPayload);
+
+  uint8_t buf[boomlink_Envelope_size];
+  size_t  len = 0;
+  if (!boomlink_encode_envelope(&envelope, buf, sizeof(buf), &len))
+  {
+    embeddedCliPrint(cli, "proto selftest: encode failed");
+    return;
+  }
+
+  boomlink_Envelope decoded = boomlink_Envelope_init_zero;
+  if (!boomlink_decode_envelope(buf, len, &decoded))
+  {
+    embeddedCliPrint(cli, "proto selftest: decode failed");
+    return;
+  }
+
+  bool round_trip_ok =
+      decoded.header.protocol_version == BOOMLINK_PROTOCOL_VERSION &&
+      decoded.header.request_id == 1 && decoded.which_payload == boomlink_Envelope_system_tag &&
+      decoded.payload.system.which_message == boomlink_SystemMessage_ping_tag &&
+      decoded.payload.system.message.ping.payload.size == sizeof(kPayload) &&
+      memcmp(decoded.payload.system.message.ping.payload.bytes, kPayload, sizeof(kPayload)) == 0;
+
+  char line[96];
+  snprintf(line, sizeof(line), "proto selftest: %s (%u bytes encoded, %u byte budget)",
+           round_trip_ok ? "ok" : "FAILED", (unsigned)len,
+           (unsigned)(RADIO_MAX_PAYLOAD - BOOMLINK_LINK_FRAME_HEADER_SIZE));
+  embeddedCliPrint(cli, line);
+}
+
 /* Longest RX payload previewed in the CLI; longer packets are still fully
    received/counted, just truncated for the debug print. */
 #define RADIO_RX_PREVIEW_MAX 64u
@@ -326,6 +391,15 @@ void cli_init(cli_tx_fn tx)
     .binding      = cmd_radio,
   };
   embeddedCliAddBinding(s_cli, radio_binding);
+
+  CliCommandBinding proto_binding = {
+    .name         = "proto",
+    .help         = "Encode/decode a BoomProtocol Envelope round-trip (bring-up self-test)",
+    .tokenizeArgs = false,
+    .context      = NULL,
+    .binding      = cmd_proto,
+  };
+  embeddedCliAddBinding(s_cli, proto_binding);
 
   embeddedCliProcess(s_cli); /* print the initial prompt */
 }
