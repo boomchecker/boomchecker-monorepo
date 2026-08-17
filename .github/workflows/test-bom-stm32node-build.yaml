@@ -9,6 +9,9 @@ on:
       - 'fw/common/boomlink/**'
       - '.github/workflows/test-bom-stm32node-build.yaml'
 
+permissions:
+  contents: read
+
 jobs:
   test-build:
     name: Build firmware (Debug)
@@ -43,6 +46,8 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: fw/common/boomlink/requirements.txt
 
       - name: Install Nanopb generator dependencies
         run: |
@@ -51,9 +56,12 @@ jobs:
           # via grpcio-tools' bundled copy) at build time to turn
           # fw/common/boomlink/proto/*.proto into the *.pb.c/.pb.h the
           # boomlink_protocol library compiles - see
-          # fw/common/boomlink/CMakeLists.txt and
-          # fw/bom-stm32node/third_party/nanopb/requirements.txt.
-          pip install --quiet protobuf grpcio-tools
+          # fw/common/boomlink/CMakeLists.txt. Installed from the same
+          # requirements.txt as the host protocol build (not a hand-picked
+          # `pip install protobuf grpcio-tools`) so the two CI jobs can never
+          # silently diverge on which protobuf/grpcio-tools version they run
+          # against.
+          pip install --quiet -r fw/common/boomlink/requirements.txt
 
       - name: Configure
         working-directory: ./fw/bom-stm32node

@@ -5,8 +5,17 @@ on:
   pull_request:
     paths:
       - '.gitmodules'
+      # A nanopb submodule version bump changes this gitlink, not
+      # .gitmodules (which only changes on a url/path edit) - without this,
+      # the only CI that actually runs generated encode/decode logic
+      # wouldn't notice a nanopb update that changes decode behaviour (e.g.
+      # bounds handling, unknown-field skipping).
+      - 'fw/bom-stm32node/third_party/nanopb'
       - 'fw/common/boomlink/**'
       - '.github/workflows/test-boomlink-protocol-build.yaml'
+
+permissions:
+  contents: read
 
 jobs:
   test-build:
@@ -31,6 +40,8 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: fw/common/boomlink/requirements.txt
 
       - name: Install Python dependencies
         working-directory: ./fw/common/boomlink
@@ -55,3 +66,4 @@ jobs:
           echo "- Nanopb code generated from fw/common/boomlink/proto/*.proto ✓" >> $GITHUB_STEP_SUMMARY
           echo "- boomlink_protocol (host-native) built ✓" >> $GITHUB_STEP_SUMMARY
           echo "- C self-test + Python cross-language/compatibility suite passed ✓" >> $GITHUB_STEP_SUMMARY
+          echo "- built with AddressSanitizer + UndefinedBehaviorSanitizer (BOOMLINK_SANITIZE, on by default for the Debug preset) ✓" >> $GITHUB_STEP_SUMMARY
