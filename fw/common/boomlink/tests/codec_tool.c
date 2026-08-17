@@ -1,33 +1,61 @@
 /**
  ******************************************************************************
- * @file    test_encode_decode.c
- * @brief   Host-native C test harness for boomlink_codec (see
- *          fw/common/boomlink/boomlink_codec.h) and standalone `encode`/
- *          `decode` CLI subcommands used as the "Nanopb side" of the
- *          cross-language interop tests in tests/test_encode_decode.py -
+ * @file    codec_tool.c
+ * @brief   Host-native CLI wrapping boomlink_codec (see
+ *          fw/common/boomlink/boomlink_codec.h): an internal round-trip
+ *          self-test plus `encode`/`decode`/`limits` subcommands used as the
+ *          "Nanopb side" of the cross-language interop tests in
+ *          tests/test_encode_decode.py and tests/test_compatibility.py -
  *          boomlink.md section 15.1 requires "Python Protobuf encode ->
  *          Nanopb decode" and "Nanopb encode -> Python Protobuf decode" to
  *          both be exercised on the same test vectors, which needs a real
  *          Nanopb-side process pytest can shell out to.
  *
  *          Usage:
- *            test_encode_decode selftest
- *            test_encode_decode encode <ping|pong> <protocol_version> \
- *                                <request_id> <payload_hex> <out_file>
- *            test_encode_decode decode <in_file>
+ *            codec_tool selftest
+ *            codec_tool limits
+ *            codec_tool encode <ping|pong> <protocol_version> \
+ *                               <request_id> <payload_hex> <out_file>
+ *            codec_tool decode <in_file>
  ******************************************************************************
  */
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "boomlink_codec.h"
 
-/* Matches nanopb/boomlink.options' Ping/Pong payload max_size. Not derived
-   from the generated headers here (boomlink_Ping_payload_t's array length
-   isn't exposed as its own macro) - if the bound in boomlink.options ever
-   changes, update this too. */
-#define BOOMLINK_TEST_MAX_PAYLOAD 192
+/* The real compiled payload bound per message, read from the generated
+   struct layout itself rather than a hand-maintained copy of
+   nanopb/system.options' max_size - changing that value here needs no
+   corresponding edit anywhere in this file. */
+#define BOOMLINK_PING_PAYLOAD_CAP (sizeof(((boomlink_Ping *)0)->payload.bytes))
+#define BOOMLINK_PONG_PAYLOAD_CAP (sizeof(((boomlink_Pong *)0)->payload.bytes))
+#define BOOMLINK_MAX_PAYLOAD_CAP \
+  (BOOMLINK_PING_PAYLOAD_CAP > BOOMLINK_PONG_PAYLOAD_CAP ? BOOMLINK_PING_PAYLOAD_CAP \
+                                                          : BOOMLINK_PONG_PAYLOAD_CAP)
+
+/* Parses `s` as a base-10 uint32_t. Rejects empty input, leading/trailing
+   junk, negative signs, and anything out of uint32_t range - `strtoul`
+   alone silently accepts all of these (e.g. "12abc" -> 12, "-1" -> wraps,
+   an out-of-range value saturates to ULONG_MAX without necessarily setting
+   errno on every libc). A test asserting this tool rejects a specific value
+   is worthless if a typo'd argument silently becomes some other value
+   instead of failing loudly. */
+static bool parse_u32(const char *s, uint32_t *out) {
+  if (s == NULL || *s == '\0') {
+    return false;
+  }
+  errno              = 0;
+  char         *end  = NULL;
+  unsigned long value = strtoul(s, &end, 10);
+  if (*end != '\0' || errno == ERANGE || value > 0xFFFFFFFFUL) {
+    return false;
+  }
+  *out = (uint32_t)value;
+  return true;
+}
 
 static int hex_nibble(char c) {
   if (c >= '0' && c <= '9') return c - '0';
@@ -53,8 +81,16 @@ static int hex_decode(const char *hex, uint8_t *out, size_t out_cap) {
   return (int)out_len;
 }
 
-static void hex_encode(const uint8_t *data, size_t len, char *out /* >= 2*len+1 */) {
+/* `out` must have capacity >= 2*len+1. */
+static void hex_encode(const uint8_t *data, size_t len, char *out, size_t out_cap) {
   static const char digits[] = "0123456789abcdef";
+  if (out_cap < 2 * len + 1) {
+    /* Can't happen given this file's own callers (out is always sized from
+       BOOMLINK_MAX_PAYLOAD_CAP, len never exceeds a real payload's compiled
+       bound) - guard anyway rather than trust that invariant silently. */
+    if (out_cap > 0) out[0] = '\0';
+    return;
+  }
   for (size_t i = 0; i < len; i++) {
     out[2 * i]     = digits[(data[i] >> 4) & 0xF];
     out[2 * i + 1] = digits[data[i] & 0xF];
@@ -67,20 +103,12 @@ static void hex_encode(const uint8_t *data, size_t len, char *out /* >= 2*len+1 
    every field survived. Exercised directly by CTest (no `decode`/`encode`
    subprocess plumbing needed for this one). */
 static int run_selftest(void) {
-  boomlink_Envelope envelope  = boomlink_Envelope_init_zero;
-  /* header is a singular message-type field, so proto3 tracks its presence
-     explicitly (has_header) rather than always encoding it - unlike a
-     top-level scalar field, setting sub-fields alone does not imply
-     presence. Forgetting this line encodes an Envelope with NO header at
-     all: protocol_version/request_id silently decode as 0 on the other end
-     instead of a build/runtime error, since it is a fully valid (if empty)
-     encoding of the schema. */
-  envelope.has_header               = true;
-  envelope.header.protocol_version = 1;
-  envelope.header.request_id       = 42;
-  envelope.which_payload           = boomlink_Envelope_system_tag;
+  boomlink_Envelope envelope = boomlink_Envelope_init_zero;
+  boomlink_envelope_init(&envelope);
+  envelope.header.request_id            = 42;
+  envelope.which_payload                = boomlink_Envelope_system_tag;
   envelope.payload.system.which_message = boomlink_SystemMessage_ping_tag;
-  const uint8_t kPayload[] = {0xDE, 0xAD, 0xBE, 0xEF};
+  const uint8_t kPayload[]              = {0xDE, 0xAD, 0xBE, 0xEF};
   memcpy(envelope.payload.system.message.ping.payload.bytes, kPayload, sizeof(kPayload));
   envelope.payload.system.message.ping.payload.size = sizeof(kPayload);
 
@@ -97,7 +125,7 @@ static int run_selftest(void) {
     return 1;
   }
 
-  if (decoded.header.protocol_version != 1 || decoded.header.request_id != 42 ||
+  if (decoded.header.protocol_version != BOOMLINK_PROTOCOL_VERSION || decoded.header.request_id != 42 ||
       decoded.which_payload != boomlink_Envelope_system_tag ||
       decoded.payload.system.which_message != boomlink_SystemMessage_ping_tag ||
       decoded.payload.system.message.ping.payload.size != sizeof(kPayload) ||
@@ -113,7 +141,28 @@ static int run_selftest(void) {
     return 1;
   }
 
+  /* An Envelope with protocol_version left at 0 must be rejected by the
+     encoder, not silently produce a wire-valid frame nobody asked for. */
+  boomlink_Envelope zero_version = boomlink_Envelope_init_zero;
+  zero_version.has_header        = true; /* protocol_version stays 0 */
+  zero_version.which_payload     = boomlink_Envelope_system_tag;
+  uint8_t reject_buf[boomlink_Envelope_size];
+  size_t  reject_len = 0;
+  if (boomlink_encode_envelope(&zero_version, reject_buf, sizeof(reject_buf), &reject_len)) {
+    fprintf(stderr, "selftest: encoding protocol_version=0 unexpectedly succeeded\n");
+    return 1;
+  }
+
   printf("selftest: ok\n");
+  return 0;
+}
+
+/* Prints the real compiled Ping/Pong payload bounds, so tests read the
+   limit from this tool instead of hardcoding their own copy of
+   nanopb/system.options' max_size. */
+static int run_limits(void) {
+  printf("ping_payload_max=%zu\n", BOOMLINK_PING_PAYLOAD_CAP);
+  printf("pong_payload_max=%zu\n", BOOMLINK_PONG_PAYLOAD_CAP);
   return 0;
 }
 
@@ -123,34 +172,45 @@ static int run_encode(int argc, char **argv) {
             "usage: encode <ping|pong> <protocol_version> <request_id> <payload_hex> <out_file>\n");
     return 2;
   }
-  const char *kind             = argv[2];
-  uint32_t    protocol_version = (uint32_t)strtoul(argv[3], NULL, 10);
-  uint32_t    request_id       = (uint32_t)strtoul(argv[4], NULL, 10);
-  const char *payload_hex      = argv[5];
-  const char *out_path         = argv[6];
+  const char *kind        = argv[2];
+  uint32_t    protocol_version;
+  uint32_t    request_id;
+  if (!parse_u32(argv[3], &protocol_version)) {
+    fprintf(stderr, "encode: '%s' is not a valid uint32 protocol_version\n", argv[3]);
+    return 2;
+  }
+  if (!parse_u32(argv[4], &request_id)) {
+    fprintf(stderr, "encode: '%s' is not a valid uint32 request_id\n", argv[4]);
+    return 2;
+  }
+  const char *payload_hex = argv[5];
+  const char *out_path    = argv[6];
 
-  boomlink_Envelope envelope       = boomlink_Envelope_init_zero;
-  envelope.has_header               = true; /* see selftest's comment on has_header */
-  envelope.header.protocol_version = protocol_version;
+  boomlink_Envelope envelope = boomlink_Envelope_init_zero;
+  boomlink_envelope_init(&envelope);
+  envelope.header.protocol_version = protocol_version; /* may deliberately be 0, to test rejection */
   envelope.header.request_id       = request_id;
   envelope.which_payload           = boomlink_Envelope_system_tag;
 
   uint8_t   *payload_bytes;
   pb_size_t *payload_size;
+  size_t     payload_cap;
   if (strcmp(kind, "ping") == 0) {
     envelope.payload.system.which_message = boomlink_SystemMessage_ping_tag;
-    payload_bytes = envelope.payload.system.message.ping.payload.bytes;
-    payload_size  = &envelope.payload.system.message.ping.payload.size;
+    payload_bytes                         = envelope.payload.system.message.ping.payload.bytes;
+    payload_size                          = &envelope.payload.system.message.ping.payload.size;
+    payload_cap                           = BOOMLINK_PING_PAYLOAD_CAP;
   } else if (strcmp(kind, "pong") == 0) {
     envelope.payload.system.which_message = boomlink_SystemMessage_pong_tag;
-    payload_bytes = envelope.payload.system.message.pong.payload.bytes;
-    payload_size  = &envelope.payload.system.message.pong.payload.size;
+    payload_bytes                         = envelope.payload.system.message.pong.payload.bytes;
+    payload_size                          = &envelope.payload.system.message.pong.payload.size;
+    payload_cap                           = BOOMLINK_PONG_PAYLOAD_CAP;
   } else {
     fprintf(stderr, "encode: unknown kind '%s' (expected ping or pong)\n", kind);
     return 2;
   }
 
-  int decoded_len = hex_decode(payload_hex, payload_bytes, BOOMLINK_TEST_MAX_PAYLOAD);
+  int decoded_len = hex_decode(payload_hex, payload_bytes, payload_cap);
   if (decoded_len < 0) {
     fprintf(stderr, "encode: malformed or oversized payload_hex\n");
     return 2;
@@ -190,12 +250,21 @@ static int run_decode(int argc, char **argv) {
     fprintf(stderr, "decode: could not open '%s' for reading\n", in_path);
     return 1;
   }
-  uint8_t buf[512];
-  size_t  len = fread(buf, 1, sizeof(buf), f);
-  int     eof = feof(f);
+  /* boomlink_Envelope_size is the schema's own worst-case encoding size for
+     the current build - anything larger literally cannot be a valid
+     Envelope under this schema, so it doubles as the read cap. */
+  uint8_t buf[boomlink_Envelope_size];
+  size_t  len   = fread(buf, 1, sizeof(buf), f);
+  int     eof   = feof(f);
+  int     ferr  = ferror(f);
   fclose(f);
+  if (ferr) {
+    fprintf(stderr, "decode: read error on '%s'\n", in_path);
+    return 1;
+  }
   if (!eof) {
-    fprintf(stderr, "decode: '%s' is larger than the maximum expected envelope size\n", in_path);
+    fprintf(stderr, "decode: '%s' is larger than the maximum possible envelope size (%d bytes)\n",
+            in_path, (int)boomlink_Envelope_size);
     return 1;
   }
 
@@ -214,13 +283,15 @@ static int run_decode(int argc, char **argv) {
   }
 
   const boomlink_SystemMessage *system = &envelope.payload.system;
-  char hex[2 * BOOMLINK_TEST_MAX_PAYLOAD + 1];
+  char                          hex[2 * BOOMLINK_MAX_PAYLOAD_CAP + 1];
   if (system->which_message == boomlink_SystemMessage_ping_tag) {
-    hex_encode(system->message.ping.payload.bytes, system->message.ping.payload.size, hex);
+    hex_encode(system->message.ping.payload.bytes, system->message.ping.payload.size, hex,
+               sizeof(hex));
     printf("kind=ping\n");
     printf("payload=%s\n", hex);
   } else if (system->which_message == boomlink_SystemMessage_pong_tag) {
-    hex_encode(system->message.pong.payload.bytes, system->message.pong.payload.size, hex);
+    hex_encode(system->message.pong.payload.bytes, system->message.pong.payload.size, hex,
+               sizeof(hex));
     printf("kind=pong\n");
     printf("payload=%s\n", hex);
   } else {
@@ -231,11 +302,14 @@ static int run_decode(int argc, char **argv) {
 
 int main(int argc, char **argv) {
   if (argc < 2) {
-    fprintf(stderr, "usage: %s <selftest|encode|decode> [args...]\n", argv[0]);
+    fprintf(stderr, "usage: %s <selftest|limits|encode|decode> [args...]\n", argv[0]);
     return 2;
   }
   if (strcmp(argv[1], "selftest") == 0) {
     return run_selftest();
+  }
+  if (strcmp(argv[1], "limits") == 0) {
+    return run_limits();
   }
   if (strcmp(argv[1], "encode") == 0) {
     return run_encode(argc, argv);
