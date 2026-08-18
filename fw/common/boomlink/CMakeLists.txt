@@ -44,9 +44,30 @@ if(BOOMLINK_STANDALONE)
   # hostile-input parser (deliberately unlike the warning flags below, which
   # are target-scoped to keep third-party code out).
   option(BOOMLINK_SANITIZE "Build with AddressSanitizer + UndefinedBehaviorSanitizer" OFF)
+  # Opt-in enforcement for a pipeline that wants to guarantee the suite is
+  # actually instrumented rather than trust a preset was used.
+  option(BOOMLINK_REQUIRE_SANITIZERS
+         "Fail configuration if BOOMLINK_SANITIZE is OFF" OFF)
   if(BOOMLINK_SANITIZE)
     add_compile_options(-fsanitize=address,undefined -fno-sanitize-recover=all -g -O1)
     add_link_options(-fsanitize=address,undefined)
+  elseif(BOOMLINK_REQUIRE_SANITIZERS)
+    message(FATAL_ERROR
+      "BOOMLINK_REQUIRE_SANITIZERS is ON but BOOMLINK_SANITIZE is OFF. Configure with "
+      "`cmake --preset Debug`, or pass -DBOOMLINK_SANITIZE=ON.")
+  else()
+    # Warn at CONFIGURE time, not only from the test suite's own output. The
+    # suite does report it (tests/conftest.py's pytest_report_header), but
+    # pytest hides its header under -q and ctest hides all output on a passing
+    # test - so on the all-green run, which is exactly the run that gives false
+    # confidence, that line is never seen. This one survives, because CMake
+    # warnings are printed on every configure and kept in CI logs.
+    message(WARNING
+      "BOOMLINK_SANITIZE is OFF: this package's negative-path tests feed deliberately "
+      "malformed bytes to a parser, and without ASan/UBSan they cannot tell an "
+      "intentional rejection from a memory-safety bug - a real one passes green. "
+      "Configure with `cmake --preset Debug` (which enables it) unless you specifically "
+      "want the faster uninstrumented build.")
   endif()
 
   # Without this, -Wall -Wextra (set on this package's own targets further
@@ -181,21 +202,36 @@ execute_process(
   OUTPUT_QUIET ERROR_QUIET
 )
 if(BOOMLINK_PYTHON_DEPS_MISSING)
+  # find_package(Python3) caches the interpreter it found, so without this the
+  # remedy below could not work: `task setup` creates the venv and `task build`
+  # puts it first on PATH, but a re-configure in the same build directory would
+  # keep using the CACHED bare python3 that failed, print no "Found Python3"
+  # line at all, and fail identically with no clue why - a closed loop on the
+  # primary onboarding path, only escapable via `task clean`. Verified: dropping
+  # these entries makes the very next configure pick up the venv. Cleared
+  # BEFORE the error so the state is already fixed when the developer retries.
+  unset(Python3_EXECUTABLE CACHE)
+  unset(_Python3_EXECUTABLE CACHE)
+
   # Absolute paths, not "requirements.txt"/"in fw/common/boomlink": this file
   # is add_subdirectory()'d from fw/bom-stm32node, so the firmware build hits
   # this error with a completely different working directory - where a bare
   # `pip install -r requirements.txt` refers to a file that isn't there.
   #
-  # The `task build` half has to differ per mode too: from the firmware build
-  # it must point back at the FIRMWARE directory, since `task build` in this
-  # package's own directory builds the host library and would leave the
-  # firmware developer exactly where they started.
+  # The `task build` hint has to differ per mode: `task build` in THIS
+  # package's directory builds the host library, so pointing a firmware
+  # developer at it would leave them exactly where they started. Both branches
+  # must name `task build` though (not just "build again") - `task setup` only
+  # CREATES .venv; nothing puts it on PATH except task build/task test.
+  #
+  # Single quoted strings: `set(VAR "a" "b")` makes a two-element LIST, and the
+  # ";" separator then leaks into the rendered message.
   if(BOOMLINK_STANDALONE)
-    set(BOOMLINK_DEPS_BUILD_HINT "then build again from ${CMAKE_CURRENT_SOURCE_DIR}")
+    set(BOOMLINK_DEPS_BUILD_HINT
+        "then build via `task build` in ${CMAKE_CURRENT_SOURCE_DIR}, which puts that venv on PATH so this check finds it")
   else()
     set(BOOMLINK_DEPS_BUILD_HINT
-        "then build via `task build` in ${CMAKE_SOURCE_DIR}, which puts that venv on "
-        "PATH so this check finds it")
+        "then build via `task build` in ${CMAKE_SOURCE_DIR} (the firmware directory - `task build` in the path above builds only the host library), which puts that venv on PATH so this check finds it")
   endif()
   message(FATAL_ERROR
     "Python packages 'protobuf' and 'grpcio-tools' are required to generate "
@@ -211,10 +247,10 @@ set(BOOMLINK_PROTO_NAMES common header system envelope)
 list(TRANSFORM BOOMLINK_PROTO_NAMES PREPEND ${BOOMLINK_PROTO_DIR}/ OUTPUT_VARIABLE BOOMLINK_PROTO_FILES)
 list(TRANSFORM BOOMLINK_PROTO_FILES APPEND .proto)
 
-# Every *.options file in BOTH directories the generator can actually pick one
-# up from, not hardcoded to a name, so adding one for a future .proto per this
-# file's own pattern (and README.md's "Adding a new message group"
-# instructions) needs no edit here.
+# Every *.options file in both directories a CHECKED-IN one can live in, not
+# hardcoded to a name, so adding one for a future .proto per this file's own
+# pattern (and README.md's "Adding a new message group" instructions) needs no
+# edit here.
 #
 # nanopb/ is this package's convention and where README.md tells contributors
 # to put them. proto/ is globbed too because the generator finds one there as
@@ -227,9 +263,42 @@ list(TRANSFORM BOOMLINK_PROTO_FILES APPEND .proto)
 # then silently ignored FOREVER on every incremental build afterwards, even
 # with an mtime newer than the generated outputs - strictly worse than the
 # mtime-window gap described below, since no amount of touching the file helps.
+#
+# There is a THIRD location, deliberately not globbed: the generator searches
+# its own working directory (".") first of all, which for the custom command
+# below is CMAKE_CURRENT_BINARY_DIR. Nothing checked in can live there and the
+# build tree is gitignored, so tracking it would be meaningless - but it does
+# mean a stray options file in the build directory silently outranks both
+# directories globbed here.
 file(GLOB BOOMLINK_NANOPB_OPTIONS_FILES CONFIGURE_DEPENDS
      ${BOOMLINK_NANOPB_OPTIONS_DIR}/*.options
      ${BOOMLINK_PROTO_DIR}/*.options)
+
+# Blessing both locations (above) makes a same-basename collision reachable,
+# and the generator resolves one silently: it takes the FIRST -I path that has
+# a matching <proto>.options and stops - no merge, no warning, and the
+# "Reading options from ..." trace only appears under -v, which the custom
+# command does not pass. Verified nanopb/system.options (max_size:200) being
+# silently beaten by proto/system.options (max_size:48), with the loser - which
+# is where this package keeps the derivation of its radio-budget ceiling -
+# becoming dead weight with no signal at all. The wrong bound then surfaces
+# only indirectly and confusingly (a golden vector failing to decode, or the
+# budget _Static_assert in boomlink_codec.c), never as "you have two of these".
+set(BOOMLINK_SEEN_OPTIONS_BASENAMES "")
+foreach(options_file IN LISTS BOOMLINK_NANOPB_OPTIONS_FILES)
+  get_filename_component(options_basename ${options_file} NAME)
+  if(options_basename IN_LIST BOOMLINK_SEEN_OPTIONS_BASENAMES)
+    message(FATAL_ERROR
+      "Two Nanopb options files are both named '${options_basename}':\n"
+      "    ${BOOMLINK_NANOPB_OPTIONS_DIR}/${options_basename}\n"
+      "    ${BOOMLINK_PROTO_DIR}/${options_basename}\n"
+      "The generator would silently use whichever -I path comes first and ignore "
+      "the other, so the bounds actually compiled in would not be the ones you "
+      "think. Keep exactly one - nanopb/ is this package's convention (see "
+      "README.md).")
+  endif()
+  list(APPEND BOOMLINK_SEEN_OPTIONS_BASENAMES ${options_basename})
+endforeach()
 
 # CONFIGURE_DEPENDS above only guarantees a RECONFIGURE when the glob's
 # result set changes. Whether the generator actually re-runs after that is
@@ -261,8 +330,9 @@ set(BOOMLINK_GENERATED_SOURCES "")
 foreach(proto_name IN LISTS BOOMLINK_PROTO_NAMES)
   set(out_c ${BOOMLINK_GENERATED_DIR}/${proto_name}.pb.c)
   set(out_h ${BOOMLINK_GENERATED_DIR}/${proto_name}.pb.h)
-  # Every generated file depends on all four .proto sources and all
-  # nanopb/*.options files (not just its own), rather than tracking
+  # Every generated file depends on all four .proto sources and every tracked
+  # *.options file from both globbed directories (not just its own), rather
+  # than tracking
   # envelope.proto's imports or each proto's own single options file
   # precisely: simpler, and the cost of an occasional unnecessary
   # regeneration of these four tiny files is not worth the extra
@@ -338,8 +408,12 @@ target_compile_options(boomlink_protocol PRIVATE ${BOOMLINK_WARNING_FLAGS})
 # rather than a second target, since the generated and hand-written sources
 # share one library.
 if(BOOMLINK_WERROR_FLAGS)
-  set_source_files_properties(${CMAKE_CURRENT_SOURCE_DIR}/boomlink_codec.c
-    PROPERTIES COMPILE_OPTIONS "${BOOMLINK_WERROR_FLAGS}")
+  # APPEND, not PROPERTIES: a plain set replaces COMPILE_OPTIONS outright, so a
+  # second such call (here or in a consumer) would silently clobber one of the
+  # two, order-dependently. Nothing else sets it today - this is to keep that
+  # true by construction rather than by luck.
+  set_property(SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/boomlink_codec.c
+    APPEND PROPERTY COMPILE_OPTIONS ${BOOMLINK_WERROR_FLAGS})
 endif()
 
 if(BOOMLINK_STANDALONE)
