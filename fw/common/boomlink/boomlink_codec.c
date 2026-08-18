@@ -5,8 +5,41 @@
  */
 #include "boomlink_codec.h"
 
+#include <stddef.h> /* offsetof */
+
 #include <pb_decode.h>
 #include <pb_encode.h>
+
+/* Nanopb does NOT enforce a bounded `bytes` field's max_size directly: its
+   decode-side check (pb_decode.c) compares against `field->data_size`, which
+   is sizeof the whole generated PB_BYTES_ARRAY_T struct - a `pb_size_t` length
+   prefix plus the byte array, rounded up to the struct's alignment. When
+   max_size is ODD (with the usual 2-byte pb_size_t) that struct carries one
+   byte of tail padding, so Nanopb accepts max_size + 1 bytes and writes the
+   last one INTO THE PADDING, past the end of the declared array.
+   That is a genuinely nasty shape of bug: the write stays inside the enclosing
+   struct, so it is intra-object and AddressSanitizer cannot see it, and the
+   discrepancy also makes every "the compiled bound is N" statement in this
+   package (codec_tool's `limits`, the buffers sized from it, the
+   one-over-the-bound rejection test) quietly wrong by one.
+   Rather than model two different bounds - one for what we may safely write,
+   one for what Nanopb will accept - require them to be equal, which for a
+   2-byte pb_size_t means requiring an even max_size. An odd bound buys nothing
+   and is the only way the two can diverge, so this turns the whole class into
+   a build failure with a clear message. Checked here, in the shared
+   translation unit, so the firmware build is covered too and not just the
+   host-side test tool. */
+#define BOOMLINK_NANOPB_ENFORCED_MAX(type) \
+  (sizeof(((type *)0)->payload) - offsetof(pb_bytes_array_t, bytes))
+
+_Static_assert(BOOMLINK_NANOPB_ENFORCED_MAX(boomlink_Ping) ==
+                   sizeof(((boomlink_Ping *)0)->payload.bytes),
+               "Ping.payload's max_size is odd, so Nanopb would accept one byte more than "
+               "the declared array holds - use an even max_size in nanopb/system.options");
+_Static_assert(BOOMLINK_NANOPB_ENFORCED_MAX(boomlink_Pong) ==
+                   sizeof(((boomlink_Pong *)0)->payload.bytes),
+               "Pong.payload's max_size is odd, so Nanopb would accept one byte more than "
+               "the declared array holds - use an even max_size in nanopb/system.options");
 
 /* boomlink_Envelope_size (envelope.pb.h) is Nanopb's own worst-case encoded
    size for the current schema, computed from every bounded field in

@@ -38,9 +38,21 @@
 
 /* Normally set by CMake (from the BOOMLINK_SANITIZE option) - defaulted here
    so this file still compiles standalone, e.g. in a hand-rolled reproduction
-   build. Reported by `limits` as sanitizers=, see run_limits(). */
+   build. Reported by `limits` as sanitizers=, see run_limits().
+   The default is 0, which UNDER-reports a hand-rolled build that passed
+   -fsanitize=... without also passing this -D. That direction is merely
+   conservative; the dangerous direction is claiming instrumentation that
+   isn't there, which would make a negative-path test's "clean rejection"
+   verdict meaningless. GCC/Clang define __SANITIZE_ADDRESS__ under
+   -fsanitize=address, so at least the ASan half of the claim can be
+   cross-checked rather than trusted - there is no equivalent macro for UBSan,
+   which is why the value has to come from the build system at all. */
 #ifndef BOOMLINK_SANITIZE_ENABLED
 #define BOOMLINK_SANITIZE_ENABLED 0
+#endif
+
+#if BOOMLINK_SANITIZE_ENABLED && !defined(__SANITIZE_ADDRESS__) && !defined(__clang__)
+#error "BOOMLINK_SANITIZE_ENABLED=1 but this file is not compiled with -fsanitize=address"
 #endif
 
 /* `decode`'s read cap - see its own comment for why this is not simply
@@ -128,11 +140,19 @@ static int hex_decode(const char *hex, uint8_t *out, size_t out_cap) {
 static void hex_encode(const uint8_t *data, size_t len, char *out, size_t out_cap) {
   static const char digits[] = "0123456789abcdef";
   if (out_cap < 2 * len + 1) {
-    /* Can't happen given this file's own callers (out is always sized from
-       BOOMLINK_MAX_PAYLOAD_CAP, len never exceeds a real payload's compiled
-       bound) - guard anyway rather than trust that invariant silently. */
-    if (out_cap > 0) out[0] = '\0';
-    return;
+    /* Should be unreachable: callers size `out` from BOOMLINK_MAX_PAYLOAD_CAP
+       and `len` comes from a decoded payload, which boomlink_codec.c's
+       BOOMLINK_NANOPB_ENFORCED_MAX asserts cannot exceed that cap. It is a
+       real guard rather than a formality, though - it once WAS reachable, when
+       an odd max_size let Nanopb accept one byte more than the declared array
+       (see that assert), and it then failed the worst possible way: silently
+       printing an empty payload with exit status 0, so `decode` reported
+       success while losing the data. Fail loudly instead. */
+    fprintf(stderr,
+            "hex_encode: output buffer too small for a %zu-byte payload (capacity %zu) - "
+            "this is a bug in codec_tool's buffer sizing, not a bad input\n",
+            len, out_cap);
+    exit(70); /* EX_SOFTWARE - not a rejection of the input, an internal fault */
   }
   for (size_t i = 0; i < len; i++) {
     out[2 * i]     = digits[(data[i] >> 4) & 0xF];
