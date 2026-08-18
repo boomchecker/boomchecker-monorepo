@@ -42,7 +42,12 @@ This directory is a CMake project that builds two different ways:
   into the firmware and actually exercised there by the `proto` CLI command
   in `Core/Src/cli.c` - see its comment for why that matters). No tests - a
   cross-compiled host tool makes no sense, and pytest cannot run on an
-  STM32.
+  STM32. Note this makes the host Python packages below a hard requirement
+  of building the **firmware**, not just of running these tests: code
+  generation runs on the build host in both modes. `task build` in
+  `fw/bom-stm32node` puts this directory's `.venv` on `PATH` for exactly
+  that reason, so `task setup` here is a prerequisite of the firmware build
+  too.
 
 ```sh
 task setup      # create .venv with protobuf/grpcio-tools/pytest/ruff
@@ -61,7 +66,18 @@ The Debug preset builds with `-DBOOMLINK_SANITIZE=ON` by default
 reason to be host-testable is exercising a wire-format parser on
 hostile/malformed bytes, and a memory-safety bug there is exactly what a
 sanitizer catches that a plain pass/fail exit code does not. Pass
-`-DBOOMLINK_SANITIZE=OFF` to `cmake --preset Debug` to disable it.
+`-DBOOMLINK_SANITIZE=OFF` to `cmake --preset Debug` to disable it. The test
+suite additionally forces `abort_on_error=1` on both sanitizers (see
+`tests/_support.py`) so a finding arrives as a signal rather than an
+ordinary nonzero exit that a negative-path test could mistake for the
+tool's own intentional rejection.
+
+The preset also sets `-DBOOMLINK_WERROR=ON`, which adds `-Werror` to this
+package's own targets (never to the vendored nanopb runtime). Without it
+`-Wall -Wextra` are advisory only - nothing fails and nothing annotates a
+PR. It defaults to OFF, so a stricter local compiler than CI's can't block
+an unrelated build; pass `-DBOOMLINK_WERROR=OFF` if a new compiler version
+starts flagging something mid-task.
 
 ## Protocol compatibility rules (boomlink.md section 15.1)
 
@@ -108,8 +124,10 @@ holding, and `tests/test_compatibility.py` is what enforces them:
 3. Add any variable-size field's bound to a new `nanopb/<name>.options` file
    (nanopb auto-discovers it by the proto's name - see CMakeLists.txt's
    comment - so it does not need registering anywhere else; CMake picks up
-   the new file automatically on the next build via `CONFIGURE_DEPENDS`,
-   no manual reconfigure needed).
+   the new file automatically on the next build, and adding, removing or
+   renaming one correctly forces regeneration regardless of the file's
+   mtime - see CMakeLists.txt's comment on why `CONFIGURE_DEPENDS` alone is
+   not enough for that).
 4. Add the new proto's name to `CMakeLists.txt`'s `BOOMLINK_PROTO_NAMES` list
    - the one place both the Nanopb and Python generation steps read it from.
 5. Add golden vectors (`vectors_spec.py` + `generate_vectors.py`) and tests
