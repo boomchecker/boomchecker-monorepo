@@ -14,16 +14,16 @@ project with the **CMake** toolchain option selected in CubeMX (Project Manager 
     makes the host Python packages
     `protobuf` and `grpcio-tools` a hard requirement of building the firmware, not
     just of running BoomProtocol's own tests — without them CMake stops at configure
-    time. Create them once:
+    time. Create them once, from the repository root:
 
     ```bash
     cd fw/common/boomlink && task setup
     ```
 
     `task build` in `fw/bom-stm32node` puts that venv on `PATH` automatically. If you
-    prefer the raw `cmake` invocation below, activate it yourself first
-    (`source ../common/boomlink/.venv/bin/activate`) or make sure your `python3` has
-    both packages.
+    prefer the raw `cmake` invocation below, activate it yourself first — from
+    `fw/bom-stm32node`, that is `source ../common/boomlink/.venv/bin/activate` — or
+    make sure your `python3` has both packages.
 
 Then, from `fw/bom-stm32node`:
 

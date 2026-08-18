@@ -16,7 +16,12 @@ nanopb/           <name>.options - bounded-field sizes for Nanopb, one file
                   per .proto that needs one (auto-discovered by name, see
                   CMakeLists.txt's comment on why - avoids a spurious
                   "did not match any fields" warning on every proto that
-                  doesn't need one)
+                  doesn't need one). Nanopb would equally find one placed
+                  next to its .proto in proto/ (its own upstream
+                  convention), and the build tracks both locations - but
+                  keep them here: having the same <name>.options in both
+                  is a configure-time error, since the generator would
+                  silently use one and ignore the other
 boomlink_codec.h/.c   Envelope encode/decode + boomlink_envelope_init(),
                       target-agnostic C
 tests/            host-native C CLI tool (codec_tool.c) + pytest suite +
@@ -72,6 +77,14 @@ suite additionally forces `abort_on_error=1` on both sanitizers (see
 ordinary nonzero exit that a negative-path test could mistake for the
 tool's own intentional rejection.
 
+Note the CMake option itself defaults to **OFF** - it is the Debug preset that
+turns it on. A configure that bypasses the preset (`cmake -S . -B build`, or an
+IDE's default) therefore gets a much weaker suite: without the sanitizers the
+negative-path tests cannot tell an intentional rejection from a memory-safety
+bug, and a real one passes green. That configuration warns at configure time
+and the pytest header states it on every run; pass
+`-DBOOMLINK_REQUIRE_SANITIZERS=ON` to make it a hard configure error instead.
+
 The preset also sets `-DBOOMLINK_WERROR=ON`, which adds `-Werror` to this
 package's own targets (never to the vendored nanopb runtime). Without it
 `-Wall -Wextra` are advisory only - nothing fails and nothing annotates a
@@ -96,7 +109,18 @@ holding, and `tests/test_compatibility.py` is what enforces them:
   compiled bound from `codec_tool limits` (or the `codec_tool_limits` pytest
   fixture) rather than hardcoding a copy of the number - a hardcoded copy
   sizing a C stack buffer is exactly how this package once shipped a real
-  stack overflow when the bound changed and one copy wasn't updated.
+  stack overflow when the bound changed and one copy wasn't updated. Keep
+  every `max_size` **even**: Nanopb enforces the generated struct's padded
+  capacity rather than `max_size` itself, so an odd bound makes it accept one
+  byte more than the declared array holds (a `_Static_assert` in
+  `boomlink_codec.c` rejects that at build time).
+- **Shrinking a bound is a breaking wire-format change**, not a local tweak,
+  once a committed golden vector carries a payload larger than the new value:
+  old peers' frames stop decoding. That collision is what
+  `test_golden_vector_decodes_with_nanopb` reports - it needs a
+  `protocol_version` bump, never a regenerated vector. Growing a bound is
+  safe until it blows the on-air budget, which `boomlink_codec.c` checks at
+  build time.
 - **Malformed and truncated input fail closed** on both sides - verified
   against the Nanopb side directly via the C test harness.
 - **Unknown fields are forward-compatible**: a field number neither side's

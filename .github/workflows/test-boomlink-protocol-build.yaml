@@ -84,6 +84,16 @@ jobs:
         working-directory: ./fw/common/boomlink
         run: pip install --quiet -r requirements.txt
 
+      - name: Register GCC problem matcher
+        # Without this, a compiler warning is neither a failure nor an
+        # annotation - just text buried in a log nobody opens. That matters
+        # because -Werror deliberately does NOT cover the four generated
+        # *.pb.c (they are machine output from a vendored generator, so a
+        # submodule bump should not hard-fail the build), and the claim that
+        # warnings there are "still visible" is only true if something
+        # surfaces them. This makes them PR annotations.
+        run: echo "::add-matcher::.github/problem-matchers/gcc.json"
+
       - name: Configure
         working-directory: ./fw/common/boomlink
         run: cmake --preset Debug
@@ -104,6 +114,6 @@ jobs:
           echo "- boomlink_protocol (host-native) built ✓" >> $GITHUB_STEP_SUMMARY
           echo "- C self-test + Python cross-language/compatibility suite passed ✓" >> $GITHUB_STEP_SUMMARY
           echo "- built with AddressSanitizer + UndefinedBehaviorSanitizer (BOOMLINK_SANITIZE, on by default for the Debug preset) ✓" >> $GITHUB_STEP_SUMMARY
-          echo "- warnings are errors (BOOMLINK_WERROR, on by default for the Debug preset) ✓" >> $GITHUB_STEP_SUMMARY
+          echo "- warnings are errors in the hand-written sources (BOOMLINK_WERROR, on by default for the Debug preset); the generated *.pb.c build with -Wall -Wextra and surface as annotations ✓" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "ruff lint runs as its own job (see the Lint check on this run)." >> $GITHUB_STEP_SUMMARY
