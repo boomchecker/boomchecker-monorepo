@@ -39,17 +39,6 @@ if(BOOMLINK_STANDALONE AND BOOMLINK_SANITIZE)
   add_link_options(-fsanitize=address,undefined)
 endif()
 
-# -Wall -Wextra for the host build only (the ARM cross build already
-# inherits -Wall from fw/bom-stm32node/cmake/gcc-arm-none-eabi.cmake, so
-# without this the host build - the only one that compiles the CLI tool
-# doing hand-rolled buffer/argument-parsing work in tests/codec_tool.c -
-# was the weaker of the two on a package whose test suite exists
-# specifically to catch C-safety bugs. Verified this produces zero warnings
-# against the current source before enabling it unconditionally.
-if(BOOMLINK_STANDALONE)
-  add_compile_options(-Wall -Wextra)
-endif()
-
 # Nanopb is vendored once, under bom-stm32node/third_party/ (git submodule
 # pinned to release 0.4.9), and referenced from here by relative path rather
 # than duplicating the submodule: both this host-native build and the ARM
@@ -140,13 +129,19 @@ list(TRANSFORM BOOMLINK_PROTO_FILES APPEND .proto)
 
 # Every *.options file in nanopb/ (today, just system.options - see below),
 # not hardcoded to that one name: CONFIGURE_DEPENDS means CMake reconfigures
-# (and this glob re-runs) if one is added, removed, or renamed, not just
-# when an already-known one's contents change. Without this, adding a new
-# nanopb/<name>.options for a future .proto per this file's own pattern (and
-# README.md's "Adding a new message group" instructions) would silently
-# never be tracked: the .options file could be edited any number of times
-# after that and the generator would keep using whatever bounds it read the
-# first time a full clean build happened to run.
+# (and this glob re-runs) if the glob's result SET changes, most usefully
+# when a new nanopb/<name>.options is added - so adding one for a future
+# .proto per this file's own pattern (and README.md's "Adding a new message
+# group" instructions) is picked up automatically, instead of the generator
+# silently keeping whatever bounds it read the first time a full clean
+# build happened to run.
+# This does NOT fully cover DELETING a nanopb/<name>.options file: the
+# reconfigure does fire, but the generator's add_custom_command below has
+# nothing left in its DEPENDS that is newer than its already-up-to-date
+# outputs, so ninja/make correctly (from their point of view) decides there
+# is no work to do and the stale generated bounds survive. Verified this gap
+# directly. Re-run cmake on a clean build directory if a nanopb/*.options
+# file is ever removed.
 file(GLOB BOOMLINK_NANOPB_OPTIONS_FILES CONFIGURE_DEPENDS ${BOOMLINK_NANOPB_OPTIONS_DIR}/*.options)
 
 set(BOOMLINK_GENERATED_DIR ${CMAKE_CURRENT_BINARY_DIR}/generated)
@@ -218,10 +213,26 @@ target_link_libraries(boomlink_protocol PUBLIC boomlink::nanopb)
 target_compile_features(boomlink_protocol PUBLIC c_std_11)
 
 if(BOOMLINK_STANDALONE)
+  # -Wall -Wextra for the host build only (the ARM cross build already
+  # inherits -Wall from fw/bom-stm32node/cmake/gcc-arm-none-eabi.cmake), and
+  # scoped with target_compile_options to boomlink_protocol/boomlink_codec_tool
+  # specifically rather than a blanket add_compile_options(): the latter
+  # would also apply to boomlink_nanopb below, a vendored third-party
+  # target (git submodule pinned to release 0.4.9) this package does not
+  # control the warning-cleanliness of - a future submodule bump could
+  # start emitting warnings there for no reason this package's own code
+  # changed. Without this the host build - the only one that compiles the
+  # CLI tool doing hand-rolled buffer/argument-parsing work in
+  # tests/codec_tool.c - was the weaker of the two on a package whose test
+  # suite exists specifically to catch C-safety bugs. Verified this
+  # produces zero warnings against the current source before enabling it.
+  target_compile_options(boomlink_protocol PRIVATE -Wall -Wextra)
+
   enable_testing()
 
   add_executable(boomlink_codec_tool tests/codec_tool.c)
   target_link_libraries(boomlink_codec_tool PRIVATE boomlink_protocol)
+  target_compile_options(boomlink_codec_tool PRIVATE -Wall -Wextra)
 
   add_test(NAME boomlink_codec_selftest COMMAND boomlink_codec_tool selftest)
 
