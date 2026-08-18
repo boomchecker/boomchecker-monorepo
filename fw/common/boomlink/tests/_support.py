@@ -55,8 +55,19 @@ def run_codec_tool(codec_tool_path, *args):
     for name, option in _SANITIZER_ABORT_OPTIONS.items():
         existing = env.get(name)
         env[name] = f"{existing}:{option}" if existing else option
+    # errors="replace", not text=True's default of "strict": corrupted process
+    # output is a SYMPTOM of the bug class assert_clean_rejection() exists to
+    # catch, so decoding it must not be what fails. Observed for real - a
+    # memory-safety bug on the rejection path emitted a stray 0xa4 byte, and the
+    # test died with a UnicodeDecodeError traceback inside subprocess.py instead
+    # of this suite's own diagnostic naming the actual problem.
     return subprocess.run(
-        [codec_tool_path, *args], capture_output=True, text=True, timeout=10, env=env
+        [codec_tool_path, *args],
+        capture_output=True,
+        text=True,
+        errors="replace",
+        timeout=10,
+        env=env,
     )
 
 

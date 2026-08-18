@@ -78,11 +78,26 @@ def pytest_report_header(config):
         return None
     try:
         limits = query_codec_tool_limits(codec_tool)
-    except (RuntimeError, OSError):
-        # pytest_configure already validated the binary; don't turn a
-        # header-line nicety into a second, noisier failure path.
+    except Exception:  # noqa: BLE001 - see comment
+        # Deliberately broad. pytest_configure already validated the binary, so
+        # this is a header-line nicety and must not become a second, noisier
+        # failure path - which is exactly what a narrow (RuntimeError, OSError)
+        # did: `limits` growing one non-integer key made int() raise ValueError
+        # here and abort the whole session with INTERNALERROR during
+        # pytest_sessionstart, before collection.
         return None
-    if limits.get("sanitizers"):
+    if "sanitizers" not in limits:
+        # Distinct from 0: a binary built before `limits` reported this at all
+        # cannot be asked. Saying "built WITHOUT sanitizers" here would state a
+        # confident falsehood about a possibly-instrumented binary, and hand out
+        # an instruction that would not change anything - and a check that cries
+        # wolf gets ignored, which costs the whole point of reporting it.
+        return (
+            "BoomLink codec_tool: cannot tell whether it was built with sanitizers - this "
+            "binary predates the `sanitizers=` field in `codec_tool limits`, so it is "
+            "stale relative to the test suite. Rebuild it."
+        )
+    if limits["sanitizers"]:
         return "BoomLink codec_tool: built WITH ASan/UBSan"
     return (
         "BoomLink codec_tool: built WITHOUT sanitizers - negative-path tests cannot "

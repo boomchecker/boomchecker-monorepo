@@ -68,8 +68,28 @@ def test_golden_vector_decodes_with_python(filename, expected):
 
 
 @pytest.mark.parametrize("filename,expected", GOLDEN_VECTORS.items())
-def test_golden_vector_decodes_with_nanopb(codec_tool_path, filename, expected):
+def test_golden_vector_decodes_with_nanopb(
+    codec_tool_path, codec_tool_limits, filename, expected
+):
     result = run_codec_tool(codec_tool_path, "decode", str(VECTORS_DIR / filename))
+    # Explains the one failure mode that is NOT a codec regression: shrinking a
+    # bounded field below the payload a committed vector already carries. Nanopb
+    # then correctly rejects the vector, and a bare `assert result.returncode ==
+    # 0, result.stderr` reports only "decode: malformed input" - indistinguishable
+    # from the codec genuinely breaking, when it is really the section 15.1 rule
+    # firing. Deliberately NOT a skip (unlike the near-budget test's unreachable
+    # scenario): the rule really is being broken here and the run must stay red.
+    bound = codec_tool_limits.get(f"{expected['kind']}_payload_max")
+    payload_len = len(expected["payload"])
+    if result.returncode != 0 and bound is not None and payload_len > bound:
+        raise AssertionError(
+            f"{filename} carries a {payload_len}-byte {expected['kind']} payload, but this "
+            f"build's compiled {expected['kind']}_payload_max is {bound}. Shrinking a bounded "
+            f"field below what a committed golden vector already holds is a BREAKING "
+            f"wire-format change (boomlink.md 15.1, README.md's compatibility rules), not a "
+            f"codec bug: old peers' frames stop decoding. It needs a protocol_version bump - "
+            f"never a regenerated vector.\n{result.stderr}"
+        )
     assert result.returncode == 0, result.stderr
     fields = parse_kv(result.stdout)
     assert fields["kind"] == expected["kind"]
