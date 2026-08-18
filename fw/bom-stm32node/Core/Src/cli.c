@@ -259,6 +259,13 @@ static void proto_selftest(EmbeddedCli *cli)
   envelope.which_payload                = boomlink_Envelope_system_tag;
   envelope.payload.system.which_message = boomlink_SystemMessage_ping_tag;
   const uint8_t kPayload[]              = {'h', 'i'};
+  /* Guards kPayload against a shrunk nanopb/system.options bound. This
+     firmware has no sanitizer runtime (unlike tests/codec_tool.c's identical
+     check) - without this, a max_size shrink below sizeof(kPayload) would
+     silently overflow ping.payload.bytes on every boot that runs this
+     selftest, caught by nothing until something else corrupted nearby. */
+  _Static_assert(sizeof(((boomlink_Ping *)0)->payload.bytes) >= sizeof(kPayload),
+                 "proto selftest's fixed payload no longer fits the compiled Ping payload bound");
   memcpy(envelope.payload.system.message.ping.payload.bytes, kPayload, sizeof(kPayload));
   envelope.payload.system.message.ping.payload.size = sizeof(kPayload);
 

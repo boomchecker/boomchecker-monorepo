@@ -11,23 +11,25 @@
 /* boomlink_Envelope_size (envelope.pb.h) is Nanopb's own worst-case encoded
    size for the current schema, computed from every bounded field in
    nanopb/system.options. Comparing it against the real on-air budget here -
-   RADIO_MAX_PAYLOAD (fw/bom-stm32node/App/radio/radio.h) minus
-   BOOMLINK_LINK_FRAME_HEADER_SIZE (boomlink_codec.h; boomlink.md section 7.3,
-   landing in PR 3) - at compile time means growing a bounded field enough to
-   blow that budget is a build failure in this file, not a runtime surprise
-   the first time a real Envelope is too big to fit in one LoRa packet.
-   255 is duplicated rather than included from radio.h: this package must
-   not depend on bom-stm32node's App/ layer (see boomlink.md section 4
-   repository rules). This is necessarily a one-directional, hand-maintained
-   check - it protects against this package's own bounded fields growing too
-   large, but can't detect RADIO_MAX_PAYLOAD itself shrinking out from under
-   it. fw/bom-stm32node's own CLI code (Core/Src/cli.c's `proto selftest`)
-   carries the real live cross-check, since only firmware code has both
-   RADIO_MAX_PAYLOAD and this header in scope at once. */
-#define BOOMLINK_RADIO_MAX_PAYLOAD 255
-#define BOOMLINK_ENVELOPE_BUDGET (BOOMLINK_RADIO_MAX_PAYLOAD - BOOMLINK_LINK_FRAME_HEADER_SIZE)
-
-_Static_assert(boomlink_Envelope_size <= BOOMLINK_ENVELOPE_BUDGET,
+   BOOMLINK_RADIO_MAX_PAYLOAD minus BOOMLINK_LINK_FRAME_HEADER_SIZE (both
+   boomlink_codec.h; boomlink.md section 7.3, landing in PR 3) - at compile
+   time means growing a bounded field enough to blow that budget is a build
+   failure in this file, not a runtime surprise the first time a real
+   Envelope is too big to fit in one LoRa packet.
+   BOOMLINK_RADIO_MAX_PAYLOAD is a hand-maintained duplicate of radio.h's
+   real RADIO_MAX_PAYLOAD (see its own doc comment in boomlink_codec.h for
+   why); this is necessarily a one-directional check - it protects against
+   this package's own bounded fields growing too large, but can't detect
+   RADIO_MAX_PAYLOAD itself shrinking out from under it. fw/bom-stm32node's
+   own CLI code (Core/Src/cli.c's `proto selftest`) carries the real live
+   cross-check, since only firmware code has both RADIO_MAX_PAYLOAD and this
+   header in scope at once.
+   Compared in additive form (budget >= header + envelope) rather than
+   subtractive (envelope <= budget - header): with unsigned operands, a
+   subtractive comparison silently wraps to a huge value and wrongly passes
+   if header size ever exceeded the max payload - the exact bug once fixed
+   in cli.c's own cross-check. */
+_Static_assert(BOOMLINK_RADIO_MAX_PAYLOAD >= BOOMLINK_LINK_FRAME_HEADER_SIZE + boomlink_Envelope_size,
                "worst-case Envelope encoding no longer fits the LoRa link frame payload "
                "budget - shrink a bounded field in nanopb/system.options");
 

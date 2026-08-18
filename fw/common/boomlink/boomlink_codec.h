@@ -22,13 +22,25 @@
 
 /* BoomLink's fixed binary link frame header (boomlink.md section 7.3) is not
    implemented until PR 3, but its size is fixed at 20 bytes and is needed
-   here to compute the real on-air budget for an Envelope - see
-   BOOMLINK_ENVELOPE_BUDGET in boomlink_codec.c. Exposed publicly so firmware
+   here to compute the real on-air budget for an Envelope - see the
+   BOOMLINK_RADIO_MAX_PAYLOAD budget assert in boomlink_codec.c. Exposed
+   publicly so firmware
    code that also sees the real RADIO_MAX_PAYLOAD (fw/bom-stm32node/App/radio/
    radio.h) can cross-check the two against each other at compile time,
    instead of boomlink_codec.c's own budget check being the only thing
    guarding a number it has to assume rather than verify. */
 #define BOOMLINK_LINK_FRAME_HEADER_SIZE 20
+
+/* BoomLink's radio hard packet limit (RADIO_MAX_PAYLOAD in
+   fw/bom-stm32node/App/radio/radio.h, the SX126x's real limit). Duplicated
+   here rather than included from that header: this package must not depend
+   on bom-stm32node's App/ layer (boomlink.md section 4 repository rules).
+   Exposed publicly (not kept private to boomlink_codec.c) so
+   tests/codec_tool.c's `limits` subcommand can report the real on-air
+   Envelope budget for tests to read, instead of a test hardcoding its own
+   copy of this number - see boomlink_codec.c's budget assert for the
+   one-directional-check caveat this duplication carries. */
+#define BOOMLINK_RADIO_MAX_PAYLOAD 255u
 
 #ifdef __cplusplus
 extern "C" {
