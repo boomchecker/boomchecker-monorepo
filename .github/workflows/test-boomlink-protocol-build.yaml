@@ -47,6 +47,16 @@ jobs:
         working-directory: ./fw/common/boomlink
         run: pip install --quiet -r requirements.txt
 
+      - name: Lint
+        working-directory: ./fw/common/boomlink
+        # ruff is configured (pyproject.toml) and available via `task lint`
+        # for local use, but nothing previously ran it in CI - so it could
+        # only ever catch a style issue if a developer remembered to run it
+        # by hand. Runs before Configure/Build/Test: it needs nothing they
+        # produce, and a style issue should fail fast instead of waiting
+        # behind a full cmake configure + build + ctest run.
+        run: ruff check tests
+
       - name: Configure
         working-directory: ./fw/common/boomlink
         run: cmake --preset Debug
@@ -58,14 +68,6 @@ jobs:
       - name: Test
         working-directory: ./fw/common/boomlink
         run: ctest --preset Debug --output-on-failure
-
-      - name: Lint
-        working-directory: ./fw/common/boomlink
-        # ruff is configured (pyproject.toml) and available via `task lint`
-        # for local use, but nothing previously ran it in CI - so it could
-        # only ever catch a style issue if a developer remembered to run it
-        # by hand.
-        run: ruff check tests
 
       - name: Build summary
         run: |
