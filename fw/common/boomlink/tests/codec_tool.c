@@ -36,6 +36,13 @@
   (BOOMLINK_PING_PAYLOAD_CAP > BOOMLINK_PONG_PAYLOAD_CAP ? BOOMLINK_PING_PAYLOAD_CAP \
                                                           : BOOMLINK_PONG_PAYLOAD_CAP)
 
+/* Normally set by CMake (from the BOOMLINK_SANITIZE option) - defaulted here
+   so this file still compiles standalone, e.g. in a hand-rolled reproduction
+   build. Reported by `limits` as sanitizers=, see run_limits(). */
+#ifndef BOOMLINK_SANITIZE_ENABLED
+#define BOOMLINK_SANITIZE_ENABLED 0
+#endif
+
 /* `decode`'s read cap - see its own comment for why this is not simply
    boomlink_Envelope_size. */
 #define BOOMLINK_DECODE_READ_CAP 512
@@ -224,6 +231,12 @@ static int run_limits(void) {
   printf("envelope_budget=%u\n",
          (unsigned)(BOOMLINK_RADIO_MAX_PAYLOAD - BOOMLINK_LINK_FRAME_HEADER_SIZE));
   printf("decode_read_cap=%d\n", BOOMLINK_DECODE_READ_CAP);
+  /* Set from CMake (BOOMLINK_SANITIZE) rather than sniffed here: GCC defines
+     __SANITIZE_ADDRESS__ for ASan but offers no UBSan equivalent, so half the
+     answer would be unknowable from inside the code. Reported so the pytest
+     suite can tell the difference between "this rejection was clean" and
+     "there was no sanitizer watching" - see tests/conftest.py. */
+  printf("sanitizers=%d\n", BOOMLINK_SANITIZE_ENABLED);
   return 0;
 }
 

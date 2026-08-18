@@ -56,6 +56,41 @@ def pytest_configure(config):
         )
 
 
+def pytest_report_header(config):
+    """Report whether the binary under test was built with sanitizers, in the
+    header of every run.
+
+    Not cosmetic: assert_clean_rejection() (see _support.py) rests entirely on
+    ASan/UBSan being present - it is what separates "this hostile input was
+    rejected on purpose" from "this hostile input crashed the parser". With
+    BOOMLINK_SANITIZE=OFF the negative-path tests still pass, because a
+    memory-safety bug on a rejection path produces a nonzero exit just like an
+    intentional rejection does; verified a deliberate use-after-free passing
+    the whole suite green. The option defaults to OFF and only the Debug preset
+    turns it ON, so an IDE's default configure or a hand-rolled
+    `cmake -S . -B build` silently gets the weaker suite. Reported rather than
+    failed: running uninstrumented on purpose is legitimate (it is much
+    faster), it just should never be a surprise.
+    """
+    del config
+    codec_tool = os.environ.get("BOOMLINK_CODEC_TOOL")
+    if not codec_tool:
+        return None
+    try:
+        limits = query_codec_tool_limits(codec_tool)
+    except (RuntimeError, OSError):
+        # pytest_configure already validated the binary; don't turn a
+        # header-line nicety into a second, noisier failure path.
+        return None
+    if limits.get("sanitizers"):
+        return "BoomLink codec_tool: built WITH ASan/UBSan"
+    return (
+        "BoomLink codec_tool: built WITHOUT sanitizers - negative-path tests cannot "
+        "tell a clean rejection from a memory-safety bug (configure with "
+        "`cmake --preset Debug`, or -DBOOMLINK_SANITIZE=ON, to restore that)"
+    )
+
+
 @pytest.fixture(scope="session")
 def codec_tool_path():
     """Path to the compiled boomlink_codec_tool binary (see
@@ -66,8 +101,8 @@ def codec_tool_path():
 
 @pytest.fixture(scope="session")
 def codec_tool_limits(codec_tool_path):
-    """Every compiled bound the tool reports: the Ping/Pong payload caps
-    plus envelope_size, envelope_budget and decode_read_cap - see
+    """Every compiled bound the tool reports: the Ping/Pong payload caps plus
+    envelope_size, envelope_budget, decode_read_cap and sanitizers - see
     _support.query_codec_tool_limits() for what each one means. Tests read
     these instead of hardcoding their own copy of a number defined in
     nanopb/system.options or boomlink_codec.h."""

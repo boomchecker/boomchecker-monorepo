@@ -269,6 +269,22 @@ def test_unknown_field_is_forward_compatible_near_the_real_budget(
     max_size = codec_tool_limits["ping_payload_max"]
     envelope_size = codec_tool_limits["envelope_size"]
     envelope_budget = codec_tool_limits["envelope_budget"]
+    if envelope_size >= envelope_budget:
+        # Nothing is wrong with the protocol here - there is simply no room
+        # left for the frame this test needs to build. It has to be LARGER
+        # than this schema's worst case (that is the whole point: a frame the
+        # old, too-tight read cap would have rejected) while staying within
+        # the on-air budget, which is impossible once the worst case fills
+        # the budget. Reachable at a legitimate bound: max_size 212 is the
+        # largest boomlink_codec.c's budget assert accepts, and it makes the
+        # two exactly equal. Skipped rather than failed, so this reports
+        # "scenario unreachable" instead of masquerading as a regression.
+        pytest.skip(
+            f"no margin between this schema's worst case (envelope_size={envelope_size}) "
+            f"and the on-air budget (envelope_budget={envelope_budget}) - the frame this "
+            "test exercises (forward-compatible, larger than the worst case, still "
+            "on-air-legal) cannot exist at these compiled bounds"
+        )
     envelope = envelope_pb2.Envelope()
     envelope.header.protocol_version = BOOMLINK_PROTOCOL_VERSION
     envelope.system.ping.payload = b"\x01" * max_size
@@ -299,8 +315,22 @@ def test_unknown_field_is_forward_compatible_near_the_real_budget(
     unknown_payload = b"\x02" * unknown_len
     unknown_field = tag + _varint(unknown_len) + unknown_payload
     with_unknown_field = base + unknown_field
-    assert len(with_unknown_field) > envelope_size  # would have tripped the old, too-tight read cap
-    assert len(with_unknown_field) <= envelope_budget  # still within the real on-air budget
+    # Both carry messages: a bare assert here reports only "assert 235 > 235",
+    # which reads like a protocol regression when it is really this test's own
+    # margin arithmetic running out (the skip above now catches that case, but
+    # not necessarily every future one).
+    assert len(with_unknown_field) > envelope_size, (
+        f"frame is {len(with_unknown_field)} bytes, not larger than this schema's worst "
+        f"case (envelope_size={envelope_size}) - it would not have tripped the old, "
+        f"too-tight read cap, so it no longer exercises what this test exists for "
+        f"(len(base)={len(base)}, unknown_len={unknown_len})"
+    )
+    assert len(with_unknown_field) <= envelope_budget, (
+        f"frame is {len(with_unknown_field)} bytes, over the real on-air budget "
+        f"(envelope_budget={envelope_budget}) - a real LoRa packet could not carry it, "
+        f"so accepting it would prove nothing (len(base)={len(base)}, "
+        f"unknown_len={unknown_len})"
+    )
 
     reparsed = envelope_pb2.Envelope()
     reparsed.ParseFromString(with_unknown_field)

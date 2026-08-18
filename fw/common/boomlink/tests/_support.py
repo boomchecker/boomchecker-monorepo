@@ -66,7 +66,9 @@ def assert_clean_rejection(result):
     produce a nonzero exit code, but only a clean rejection proves the code
     fails closed on purpose rather than crashing on a memory-safety/
     undefined-behavior bug on exactly the hostile-input path the sanitizers
-    (BOOMLINK_SANITIZE, on by default) exist to catch.
+    (BOOMLINK_SANITIZE, which the Debug preset turns on - the CMake option
+    itself defaults to OFF, and this whole check is only as good as that
+    being enabled; see conftest.py's pytest_report_header) exist to catch.
 
     The returncode-sign check below is the load-bearing one, and it is only
     load-bearing because run_codec_tool() forces `abort_on_error=1` on both
@@ -119,6 +121,10 @@ def query_codec_tool_limits(codec_tool_path):
       decode_read_cap
           how many bytes `decode` will read from a file before rejecting it
           as too large (BOOMLINK_DECODE_READ_CAP).
+      sanitizers
+          1 if the binary was built with ASan/UBSan (CMake's
+          BOOMLINK_SANITIZE), else 0. See conftest.py's
+          pytest_report_header() for why the suite surfaces this.
     """
     result = run_codec_tool(codec_tool_path, "limits")
     if result.returncode != 0:
