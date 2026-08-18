@@ -127,6 +127,24 @@ definitions:
         example: 0
         type: integer
     type: object
+  services.TokenRequest:
+    properties:
+      email:
+        example: admin@example.com
+        type: string
+    required:
+    - email
+    type: object
+  services.TokenResponse:
+    properties:
+      expires_at:
+        description: UTC timestamp when token expires (RFC3339 format)
+        example: "2025-11-13T12:00:00Z"
+        type: string
+      message:
+        example: Admin token has been sent to your email
+        type: string
+    type: object
 host: localhost:8080
 info:
   contact:
@@ -141,6 +159,45 @@ info:
   title: BoomChecker API
   version: "1.0"
 paths:
+  /admin/auth/request:
+    post:
+      consumes:
+      - application/json
+      description: Request a JWT token for admin access. Token is sent via email and
+        is valid for 24 hours. Rate limited to 1 request per 24 hours.
+      parameters:
+      - description: Email address
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/services.TokenRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Token request successful, email sent
+          schema:
+            $ref: '#/definitions/services.TokenResponse'
+        "400":
+          description: Invalid request format
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "401":
+          description: Unauthorized email
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "429":
+          description: Rate limit exceeded
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      summary: Request admin authentication token
+      tags:
+      - admin-auth
   /admin/registration-node-tokens:
     get:
       description: Return all registration tokens (active, expired, used)

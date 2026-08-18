@@ -10,6 +10,9 @@ import (
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
+
+	// Import modernc.org/sqlite for pure-Go SQLite driver (no CGO required)
+	_ "modernc.org/sqlite"
 )
 
 // Config holds database configuration options
@@ -80,9 +83,12 @@ func InitDB(config *Config) (*gorm.DB, error) {
 
 	// Open SQLite connection using pure-Go driver (modernc.org/sqlite)
 	// This avoids CGO dependency required by mattn/go-sqlite3
-	// sqlite.Open() automatically uses the pure-Go driver without CGO
+	// We explicitly specify "sqlite" driver name to use modernc.org/sqlite
 	log.Printf("Opening SQLite database: %s", config.DatabasePath)
-	db, err := gorm.Open(sqlite.Open(config.DatabasePath), gormConfig)
+	db, err := gorm.Open(sqlite.Dialector{
+		DriverName: "sqlite",
+		DSN:        config.DatabasePath,
+	}, gormConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to database at %s: %w", config.DatabasePath, err)
 	}
@@ -126,6 +132,7 @@ func runMigrations(db *gorm.DB) error {
 	if err := db.AutoMigrate(
 		&models.Node{},
 		&models.RegistrationToken{},
+		&models.AdminToken{},
 	); err != nil {
 		return fmt.Errorf("AutoMigrate failed: %w", err)
 	}
@@ -153,6 +160,12 @@ func createCustomIndexes(db *gorm.DB) error {
 
 		// Index for expired token cleanup queries
 		"CREATE INDEX IF NOT EXISTS idx_registration_tokens_expires_at ON registration_tokens(expires_at);",
+
+		// Index for admin token rate limiting (finding last request by email)
+		"CREATE INDEX IF NOT EXISTS idx_admin_tokens_email_requested ON admin_tokens(email, requested_at DESC);",
+
+		// Index for expired admin token cleanup queries
+		"CREATE INDEX IF NOT EXISTS idx_admin_tokens_expires_at ON admin_tokens(expires_at);",
 	}
 
 	for _, indexSQL := range indexes {

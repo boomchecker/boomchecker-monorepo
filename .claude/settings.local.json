@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dir \"C:\\Users\\maxam\\Documents\\GIT\\03_skola\\boomchecker-monorepo\")",
+      "Bash(dir:*)",
+      "Bash(go get:*)",
+      "Bash(go mod tidy:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

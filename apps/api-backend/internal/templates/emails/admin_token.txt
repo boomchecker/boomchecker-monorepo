@@ -1,0 +1,26 @@
+BoomChecker Admin Authentication
+
+Your admin authentication token has been generated.
+
+YOUR TOKEN:
+{{.Token}}
+
+TOKEN EXPIRATION:
+This token will expire in {{.ExpiresInHours}} hours ({{.ExpiresAtFormatted}})
+
+HOW TO USE THIS TOKEN:
+1. Copy the token above
+2. Include it in your API requests as a Bearer token
+3. Add the header: Authorization: Bearer YOUR_TOKEN
+
+EXAMPLE CURL COMMAND:
+curl -H "Authorization: Bearer {{.Token}}" https://api.boomchecker.com/admin/...
+
+SECURITY NOTICE:
+• Keep this token secret and secure
+• Do not share it with anyone
+• You can request a new token only once per 24 hours
+
+---
+This is an automated message from BoomChecker API.
+If you did not request this token, please ignore this email.
