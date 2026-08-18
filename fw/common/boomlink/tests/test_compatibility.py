@@ -171,6 +171,38 @@ def test_encode_rejects_malformed_numeric_arguments(tmp_path, codec_tool_path):
         )
 
 
+def test_decode_read_cap_boundary(tmp_path, codec_tool_path, codec_tool_limits):
+    """codec_tool's own read cap (BOOMLINK_DECODE_READ_CAP - generously above
+    the real on-air budget, see codec_tool.c's decode comment) must accept
+    exactly `decode_read_cap` bytes and reject only what's strictly larger,
+    with a distinct "too large" rejection rather than misreporting an
+    oversized input as an ordinary decode failure. A previous version of
+    this cap had an off-by-one here (rejecting a legitimately-sized input of
+    precisely the cap's own size) that this test guards against
+    regressing - garbage bytes are used rather than a real Envelope encoding
+    since only the read stage's own boundary behaviour is under test here,
+    not boomlink_decode_envelope() itself."""
+    read_cap = codec_tool_limits["decode_read_cap"]
+
+    at_cap = tmp_path / "at_cap.bin"
+    at_cap.write_bytes(b"\xff" * read_cap)
+    result_at_cap = run_codec_tool(codec_tool_path, "decode", str(at_cap))
+    assert_clean_rejection(result_at_cap)
+    assert "exceeds the maximum test input size" not in result_at_cap.stderr, (
+        f"a {read_cap}-byte input (exactly the read cap) was rejected as too "
+        f"large:\n{result_at_cap.stderr}"
+    )
+
+    over_cap = tmp_path / "over_cap.bin"
+    over_cap.write_bytes(b"\xff" * (read_cap + 1))
+    result_over_cap = run_codec_tool(codec_tool_path, "decode", str(over_cap))
+    assert_clean_rejection(result_over_cap)
+    assert "exceeds the maximum test input size" in result_over_cap.stderr, (
+        f"a {read_cap + 1}-byte input (one over the read cap) was not rejected "
+        f"as too large:\n{result_over_cap.stderr}"
+    )
+
+
 def test_unknown_field_is_forward_compatible(tmp_path, codec_tool_path):
     """A peer running a newer schema (a hypothetical future Envelope field)
     must not break an older decoder - the field is skipped, not an error, on
@@ -203,29 +235,48 @@ def test_unknown_field_is_forward_compatible_near_the_real_budget(
     tmp_path, codec_tool_path, codec_tool_limits
 ):
     """Same as test_unknown_field_is_forward_compatible, but sized close to
-    the real on-air budget (235 bytes = 255-byte SX126x limit - 20-byte link
-    frame header) rather than a few bytes over this schema's own worst case
-    (boomlink_Envelope_size, 215 bytes today). A previous version of
-    codec_tool's `decode` sized its read buffer to exactly
-    boomlink_Envelope_size and rejected anything larger as "too large" -
-    which made it impossible to exercise this exact compatibility rule
-    (section 15.1) at a realistic size: any legitimately-larger frame from a
-    newer peer was rejected by the test tool itself, before
-    boomlink_decode_envelope() ever got to prove it handles the extra field
-    correctly."""
+    the real on-air budget (codec_tool_limits["envelope_budget"] -
+    BOOMLINK_RADIO_MAX_PAYLOAD minus the link frame header) rather than a
+    few bytes over this schema's own worst case
+    (codec_tool_limits["envelope_size"]). A previous version of codec_tool's
+    `decode` sized its read buffer to exactly boomlink_Envelope_size and
+    rejected anything larger as "too large" - which made it impossible to
+    exercise this exact compatibility rule (section 15.1) at a realistic
+    size: any legitimately-larger frame from a newer peer was rejected by
+    the test tool itself, before boomlink_decode_envelope() ever got to
+    prove it handles the extra field correctly.
+
+    Both bounds are read from `codec_tool limits` rather than hardcoded -
+    a hardcoded copy of a compiled bound is exactly the failure mode
+    README.md warns against (it's how this package once shipped a real
+    stack overflow when a bound changed and one copy wasn't updated)."""
     max_size = codec_tool_limits["ping_payload_max"]
+    envelope_size = codec_tool_limits["envelope_size"]
+    envelope_budget = codec_tool_limits["envelope_budget"]
     envelope = envelope_pb2.Envelope()
     envelope.header.protocol_version = BOOMLINK_PROTOCOL_VERSION
     envelope.system.ping.payload = b"\x01" * max_size
     base = envelope.SerializeToString()
 
-    # Field 20, wire type 2, with a 21-byte payload - pushes the total past
-    # boomlink_Envelope_size while staying under the real 235-byte ceiling.
-    unknown_payload = b"\x02" * 21
+    # Field 20, wire type 2: tag varint (20 << 3) | 2 = 162, which needs TWO
+    # bytes to encode (162 > 127, so its continuation bit is set) - encoded
+    # below as 0xA2 0x01, same as test_unknown_field_is_forward_compatible
+    # above. Sized to land the whole frame right at the real on-air budget:
+    # past this schema's own worst case (envelope_size), but never above
+    # what a real LoRa packet can carry (envelope_budget).
+    tag_and_length_overhead = 3  # 2-byte tag + 1-byte length varint - see assert below
+    unknown_len = envelope_budget - len(base) - tag_and_length_overhead
+    assert 0 < unknown_len < 128, (
+        "test assumes the unknown field's own length fits in a 1-byte varint - "
+        f"got unknown_len={unknown_len} from envelope_budget={envelope_budget}, "
+        f"len(base)={len(base)}; the compiled bounds no longer leave the margin "
+        "this test was written to exercise"
+    )
+    unknown_payload = b"\x02" * unknown_len
     unknown_field = bytes([0xA2, 0x01, len(unknown_payload)]) + unknown_payload
     with_unknown_field = base + unknown_field
-    assert len(with_unknown_field) > 215  # would have tripped the old, too-tight read cap
-    assert len(with_unknown_field) <= 235  # still within the real on-air budget
+    assert len(with_unknown_field) > envelope_size  # would have tripped the old, too-tight read cap
+    assert len(with_unknown_field) <= envelope_budget  # still within the real on-air budget
 
     reparsed = envelope_pb2.Envelope()
     reparsed.ParseFromString(with_unknown_field)

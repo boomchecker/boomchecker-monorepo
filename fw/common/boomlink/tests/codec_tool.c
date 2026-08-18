@@ -40,6 +40,15 @@
    boomlink_Envelope_size. */
 #define BOOMLINK_DECODE_READ_CAP 512
 
+/* The whole point of not sizing the read cap to boomlink_Envelope_size (see
+   run_decode()'s comment) is to stay generously ABOVE it, so a forward-
+   compatible frame carrying an unknown field can still be read. Catches the
+   cap ever being edited down below that at compile time instead of
+   silently reintroducing the exact "legitimate input rejected as too
+   large" bug this cap was raised to fix. */
+_Static_assert(BOOMLINK_DECODE_READ_CAP >= boomlink_Envelope_size,
+               "decode's read cap must stay generously above the compiled worst-case envelope size");
+
 /* Parses `s` as a base-10 uint32_t. Rejects empty input, any leading
    character that isn't a digit (whitespace, '+', '-'), trailing junk, and
    anything out of uint32_t range.
@@ -183,12 +192,22 @@ static int run_selftest(void) {
   return 0;
 }
 
-/* Prints the real compiled Ping/Pong payload bounds, so tests read the
-   limit from this tool instead of hardcoding their own copy of
-   nanopb/system.options' max_size. */
+/* Prints the real compiled Ping/Pong payload bounds and the real on-air
+   Envelope budget, so tests read every one of these from this tool instead
+   of each hardcoding its own copy - envelope_size is Nanopb's own
+   worst-case encoded size (envelope.pb.h's boomlink_Envelope_size, already
+   used to size buf[] throughout this file); envelope_budget is the real
+   on-air ceiling (boomlink_codec.h's BOOMLINK_RADIO_MAX_PAYLOAD minus
+   BOOMLINK_LINK_FRAME_HEADER_SIZE) a valid frame from a newer peer could
+   still legitimately approach, per BOOMLINK_DECODE_READ_CAP's own comment
+   above. */
 static int run_limits(void) {
   printf("ping_payload_max=%zu\n", BOOMLINK_PING_PAYLOAD_CAP);
   printf("pong_payload_max=%zu\n", BOOMLINK_PONG_PAYLOAD_CAP);
+  printf("envelope_size=%u\n", (unsigned)boomlink_Envelope_size);
+  printf("envelope_budget=%u\n",
+         (unsigned)(BOOMLINK_RADIO_MAX_PAYLOAD - BOOMLINK_LINK_FRAME_HEADER_SIZE));
+  printf("decode_read_cap=%d\n", BOOMLINK_DECODE_READ_CAP);
   return 0;
 }
 
