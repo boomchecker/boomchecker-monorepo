@@ -66,10 +66,11 @@ def codec_tool_path():
 
 @pytest.fixture(scope="session")
 def codec_tool_limits(codec_tool_path):
-    """The tool's real compiled Ping/Pong payload bounds, so tests read the
-    limit from the one place it is actually defined - the compiled struct
-    layout - instead of each hardcoding its own copy of
-    nanopb/system.options' max_size."""
+    """Every compiled bound the tool reports: the Ping/Pong payload caps
+    plus envelope_size, envelope_budget and decode_read_cap - see
+    _support.query_codec_tool_limits() for what each one means. Tests read
+    these instead of hardcoding their own copy of a number defined in
+    nanopb/system.options or boomlink_codec.h."""
     try:
         return query_codec_tool_limits(codec_tool_path)
     except RuntimeError as exc:
