@@ -109,11 +109,14 @@ holding, and `tests/test_compatibility.py` is what enforces them:
   compiled bound from `codec_tool limits` (or the `codec_tool_limits` pytest
   fixture) rather than hardcoding a copy of the number - a hardcoded copy
   sizing a C stack buffer is exactly how this package once shipped a real
-  stack overflow when the bound changed and one copy wasn't updated. Keep
-  every `max_size` **even**: Nanopb enforces the generated struct's padded
-  capacity rather than `max_size` itself, so an odd bound makes it accept one
-  byte more than the declared array holds (a `_Static_assert` in
-  `boomlink_codec.c` rejects that at build time).
+  stack overflow when the bound changed and one copy wasn't updated. Nanopb
+  enforces the generated struct's **padded** capacity rather than `max_size`
+  itself, so a `max_size` that leaves padding makes it accept a byte (or more)
+  past the declared array - with the default 2-byte `pb_size_t` that means
+  keeping every `max_size` **even**, and under `PB_FIELD_32BIT` a multiple of 4.
+  `boomlink_codec.c`'s `BOOMLINK_ASSERT_BOUNDED_BYTES` rejects a bad one at
+  build time, but only for the fields explicitly listed there - see step 3b of
+  the checklist below.
 - **Shrinking a bound is a breaking wire-format change**, not a local tweak,
   once a committed golden vector carries a payload larger than the new value:
   old peers' frames stop decoding. That collision is what
@@ -152,6 +155,14 @@ holding, and `tests/test_compatibility.py` is what enforces them:
    renaming one correctly forces regeneration regardless of the file's
    mtime - see CMakeLists.txt's comment on why `CONFIGURE_DEPENDS` alone is
    not enough for that).
+3b. **For each new bounded `bytes` field, add a
+   `BOOMLINK_ASSERT_BOUNDED_BYTES(<Type>, <field>)` line in
+   `boomlink_codec.c`.** C cannot enumerate a struct's members, so that check
+   has to be written per field - and a field without one silently gets the
+   over-accept-by-a-byte behaviour described in the compatibility rules above,
+   which AddressSanitizer cannot see (the overrun lands inside the struct's own
+   padding) and no test currently covers beyond `Ping`. `string` fields need
+   no line: nanopb emits a plain `char[N]` and bounds it exactly.
 4. Add the new proto's name to `CMakeLists.txt`'s `BOOMLINK_PROTO_NAMES` list
    - the one place both the Nanopb and Python generation steps read it from.
 5. Add golden vectors (`vectors_spec.py` + `generate_vectors.py`) and tests

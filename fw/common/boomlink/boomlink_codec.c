@@ -23,23 +23,28 @@
    package (codec_tool's `limits`, the buffers sized from it, the
    one-over-the-bound rejection test) quietly wrong by one.
    Rather than model two different bounds - one for what we may safely write,
-   one for what Nanopb will accept - require them to be equal, which for a
-   2-byte pb_size_t means requiring an even max_size. An odd bound buys nothing
-   and is the only way the two can diverge, so this turns the whole class into
-   a build failure with a clear message. Checked here, in the shared
-   translation unit, so the firmware build is covered too and not just the
-   host-side test tool. */
-#define BOOMLINK_NANOPB_ENFORCED_MAX(type) \
-  (sizeof(((type *)0)->payload) - offsetof(pb_bytes_array_t, bytes))
+   one for what Nanopb will accept - require them to be equal. An odd bound
+   buys nothing and (with the default pb_size_t) is the only way the two can
+   diverge. Checked here, in the shared translation unit, so the firmware build
+   is covered too and not just the host-side test tool.
 
-_Static_assert(BOOMLINK_NANOPB_ENFORCED_MAX(boomlink_Ping) ==
-                   sizeof(((boomlink_Ping *)0)->payload.bytes),
-               "Ping.payload's max_size is odd, so Nanopb would accept one byte more than "
-               "the declared array holds - use an even max_size in nanopb/system.options");
-_Static_assert(BOOMLINK_NANOPB_ENFORCED_MAX(boomlink_Pong) ==
-                   sizeof(((boomlink_Pong *)0)->payload.bytes),
-               "Pong.payload's max_size is odd, so Nanopb would accept one byte more than "
-               "the declared array holds - use an even max_size in nanopb/system.options");
+   EVERY bounded `bytes` field needs its own line below - the check cannot be
+   written once for the whole schema, since C has no way to enumerate a
+   struct's members. A new one added without a line here (see README.md's
+   "Adding a new message group" checklist) is not protected. `string` fields
+   need nothing: Nanopb emits a plain char[N], whose alignment is 1, and
+   checks size + 1 against it exactly. */
+#define BOOMLINK_ASSERT_BOUNDED_BYTES(type, member)                                      \
+  _Static_assert(sizeof(((type *)0)->member) - offsetof(pb_bytes_array_t, bytes) ==       \
+                     sizeof(((type *)0)->member.bytes),                                   \
+                 #type "." #member " has a max_size that Nanopb would over-accept by a "  \
+                 "byte or more: it must equal sizeof the generated array struct minus "   \
+                 "its pb_size_t length prefix. With the default 2-byte pb_size_t that "   \
+                 "means an even max_size (under PB_FIELD_32BIT, a multiple of 4) - see "  \
+                 "nanopb/system.options")
+
+BOOMLINK_ASSERT_BOUNDED_BYTES(boomlink_Ping, payload);
+BOOMLINK_ASSERT_BOUNDED_BYTES(boomlink_Pong, payload);
 
 /* boomlink_Envelope_size (envelope.pb.h) is Nanopb's own worst-case encoded
    size for the current schema, computed from every bounded field in
