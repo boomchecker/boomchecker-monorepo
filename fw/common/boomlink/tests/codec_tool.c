@@ -51,7 +51,20 @@
 #define BOOMLINK_SANITIZE_ENABLED 0
 #endif
 
-#if BOOMLINK_SANITIZE_ENABLED && !defined(__SANITIZE_ADDRESS__) && !defined(__clang__)
+/* GCC advertises ASan via __SANITIZE_ADDRESS__; Clang (verified on 18.1) does
+   NOT define it at all and answers __has_feature(address_sanitizer) instead. So
+   detect both rather than exempting Clang - exempting it would silently disable
+   this cross-check for a whole compiler family, and a Clang build that lost its
+   -fsanitize flags would still claim sanitizers=1. */
+#if defined(__SANITIZE_ADDRESS__)
+#define BOOMLINK_ASAN_ACTIVE 1
+#elif defined(__has_feature)
+#if __has_feature(address_sanitizer)
+#define BOOMLINK_ASAN_ACTIVE 1
+#endif
+#endif
+
+#if BOOMLINK_SANITIZE_ENABLED && !defined(BOOMLINK_ASAN_ACTIVE)
 #error "BOOMLINK_SANITIZE_ENABLED=1 but this file is not compiled with -fsanitize=address"
 #endif
 
@@ -142,17 +155,26 @@ static void hex_encode(const uint8_t *data, size_t len, char *out, size_t out_ca
   if (out_cap < 2 * len + 1) {
     /* Should be unreachable: callers size `out` from BOOMLINK_MAX_PAYLOAD_CAP
        and `len` comes from a decoded payload, which boomlink_codec.c's
-       BOOMLINK_NANOPB_ENFORCED_MAX asserts cannot exceed that cap. It is a
+       BOOMLINK_ASSERT_BOUNDED_BYTES guarantees cannot exceed that cap. It is a
        real guard rather than a formality, though - it once WAS reachable, when
        an odd max_size let Nanopb accept one byte more than the declared array
-       (see that assert), and it then failed the worst possible way: silently
-       printing an empty payload with exit status 0, so `decode` reported
-       success while losing the data. Fail loudly instead. */
+       (see that assert), and getting the failure MODE right here turned out to
+       matter more than the message.
+       abort(), not exit(): the test suite's assert_clean_rejection() treats any
+       POSITIVE exit code as a clean, intentional rejection, so exiting 70 here
+       made an internal fault indistinguishable from one - and measurably so.
+       With a deliberately odd bound, `exit(70)` made all three over-bound
+       rejection tests pass green over a real intra-object overflow, where both
+       abort() and even the old silent `return` left them red. SIGABRT is
+       already this suite's canonical internal-fault signal (see
+       _support.py's forced abort_on_error=1), so it lands as a negative
+       returncode and is reported as the fault it is. */
     fprintf(stderr,
             "hex_encode: output buffer too small for a %zu-byte payload (capacity %zu) - "
             "this is a bug in codec_tool's buffer sizing, not a bad input\n",
             len, out_cap);
-    exit(70); /* EX_SOFTWARE - not a rejection of the input, an internal fault */
+    fflush(stderr);
+    abort();
   }
   for (size_t i = 0; i < len; i++) {
     out[2 * i]     = digits[(data[i] >> 4) & 0xF];

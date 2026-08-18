@@ -49,6 +49,11 @@ _SANITIZER_STDERR_PATTERNS = (
     re.compile(r"^.+:\d+:\d+: runtime error:", re.MULTILINE),
 )
 
+# The only exit codes codec_tool.c uses to reject an input: 2 for a usage/parse
+# error, 1 for a rejected payload or an I/O failure. Anything else positive is
+# not a rejection - see assert_clean_rejection().
+_REJECTION_EXIT_CODES = frozenset({1, 2})
+
 
 def run_codec_tool(codec_tool_path, *args):
     env = dict(os.environ)
@@ -98,6 +103,16 @@ def assert_clean_rejection(result):
             f"intentional rejection - with abort_on_error=1 forced on both sanitizers, "
             f"SIGABRT (-6) is what a sanitizer finding looks like:\n{result.stderr}"
         )
+    # An exact allow-list, not just "positive": codec_tool's rejection paths
+    # return only 1 or 2, so any OTHER positive code is something else wearing a
+    # rejection's clothes. Accepting all positives once let an internal fault
+    # (an exit(70) from hex_encode, over a real intra-object buffer overflow)
+    # pass three over-bound tests green.
+    assert result.returncode in _REJECTION_EXIT_CODES, (
+        f"exit code {result.returncode} is not one of codec_tool's rejection codes "
+        f"{sorted(_REJECTION_EXIT_CODES)} - an unexpected positive code means an internal "
+        f"fault or a new failure path, not a clean intentional rejection:\n{result.stderr}"
+    )
     for pattern in _SANITIZER_STDERR_PATTERNS:
         assert not pattern.search(result.stderr), (
             "rejection looks like a sanitizer abort, not a clean intentional one "
@@ -117,7 +132,15 @@ def query_codec_tool_limits(codec_tool_path):
     """Every compiled bound the tool can report (its `limits` subcommand) -
     the one place tests should read these from, instead of each hardcoding
     its own copy of a number that lives in nanopb/system.options or
-    boomlink_codec.h. Keys, all ints:
+    boomlink_codec.h. Values that parse as integers are returned as ints, any
+    other value as the raw string - so a future non-numeric field (a
+    `nanopb_version`, a `build_type`) is simply carried through rather than
+    breaking every caller. That is not hypothetical caution: coercing EVERY
+    value with int() meant one such field raised ValueError here, during
+    test_encode_decode.py's collection-time pytest_generate_tests, which
+    aborted the whole session before a single test ran.
+
+    Keys today (all ints):
 
       ping_payload_max / pong_payload_max
           the per-message bounded `bytes` field caps (nanopb/system.options'
@@ -140,4 +163,10 @@ def query_codec_tool_limits(codec_tool_path):
     result = run_codec_tool(codec_tool_path, "limits")
     if result.returncode != 0:
         raise RuntimeError(f"codec_tool limits failed: {result.stderr}")
-    return {key: int(value) for key, value in parse_kv(result.stdout).items()}
+    limits = {}
+    for key, value in parse_kv(result.stdout).items():
+        try:
+            limits[key] = int(value)
+        except ValueError:
+            limits[key] = value
+    return limits
