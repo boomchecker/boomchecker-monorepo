@@ -27,16 +27,46 @@ else()
   set(BOOMLINK_STANDALONE FALSE)
 endif()
 
-# ASan+UBSan for the host test suite - this package's whole reason to exist
-# as a host-testable build is exercising a wire-format parser on
-# hostile/malformed bytes (see tests/test_compatibility.py); a memory-safety
-# bug in that parser (or in the C tool driving it) is exactly what a
-# sanitizer catches and a plain pass/fail exit code does not. Host-only:
-# never applied to the ARM cross build, which has no sanitizer runtime.
-option(BOOMLINK_SANITIZE "Build with AddressSanitizer + UndefinedBehaviorSanitizer" OFF)
-if(BOOMLINK_STANDALONE AND BOOMLINK_SANITIZE)
-  add_compile_options(-fsanitize=address,undefined -fno-sanitize-recover=all -g -O1)
-  add_link_options(-fsanitize=address,undefined)
+# Both options are declared only in the standalone branch, not
+# unconditionally: neither is meaningful under the ARM cross build (no
+# sanitizer runtime exists there, and a firmware build should not be gated on
+# a host-toolchain warning becoming an error), and declaring them anyway
+# would put two settable-but-inert knobs in the firmware build's `cmake -LH`
+# output for a reader to wonder about.
+if(BOOMLINK_STANDALONE)
+  # ASan+UBSan for the host test suite - this package's whole reason to exist
+  # as a host-testable build is exercising a wire-format parser on
+  # hostile/malformed bytes (see tests/test_compatibility.py); a memory-safety
+  # bug in that parser (or in the C tool driving it) is exactly what a
+  # sanitizer catches and a plain pass/fail exit code does not. Applied at
+  # directory scope so it reaches the vendored nanopb runtime too -
+  # instrumenting pb_decode.c is precisely where you want a sanitizer on a
+  # hostile-input parser (deliberately unlike the warning flags below, which
+  # are target-scoped to keep third-party code out).
+  option(BOOMLINK_SANITIZE "Build with AddressSanitizer + UndefinedBehaviorSanitizer" OFF)
+  if(BOOMLINK_SANITIZE)
+    add_compile_options(-fsanitize=address,undefined -fno-sanitize-recover=all -g -O1)
+    add_link_options(-fsanitize=address,undefined)
+  endif()
+
+  # Without this, -Wall -Wextra (set on this package's own targets further
+  # down) are advisory only: nothing in this repo sets -Werror and neither CI
+  # workflow registers a compiler problem matcher, so a new warning would
+  # neither fail the build nor surface as a PR annotation - it would just sit
+  # in raw log output nobody opens, on a package whose test suite exists
+  # specifically to catch C-safety bugs. Defaults OFF so a developer's local
+  # build is never blocked by a warning from a newer compiler than CI's; the
+  # Debug preset and CI turn it ON (see CMakePresets.json).
+  option(BOOMLINK_WERROR "Treat warnings as errors in this package's own targets" OFF)
+endif()
+
+# Applied via target_compile_options on this package's own targets only (see
+# boomlink_protocol/boomlink_codec_tool below), never add_compile_options:
+# the vendored nanopb runtime is third-party code this package doesn't
+# control the warning-cleanliness of.
+set(BOOMLINK_WARNING_FLAGS -Wall -Wextra)
+if(BOOMLINK_WERROR)
+  list(APPEND BOOMLINK_WARNING_FLAGS -Werror)
 endif()
 
 # Nanopb is vendored once, under bom-stm32node/third_party/ (git submodule
@@ -54,6 +84,11 @@ endif()
 # path, or fail loudly if that path doesn't contain a Nanopb checkout.
 set(BOOMLINK_NANOPB_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../bom-stm32node/third_party/nanopb
     CACHE PATH "Path to the vendored Nanopb submodule")
+# Collapse the ../../ the default above is built from, so every compile line
+# and compile_commands.json entry carries a clean -I path instead of
+# ".../fw/common/boomlink/../../bom-stm32node/third_party/nanopb". Applied to
+# whatever value is in effect, including one a consumer set themselves.
+cmake_path(NORMAL_PATH BOOMLINK_NANOPB_DIR)
 set(BOOMLINK_NANOPB_GENERATOR ${BOOMLINK_NANOPB_DIR}/generator/nanopb_generator.py)
 
 if(NOT EXISTS ${BOOMLINK_NANOPB_GENERATOR})
@@ -61,6 +96,20 @@ if(NOT EXISTS ${BOOMLINK_NANOPB_GENERATOR})
     "Nanopb submodule not found at ${BOOMLINK_NANOPB_DIR}. Run: "
     "git submodule update --init fw/bom-stm32node/third_party/nanopb")
 endif()
+
+# The generator is a Python PACKAGE, not just the one entry-point script, so
+# depending on nanopb_generator.py alone would miss a submodule bump that
+# changes generated output via one of these instead - the generated .pb.h
+# bounds would silently stay stale on an incremental build after
+# `git submodule update`. Deliberately does NOT list generator/proto/
+# nanopb_pb2.py: that file is itself produced by the generator at build time,
+# so depending on it would mean depending on a build artifact.
+set(BOOMLINK_NANOPB_GENERATOR_FILES
+  ${BOOMLINK_NANOPB_GENERATOR}
+  ${BOOMLINK_NANOPB_DIR}/generator/proto/__init__.py
+  ${BOOMLINK_NANOPB_DIR}/generator/proto/_utils.py
+  ${BOOMLINK_NANOPB_DIR}/generator/proto/nanopb.proto
+)
 
 # Named boomlink_nanopb (not the generic "nanopb" nanopb's own vendored
 # CMakeLists.txt would use) since this package is designed to be
@@ -113,12 +162,17 @@ execute_process(
   OUTPUT_QUIET ERROR_QUIET
 )
 if(BOOMLINK_PYTHON_DEPS_MISSING)
+  # Absolute paths, not "requirements.txt"/"in fw/common/boomlink": this file
+  # is add_subdirectory()'d from fw/bom-stm32node, so the firmware build hits
+  # this error with a completely different working directory - where a bare
+  # `pip install -r requirements.txt` refers to a file that isn't there.
   message(FATAL_ERROR
     "Python packages 'protobuf' and 'grpcio-tools' are required to generate "
-    "Nanopb code from fw/common/boomlink/proto/*.proto. Install them "
-    "(matching fw/common/boomlink/requirements.txt) with:\n"
-    "    pip install -r requirements.txt\n"
-    "or run `task setup` in fw/common/boomlink.")
+    "Nanopb code from ${CMAKE_CURRENT_SOURCE_DIR}/proto/*.proto, using the "
+    "interpreter CMake found (${Python3_EXECUTABLE}). Install them with:\n"
+    "    ${Python3_EXECUTABLE} -m pip install -r ${CMAKE_CURRENT_SOURCE_DIR}/requirements.txt\n"
+    "or run `task setup` in ${CMAKE_CURRENT_SOURCE_DIR} and build via `task "
+    "build`, which puts that venv on PATH so this check finds it.")
 endif()
 
 set(BOOMLINK_PROTO_DIR ${CMAKE_CURRENT_SOURCE_DIR}/proto)
@@ -128,21 +182,30 @@ list(TRANSFORM BOOMLINK_PROTO_NAMES PREPEND ${BOOMLINK_PROTO_DIR}/ OUTPUT_VARIAB
 list(TRANSFORM BOOMLINK_PROTO_FILES APPEND .proto)
 
 # Every *.options file in nanopb/ (today, just system.options - see below),
-# not hardcoded to that one name: CONFIGURE_DEPENDS means CMake reconfigures
-# (and this glob re-runs) if the glob's result SET changes, most usefully
-# when a new nanopb/<name>.options is added - so adding one for a future
-# .proto per this file's own pattern (and README.md's "Adding a new message
-# group" instructions) is picked up automatically, instead of the generator
-# silently keeping whatever bounds it read the first time a full clean
-# build happened to run.
-# This does NOT fully cover DELETING a nanopb/<name>.options file: the
-# reconfigure does fire, but the generator's add_custom_command below has
-# nothing left in its DEPENDS that is newer than its already-up-to-date
-# outputs, so ninja/make correctly (from their point of view) decides there
-# is no work to do and the stale generated bounds survive. Verified this gap
-# directly. Re-run cmake on a clean build directory if a nanopb/*.options
-# file is ever removed.
+# not hardcoded to that one name, so adding one for a future .proto per this
+# file's own pattern (and README.md's "Adding a new message group"
+# instructions) needs no edit here.
 file(GLOB BOOMLINK_NANOPB_OPTIONS_FILES CONFIGURE_DEPENDS ${BOOMLINK_NANOPB_OPTIONS_DIR}/*.options)
+
+# CONFIGURE_DEPENDS above only guarantees a RECONFIGURE when the glob's
+# result set changes. Whether the generator actually re-runs after that is
+# decided purely by comparing mtimes of the surviving DEPENDS entries against
+# the generated outputs - so any set change whose remaining members are all
+# older than those outputs is a silent no-op, and the stale generated bounds
+# survive. That is not a corner case: it swallows a DELETED options file, a
+# RENAMED one (rename(2) preserves mtime, so the "add" half can't rescue it),
+# and even an added file carrying an old mtime (cp -p, tar -p, rsync -t, or
+# moved in from elsewhere). All three verified directly against this build.
+#
+# Stamping the glob's result set into a file turns that set into a real build
+# dependency: file(CONFIGURE) rewrites - and therefore re-timestamps - the
+# stamp only when the content differs, so a changed set forces regeneration
+# while an unchanged one causes no spurious rebuild. Verified all four
+# behaviours (delete/rename/old-mtime add regenerate; no-op rebuild stays a
+# no-op).
+set(BOOMLINK_NANOPB_OPTIONS_STAMP ${CMAKE_CURRENT_BINARY_DIR}/nanopb_options_set.stamp)
+file(CONFIGURE OUTPUT ${BOOMLINK_NANOPB_OPTIONS_STAMP}
+     CONTENT "${BOOMLINK_NANOPB_OPTIONS_FILES}\n")
 
 set(BOOMLINK_GENERATED_DIR ${CMAKE_CURRENT_BINARY_DIR}/generated)
 file(MAKE_DIRECTORY ${BOOMLINK_GENERATED_DIR})
@@ -174,7 +237,10 @@ foreach(proto_name IN LISTS BOOMLINK_PROTO_NAMES)
             -I${BOOMLINK_NANOPB_OPTIONS_DIR}
             -D${BOOMLINK_GENERATED_DIR}
             ${BOOMLINK_PROTO_DIR}/${proto_name}.proto
-    DEPENDS ${BOOMLINK_PROTO_FILES} ${BOOMLINK_NANOPB_OPTIONS_FILES} ${BOOMLINK_NANOPB_GENERATOR}
+    DEPENDS ${BOOMLINK_PROTO_FILES}
+            ${BOOMLINK_NANOPB_OPTIONS_FILES}
+            ${BOOMLINK_NANOPB_OPTIONS_STAMP}
+            ${BOOMLINK_NANOPB_GENERATOR_FILES}
     COMMENT "Generating Nanopb code for ${proto_name}.proto"
     VERBATIM
   )
@@ -211,28 +277,25 @@ target_link_libraries(boomlink_protocol PUBLIC boomlink::nanopb)
 # silently regenerated, and this target should not depend on it staying at
 # C11 by accident.
 target_compile_features(boomlink_protocol PUBLIC c_std_11)
+# Deliberately OUTSIDE the standalone branch below, so the ARM cross build
+# gets these too. This target is this package's own code in both modes (the
+# vendored-third-party argument that keeps these flags off boomlink_nanopb
+# does not apply to it), and the firmware is the build that needs them more:
+# the host build has ASan/UBSan as a runtime net, while the ARM build has no
+# sanitizer runtime at all and otherwise sees only -Wall (no -Wextra) from
+# fw/bom-stm32node/cmake/gcc-arm-none-eabi.cmake. Verified zero warnings from
+# boomlink_codec.c and all four generated .pb.c under both compilers.
+target_compile_options(boomlink_protocol PRIVATE ${BOOMLINK_WARNING_FLAGS})
 
 if(BOOMLINK_STANDALONE)
-  # -Wall -Wextra for the host build only (the ARM cross build already
-  # inherits -Wall from fw/bom-stm32node/cmake/gcc-arm-none-eabi.cmake), and
-  # scoped with target_compile_options to boomlink_protocol/boomlink_codec_tool
-  # specifically rather than a blanket add_compile_options(): the latter
-  # would also apply to boomlink_nanopb below, a vendored third-party
-  # target (git submodule pinned to release 0.4.9) this package does not
-  # control the warning-cleanliness of - a future submodule bump could
-  # start emitting warnings there for no reason this package's own code
-  # changed. Without this the host build - the only one that compiles the
-  # CLI tool doing hand-rolled buffer/argument-parsing work in
-  # tests/codec_tool.c - was the weaker of the two on a package whose test
-  # suite exists specifically to catch C-safety bugs. Verified this
-  # produces zero warnings against the current source before enabling it.
-  target_compile_options(boomlink_protocol PRIVATE -Wall -Wextra)
-
   enable_testing()
 
+  # The only target that compiles the hand-rolled buffer/argument-parsing
+  # work in tests/codec_tool.c, and host-only by nature - a cross-compiled
+  # host tool makes no sense.
   add_executable(boomlink_codec_tool tests/codec_tool.c)
   target_link_libraries(boomlink_codec_tool PRIVATE boomlink_protocol)
-  target_compile_options(boomlink_codec_tool PRIVATE -Wall -Wextra)
+  target_compile_options(boomlink_codec_tool PRIVATE ${BOOMLINK_WARNING_FLAGS})
 
   add_test(NAME boomlink_codec_selftest COMMAND boomlink_codec_tool selftest)
 
