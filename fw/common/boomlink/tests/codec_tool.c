@@ -41,13 +41,21 @@
 #define BOOMLINK_DECODE_READ_CAP 512
 
 /* The whole point of not sizing the read cap to boomlink_Envelope_size (see
-   run_decode()'s comment) is to stay generously ABOVE it, so a forward-
-   compatible frame carrying an unknown field can still be read. Catches the
-   cap ever being edited down below that at compile time instead of
-   silently reintroducing the exact "legitimate input rejected as too
-   large" bug this cap was raised to fix. */
-_Static_assert(BOOMLINK_DECODE_READ_CAP >= boomlink_Envelope_size,
-               "decode's read cap must stay generously above the compiled worst-case envelope size");
+   run_decode()'s comment) is that a forward-compatible frame from a newer
+   peer can legitimately be larger than this schema's own worst case, right
+   up to the real on-air budget - so the cap has to clear THE BUDGET, not
+   merely boomlink_Envelope_size. Checking it against the latter (as an
+   earlier version of this assert did) leaves the whole
+   boomlink_Envelope_size..budget window unguarded: a cap of 220 compiles
+   silently and then rejects a legitimate 235-byte frame at runtime, which
+   is exactly the bug this cap was raised to fix.
+   Additive form (cap + header >= max payload) rather than comparing against
+   a "budget" subtraction, for the same unsigned-underflow reason spelled
+   out in boomlink_codec.c's own budget assert. */
+_Static_assert(BOOMLINK_DECODE_READ_CAP + BOOMLINK_LINK_FRAME_HEADER_SIZE >=
+                   BOOMLINK_RADIO_MAX_PAYLOAD,
+               "decode's read cap must clear the real on-air Envelope budget, not just "
+               "boomlink_Envelope_size - see the comment above");
 
 /* Parses `s` as a base-10 uint32_t. Rejects empty input, any leading
    character that isn't a digit (whitespace, '+', '-'), trailing junk, and
@@ -205,6 +213,14 @@ static int run_limits(void) {
   printf("ping_payload_max=%zu\n", BOOMLINK_PING_PAYLOAD_CAP);
   printf("pong_payload_max=%zu\n", BOOMLINK_PONG_PAYLOAD_CAP);
   printf("envelope_size=%u\n", (unsigned)boomlink_Envelope_size);
+  /* Both operands are unsigned, so this subtraction would wrap rather than
+     go negative if the header were ever larger than the max payload. It
+     cannot be, in any binary that compiled: boomlink_codec.c's budget
+     assert requires BOOMLINK_RADIO_MAX_PAYLOAD >=
+     BOOMLINK_LINK_FRAME_HEADER_SIZE + boomlink_Envelope_size, and this tool
+     links boomlink_protocol. Spelled out because the same subtraction was a
+     real (if latent) bug elsewhere in this package - see cli.c's identical
+     note. */
   printf("envelope_budget=%u\n",
          (unsigned)(BOOMLINK_RADIO_MAX_PAYLOAD - BOOMLINK_LINK_FRAME_HEADER_SIZE));
   printf("decode_read_cap=%d\n", BOOMLINK_DECODE_READ_CAP);
@@ -303,8 +319,10 @@ static int run_decode(int argc, char **argv) {
      it here - before boomlink_decode_envelope() ever sees it - would make
      forward compatibility impossible to exercise through this tool.
      BOOMLINK_DECODE_READ_CAP is generously above the real on-air ceiling
-     (255-byte SX126x limit - 20-byte link frame header = 235 bytes)
-     instead.
+     (BOOMLINK_RADIO_MAX_PAYLOAD minus BOOMLINK_LINK_FRAME_HEADER_SIZE, both
+     from boomlink_codec.h - the `limits` subcommand reports the computed
+     value as envelope_budget) instead, enforced by the _Static_assert at
+     the top of this file.
 
      Reads one byte past that cap so an oversized file is detected by "we
      read more than the cap allows" rather than by feof() after a read

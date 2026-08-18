@@ -17,6 +17,22 @@ from _support import BOOMLINK_PROTOCOL_VERSION, assert_clean_rejection, parse_kv
 from vectors_spec import GOLDEN_VECTORS, VECTORS_DIR, verify_vector_hashes
 
 
+def _varint(value):
+    """Protobuf base-128 varint encoding (developers.google.com/protocol-buffers
+    /docs/encoding#varints). Needed because these tests hand-append raw wire
+    bytes for a field number no schema assigns - envelope_pb2 cannot encode a
+    field it doesn't know about, so there is nothing to borrow this from."""
+    out = bytearray()
+    while True:
+        byte = value & 0x7F
+        value >>= 7
+        if value:
+            out.append(byte | 0x80)
+        else:
+            out.append(byte)
+            return bytes(out)
+
+
 def test_golden_vector_hashes_are_unchanged():
     """Catches a committed vector being silently replaced (e.g.
     `rm vectors/foo.bin && python generate_vectors.py` producing a fresh
@@ -258,22 +274,30 @@ def test_unknown_field_is_forward_compatible_near_the_real_budget(
     envelope.system.ping.payload = b"\x01" * max_size
     base = envelope.SerializeToString()
 
-    # Field 20, wire type 2: tag varint (20 << 3) | 2 = 162, which needs TWO
-    # bytes to encode (162 > 127, so its continuation bit is set) - encoded
-    # below as 0xA2 0x01, same as test_unknown_field_is_forward_compatible
-    # above. Sized to land the whole frame right at the real on-air budget:
-    # past this schema's own worst case (envelope_size), but never above
-    # what a real LoRa packet can carry (envelope_budget).
-    tag_and_length_overhead = 3  # 2-byte tag + 1-byte length varint - see assert below
-    unknown_len = envelope_budget - len(base) - tag_and_length_overhead
-    assert 0 < unknown_len < 128, (
-        "test assumes the unknown field's own length fits in a 1-byte varint - "
-        f"got unknown_len={unknown_len} from envelope_budget={envelope_budget}, "
-        f"len(base)={len(base)}; the compiled bounds no longer leave the margin "
-        "this test was written to exercise"
+    # Field 20, wire type 2, sized so the whole frame lands exactly on the
+    # real on-air budget: past this schema's own worst case (envelope_size),
+    # but never above what a real LoRa packet can carry (envelope_budget).
+    #
+    # The field's own length prefix is encoded with a real varint rather than
+    # assuming it is one byte: how many bytes it takes is a function of
+    # len(base), which is a function of the compiled max_size - so a bare
+    # "overhead = 3" is itself a hidden hardcoded copy of a compiled bound,
+    # and a legitimate max_size change (e.g. 192 -> 64, which leaves 158
+    # bytes of room and so needs a 2-byte length) would fail this test with a
+    # protocol regression it never actually found.
+    tag = _varint((20 << 3) | 2)
+    available = envelope_budget - len(base) - len(tag)
+    unknown_len = available
+    while unknown_len > 0 and unknown_len + len(_varint(unknown_len)) > available:
+        unknown_len -= 1
+    assert unknown_len > 0, (
+        f"no room left for an unknown field: envelope_budget={envelope_budget} vs "
+        f"len(base)={len(base)} - the compiled bounds no longer leave the margin "
+        "between this schema's worst case and the on-air budget that this test "
+        "exists to exercise"
     )
     unknown_payload = b"\x02" * unknown_len
-    unknown_field = bytes([0xA2, 0x01, len(unknown_payload)]) + unknown_payload
+    unknown_field = tag + _varint(unknown_len) + unknown_payload
     with_unknown_field = base + unknown_field
     assert len(with_unknown_field) > envelope_size  # would have tripped the old, too-tight read cap
     assert len(with_unknown_field) <= envelope_budget  # still within the real on-air budget
