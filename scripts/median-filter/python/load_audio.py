@@ -88,7 +88,11 @@ def get_video_metadata_from_url(video_url: str) -> dict:
         return info
 
 
-def search_youtube(query: str, limit: int = 20, max_length_s: Optional[int] = None) -> List[Dict[str, str]]:
+def search_youtube(
+    query: str,
+    limit: int = 20,
+    max_length_s: Optional[int] = None,
+) -> List[Dict[str, str]]:
     """
     Use yt-dlp search to pull back metadata for the first `limit` results.
     Returns dictionaries with title and watch_url that can be consumed by later
@@ -109,9 +113,11 @@ def search_youtube(query: str, limit: int = 20, max_length_s: Optional[int] = No
         return []
 
     ydl_opts = _build_ydl_opts()
+    ydl_opts["ignoreerrors"] = True
     try:
         with YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(f"ytsearch{limit}:{query}", download=False)
+            search_pool = min(max(limit * 5, limit), 50)
+            info = ydl.extract_info(f"ytsearch{search_pool}:{query}", download=False)
     except Exception as exc:  # pragma: no cover - network dependent
         raise RuntimeError(f"yt-dlp search failed: {exc}") from exc
 
@@ -130,6 +136,7 @@ def search_youtube(query: str, limit: int = 20, max_length_s: Optional[int] = No
                 url = f"https://www.youtube.com/watch?v={video_id}"
         results.append(
             {
+                "id": entry.get("id"),
                 "title": (entry.get("title") or "Untitled video").strip(),
                 "url": url,
                 "length": duration,
