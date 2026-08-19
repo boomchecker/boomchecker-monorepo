@@ -1,16 +1,25 @@
 /**
  ******************************************************************************
- * @file    cxx_bound_ok.cpp
- * @brief   The C++ half of boomlink_linkframe.h, compiled by
- *          tests/check_cxx_bound.sh as the POSITIVE direction: a correctly-sized
- *          buffer must compile clean, and the emitted call must be to the plain
- *          C symbol.
+ * @file    encoder_bound_ok.cpp
+ * @brief   The C++ half of boomlink_linkframe.h's encoder bound, compiled by
+ *          tests/check_encoder_bound.sh as the POSITIVE direction: a
+ *          correctly-sized buffer must compile clean, and the emitted call must
+ *          be to the plain C symbol.
  *
  *          Nothing else in either build compiles this header as C++ yet - the
  *          firmware's C++ radio layer is what will, in a later phase - so
  *          without this the template wrapper and its `extern "C"` namespace
  *          trick could stop working (or stop being reachable) with nothing
- *          turning red. See cxx_bound_too_small.cpp for the other direction.
+ *          turning red. See encoder_bound_too_small.cpp for the other direction.
+ *
+ *          NOTE the include below is NOT wrapped in `extern "C" { }`. That is
+ *          load-bearing, and this file is where it is pinned: the header ends in
+ *          a template, and a template cannot have C language linkage, so
+ *          wrapping the include is a hard error ("template with C linkage").
+ *          The header guards its own linkage and must be included bare - which
+ *          matters because the translation units under App/radio/, the caller
+ *          this whole construct exists for, wrap their C includes exactly that
+ *          way today.
  ******************************************************************************
  */
 #include "boomlink_linkframe.h"

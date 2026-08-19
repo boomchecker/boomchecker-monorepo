@@ -564,24 +564,41 @@ if(BOOMLINK_STANDALONE)
             $<TARGET_FILE:boomlink_linkframe_tool>
   )
 
-  # The encoder's compile-time output bound, for C++ callers (see
-  # tests/check_cxx_bound.sh). Nothing else in either build compiles
-  # boomlink_linkframe.h as C++ - every target here and in the firmware that
-  # includes it today is C - while the caller that will actually encode frames is
-  # the firmware's C++ radio layer. So this is the only thing standing between
-  # that construct and silently rotting until a later phase discovers it on the
-  # target.
+  # The encoder's compile-time output bound, in BOTH languages (see
+  # tests/check_encoder_bound.sh). Neither bound is exercised by any target in
+  # either build: every library and tool here is C and none of them passes an
+  # undersized buffer, and the C++ caller - the firmware's radio layer - does not
+  # exist yet. Verified that with these two tests absent, BOTH bounds can be
+  # deleted outright with the whole suite, the ARM build and ruff staying green,
+  # while an intra-object overflow (the case AddressSanitizer is blind to) then
+  # compiles clean under -Werror. These tests are the only thing standing between
+  # the package's headline safety construct and silently becoming decoration.
   #
-  # -std=c++17 is passed explicitly rather than left to the compiler's default,
-  # to match fw/bom-stm32node/CMakeLists.txt's CMAKE_CXX_STANDARD - the caller
-  # this is a proxy for.
+  # The std flags are passed explicitly rather than left to each compiler's
+  # default, to match the standards the real callers are built with:
+  # CMAKE_C_STANDARD 11 above, and fw/bom-stm32node/CMakeLists.txt's
+  # CMAKE_CXX_STANDARD 17.
+  #
+  # The last argument is the diagnostic each language's bound is expected to
+  # produce, so a rejection for an unrelated reason (a typo, a missing header, a
+  # wrong -I) cannot masquerade as the bound working.
+  add_test(NAME boomlink_linkframe_c_bound
+    COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/tests/check_encoder_bound.sh
+            ${CMAKE_C_COMPILER}
+            -std=c11
+            ${CMAKE_CURRENT_SOURCE_DIR}/linkframe
+            ${CMAKE_CURRENT_SOURCE_DIR}/tests/encoder_bound_ok.c
+            ${CMAKE_CURRENT_SOURCE_DIR}/tests/encoder_bound_too_small.c
+            "stringop-overflow|array-bounds|array argument is too small"
+  )
   add_test(NAME boomlink_linkframe_cxx_bound
-    COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/tests/check_cxx_bound.sh
+    COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/tests/check_encoder_bound.sh
             ${CMAKE_CXX_COMPILER}
             -std=c++17
             ${CMAKE_CURRENT_SOURCE_DIR}/linkframe
-            ${CMAKE_CURRENT_SOURCE_DIR}/tests/cxx_bound_ok.cpp
-            ${CMAKE_CURRENT_SOURCE_DIR}/tests/cxx_bound_too_small.cpp
+            ${CMAKE_CURRENT_SOURCE_DIR}/tests/encoder_bound_ok.cpp
+            ${CMAKE_CURRENT_SOURCE_DIR}/tests/encoder_bound_too_small.cpp
+            "static assert"
   )
 
   # Host-side Python classes for the SAME .proto files, generated straight by

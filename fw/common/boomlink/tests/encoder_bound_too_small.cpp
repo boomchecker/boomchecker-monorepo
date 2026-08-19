@@ -1,10 +1,10 @@
 /**
  ******************************************************************************
- * @file    cxx_bound_too_small.cpp
+ * @file    encoder_bound_too_small.cpp
  * @brief   The NEGATIVE direction of boomlink_linkframe.h's C++ bound: this file
  *          must FAIL to compile, with the header's static_assert as the reason.
- *          tests/check_cxx_bound.sh compiles it and fails if it succeeds - or if
- *          it fails for any other reason.
+ *          tests/check_encoder_bound.sh compiles it and fails if it succeeds -
+ *          or if it fails for any other reason.
  *
  *          Deliberately not part of any build target, since it cannot compile.
  ******************************************************************************
