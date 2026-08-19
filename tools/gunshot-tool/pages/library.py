@@ -49,35 +49,56 @@ def _audio_chart(audio_folder: str, filenames: list, record_id: str):
     return fig
 
 
+# Shown for context but never editable — event_type drives the whole record's schema
+READONLY_PARAM_KEYS = ['event_type']
+
+
+def _param_keys(df: pd.DataFrame) -> list:
+    """Editable other_params keys, taken from the records themselves rather than hardcoded."""
+    keys = set()
+    for params in df['other_params']:
+        if isinstance(params, dict):
+            keys.update(params.keys())
+    return sorted(keys - set(READONLY_PARAM_KEYS))
+
+
 def _expand_other_params(df: pd.DataFrame) -> pd.DataFrame:
     """Expand other_params dict into individual columns for editing."""
     if 'other_params' not in df.columns:
         return df
-    param_keys = ['guntype', 'caliber', 'distance', 'suppressor', 'angle', 'date', 'window_size', 'impulse_position']
-    for key in param_keys:
-        df[f'p_{key}'] = df['other_params'].apply(
-            lambda x: x.get(key, '') if isinstance(x, dict) else ''
+    for key in READONLY_PARAM_KEYS + _param_keys(df):
+        prefix = '' if key in READONLY_PARAM_KEYS else 'p_'
+        df[f'{prefix}{key}'] = df['other_params'].apply(
+            lambda x, k=key: x.get(k, '') if isinstance(x, dict) else ''
         )
     return df
 
 
 def _collapse_other_params(df: pd.DataFrame) -> pd.DataFrame:
-    """Reconstruct other_params dict from expanded columns."""
-    param_keys = ['guntype', 'caliber', 'distance', 'suppressor', 'angle', 'date', 'window_size', 'impulse_position']
-    col_names = [f'p_{k}' for k in param_keys]
-    existing_cols = [c for c in col_names if c in df.columns]
+    """
+    Fold the edited columns back into each record's own other_params dict.
+    Starting from the original dict keeps event_type and any key not shown as a
+    column, which a fixed key list would silently drop.
+    """
+    helper_cols = [c for c in df.columns if c.startswith('p_')] + \
+                  [c for c in READONLY_PARAM_KEYS if c in df.columns]
+    if df.empty:
+        return df.drop(columns=helper_cols, errors='ignore')
+
+    edited_cols = [c for c in df.columns if c.startswith('p_')]
 
     def _rebuild(row):
-        d = {}
-        for key in param_keys:
-            col = f'p_{key}'
-            if col in row.index:
-                d[key] = row[col]
-        return d
+        params = dict(row['other_params']) if isinstance(row['other_params'], dict) else {}
+        for col in edited_cols:
+            key, value = col[2:], row[col]
+            # A column can come from another record's event type — only add it here
+            # if this record already had the key or the user actually filled it in
+            if key in params or (value != '' and value is not None):
+                params[key] = value
+        return params
 
     df['other_params'] = df.apply(_rebuild, axis=1)
-    df = df.drop(columns=[c for c in existing_cols], errors='ignore')
-    return df
+    return df.drop(columns=helper_cols, errors='ignore')
 
 
 def _browser_tab(parquet_files):
@@ -159,12 +180,14 @@ def _editor_tab(parquet_files):
     df_edit = st.session_state['lib_edit_df']
 
     editable_cols = ['label'] + [c for c in df_edit.columns if c.startswith('p_')]
-    display_cols = ['id'] + editable_cols
+    readonly_cols = ['id'] + [c for c in READONLY_PARAM_KEYS if c in df_edit.columns]
+    display_cols = readonly_cols + editable_cols
 
     edited = st.data_editor(
         df_edit[display_cols],
         use_container_width=True,
         num_rows='fixed',
+        disabled=readonly_cols,
         key='lib_data_editor',
     )
 
