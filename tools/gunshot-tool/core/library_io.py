@@ -2,6 +2,7 @@ import os
 import random
 import re
 import string
+import time
 import json
 import numpy as np
 import pandas as pd
@@ -128,18 +129,81 @@ def save_peak(
     return uid
 
 
+class _file_lock:
+    """
+    Exclusive cross-process lock for one parquet file. Without it two sessions
+    appending at the same time both read before either writes, and the first
+    session's record is silently overwritten.
+    """
+
+    def __init__(self, target_path: str, timeout: float = 10.0, stale_after: float = 60.0):
+        self.lock_path = f'{target_path}.lock'
+        self.timeout = timeout
+        self.stale_after = stale_after
+
+    def _is_stale(self) -> bool:
+        try:
+            return time.time() - os.path.getmtime(self.lock_path) > self.stale_after
+        except OSError:
+            return False
+
+    def __enter__(self):
+        deadline = time.monotonic() + self.timeout
+        while True:
+            try:
+                fd = os.open(self.lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+                os.write(fd, str(os.getpid()).encode())
+                os.close(fd)
+                return self
+            except FileExistsError:
+                if self._is_stale():
+                    # Left behind by a crashed session
+                    try:
+                        os.remove(self.lock_path)
+                    except OSError:
+                        pass
+                    continue
+                if time.monotonic() >= deadline:
+                    raise TimeoutError(
+                        f'Another session is writing {os.path.basename(self.lock_path)[:-5]} — try again.'
+                    )
+                time.sleep(0.05)
+
+    def __exit__(self, *exc_info):
+        try:
+            os.remove(self.lock_path)
+        except OSError:
+            pass
+        return False
+
+
+def _write_parquet_atomic(df: pd.DataFrame, path: str):
+    """Write via a temp file so an interrupted write cannot truncate the library index."""
+    tmp_path = f'{path}.tmp-{os.getpid()}'
+    try:
+        df.to_parquet(tmp_path, index=False)
+        os.replace(tmp_path, path)
+    except Exception:
+        try:
+            os.remove(tmp_path)
+        except OSError:
+            pass
+        raise
+
+
 def _append_record(parquet_path: str, record: AudioRecording):
-    if os.path.exists(parquet_path):
-        df = pd.read_parquet(parquet_path)
-    else:
-        df = pd.DataFrame()
+    with _file_lock(parquet_path):
+        if os.path.exists(parquet_path):
+            df = pd.read_parquet(parquet_path)
+        else:
+            df = pd.DataFrame()
 
-    if not df.empty and record.id in df['id'].values:
-        raise ValueError(f"Duplicate UID: {record.id}")
+        if not df.empty and record.id in df['id'].values:
+            raise ValueError(f"Duplicate UID: {record.id}")
 
-    new_row = pd.DataFrame([record.to_dict()])
-    df = pd.concat([df, new_row], ignore_index=True)
-    df.to_parquet(parquet_path, index=False)
+        new_row = pd.DataFrame([record.to_dict()])
+        df = pd.concat([df, new_row], ignore_index=True)
+        _write_parquet_atomic(df, parquet_path)
 
 
 def scan_parquet_files(root: str) -> List[str]:
@@ -163,7 +227,8 @@ def load_parquet(path: str) -> pd.DataFrame:
 
 
 def save_parquet(df: pd.DataFrame, path: str):
-    df.to_parquet(path, index=False)
+    with _file_lock(path):
+        _write_parquet_atomic(df, path)
 
 
 def merge_parquets(paths: List[str]) -> pd.DataFrame:
