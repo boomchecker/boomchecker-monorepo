@@ -52,12 +52,21 @@ def dependency_argv(entry) -> list[str]:
         if skip_next:
             skip_next = False
             continue
-        if arg == "-o":
+        # -o and -MF/-MT/-MQ each take a separate path argument that must go with
+        # them. The dependency flags matter because they REDIRECT the output this
+        # script parses: with an -MF in the command, `-M` writes the dependency
+        # list to that file and prints nothing at all, leaving this script with an
+        # empty result. Today CMake's compile_commands.json carries no dependency
+        # flags (Ninja keeps them out of it), so this is defensive - and
+        # check_no_nanopb.sh treats an empty include list as a failure, so the
+        # worst case was always a confusing failure rather than a silent pass.
+        if arg in ("-o", "-MF", "-MT", "-MQ"):
             skip_next = True
             continue
-        # -c would compile; the sanitizer/codegen flags are irrelevant to which
-        # headers get opened and only slow this down.
-        if arg == "-c" or arg.startswith("-fsanitize"):
+        # -c would compile; -M* variants would fight with the -M added below; the
+        # sanitizer/codegen flags are irrelevant to which headers get opened and
+        # only slow this down.
+        if arg == "-c" or arg.startswith("-fsanitize") or arg.startswith("-M"):
             continue
         out.append(arg)
     return [argv[0], "-M", *out]

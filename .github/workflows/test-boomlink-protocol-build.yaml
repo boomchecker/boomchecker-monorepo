@@ -122,6 +122,7 @@ jobs:
           echo "- Nanopb code generated from fw/common/boomlink/proto/*.proto ✓" >> $GITHUB_STEP_SUMMARY
           echo "- boomlink_protocol (host-native) built ✓" >> $GITHUB_STEP_SUMMARY
           echo "- boomlink_linkframe built, verified free of Nanopb symbols ✓" >> $GITHUB_STEP_SUMMARY
+          echo "- the encoder's compile-time output bound verified from both C and C++ (an undersized caller buffer must be rejected, for the right reason, at more than one optimization level) ✓" >> $GITHUB_STEP_SUMMARY
           echo "- the link frame encoder's output bound verified for C++ callers, both directions ✓" >> $GITHUB_STEP_SUMMARY
           echo "- C self-test + Python cross-language/compatibility suite passed ✓" >> $GITHUB_STEP_SUMMARY
           echo "- built with AddressSanitizer + UndefinedBehaviorSanitizer (BOOMLINK_SANITIZE, on by default for the Debug preset) ✓" >> $GITHUB_STEP_SUMMARY

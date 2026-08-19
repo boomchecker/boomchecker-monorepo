@@ -64,7 +64,14 @@ for artefact in "$@"; do
     status=1
     continue
   fi
-  if printf '%s\n' "$symbols" | grep -E ' (U|T|t) pb_'; then
+  # Any symbol CLASS, not just U/T/t. nm's class letter says where a symbol
+  # lives, and restricting the pattern to undefined-plus-text quietly exempted
+  # the rest: a weak definition (W/V), a common or absolute symbol (C/A), an
+  # indirect reference (i/I), or nanopb data landing in .rodata/.bss (R/B/D)
+  # would all have passed. No nanopb symbol is weak today, so this is
+  # defensive - but "which classes could nanopb's symbols be in" is not a
+  # question this check should depend on getting right.
+  if printf '%s\n' "$symbols" | grep -E ' [A-Za-z] pb_'; then
     echo "FAIL: $artefact references Nanopb symbols" >&2
     status=1
   else
