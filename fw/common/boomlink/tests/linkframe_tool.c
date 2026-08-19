@@ -159,6 +159,51 @@ static int run_selftest(void) {
     return 1;
   }
 
+  /* The parser's fail-safe: "on any failure *out_header is zeroed and
+     *out_payload_len is set to 0, so a caller that ignores the return value
+     cannot act on a partially-filled header" (see the header's contract). That
+     promise is defence-in-depth aimed at the link engine, and it is checked HERE
+     because it cannot be observed through the CLI at all: `parse` prints only
+     result= and result_str= for a rejected frame and returns, so no pytest test
+     can see the post-rejection header. Verified that without this probe,
+     replacing the memset with `memset(out_header, 0xAA, ...)` and
+     `*out_payload_len = 12345` leaves every test green.
+
+     Pre-filled with 0xAA rather than left uninitialised so a parser that zeroes
+     nothing is caught, and compared with memcmp against a zeroed struct rather
+     than field by field so a partial memset (or a field added later and left out
+     of the clear) is caught too. */
+  boomlink_linkframe_header_t dirty;
+  memset(&dirty, 0xAA, sizeof(dirty));
+  size_t dirty_payload_len = 12345u;
+  /* An all-zero buffer: rejected on magic, the earliest failure that still gets
+     past the length check, so the memset is the only thing that could have
+     cleared the header. */
+  const uint8_t rejected_frame[BOOMLINK_LINKFRAME_HEADER_SIZE] = {0};
+  boomlink_linkframe_parse_result_t dirty_result =
+      boomlink_linkframe_parse(rejected_frame, sizeof(rejected_frame),
+                               BOOMLINK_LINKFRAME_MAGIC_DEFAULT, &dirty,
+                               &dirty_payload_len);
+  if (dirty_result != BOOMLINK_LINKFRAME_ERR_MAGIC) {
+    fprintf(stderr, "selftest: an all-zero frame was rejected as %s, expected a magic error\n",
+            boomlink_linkframe_parse_result_str(dirty_result));
+    return 1;
+  }
+  boomlink_linkframe_header_t all_zero;
+  memset(&all_zero, 0, sizeof(all_zero));
+  if (memcmp(&dirty, &all_zero, sizeof(dirty)) != 0) {
+    fprintf(stderr,
+            "selftest: a rejected parse left the caller's header non-zero - a caller "
+            "ignoring the return value would act on stale contents\n");
+    return 1;
+  }
+  if (dirty_payload_len != 0u) {
+    fprintf(stderr,
+            "selftest: a rejected parse left payload_len at %zu instead of 0\n",
+            dirty_payload_len);
+    return 1;
+  }
+
   /* Deliberately NO probe for an out-of-nibble `version`, even though it is
      reachable only from here (the encode subcommands do not expose `version`,
      since every frame they build has to be a version-1 frame for the parse
@@ -212,6 +257,30 @@ static int run_limits(void) {
   printf("result_frame_type=%d\n", (int)BOOMLINK_LINKFRAME_ERR_FRAME_TYPE);
   printf("result_fragmented=%d\n", (int)BOOMLINK_LINKFRAME_ERR_FRAGMENTED);
   printf("result_ack_has_payload=%d\n", (int)BOOMLINK_LINKFRAME_ERR_ACK_HAS_PAYLOAD);
+  /* And the human-readable name of each, driven off the sentinel so every result
+     is covered whether or not it was listed above. Nothing used to read these
+     strings at all: swapping the ERR_MAGIC and ERR_VERSION return values in
+     boomlink_linkframe_parse_result_str() left the whole suite green, so every
+     wrong-magic drop in the field would have been logged as "unsupported link
+     frame version". The header justifies the entire split-reason enum with
+     section 9.10's requirement to count and debug these separately, which is
+     worth nothing if the labels are wrong.
+
+     Keyed parse_result_str_<n>, not result_str_<n>: the cross-check above
+     collects every key starting with "result_" as a reported enumerator, so that
+     spelling would have added seven phantom results to it. Same reason
+     parse_result_count is spelled that way. */
+  for (int result = 0; result < (int)BOOMLINK_LINKFRAME_RESULT_COUNT; result++) {
+    printf("parse_result_str_%d=%s\n", result,
+           boomlink_linkframe_parse_result_str((boomlink_linkframe_parse_result_t)result));
+  }
+  /* The catch-all, reported so the test can assert no REAL result falls through
+     to it without hardcoding its wording - and so the header's "never NULL, even
+     for an out-of-range value" contract has a consumer. Deliberately a value no
+     enumerator has. */
+  printf("parse_result_str_out_of_range=%s\n",
+         boomlink_linkframe_parse_result_str(
+             (boomlink_linkframe_parse_result_t)(BOOMLINK_LINKFRAME_RESULT_COUNT + 1)));
   return 0;
 }
 

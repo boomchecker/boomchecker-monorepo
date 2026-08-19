@@ -15,9 +15,18 @@ would only prove self-consistency, which is exactly what a hand-packed binary
 format cannot afford.
 """
 
+import struct
+
 import boomlink_linkframe as ref
 import pytest
 from _support import parse_kv, run_codec_tool
+
+# Section 7.3's layout, as this module's OWN copy - deliberately not imported
+# from the reference implementation. Used only to forge frames that violate
+# several rules at once (see _frame_violating); the same reasoning as
+# test_wire_layout_is_byte_exact spelling the 20 bytes out as literals.
+_LAYOUT = struct.Struct("<BBBBIIII")
+assert _LAYOUT.size == ref.HEADER_SIZE
 
 # A header with a distinct byte pattern in every 32-bit field, so a swapped
 # pair of fields or a dropped high byte changes the result rather than
@@ -109,6 +118,63 @@ def test_python_parse_result_codes_match_the_c_enum(linkframe_constants):
     assert len(reported) == linkframe_constants["parse_result_count"], (
         f"the C enum has {linkframe_constants['parse_result_count']} parse results but "
         f"`limits` reports {len(reported)} of them: {sorted(reported)}"
+    )
+
+
+def test_parse_result_names_describe_the_right_result(linkframe_constants):
+    """The strings boomlink_linkframe_parse_result_str() returns are what a field
+    log or CLI actually shows, and nothing used to read them: swapping the
+    ERR_MAGIC and ERR_VERSION strings left the entire suite green, so every
+    wrong-magic drop would have been reported as a version mismatch. The header
+    justifies having separate reasons at all with section 9.10's requirement to
+    count and debug them independently - worthless if the labels lie.
+
+    Checked by required keyword rather than by exact text, so rewording a message
+    is free while mislabelling one is not. This is an expectation independent of
+    the C, which is the point: comparing the C's strings to a Python copy of the
+    same strings would agree just as happily with them swapped.
+    """
+    required = {
+        ref.ParseResult.OK: "ok",
+        ref.ParseResult.ERR_TOO_SHORT: "short",
+        ref.ParseResult.ERR_MAGIC: "magic",
+        ref.ParseResult.ERR_VERSION: "version",
+        ref.ParseResult.ERR_FRAME_TYPE: "type",
+        ref.ParseResult.ERR_FRAGMENTED: "fragment",
+        ref.ParseResult.ERR_ACK_HAS_PAYLOAD: "payload",
+    }
+    assert set(required) == set(ref.ParseResult), (
+        "a parse result has no expected keyword here - add one rather than "
+        "leaving its label unchecked"
+    )
+
+    described = {}
+    for result, keyword in required.items():
+        key = f"parse_result_str_{int(result)}"
+        assert key in linkframe_constants, (
+            f"linkframe_tool limits does not report {key!r}, so "
+            f"ParseResult.{result.name}'s label is unchecked"
+        )
+        text = str(linkframe_constants[key])
+        assert keyword in text.lower(), (
+            f"ParseResult.{result.name} is described as {text!r}, which does not "
+            f"mention {keyword!r} - the label does not match the result"
+        )
+        described[result] = text
+
+    # Distinct, and none of them the catch-all. Two results sharing a label is
+    # just as misleading in a log as a swapped one, and the fallback string
+    # appearing here would mean a result has no case at all.
+    assert len(set(described.values())) == len(described), (
+        f"two parse results share a label: {sorted(described.values())}"
+    )
+    # Compared against the fallback the tool reports for an out-of-range value,
+    # not against the word "unknown" - "unknown frame type" is a legitimate label
+    # and matching on the word flagged it.
+    catch_all = str(linkframe_constants["parse_result_str_out_of_range"])
+    assert catch_all, "the tool reports no catch-all string to compare against"
+    assert catch_all not in described.values(), (
+        f"a real parse result falls through to the catch-all {catch_all!r}: {described}"
     )
 
 
@@ -262,10 +328,17 @@ def test_a_matching_non_default_magic_is_accepted(tmp_path, linkframe_tool_path)
     assert header.magic == 0x5A
 
 
-def test_wrong_version_is_rejected(tmp_path, linkframe_tool_path):
+@pytest.mark.parametrize("version", [0, 2, 15])
+def test_wrong_version_is_rejected(tmp_path, linkframe_tool_path, version):
+    """Version 0 and 15 as well as 2, for the same reason the frame-type test
+    covers type 0: version 0 is what an uninitialised or zero-padded byte 1 gives
+    (with a correct magic, which a replayed or spoofed header supplies), and 15 is
+    the nibble's ceiling. With only version 2 covered, a guard written as
+    `version != VERSION && version != 0` - accepting a frame whose version nibble
+    was never set - passed the entire suite. Verified."""
     frame = bytearray(ref.encode(ref.LinkFrameHeader(**SAMPLE)))
-    # Version 2, frame type DATA - a future version this build does not know.
-    frame[1] = (2 << 4) | int(ref.FrameType.DATA)
+    # A version this build does not implement, frame type DATA.
+    frame[1] = (version << 4) | int(ref.FrameType.DATA)
 
     fields = parse_with_tool(tmp_path, linkframe_tool_path, bytes(frame))
     assert fields["result"] == str(int(ref.ParseResult.ERR_VERSION)), fields
@@ -435,6 +508,87 @@ def test_ack_with_a_payload_is_rejected(tmp_path, linkframe_tool_path):
     with pytest.raises(ref.LinkFrameError) as excinfo:
         ref.parse(frame)
     assert excinfo.value.result is ref.ParseResult.ERR_ACK_HAS_PAYLOAD
+
+
+def _frame_violating(*, magic=ref.MAGIC_DEFAULT, version=ref.VERSION,
+                     frame_type=int(ref.FrameType.DATA), flags=0, fragment_index=0,
+                     payload=b"", truncate_to=None):
+    """A hand-built frame that can violate several rules at once.
+
+    Packed here rather than through ref.encode(), for two reasons: a frame can
+    then carry a combination the encoder would refuse to emit (a reserved bit, a
+    fragment index) without going through either implementation's opinion about
+    it, and the layout comes from this module's own format string rather than the
+    reference's - so this cannot silently follow the reference somewhere wrong.
+    """
+    frame = _LAYOUT.pack(
+        magic, ((version & 0x0F) << 4) | (frame_type & 0x0F), flags, fragment_index,
+        SAMPLE["destination_id"], SAMPLE["source_id"], SAMPLE["session_id"],
+        SAMPLE["sequence"],
+    ) + payload
+    return frame[:truncate_to] if truncate_to is not None else frame
+
+
+@pytest.mark.parametrize(
+    "frame,expected,why",
+    [
+        pytest.param(
+            _frame_violating(magic=0x5A, version=9, frame_type=0, flags=0xFF,
+                             fragment_index=7, payload=b"\x01"),
+            ref.ParseResult.ERR_MAGIC,
+            "magic outranks everything: section 7.3 requires foreign traffic dropped "
+            "before any further processing, so a frame from another network must not "
+            "be counted against this one's malformed-packet statistics",
+            id="magic-beats-everything-else"),
+        pytest.param(
+            _frame_violating(version=2, frame_type=0),
+            ref.ParseResult.ERR_VERSION,
+            "version before frame type - a future version is allowed to redefine the "
+            "type nibble entirely, so judging the type of a frame we cannot interpret "
+            "is meaningless",
+            id="version-beats-frame-type"),
+        pytest.param(
+            _frame_violating(version=2, frame_type=0, truncate_to=19),
+            ref.ParseResult.ERR_TOO_SHORT,
+            "length before anything: the other checks read bytes that are not there",
+            id="length-beats-version"),
+        pytest.param(
+            _frame_violating(frame_type=int(ref.FrameType.ACK),
+                             flags=ref.FLAG_MORE_FRAGMENTS, fragment_index=3,
+                             payload=b"\x01\x02"),
+            ref.ParseResult.ERR_FRAGMENTED,
+            "fragmentation before the ACK-has-no-payload rule: a fragmented frame's "
+            "payload length is not the message's, so 'this ACK carries a payload' is "
+            "not a conclusion that can be drawn from it yet",
+            id="fragmentation-beats-ack-payload"),
+        pytest.param(
+            _frame_violating(frame_type=0, flags=ref.FLAG_MORE_FRAGMENTS),
+            ref.ParseResult.ERR_FRAME_TYPE,
+            "frame type before fragmentation",
+            id="frame-type-beats-fragmentation"),
+    ],
+)
+def test_validation_order_matches_across_implementations(tmp_path, linkframe_tool_path,
+                                                         frame, expected, why):
+    """Frames violating SEVERAL rules at once, to pin the ORDER of the checks.
+
+    Every other negative test here breaks exactly one rule, so all of them pass
+    against any permutation of the validation order - while the Python reference's
+    docstring states the order matches the C and that tests rely on it. Verified:
+    swapping the version and frame-type checks in boomlink_linkframe.py, or
+    moving the ACK-payload check ahead of the fragmentation check, left the whole
+    suite green while producing a genuine cross-language divergence in a field
+    section 9.10 requires to be counted separately.
+
+    The order is not arbitrary bookkeeping - each `why` below is the reason that
+    particular pair cannot be swapped without reporting something misleading.
+    """
+    fields = parse_with_tool(tmp_path, linkframe_tool_path, frame)
+    assert fields["result"] == str(int(expected)), f"C: {why}\n{fields}"
+
+    with pytest.raises(ref.LinkFrameError) as excinfo:
+        ref.parse(frame)
+    assert excinfo.value.result is expected, f"Python: {why}"
 
 
 @pytest.mark.parametrize("length", [0, 1, 19])
@@ -616,6 +770,57 @@ def test_payload_at_the_tool_cap_round_trips(tmp_path, linkframe_tool_path,
     header, parsed_payload = ref.parse(frame)
     assert parsed_payload == payload
     assert header.sequence == SAMPLE["sequence"]
+
+
+def test_payload_over_the_tool_cap_is_rejected(tmp_path, linkframe_tool_path,
+                                               linkframe_constants):
+    """`encode` must refuse a payload past its own buffer rather than truncating.
+
+    The harness's own limits are worth a test for the same reason
+    boomlink_tool_hex_encode() aborts instead of exiting positively: a buffer
+    fault inside the tool that presents as an ordinary rejection is
+    indistinguishable from the protocol rejecting something, and once turned a
+    real overflow test green. The companion test at the cap
+    (test_payload_at_the_tool_cap_round_trips) covers the accepting side, so the
+    two together pin the boundary from both directions.
+    """
+    max_payload = linkframe_constants["max_payload"]
+    result = run_linkframe_tool(
+        linkframe_tool_path, "encode", "1", "0", "0",
+        str(SAMPLE["destination_id"]), str(SAMPLE["source_id"]),
+        str(SAMPLE["session_id"]), str(SAMPLE["sequence"]),
+        (b"\xAB" * (max_payload + 1)).hex(), str(tmp_path / "too_big.bin"),
+    )
+    assert result.returncode == 2, (
+        f"a {max_payload + 1}-byte payload should be rejected, got rc={result.returncode}"
+    )
+    assert not (tmp_path / "too_big.bin").exists(), (
+        "the tool wrote a frame despite rejecting the payload"
+    )
+
+
+def test_input_over_the_tool_cap_is_rejected(tmp_path, linkframe_tool_path,
+                                             linkframe_constants):
+    """And the same on the way in: `parse` reads one byte past its cap precisely
+    so an oversized file is detected by having read too much, rather than by
+    feof() after a read that exactly filled the buffer - fread() does not set EOF
+    in that case, so the off-by-one in that reasoning is what this pins."""
+    max_input = linkframe_constants["header_size"] + linkframe_constants["max_payload"]
+    path = tmp_path / "too_big_in.bin"
+
+    # Exactly at the cap must still be accepted, or the check below could be
+    # passing because the limit is off by one in the other direction.
+    at_cap = ref.encode(ref.LinkFrameHeader(**SAMPLE)) + bytes(
+        max_input - linkframe_constants["header_size"]
+    )
+    path.write_bytes(at_cap)
+    assert run_linkframe_tool(linkframe_tool_path, "parse", str(path)).returncode == 0
+
+    path.write_bytes(at_cap + b"\x00")
+    result = run_linkframe_tool(linkframe_tool_path, "parse", str(path))
+    assert result.returncode == 1, (
+        f"a {max_input + 1}-byte input should be rejected, got rc={result.returncode}"
+    )
 
 
 def test_frame_type_over_a_nibble_cannot_reach_the_version(tmp_path, linkframe_tool_path):
