@@ -474,23 +474,28 @@ def _setup_mode():
             'min_gap_samples': int(st.session_state.get('s_min_gap', 0.0) * sr),
         }
         event_fields = {k: st.session_state.get(f's_param_{k}', '') for k, _, _ in fields}
-        with st.spinner('Detecting peaks...'):
-            impulses = _run_detection(audio, sr, method, params)
+        try:
+            with st.spinner('Detecting peaks...'):
+                impulses = _run_detection(audio, sr, method, params)
+        except ValueError as e:
+            st.error(str(e))
+            impulses = None
 
-        st.session_state.det_impulses = impulses
-        st.session_state.det_ch_idx = det_ch
-        st.session_state.det_window_size = int(window_size)
-        st.session_state.det_pre_pct = pre_pct
-        st.session_state.det_metadata = {
-            'event_type':  event_type,
-            'date':        st.session_state.s_date,
-            'location':    st.session_state.s_location,
-            'label':       st.session_state.s_label,
-            'output_root': st.session_state.s_output_root,
-            **event_fields,
-        }
-        st.session_state.det_peak_idx = 0
-        st.session_state.det_decisions = {}
+        if impulses is not None:
+            st.session_state.det_impulses = impulses
+            st.session_state.det_ch_idx = det_ch
+            st.session_state.det_window_size = int(window_size)
+            st.session_state.det_pre_pct = pre_pct
+            st.session_state.det_metadata = {
+                'event_type':  event_type,
+                'date':        st.session_state.s_date,
+                'location':    st.session_state.s_location,
+                'label':       st.session_state.s_label,
+                'output_root': st.session_state.s_output_root,
+                **event_fields,
+            }
+            st.session_state.det_peak_idx = 0
+            st.session_state.det_decisions = {}
 
     if st.session_state.det_impulses is not None:
         st.divider()

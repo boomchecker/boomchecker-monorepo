@@ -27,6 +27,17 @@ def filter_impulses(impulses, sample_delay):
     return np.array(filtered)
 
 
+def normalize_audio(audio):
+    """Scale to peak 1.0. Raises ValueError on silent or non-finite input."""
+    peak = np.max(np.abs(audio))
+    if not np.isfinite(peak) or peak == 0:
+        raise ValueError(
+            'Selected channel carries no usable signal (silent or non-finite samples) — '
+            'pick a different detection channel.'
+        )
+    return audio / peak
+
+
 def filter_peaks(peaks):
     filtered = []
     counter = 0
@@ -43,7 +54,7 @@ def filter_peaks(peaks):
 
 
 def perform_amplitude_thresholding(audio, sr, threshold=AMPLITUDE_TRESHOLD, edge='rising'):
-    norm = audio / np.max(np.abs(audio))
+    norm = normalize_audio(audio)
     above = norm > threshold
 
     if edge == 'rising':
@@ -65,7 +76,7 @@ def perform_median_filtering(
     median_threshold=MEDIAN_FILTER_TRESHOLD,
     median_window_size=MEDIAN_WINDOW_SIZE
 ):
-    audio = audio / np.max(np.abs(audio))
+    audio = normalize_audio(audio)
     filtered_audio = medfilt(audio, kernel_size=median_window_size)
     difference = np.abs(audio - filtered_audio)
     impulses = np.where(difference > median_threshold)[0]
@@ -73,8 +84,11 @@ def perform_median_filtering(
 
 
 def perform_zscore_detection(audio, sr, zscore_threshold=ZSCORE_TRESHOLD):
-    audio = audio / np.max(np.abs(audio))
-    z_scores = (audio - np.mean(audio)) / np.std(audio)
+    audio = normalize_audio(audio)
+    std = np.std(audio)
+    if std == 0:
+        raise ValueError('Selected channel has zero variance — Z-Score detection cannot run on it.')
+    z_scores = (audio - np.mean(audio)) / std
     impulses = np.where(z_scores > zscore_threshold)[0]
     return filter_impulses(impulses, IMPULSE_MIN_TIME_DELAY * sr)
 
@@ -84,7 +98,7 @@ def perform_energy_analysis(
     energy_window_size=ENERGY_WINDOW_SIZE,
     energy_threshold=ENERGY_THRESHOLD
 ):
-    audio = audio / np.max(np.abs(audio))
+    audio = normalize_audio(audio)
     energy = np.convolve(audio**2, np.ones(energy_window_size) / energy_window_size, mode='same')
     threshold = np.mean(energy) + energy_threshold * np.std(energy)
     impulses = np.where(energy > threshold)[0]
@@ -92,7 +106,7 @@ def perform_energy_analysis(
 
 
 def perform_spectral_analysis(audio, sr, spectrum_threshold=STFT_TRESHOLD):
-    audio = audio / np.max(np.abs(audio))
+    audio = normalize_audio(audio)
     _, times, Zxx = stft(audio, fs=sr, window='hamming')
     spectral_energy = np.sum(np.abs(Zxx), axis=0)
     threshold = np.mean(spectral_energy) + spectrum_threshold * np.std(spectral_energy)
