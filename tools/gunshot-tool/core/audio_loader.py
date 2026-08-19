@@ -57,31 +57,38 @@ def load_separate_wavs(folder: str, pattern: str) -> Tuple[List[np.ndarray], int
 def detect_channels_from_file(filepath: str) -> Tuple[List[str], str]:
     """
     Given one WAV file, auto-detect sibling channel files.
-    Tries replacing each digit sequence in the filename with {n} and scans for n=1,2,3...
+    Tries replacing each digit sequence in the filename with {n} and scans upwards from
+    the first index that exists (0 or 1), keeping any zero-padding of the original digits.
     Returns (sorted list of found paths, detected pattern filename).
     """
     folder = os.path.dirname(filepath)
     filename = os.path.basename(filepath)
     stem, ext = os.path.splitext(filename)
+    target = os.path.normpath(filepath)
 
     # Try each digit sequence in the stem, right-to-left (channel number is usually last)
     for match in reversed(list(re.finditer(r'\d+', stem))):
         start, end = match.span()
+        digits = match.group()
         pattern_stem = stem[:start] + '{n}' + stem[end:]
         pattern = pattern_stem + ext
+        width = len(digits) if digits.startswith('0') else 1
 
-        found = []
-        n = 1
-        while True:
-            candidate = os.path.join(folder, pattern.replace('{n}', str(n)))
-            if os.path.exists(candidate):
-                found.append(candidate)
-                n += 1
-            else:
-                break
+        # Channel numbering may be 0-based or 1-based
+        for first in (0, 1):
+            found = []
+            n = first
+            while True:
+                candidate = os.path.join(folder, pattern.replace('{n}', str(n).zfill(width)))
+                if os.path.exists(candidate):
+                    found.append(candidate)
+                    n += 1
+                else:
+                    break
 
-        if len(found) > 1:
-            return found, pattern
+            # Reject a group that skips the very file the user picked
+            if len(found) > 1 and target in {os.path.normpath(f) for f in found}:
+                return found, pattern
 
     # Fallback: just the selected file as a single channel
     return [filepath], filename
