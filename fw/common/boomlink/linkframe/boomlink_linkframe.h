@@ -45,6 +45,26 @@ extern "C" {
    tests pins them together so they cannot drift. */
 #define BOOMLINK_LINKFRAME_HEADER_SIZE 20u
 
+/* Used to declare the encoder's output buffer as `uint8_t out[static 20]`.
+   That is not decoration: it tells the compiler the callee always writes 20
+   bytes, which makes GCC reject an undersized caller buffer at COMPILE time
+   (-Wstringop-overflow, an error under this package's -Werror). Without it the
+   encoder writes 20 bytes unconditionally, and the dangerous case is not the
+   obvious one - a too-small separate object is caught by AddressSanitizer, but
+   writing past a short array INSIDE a larger struct silently corrupts the
+   neighbouring member with no ASan report and no warning at all. That is the
+   same intra-object class that cost this package a round of review on the
+   Protobuf side.
+   `[static N]` is C only - it is not valid C++, and this header is reachable
+   from the firmware's C++ translation units through extern "C" - so under a
+   C++ compiler it degrades to a plain bound, which decays to a pointer exactly
+   as before. C++ callers simply do not get the check. */
+#if defined(__cplusplus)
+#define BOOMLINK_LINKFRAME_HEADER_BOUND BOOMLINK_LINKFRAME_HEADER_SIZE
+#else
+#define BOOMLINK_LINKFRAME_HEADER_BOUND static BOOMLINK_LINKFRAME_HEADER_SIZE
+#endif
+
 /* Default magic / network ID. Runtime-configurable per section 7.3 so two
    deployments in radio range can ignore each other's traffic cheaply; the
    parse function takes the expected value as an argument rather than reading
@@ -76,6 +96,15 @@ typedef enum {
   BOOMLINK_FRAME_TYPE_DATA = 1,
   BOOMLINK_FRAME_TYPE_ACK  = 2,
 } boomlink_frame_type_t;
+
+/* Section 9.5's SENDER rules - "ACK packets never request another ACK",
+   "broadcast packets never request ACK" - are deliberately NOT enforced in this
+   module and are not bugs by their absence. They are properties of the TX
+   pipeline (section 9.1), which is the link engine's job: this layer is a
+   stateless codec for one header, and a parser must report what actually
+   arrived rather than what a compliant sender would have sent. Whoever builds
+   the engine owns them. Said out loud because nothing else in this phase
+   mentions them, and their absence here should not read as an oversight. */
 
 typedef struct {
   uint8_t  magic;
@@ -126,16 +155,23 @@ typedef enum {
 } boomlink_linkframe_parse_result_t;
 
 /**
- * Serialize `header` into `out` (which must have room for
- * BOOMLINK_LINKFRAME_HEADER_SIZE bytes). Writes byte by byte in explicit
- * little-endian order rather than copying a struct, so the wire format does
- * not depend on the host's endianness, alignment or padding.
+ * Serialize `header` into `out`, which must have room for
+ * BOOMLINK_LINKFRAME_HEADER_SIZE bytes - declared so the compiler enforces
+ * that in C (see BOOMLINK_LINKFRAME_HEADER_BOUND). Writes byte by byte in
+ * explicit little-endian order rather than copying a struct, so the wire
+ * format does not depend on the host's endianness, alignment or padding.
+ *
+ * Takes no size argument and cannot fail, unlike
+ * boomlink_encode_envelope(): the output length is a compile-time constant, so
+ * a capacity parameter would only move a guaranteed-satisfiable check to
+ * runtime. The array bound is what makes that safe.
  *
  * `header->reserved_flags` is ignored and the reserved bits are written as 0
  * (section 7.3: always 0 until a future PR assigns them). `version` and
  * `frame_type` are masked to their nibbles.
  */
-void boomlink_linkframe_encode(const boomlink_linkframe_header_t *header, uint8_t *out);
+void boomlink_linkframe_encode(const boomlink_linkframe_header_t *header,
+                               uint8_t out[BOOMLINK_LINKFRAME_HEADER_BOUND]);
 
 /**
  * Parse and validate the link frame header at the start of `buf` (`len`
@@ -158,6 +194,16 @@ void boomlink_linkframe_encode(const boomlink_linkframe_header_t *header, uint8_
  * payload that is not a valid Envelope is a BoomProtocol-layer failure, and
  * the two are counted separately - so this function must not pre-empt the
  * codec's judgement about the payload.
+ *
+ * No MAXIMUM length is enforced, and `*out_payload_len` is therefore
+ * unbounded. Section 9.2's RX pipeline lists "validate magic/version + frame
+ * length"; the minimum is checked here, but the ceiling is the radio's
+ * (RADIO_MAX_PAYLOAD), and this module deliberately has no radio dependency,
+ * so it cannot know it. Section 7.3 puts oversize rejection on the TX side
+ * ("An oversized frame is rejected before transmission"). The caller owns the
+ * radio budget - stated explicitly because this function does perform two
+ * other length checks, so a reader could reasonably assume it performs this
+ * one too.
  */
 boomlink_linkframe_parse_result_t boomlink_linkframe_parse(
     const uint8_t *buf, size_t len, uint8_t expected_magic,

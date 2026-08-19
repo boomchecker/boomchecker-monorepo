@@ -25,6 +25,21 @@ _Static_assert(BOOMLINK_LINKFRAME_VERSION <= 0x0Fu,
 _Static_assert(BOOMLINK_FRAME_TYPE_DATA <= 0x0Fu && BOOMLINK_FRAME_TYPE_ACK <= 0x0Fu,
                "frame type must fit the low nibble of byte 1");
 
+/* The reserved mask must be exactly the flag bits that are NOT assigned:
+   together the three cover the whole byte, and the assigned bits must not
+   appear in the mask. Without this, assigning a future FLAG_X = 0x04 without
+   clearing that bit from the mask would leave the parser reporting an already
+   assigned bit as "reserved/unrecognized" - a wrong diagnostic in the one field
+   whose purpose is to say what a newer peer sent that we do not understand. */
+_Static_assert(((BOOMLINK_LINKFRAME_FLAG_ACK_REQUESTED |
+                 BOOMLINK_LINKFRAME_FLAG_MORE_FRAGMENTS |
+                 BOOMLINK_LINKFRAME_FLAGS_RESERVED_MASK) == 0xFFu) &&
+                   (((BOOMLINK_LINKFRAME_FLAG_ACK_REQUESTED |
+                      BOOMLINK_LINKFRAME_FLAG_MORE_FRAGMENTS) &
+                     BOOMLINK_LINKFRAME_FLAGS_RESERVED_MASK) == 0u),
+               "the reserved flags mask is no longer exactly the unassigned flag bits - a "
+               "newly assigned bit must be removed from BOOMLINK_LINKFRAME_FLAGS_RESERVED_MASK");
+
 /* Explicit little-endian access, one byte at a time. Not a memcpy of a
    uint32_t and not a packed struct: the wire format is fixed by the spec and
    must not depend on the host being little-endian, on alignment, or on the
@@ -41,7 +56,8 @@ static uint32_t get_u32_le(const uint8_t *buf) {
          ((uint32_t)buf[3] << 24);
 }
 
-void boomlink_linkframe_encode(const boomlink_linkframe_header_t *header, uint8_t *out) {
+void boomlink_linkframe_encode(const boomlink_linkframe_header_t *header,
+                               uint8_t out[BOOMLINK_LINKFRAME_HEADER_BOUND]) {
   out[OFF_MAGIC] = header->magic;
   /* Both halves masked to a nibble: a caller passing a too-large version or
      frame type would otherwise corrupt the neighbouring field silently. */
