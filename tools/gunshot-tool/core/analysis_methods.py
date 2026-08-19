@@ -17,9 +17,9 @@ ENERGY_WINDOW_SIZE = 50
 
 
 def filter_impulses(impulses, sample_delay):
-    filtered = []
-    if not impulses.any():
-        return np.array(filtered)
+    impulses = np.asarray(impulses)
+    if impulses.size == 0:
+        return np.array([], dtype=np.int64)
     filtered = [impulses[0]]
     for number in impulses[1:]:
         if number - filtered[-1] > sample_delay:
