@@ -40,7 +40,7 @@ def _init():
         'det_channel_files': [],
         'det_sr': None,
         'det_impulses': None,
-        'det_phase': 'setup',   # 'setup' | 'overview' | 'review'
+        'det_phase': 'setup',   # 'setup' | 'review'
         'det_peak_idx': 0,
         'det_decisions': {},
         'det_metadata': {},
@@ -491,13 +491,15 @@ def _setup_mode():
         }
         st.session_state.det_peak_idx = 0
         st.session_state.det_decisions = {}
-        st.session_state.det_phase = 'overview'
-        st.rerun()
+
+    if st.session_state.det_impulses is not None:
+        st.divider()
+        _detection_results_preview()
 
 
-# ── OVERVIEW MODE ───────────────────────────────────────────────────────────────
-
-def _overview_mode():
+def _detection_results_preview():
+    """Shown right below the Detect button — re-running Detect with new
+    parameters just refreshes this in place, no page navigation needed."""
     impulses = st.session_state.det_impulses
     channels = st.session_state.det_channels
     sr = st.session_state.det_sr
@@ -507,14 +509,8 @@ def _overview_mode():
     saved = sum(1 for v in decisions.values() if v == 'saved')
     skipped = sum(1 for v in decisions.values() if v == 'skipped')
 
-    hc1, hc2 = st.columns([3, 1])
-    with hc1:
-        peak_s = 's' if total != 1 else ''
-        st.title(f'{total} peak{peak_s} detected on ch{det_ch + 1}')
-    with hc2:
-        if st.button('← Back to setup', type='secondary'):
-            st.session_state.det_phase = 'setup'
-            st.rerun()
+    peak_s = 's' if total != 1 else ''
+    st.subheader(f'{total} peak{peak_s} detected on ch{det_ch + 1}')
 
     st.plotly_chart(
         _detection_overview_chart(channels, sr, impulses, det_ch),
@@ -522,7 +518,7 @@ def _overview_mode():
     )
 
     if total == 0:
-        st.warning('No peaks found. Go back and adjust detection parameters.')
+        st.warning('No peaks found. Adjust detection parameters above and click Detect again.')
         return
 
     if decisions:
@@ -560,7 +556,7 @@ def _review_mode():
         st.title(f'{EVENT_TYPES.get(event_type, event_type)} — {saved} saved / {skipped} skipped')
     with hc2:
         if st.button('← Overview', type='secondary'):
-            st.session_state.det_phase = 'overview'
+            st.session_state.det_phase = 'setup'
             st.rerun()
 
     if idx >= total:
@@ -568,7 +564,7 @@ def _review_mode():
         col_a, col_b, _ = st.columns([1, 1, 2])
         with col_a:
             if st.button('← Overview', use_container_width=True):
-                st.session_state.det_phase = 'overview'
+                st.session_state.det_phase = 'setup'
                 st.rerun()
         with col_b:
             if st.button('New session', type='primary', use_container_width=True):
@@ -708,9 +704,7 @@ def _review_mode():
 _init()
 
 phase = st.session_state.det_phase
-if phase == 'overview':
-    _overview_mode()
-elif phase == 'review':
+if phase == 'review':
     _review_mode()
 else:
     _setup_mode()
