@@ -21,6 +21,7 @@ from core.analysis_methods import (
     ENERGY_THRESHOLD, STFT_TRESHOLD, MEDIAN_WINDOW_SIZE, ENERGY_WINDOW_SIZE,
     BASE_WINDOW_SAMPLE_SIZE, BASE_WINDOW_IMPLUSE_POSITION,
 )
+from core.cropping import crop_bounds, crop_channels
 from core.library_io import save_peak
 from core.event_types import EVENT_TYPES, METADATA_FIELDS, OPTIONAL_FIELD_KEYS
 from core.ui_helpers import path_input, files_input
@@ -141,10 +142,7 @@ def _detection_overview_chart(channels, sr, impulses, det_ch_idx):
 
 
 def _peak_chart(channels, sr, peak_sample, window_size, pre_pct, det_ch_idx):
-    pre = int(window_size * pre_pct / 100)
-    post = window_size - pre
-    start = max(0, peak_sample - pre)
-    end = min(len(channels[0]), peak_sample + post)
+    start, end = crop_bounds(channels, peak_sample, window_size, pre_pct)
     x = np.arange(start, end) / sr
 
     fig = go.Figure()
@@ -168,11 +166,7 @@ def _peak_chart(channels, sr, peak_sample, window_size, pre_pct, det_ch_idx):
 
 def _get_peak_audio_bytes(channels, sr, peak_sample, window_size, pre_pct, ch_idx) -> io.BytesIO:
     """Crop a single channel around the peak and return it as WAV bytes."""
-    pre = int(window_size * pre_pct / 100)
-    post = window_size - pre
-    start = max(0, peak_sample - pre)
-    end = min(len(channels[0]), peak_sample + post)
-    audio = channels[ch_idx][start:end]
+    audio = crop_channels(channels, peak_sample, window_size, pre_pct, [ch_idx])[0]
     buf = io.BytesIO()
     sf.write(buf, audio, sr, format='WAV', subtype='PCM_16')
     buf.seek(0)
@@ -181,13 +175,7 @@ def _get_peak_audio_bytes(channels, sr, peak_sample, window_size, pre_pct, ch_id
 
 def _get_cropped_wav_bytes(channels, sr, peak_sample, window_size, pre_pct, ch_indices=None) -> io.BytesIO:
     """Crop selected channels synchronously around the peak and return as WAV bytes."""
-    if ch_indices is None:
-        ch_indices = list(range(len(channels)))
-    pre = int(window_size * pre_pct / 100)
-    post = window_size - pre
-    start = max(0, peak_sample - pre)
-    end = min(len(channels[0]), peak_sample + post)
-    selected = [channels[i][start:end] for i in ch_indices]
+    selected = crop_channels(channels, peak_sample, window_size, pre_pct, ch_indices)
     data = selected[0] if len(selected) == 1 else np.stack(selected, axis=1)
     buf = io.BytesIO()
     sf.write(buf, data, sr, format='WAV', subtype='PCM_16')
@@ -198,15 +186,12 @@ def _get_cropped_wav_bytes(channels, sr, peak_sample, window_size, pre_pct, ch_i
 def _get_cropped_zip_bytes(channels, sr, peak_sample, window_size, pre_pct, stem) -> io.BytesIO:
     """Return a ZIP containing one WAV per channel, each cropped around the peak."""
     import zipfile
-    pre = int(window_size * pre_pct / 100)
-    post = window_size - pre
-    start = max(0, peak_sample - pre)
-    end = min(len(channels[0]), peak_sample + post)
+    cropped = crop_channels(channels, peak_sample, window_size, pre_pct)
     zip_buf = io.BytesIO()
     with zipfile.ZipFile(zip_buf, 'w', zipfile.ZIP_DEFLATED) as zf:
-        for i, ch in enumerate(channels):
+        for i, audio in enumerate(cropped):
             wav_buf = io.BytesIO()
-            sf.write(wav_buf, ch[start:end], sr, format='WAV', subtype='PCM_16')
+            sf.write(wav_buf, audio, sr, format='WAV', subtype='PCM_16')
             zf.writestr(f'{stem}_ch{i + 1}.wav', wav_buf.getvalue())
     zip_buf.seek(0)
     return zip_buf
@@ -226,10 +211,7 @@ def _make_publication_plot(channels, sr, peak_sample, window_size, pre_pct, det_
     """Render a publication-quality matplotlib waveform plot (300 DPI PNG)."""
     if ch_indices is None:
         ch_indices = list(range(len(channels)))
-    pre = int(window_size * pre_pct / 100)
-    post = window_size - pre
-    start = max(0, peak_sample - pre)
-    end = min(len(channels[0]), peak_sample + post)
+    start, end = crop_bounds(channels, peak_sample, window_size, pre_pct)
     duration = (end - start) / sr
     t = np.linspace(0.0, duration, end - start)
 

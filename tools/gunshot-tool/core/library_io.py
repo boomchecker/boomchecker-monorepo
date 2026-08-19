@@ -9,6 +9,7 @@ import pandas as pd
 from scipy.io.wavfile import write as wav_write
 from typing import List, Tuple
 
+from core.cropping import crop_channels
 from core.event_types import PRIMARY_KEY, METADATA_FIELDS
 
 
@@ -67,11 +68,7 @@ def save_peak(
     Path: {root}/{event_type}/{date}_{location}/{primary_id}/{primary_id}_{label}/
     Returns the generated UID.
     """
-    pre_samples = int(window_size * pre_peak_pct / 100)
-    post_samples = window_size - pre_samples
-
-    start = max(0, peak_sample - pre_samples)
-    end = min(len(channels[0]), peak_sample + post_samples)
+    cropped_channels = crop_channels(channels, peak_sample, window_size, pre_peak_pct)
 
     uid = _generate_uid()
     event_type = metadata.get('event_type', 'gunshot')
@@ -112,8 +109,8 @@ def save_peak(
     # so a failed save never leaves unreferenced audio behind
     written = []
     try:
-        for ch_audio, filename in zip(channels, filenames):
-            data_int16 = (np.clip(ch_audio[start:end], -1.0, 1.0) * 32767).astype(np.int16)
+        for ch_audio, filename in zip(cropped_channels, filenames):
+            data_int16 = (np.clip(ch_audio, -1.0, 1.0) * 32767).astype(np.int16)
             wav_path = os.path.join(output_dir, filename)
             wav_write(wav_path, sr, data_int16)
             written.append(wav_path)
