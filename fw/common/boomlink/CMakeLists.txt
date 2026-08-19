@@ -121,6 +121,33 @@ if(BOOMLINK_STANDALONE AND BOOMLINK_WERROR)
   set(BOOMLINK_WERROR_FLAGS -Werror)
 endif()
 
+# One exception to all of the above, and the only warning knob declared in BOTH
+# modes: -Werror for boomlink_linkframe alone, off by default.
+#
+# It exists because three places (this file, README.md and
+# .github/workflows/test-bom-stm32node-build.yaml) justify cross-compiling the
+# link frame layer as proving it is "free of host-isms AND warning-clean for the
+# target". Only the first half was true: nothing put -Werror on the ARM build,
+# and the workflow's check only asserts the archive exists - so adding
+# `static int unused_var = 7;` to boomlink_linkframe.c left the ARM build green
+# with the warning buried in a log (verified), while the same edit is a hard
+# error in the host build. That gap matters more than it sounds, because the
+# interesting warnings here are precisely the ones the host build CANNOT see:
+# int/long/size_t are different widths on the target, so -Wformat and
+# sign-compare diagnostics appear there and nowhere else.
+#
+# Default OFF, ON in CI, for exactly the reason BOOMLINK_WERROR is: a developer's
+# local firmware build must never be blocked by a warning from a compiler newer
+# than CI's, least of all on code they did not touch. Scoped to this ONE
+# small hand-written target, so it cannot spread to the CubeMX-generated sources
+# or the vendored libraries.
+option(BOOMLINK_LINKFRAME_WERROR
+       "Treat warnings as errors when compiling boomlink_linkframe (CI turns this on)" OFF)
+set(BOOMLINK_LINKFRAME_WERROR_FLAGS "")
+if(BOOMLINK_LINKFRAME_WERROR)
+  set(BOOMLINK_LINKFRAME_WERROR_FLAGS -Werror)
+endif()
+
 # Nanopb is vendored once, under bom-stm32node/third_party/ (git submodule
 # pinned to release 0.4.9), and referenced from here by relative path rather
 # than duplicating the submodule: both this host-native build and the ARM
@@ -457,7 +484,9 @@ endif()
 # the "compiled but never linked" gap PR 2's review caught: there the ELF was
 # missing a symbol an acceptance criterion required, whereas here cross-
 # compiling it early is what proves it is free of host-isms and warning-clean
-# for the target before any firmware depends on it.
+# for the target before any firmware depends on it. The second half of that claim
+# is only true when BOOMLINK_LINKFRAME_WERROR is on, which is why CI turns it on
+# - see that option above.
 #
 # Precisely: the archive is BUILT but never reaches the linker at all - it is
 # not on bom-stm32node.elf's link line, because nothing links it. So Phase C
@@ -473,8 +502,12 @@ target_include_directories(boomlink_linkframe PUBLIC
 )
 # _Static_assert (C11), same self-contained reasoning as boomlink_protocol.
 target_compile_features(boomlink_linkframe PUBLIC c_std_11)
+# BOOMLINK_WERROR_FLAGS is the host-build knob (empty outside the standalone
+# branch); BOOMLINK_LINKFRAME_WERROR_FLAGS is the one that also applies under the
+# ARM cross build, which is what makes "warning-clean for the target" a checked
+# claim rather than a stated one. Both are listed so either can enable it.
 target_compile_options(boomlink_linkframe PRIVATE
-  ${BOOMLINK_WARNING_FLAGS} ${BOOMLINK_WERROR_FLAGS})
+  ${BOOMLINK_WARNING_FLAGS} ${BOOMLINK_WERROR_FLAGS} ${BOOMLINK_LINKFRAME_WERROR_FLAGS})
 
 if(BOOMLINK_STANDALONE)
   enable_testing()

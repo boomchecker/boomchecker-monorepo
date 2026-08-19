@@ -72,6 +72,9 @@ This directory is a CMake project that builds two different ways:
   matters); `boomlink_linkframe` is cross-compiled but not yet referenced by
   anything, which is deliberate - it proves the header is free of host-isms and
   warning-clean for the target before the link engine that will use it exists.
+  The warning-clean half needs `-DBOOMLINK_LINKFRAME_WERROR=ON`, which CI passes
+  and a local firmware build does not (so a warning from a newer compiler than
+  CI's never blocks you); without it a warning there is only log text.
   The archive is built but never reaches the linker at all (nothing links it),
   so wiring it into the firmware will need a `target_link_libraries` entry in
   `fw/bom-stm32node`, not merely a call site. No tests - a
