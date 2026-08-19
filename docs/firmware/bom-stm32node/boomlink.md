@@ -158,6 +158,14 @@ transport without inheriting LoRa ACK/retry behaviour.
 The `.proto` files are shared protocol definitions and must not live only inside the
 STM32 target. The STM32-specific radio/link implementation stays in `bom-stm32node`.
 
+Two deliberate departures from what this section originally proposed, both settled when
+the link frame landed. The C header is `boomlink_linkframe.h`, not `boomlink_frame.h`,
+to match `boomlink_codec.h`'s naming; and there is no separate `linkframe/linkframe.md`,
+because section 7.3 below already *is* that specification and a second copy beside the
+code would be free to drift from it. The host parser lives next to the C rather than
+under `tests/` because PR 3's scope lists it as a deliverable and PR 5's `stm32node-cli`
+will consume it.
+
 ```text
 fw/
 ├── common/
@@ -178,12 +186,14 @@ fw/
 │       │                           # doesn't need one - PR 2 started with a
 │       │                           # single shared boomlink.options and hit
 │       │                           # exactly that warning)
-│       ├── linkframe/
-│       │   ├── linkframe.md        # link frame header spec (section 7.3)
-│       │   └── boomlink_frame.h    # shared C header, mirrored by host parser
+│       ├── linkframe/               # NO Nanopb dependency - see section 9
+│       │   ├── boomlink_linkframe.h
+│       │   ├── boomlink_linkframe.c
+│       │   └── boomlink_linkframe.py  # independent host parser, not a binding
 │       ├── tests/
 │       │   ├── test_encode_decode.py
 │       │   ├── test_compatibility.py
+│       │   ├── test_linkframe.py
 │       │   └── vectors/
 │       ├── CMakeLists.txt
 │       └── README.md

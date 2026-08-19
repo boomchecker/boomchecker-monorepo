@@ -416,14 +416,59 @@ if(BOOMLINK_WERROR_FLAGS)
     APPEND PROPERTY COMPILE_OPTIONS ${BOOMLINK_WERROR_FLAGS})
 endif()
 
+# BoomLink's link frame header (boomlink.md section 7.3), a SEPARATE target
+# from boomlink_protocol on purpose - and the separation is the point, not
+# tidiness. Section 9 requires that "BoomLink never decodes the Protobuf
+# payload and has no Nanopb dependency": the link layer must be able to filter,
+# acknowledge and deduplicate a packet, and reject foreign traffic from a few
+# leading bytes, without invoking a Protobuf decoder. Because this target does
+# not link boomlink::nanopb and does not include the codec's directory, that
+# boundary is enforced by the compiler - unlike boomlink_protocol's own
+# "consumers shouldn't call pb_encode directly" convention, which nothing
+# stops (see its comment above). Do not add a nanopb link here to make
+# something compile; if link-layer code needs to look inside the payload, the
+# layering is wrong.
+#
+# Built in the ARM cross build too, even though nothing in the firmware
+# references it yet - PR 3's later phases wire it in. That is deliberate, not
+# the "compiled but never linked" gap PR 2's review caught: there the ELF was
+# missing a symbol an acceptance criterion required, whereas here cross-
+# compiling it early is what proves it is free of host-isms and warning-clean
+# for the target before any firmware depends on it. The linker drops it from
+# the image until Phase C, which is correct.
+add_library(boomlink_linkframe STATIC
+  ${CMAKE_CURRENT_SOURCE_DIR}/linkframe/boomlink_linkframe.c
+)
+target_include_directories(boomlink_linkframe PUBLIC
+  ${CMAKE_CURRENT_SOURCE_DIR}/linkframe
+)
+# _Static_assert (C11), same self-contained reasoning as boomlink_protocol.
+target_compile_features(boomlink_linkframe PUBLIC c_std_11)
+target_compile_options(boomlink_linkframe PRIVATE
+  ${BOOMLINK_WARNING_FLAGS} ${BOOMLINK_WERROR_FLAGS})
+
 if(BOOMLINK_STANDALONE)
   enable_testing()
+
+  # Argument/hex parsing shared by both CLI test tools. Compiled into each
+  # rather than made its own library: two small executables, and a library
+  # would add a target for ~90 lines. See tests/tool_support.h for why it is
+  # shared at all instead of copied - parse_u32 has a history of subtle bugs
+  # that a second hand-maintained copy would eventually reintroduce.
+  set(BOOMLINK_TOOL_SUPPORT ${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_support.c)
 
   # The only target that compiles the hand-rolled buffer/argument-parsing
   # work in tests/codec_tool.c, and host-only by nature - a cross-compiled
   # host tool makes no sense.
-  add_executable(boomlink_codec_tool tests/codec_tool.c)
-  target_link_libraries(boomlink_codec_tool PRIVATE boomlink_protocol)
+  add_executable(boomlink_codec_tool tests/codec_tool.c ${BOOMLINK_TOOL_SUPPORT})
+  # boomlink_linkframe is linked for its HEADER only: codec_tool carries the
+  # _Static_assert pinning BOOMLINK_LINKFRAME_HEADER_SIZE (the link layer's
+  # own definition) to BOOMLINK_LINK_FRAME_HEADER_SIZE (the codec's copy, used
+  # to compute the on-air Envelope budget). Neither layer may include the
+  # other's header - that is the boundary above - so a test tool that
+  # legitimately sees both is the only place the two numbers can be checked
+  # against each other instead of silently drifting apart.
+  target_link_libraries(boomlink_codec_tool PRIVATE boomlink_protocol boomlink_linkframe)
   # Hand-written, so it gets -Werror too when enabled (unlike the generated
   # *.pb.c - see BOOMLINK_WERROR_FLAGS).
   target_compile_options(boomlink_codec_tool PRIVATE
@@ -439,6 +484,21 @@ if(BOOMLINK_STANDALONE)
     BOOMLINK_SANITIZE_ENABLED=$<IF:$<BOOL:${BOOMLINK_SANITIZE}>,1,0>)
 
   add_test(NAME boomlink_codec_selftest COMMAND boomlink_codec_tool selftest)
+
+  # The link frame's own CLI, so the pytest suite can cross-check the C
+  # encoder/parser against linkframe/boomlink_linkframe.py on the same wire
+  # bytes. Deliberately does NOT link boomlink_protocol: this tool exists to
+  # exercise a layer that must work without a Protobuf decoder, and linking one
+  # in would quietly make the boundary untested.
+  add_executable(boomlink_linkframe_tool tests/linkframe_tool.c ${BOOMLINK_TOOL_SUPPORT})
+  target_link_libraries(boomlink_linkframe_tool PRIVATE boomlink_linkframe)
+  target_include_directories(boomlink_linkframe_tool PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests)
+  target_compile_options(boomlink_linkframe_tool PRIVATE
+    ${BOOMLINK_WARNING_FLAGS} ${BOOMLINK_WERROR_FLAGS})
+  target_compile_definitions(boomlink_linkframe_tool PRIVATE
+    BOOMLINK_SANITIZE_ENABLED=$<IF:$<BOOL:${BOOMLINK_SANITIZE}>,1,0>)
+
+  add_test(NAME boomlink_linkframe_selftest COMMAND boomlink_linkframe_tool selftest)
 
   # Host-side Python classes for the SAME .proto files, generated straight by
   # protoc (not through the Nanopb generator) so tests/*.py can act as an
@@ -466,7 +526,12 @@ if(BOOMLINK_STANDALONE)
   add_test(NAME boomlink_python_tests
     COMMAND ${Python3_EXECUTABLE} -m pytest ${CMAKE_CURRENT_SOURCE_DIR}/tests -v
   )
+  # PYTHONPATH carries both the generated protobuf classes and linkframe/, so
+  # the tests can import boomlink_linkframe - the independent Python reference
+  # implementation of section 7.3's header. It lives next to the C rather than
+  # under tests/ because PR 3's scope calls for a host parser as a deliverable
+  # and PR 5's stm32node-cli will consume it.
   set_tests_properties(boomlink_python_tests PROPERTIES
-    ENVIRONMENT "BOOMLINK_CODEC_TOOL=$<TARGET_FILE:boomlink_codec_tool>;PYTHONPATH=${BOOMLINK_PYTHON_PB_DIR}"
+    ENVIRONMENT "BOOMLINK_CODEC_TOOL=$<TARGET_FILE:boomlink_codec_tool>;BOOMLINK_LINKFRAME_TOOL=$<TARGET_FILE:boomlink_linkframe_tool>;PYTHONPATH=${BOOMLINK_PYTHON_PB_DIR}:${CMAKE_CURRENT_SOURCE_DIR}/linkframe"
   )
 endif()

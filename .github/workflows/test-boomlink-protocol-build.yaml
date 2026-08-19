@@ -33,7 +33,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          # No submodules: ruff only reads fw/common/boomlink/tests.
+          # No submodules: ruff only reads fw/common/boomlink/{tests,linkframe}.
           persist-credentials: false
 
       - name: Set up Python
@@ -53,7 +53,7 @@ jobs:
         # for local use, but nothing previously ran it in CI - so it could
         # only ever catch a style issue if a developer remembered to run it
         # by hand. Matches `task lint` exactly.
-        run: ruff check tests
+        run: ruff check tests linkframe
 
   test-build:
     name: Build and test (host, Debug)
@@ -106,12 +106,28 @@ jobs:
         working-directory: ./fw/common/boomlink
         run: ctest --preset Debug --output-on-failure
 
+      - name: Verify the link layer has no Nanopb dependency
+        working-directory: ./fw/common/boomlink
+        # boomlink.md section 9: "BoomLink never decodes the Protobuf payload
+        # and has no Nanopb dependency". The CMake target enforces it by not
+        # linking Nanopb and not exposing the codec's include path, so a
+        # violation is normally a compile error - but a future refactor could
+        # re-add the link (to make something build) and quietly lose the
+        # property, with every test still green. This fails the build instead.
+        run: |
+          if nm build/Debug/libboomlink_linkframe.a | grep -E ' (U|T) pb_'; then
+            echo "❌ libboomlink_linkframe.a references Nanopb symbols"
+            exit 1
+          fi
+          echo "✅ the link frame layer is free of Nanopb symbols"
+
       - name: Build summary
         run: |
           echo "### ✅ Build and tests successful!" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "- Nanopb code generated from fw/common/boomlink/proto/*.proto ✓" >> $GITHUB_STEP_SUMMARY
           echo "- boomlink_protocol (host-native) built ✓" >> $GITHUB_STEP_SUMMARY
+          echo "- boomlink_linkframe built, verified free of Nanopb symbols ✓" >> $GITHUB_STEP_SUMMARY
           echo "- C self-test + Python cross-language/compatibility suite passed ✓" >> $GITHUB_STEP_SUMMARY
           echo "- built with AddressSanitizer + UndefinedBehaviorSanitizer (BOOMLINK_SANITIZE, on by default for the Debug preset) ✓" >> $GITHUB_STEP_SUMMARY
           echo "- warnings are errors in the hand-written sources (BOOMLINK_WERROR, on by default for the Debug preset); the generated *.pb.c build with -Wall -Wextra and surface as annotations ✓" >> $GITHUB_STEP_SUMMARY

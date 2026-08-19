@@ -34,9 +34,11 @@ tasks:
       - PYTHONPATH=$PWD/build/Debug/python_pb2 .venv/bin/python tests/generate_vectors.py
 
   lint:
-    desc: Run ruff over the test suite
+    desc: Run ruff over the Python in this package
     cmds:
-      - .venv/bin/ruff check tests
+      # linkframe/ too, not just tests/: boomlink_linkframe.py is shipped code
+      # (PR 5's host CLI will import it), not a test helper.
+      - .venv/bin/ruff check tests linkframe
 
   clean:
     desc: Remove the build directory
