@@ -30,21 +30,30 @@ def pytest_configure(config):
             "(envelope_pb2 and friends). These are generated at build time, not "
             "committed - see CMakeLists.txt's boomlink_python_pb2 target."
         )
-    codec_tool = os.environ.get("BOOMLINK_CODEC_TOOL")
-    if not codec_tool:
+    try:
+        import boomlink_linkframe  # noqa: F401
+    except ImportError:
         missing.append(
-            "  - BOOMLINK_CODEC_TOOL is not set. Point it at the compiled "
-            "boomlink_codec_tool binary."
+            "  - PYTHONPATH does not include fw/common/boomlink/linkframe, so the "
+            "boomlink_linkframe reference parser cannot be imported."
         )
-    elif not (os.path.isfile(codec_tool) and os.access(codec_tool, os.X_OK)):
-        # Set but stale/wrong (e.g. left over from a `rm -rf build` since the
-        # last time it was exported) - checking non-empty alone isn't enough,
-        # or every test using it fails with a raw FileNotFoundError instead
-        # of this actionable message.
-        missing.append(
-            f"  - BOOMLINK_CODEC_TOOL={codec_tool!r} does not point to an "
-            "existing, executable file."
-        )
+    # Both tools, checked the same way: set, and pointing at something that
+    # exists and is executable. Checking non-empty alone is not enough - a value
+    # left over from a `rm -rf build` would otherwise surface as a raw
+    # FileNotFoundError from whichever test happened to run first.
+    for env_var, description in (
+        ("BOOMLINK_CODEC_TOOL", "boomlink_codec_tool"),
+        ("BOOMLINK_LINKFRAME_TOOL", "boomlink_linkframe_tool"),
+    ):
+        path = os.environ.get(env_var)
+        if not path:
+            missing.append(
+                f"  - {env_var} is not set. Point it at the compiled {description} binary."
+            )
+        elif not (os.path.isfile(path) and os.access(path, os.X_OK)):
+            missing.append(
+                f"  - {env_var}={path!r} does not point to an existing, executable file."
+            )
     if missing:
         pytest.exit(
             "Test environment is not set up:\n"
@@ -123,6 +132,25 @@ def codec_tool_path():
     tests/codec_tool.c) - the "Nanopb side" of the cross-language interop
     tests. pytest_configure() above already guarantees this is set."""
     return os.environ["BOOMLINK_CODEC_TOOL"]
+
+
+@pytest.fixture(scope="session")
+def linkframe_tool_path():
+    """Path to the compiled boomlink_linkframe_tool binary (see
+    tests/linkframe_tool.c) - the C side of the link frame cross-check against
+    the Python reference parser. pytest_configure() guarantees this is set."""
+    return os.environ["BOOMLINK_LINKFRAME_TOOL"]
+
+
+@pytest.fixture(scope="session")
+def linkframe_constants(linkframe_tool_path):
+    """The link frame's compile-time constants and every parse result code, as
+    reported by `linkframe_tool limits` - so the tests compare against the C
+    enumerators rather than assuming the Python mirror still matches them."""
+    try:
+        return query_codec_tool_limits(linkframe_tool_path)
+    except RuntimeError as exc:
+        pytest.fail(str(exc))
 
 
 @pytest.fixture(scope="session")
