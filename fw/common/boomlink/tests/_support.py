@@ -100,8 +100,11 @@ def assert_clean_rejection(result):
     if result.returncode < 0:
         raise AssertionError(
             f"process was killed by a signal (returncode={result.returncode}), not a clean "
-            f"intentional rejection - with abort_on_error=1 forced on both sanitizers, "
-            f"SIGABRT (-6) is what a sanitizer finding looks like:\n{result.stderr}"
+            f"intentional rejection. With abort_on_error=1 forced on both sanitizers a "
+            f"sanitizer finding arrives as SIGABRT (-6); so does codec_tool's own abort() "
+            f"on an internal fault, so read the stderr below to tell them apart - a "
+            f"sanitizer report names itself, an internal fault says so explicitly:"
+            f"\n{result.stderr}"
         )
     # An exact allow-list, not just "positive": codec_tool's rejection paths
     # return only 1 or 2, so any OTHER positive code is something else wearing a

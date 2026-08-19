@@ -160,15 +160,20 @@ static void hex_encode(const uint8_t *data, size_t len, char *out, size_t out_ca
        an odd max_size let Nanopb accept one byte more than the declared array
        (see that assert), and getting the failure MODE right here turned out to
        matter more than the message.
-       abort(), not exit(): the test suite's assert_clean_rejection() treats any
-       POSITIVE exit code as a clean, intentional rejection, so exiting 70 here
-       made an internal fault indistinguishable from one - and measurably so.
-       With a deliberately odd bound, `exit(70)` made all three over-bound
-       rejection tests pass green over a real intra-object overflow, where both
-       abort() and even the old silent `return` left them red. SIGABRT is
-       already this suite's canonical internal-fault signal (see
-       _support.py's forced abort_on_error=1), so it lands as a negative
-       returncode and is reported as the fault it is. */
+       abort(), not exit(): assert_clean_rejection() used to treat any POSITIVE
+       exit code as a clean, intentional rejection, so exiting 70 here made an
+       internal fault indistinguishable from one - and measurably so. With a
+       deliberately odd bound, `exit(70)` made
+       test_field_size_one_over_bound_is_rejected pass green over a real
+       intra-object overflow, where both abort() and even the old silent
+       `return` left it red. That is the ONE test that can reach this window:
+       only a payload of exactly max_size + 1 gets past Nanopb's padded-capacity
+       check, so the suite's other over-bound cases are cleanly rejected either
+       way and never exercised the fault. SIGABRT is already this suite's
+       canonical internal-fault signal (see _support.py's forced
+       abort_on_error=1), so it lands as a negative returncode and is reported
+       as the fault it is - and the allow-list added alongside it now catches an
+       unexpected positive code independently. */
     fprintf(stderr,
             "hex_encode: output buffer too small for a %zu-byte payload (capacity %zu) - "
             "this is a bug in codec_tool's buffer sizing, not a bad input\n",

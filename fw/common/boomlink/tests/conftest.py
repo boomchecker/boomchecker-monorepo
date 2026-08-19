@@ -97,12 +97,23 @@ def pytest_report_header(config):
             "binary predates the `sanitizers=` field in `codec_tool limits`, so it is "
             "stale relative to the test suite. Rebuild it."
         )
-    if limits["sanitizers"]:
+    sanitizers = limits["sanitizers"]
+    # Compared against the two values the field is defined to take rather than
+    # tested for truthiness: query_codec_tool_limits() passes a value it cannot
+    # parse as an int straight through as a string, and a truthiness test would
+    # read a future `sanitizers=off` as ON - reporting the exact opposite of the
+    # truth, in the one line whose whole job is to be honest about this.
+    if sanitizers == 1:
         return "BoomLink codec_tool: built WITH ASan/UBSan"
+    if sanitizers == 0:
+        return (
+            "BoomLink codec_tool: built WITHOUT sanitizers - negative-path tests cannot "
+            "tell a clean rejection from a memory-safety bug (configure with "
+            "`cmake --preset Debug`, or -DBOOMLINK_SANITIZE=ON, to restore that)"
+        )
     return (
-        "BoomLink codec_tool: built WITHOUT sanitizers - negative-path tests cannot "
-        "tell a clean rejection from a memory-safety bug (configure with "
-        "`cmake --preset Debug`, or -DBOOMLINK_SANITIZE=ON, to restore that)"
+        f"BoomLink codec_tool: reported an unrecognized sanitizers value {sanitizers!r} - "
+        "cannot tell whether the negative-path tests have a safety net"
     )
 
 
