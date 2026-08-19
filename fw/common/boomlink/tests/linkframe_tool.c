@@ -12,19 +12,36 @@
  *          Usage:
  *            linkframe_tool selftest
  *            linkframe_tool limits
- *            linkframe_tool encode <frame_type> <flags> <fragment_index> \
- *                                  <dest> <src> <session> <sequence> \
- *                                  <payload_hex> <out_file>
+ *            linkframe_tool encode     <frame_type> <flags> <fragment_index> \
+ *                                      <dest> <src> <session> <sequence> \
+ *                                      <payload_hex> <out_file>
+ *            linkframe_tool encode_raw <same arguments>
  *            linkframe_tool parse <in_file> [expected_magic]
  *            linkframe_tool accepts <destination_id> <local_node_id>
  *
- *          `encode` takes raw flags/fragment_index bytes rather than named
- *          booleans deliberately: the tests need to build frames that a
- *          correct sender would never produce (a reserved flag bit set, a
- *          non-zero fragment_index) to check the receiver drops or ignores
- *          them per section 7.3.
+ *          Both encode subcommands take a raw flags byte rather than named
+ *          booleans, because the tests must be able to build frames a correct
+ *          sender would never produce. They differ in one crucial way:
+ *
+ *          `encode` goes through boomlink_linkframe_encode() and leaves its
+ *          output alone, so whatever that function decides about the flags byte
+ *          is what lands in the file and is therefore observable by the tests.
+ *          The requested reserved bits are handed to it via the header's
+ *          reserved_flags field - which it is supposed to ignore.
+ *
+ *          `encode_raw` additionally overwrites the flags byte with the
+ *          requested value afterwards. That is the only way to forge the "a
+ *          newer sender set a bit we have never heard of" frame the reserved-bit
+ *          RECEIVER rule must be tested against, since the encoder correctly
+ *          refuses to emit one.
+ *
+ *          Keeping these separate matters: when a single `encode` did both, the
+ *          override made byte 2 of the encoder's output invisible to the whole
+ *          pytest suite - an encoder that set a reserved bit on every frame, or
+ *          swapped the two known flags, passed 100%.
  ******************************************************************************
  */
+#include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -115,6 +132,13 @@ static int run_limits(void) {
   printf("flag_more_fragments=%u\n", (unsigned)BOOMLINK_LINKFRAME_FLAG_MORE_FRAGMENTS);
   printf("flags_reserved_mask=%u\n", (unsigned)BOOMLINK_LINKFRAME_FLAGS_RESERVED_MASK);
   printf("max_payload=%u\n", (unsigned)LINKFRAME_TOOL_MAX_PAYLOAD);
+  /* Same reason codec_tool reports it: assert_clean_rejection()'s guarantee
+     rests entirely on the sanitizers being present, so a suite running against
+     an uninstrumented binary must be able to say so rather than quietly lose
+     its safety net. Reported per TOOL - this one has its own negative-path
+     tests (short buffers, fragmented frames, hostile flag bytes) and could in
+     principle be built differently from codec_tool. */
+  printf("sanitizers=%d\n", BOOMLINK_SANITIZE_ENABLED);
   /* Every parse result code, so the Python ParseResult enum is checked against
      the C enumerators rather than assumed to match. */
   printf("result_ok=%d\n", (int)BOOMLINK_LINKFRAME_OK);
@@ -127,11 +151,12 @@ static int run_limits(void) {
   return 0;
 }
 
-static int run_encode(int argc, char **argv) {
+static int run_encode(int argc, char **argv, bool raw_flags) {
   if (argc != 11) {
     fprintf(stderr,
-            "usage: encode <frame_type> <flags> <fragment_index> <dest> <src> <session> "
-            "<sequence> <payload_hex> <out_file>\n");
+            "usage: %s <frame_type> <flags> <fragment_index> <dest> <src> <session> "
+            "<sequence> <payload_hex> <out_file>\n",
+            argv[1]);
     return 2;
   }
   uint8_t  frame_type;
@@ -181,8 +206,10 @@ static int run_encode(int argc, char **argv) {
     return 2;
   }
 
-  /* Built field by field rather than from the flags byte, then the raw flags
-     are written back over the encoder's output below - see the comment there. */
+  /* The requested reserved bits are handed to the encoder via reserved_flags,
+     which it is specified to ignore. That is deliberate: it means plain
+     `encode` actually ASKS the encoder for reserved bits, so a test can observe
+     whether it refuses - rather than the tool answering the question itself. */
   boomlink_linkframe_header_t header = {
       .magic          = BOOMLINK_LINKFRAME_MAGIC_DEFAULT,
       .version        = BOOMLINK_LINKFRAME_VERSION,
@@ -190,6 +217,7 @@ static int run_encode(int argc, char **argv) {
       .ack_requested  = (flags & BOOMLINK_LINKFRAME_FLAG_ACK_REQUESTED) != 0u,
       .more_fragments = (flags & BOOMLINK_LINKFRAME_FLAG_MORE_FRAGMENTS) != 0u,
       .fragment_index = fragment_index,
+      .reserved_flags = (uint8_t)(flags & BOOMLINK_LINKFRAME_FLAGS_RESERVED_MASK),
       .destination_id = dest,
       .source_id      = src,
       .session_id     = session,
@@ -198,12 +226,14 @@ static int run_encode(int argc, char **argv) {
 
   uint8_t buf[BOOMLINK_LINKFRAME_HEADER_SIZE + LINKFRAME_TOOL_MAX_PAYLOAD];
   boomlink_linkframe_encode(&header, buf);
-  /* boomlink_linkframe_encode() correctly refuses to put reserved flag bits on
-     the air, so writing the raw byte over its output is the only way to build
-     the "a newer sender set a bit we don't know" frame the reserved-bits
-     receiver rule has to be tested against. Done here, in the test tool, and
-     deliberately not by weakening the encoder. */
-  buf[2] = flags;
+  if (raw_flags) {
+    /* encode_raw only: forge the flags byte the encoder correctly refuses to
+       emit, so the reserved-bit RECEIVER rule can be tested. Plain `encode`
+       must never do this - it would make the encoder's own output unobservable,
+       which is exactly how an encoder that set a reserved bit on every frame
+       once passed the whole suite. */
+    buf[2] = flags;
+  }
   if (payload_len > 0) {
     memcpy(&buf[BOOMLINK_LINKFRAME_HEADER_SIZE], payload, (size_t)payload_len);
   }
@@ -312,7 +342,8 @@ static int run_accepts(int argc, char **argv) {
 
 int main(int argc, char **argv) {
   if (argc < 2) {
-    fprintf(stderr, "usage: %s <selftest|limits|encode|parse|accepts> [args...]\n", argv[0]);
+    fprintf(stderr, "usage: %s <selftest|limits|encode|encode_raw|parse|accepts> [args...]\n",
+            argv[0]);
     return 2;
   }
   if (strcmp(argv[1], "selftest") == 0) {
@@ -322,7 +353,10 @@ int main(int argc, char **argv) {
     return run_limits();
   }
   if (strcmp(argv[1], "encode") == 0) {
-    return run_encode(argc, argv);
+    return run_encode(argc, argv, false);
+  }
+  if (strcmp(argv[1], "encode_raw") == 0) {
+    return run_encode(argc, argv, true);
   }
   if (strcmp(argv[1], "parse") == 0) {
     return run_parse(argc, argv);

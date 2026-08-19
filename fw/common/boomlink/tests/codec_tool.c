@@ -51,37 +51,8 @@ _Static_assert(BOOMLINK_LINK_FRAME_HEADER_SIZE == BOOMLINK_LINKFRAME_HEADER_SIZE
   (BOOMLINK_PING_PAYLOAD_CAP > BOOMLINK_PONG_PAYLOAD_CAP ? BOOMLINK_PING_PAYLOAD_CAP \
                                                           : BOOMLINK_PONG_PAYLOAD_CAP)
 
-/* Normally set by CMake (from the BOOMLINK_SANITIZE option) - defaulted here
-   so this file still compiles standalone, e.g. in a hand-rolled reproduction
-   build. Reported by `limits` as sanitizers=, see run_limits().
-   The default is 0, which UNDER-reports a hand-rolled build that passed
-   -fsanitize=... without also passing this -D. That direction is merely
-   conservative; the dangerous direction is claiming instrumentation that
-   isn't there, which would make a negative-path test's "clean rejection"
-   verdict meaningless. GCC/Clang define __SANITIZE_ADDRESS__ under
-   -fsanitize=address, so at least the ASan half of the claim can be
-   cross-checked rather than trusted - there is no equivalent macro for UBSan,
-   which is why the value has to come from the build system at all. */
-#ifndef BOOMLINK_SANITIZE_ENABLED
-#define BOOMLINK_SANITIZE_ENABLED 0
-#endif
-
-/* GCC advertises ASan via __SANITIZE_ADDRESS__; Clang (verified on 18.1) does
-   NOT define it at all and answers __has_feature(address_sanitizer) instead. So
-   detect both rather than exempting Clang - exempting it would silently disable
-   this cross-check for a whole compiler family, and a Clang build that lost its
-   -fsanitize flags would still claim sanitizers=1. */
-#if defined(__SANITIZE_ADDRESS__)
-#define BOOMLINK_ASAN_ACTIVE 1
-#elif defined(__has_feature)
-#if __has_feature(address_sanitizer)
-#define BOOMLINK_ASAN_ACTIVE 1
-#endif
-#endif
-
-#if BOOMLINK_SANITIZE_ENABLED && !defined(BOOMLINK_ASAN_ACTIVE)
-#error "BOOMLINK_SANITIZE_ENABLED=1 but this file is not compiled with -fsanitize=address"
-#endif
+/* BOOMLINK_SANITIZE_ENABLED and its ASan cross-check now live in
+   tool_support.h, shared with linkframe_tool.c. */
 
 /* `decode`'s read cap - see its own comment for why this is not simply
    boomlink_Envelope_size. */

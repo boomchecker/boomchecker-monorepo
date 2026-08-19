@@ -10,7 +10,7 @@ file. Import them directly in test modules, e.g. `import envelope_pb2`.
 import os
 
 import pytest
-from _support import query_codec_tool_limits
+from _support import query_tool_limits
 
 
 def pytest_configure(config):
@@ -82,19 +82,35 @@ def pytest_report_header(config):
     faster), it just should never be a surprise.
     """
     del config
-    codec_tool = os.environ.get("BOOMLINK_CODEC_TOOL")
-    if not codec_tool:
-        return None
-    try:
-        limits = query_codec_tool_limits(codec_tool)
-    except Exception:  # noqa: BLE001 - see comment
-        # Deliberately broad. pytest_configure already validated the binary, so
-        # this is a header-line nicety and must not become a second, noisier
-        # failure path - which is exactly what a narrow (RuntimeError, OSError)
-        # did: `limits` growing one non-integer key made int() raise ValueError
-        # here and abort the whole session with INTERNALERROR during
-        # pytest_sessionstart, before collection.
-        return None
+    # BOTH tools, each reported separately. They are built from the same
+    # directory-scope flags today, so they agree - but each has its own
+    # negative-path tests (the codec's malformed-Envelope paths, the link
+    # frame's short/fragmented/hostile-flag paths), and reporting only one
+    # would let the other run uninstrumented while the header claimed a safety
+    # net covering everything.
+    lines = []
+    for env_var, label in (
+        ("BOOMLINK_CODEC_TOOL", "codec_tool"),
+        ("BOOMLINK_LINKFRAME_TOOL", "linkframe_tool"),
+    ):
+        path = os.environ.get(env_var)
+        if not path:
+            continue
+        try:
+            limits = query_tool_limits(path)
+        except Exception:  # noqa: BLE001 - see comment
+            # Deliberately broad. pytest_configure already validated the binary,
+            # so this is a header-line nicety and must not become a second,
+            # noisier failure path - which is exactly what a narrow
+            # (RuntimeError, OSError) did: `limits` growing one non-integer key
+            # made int() raise ValueError here and abort the whole session with
+            # INTERNALERROR during pytest_sessionstart, before collection.
+            continue
+        lines.append(f"BoomLink {label}: {_describe_sanitizer_state(limits)}")
+    return lines or None
+
+
+def _describe_sanitizer_state(limits):
     if "sanitizers" not in limits:
         # Distinct from 0: a binary built before `limits` reported this at all
         # cannot be asked. Saying "built WITHOUT sanitizers" here would state a
@@ -102,27 +118,27 @@ def pytest_report_header(config):
         # an instruction that would not change anything - and a check that cries
         # wolf gets ignored, which costs the whole point of reporting it.
         return (
-            "BoomLink codec_tool: cannot tell whether it was built with sanitizers - this "
-            "binary predates the `sanitizers=` field in `codec_tool limits`, so it is "
-            "stale relative to the test suite. Rebuild it."
+            "cannot tell whether it was built with sanitizers - this binary predates the "
+            "`sanitizers=` field in its `limits` output, so it is stale relative to the "
+            "test suite. Rebuild it."
         )
     sanitizers = limits["sanitizers"]
     # Compared against the two values the field is defined to take rather than
-    # tested for truthiness: query_codec_tool_limits() passes a value it cannot
+    # tested for truthiness: query_tool_limits() passes a value it cannot
     # parse as an int straight through as a string, and a truthiness test would
     # read a future `sanitizers=off` as ON - reporting the exact opposite of the
     # truth, in the one line whose whole job is to be honest about this.
     if sanitizers == 1:
-        return "BoomLink codec_tool: built WITH ASan/UBSan"
+        return "built WITH ASan/UBSan"
     if sanitizers == 0:
         return (
-            "BoomLink codec_tool: built WITHOUT sanitizers - negative-path tests cannot "
-            "tell a clean rejection from a memory-safety bug (configure with "
-            "`cmake --preset Debug`, or -DBOOMLINK_SANITIZE=ON, to restore that)"
+            "built WITHOUT sanitizers - negative-path tests cannot tell a clean rejection "
+            "from a memory-safety bug (configure with `cmake --preset Debug`, or "
+            "-DBOOMLINK_SANITIZE=ON, to restore that)"
         )
     return (
-        f"BoomLink codec_tool: reported an unrecognized sanitizers value {sanitizers!r} - "
-        "cannot tell whether the negative-path tests have a safety net"
+        f"reported an unrecognized sanitizers value {sanitizers!r} - cannot tell whether "
+        "the negative-path tests have a safety net"
     )
 
 
@@ -148,7 +164,7 @@ def linkframe_constants(linkframe_tool_path):
     reported by `linkframe_tool limits` - so the tests compare against the C
     enumerators rather than assuming the Python mirror still matches them."""
     try:
-        return query_codec_tool_limits(linkframe_tool_path)
+        return query_tool_limits(linkframe_tool_path)
     except RuntimeError as exc:
         pytest.fail(str(exc))
 
@@ -157,10 +173,10 @@ def linkframe_constants(linkframe_tool_path):
 def codec_tool_limits(codec_tool_path):
     """Every compiled bound the tool reports: the Ping/Pong payload caps plus
     envelope_size, envelope_budget, decode_read_cap and sanitizers - see
-    _support.query_codec_tool_limits() for what each one means. Tests read
+    _support.query_tool_limits() for what each one means. Tests read
     these instead of hardcoding their own copy of a number defined in
     nanopb/system.options or boomlink_codec.h."""
     try:
-        return query_codec_tool_limits(codec_tool_path)
+        return query_tool_limits(codec_tool_path)
     except RuntimeError as exc:
         pytest.fail(str(exc))

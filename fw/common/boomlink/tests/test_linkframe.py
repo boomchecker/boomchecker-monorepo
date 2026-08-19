@@ -38,11 +38,18 @@ def run_linkframe_tool(linkframe_tool_path, *args):
 
 
 def encode_with_tool(tmp_path, linkframe_tool_path, *, frame_type, flags, fragment_index,
-                     payload=b"", name="frame.bin", **fields):
-    """Build a frame with the C encoder and return its bytes."""
+                     payload=b"", name="frame.bin", raw=False, **fields):
+    """Build a frame with the C encoder and return its bytes.
+
+    `raw=True` selects the `encode_raw` subcommand, which overwrites the flags
+    byte after the encoder has run. Only use it where a test genuinely needs a
+    frame the encoder refuses to emit (a set reserved bit): with `raw=False` the
+    encoder's own flags byte reaches the file, which is what makes it observable
+    at all.
+    """
     path = tmp_path / name
     result = run_linkframe_tool(
-        linkframe_tool_path, "encode",
+        linkframe_tool_path, "encode_raw" if raw else "encode",
         str(frame_type), str(flags), str(fragment_index),
         str(fields["destination_id"]), str(fields["source_id"]),
         str(fields["session_id"]), str(fields["sequence"]),
@@ -81,6 +88,19 @@ def test_python_parse_result_codes_match_the_c_enum(linkframe_constants):
             f"ParseResult.{name} is {int(member)} in Python but "
             f"{linkframe_constants[key]} in C"
         )
+
+    # And the reverse: iterating only Python's members would miss a C enumerator
+    # APPENDED after ERR_ACK_HAS_PAYLOAD - a new drop reason the reference
+    # parser cannot produce, and no test would notice.
+    reported = {k for k in linkframe_constants if k.startswith("result_")}
+    mirrored = {
+        f"result_{name.lower().removeprefix('err_')}"
+        for name in ref.ParseResult.__members__
+    }
+    assert reported == mirrored, (
+        f"C reports parse results the Python mirror does not have: {reported - mirrored}; "
+        f"Python has ones C does not report: {mirrored - reported}"
+    )
 
 
 def test_python_constants_match_the_c_header(linkframe_constants):
@@ -130,7 +150,11 @@ def test_ack_frame_wire_layout_is_byte_exact():
     carrying no payload (section 9.5)."""
     frame = ref.encode(ref.LinkFrameHeader(frame_type=ref.FrameType.ACK, **SAMPLE))
     assert frame[1] == 0x12, "version 1 | ACK"
-    assert frame[2] == 0x00, "an ACK never requests an ACK"
+    # The default header simply does not request an ACK. Neither encoder
+    # ENFORCES section 9.5's "ACK packets never request another ACK" - that is a
+    # TX-pipeline rule belonging to the link engine, and a stateless parser must
+    # report what arrived rather than what a compliant sender would have sent.
+    assert frame[2] == 0x00, "the default header does not request an ACK"
     assert len(frame) == ref.HEADER_SIZE
 
 
@@ -215,7 +239,10 @@ def test_wrong_version_is_rejected(tmp_path, linkframe_tool_path):
 
 @pytest.mark.parametrize("frame_type", [0, 3, 15])
 def test_unknown_frame_type_is_rejected(tmp_path, linkframe_tool_path, frame_type):
-    """0 in particular: an all-zero buffer must never parse as a usable frame."""
+    """Type 0 included, so a frame whose type nibble was never set cannot parse.
+    Note this sets ONLY the type nibble on an otherwise valid frame - an
+    all-zero buffer is a different case, covered separately below (it never
+    reaches the frame-type check, being rejected on magic first)."""
     frame = bytearray(ref.encode(ref.LinkFrameHeader(**SAMPLE)))
     frame[1] = (ref.VERSION << 4) | frame_type
 
@@ -224,6 +251,20 @@ def test_unknown_frame_type_is_rejected(tmp_path, linkframe_tool_path, frame_typ
     with pytest.raises(ref.LinkFrameError) as excinfo:
         ref.parse(bytes(frame))
     assert excinfo.value.result is ref.ParseResult.ERR_FRAME_TYPE
+
+
+def test_an_all_zero_buffer_is_rejected(tmp_path, linkframe_tool_path):
+    """A zeroed buffer - an uninitialised RX slot, a padded read - must never
+    parse as a usable frame. It is rejected on MAGIC, before the frame-type
+    check, since 0x00 is not the expected network ID; asserting the specific
+    reason keeps this honest about which rule does the work."""
+    frame = bytes(ref.HEADER_SIZE)
+
+    fields = parse_with_tool(tmp_path, linkframe_tool_path, frame)
+    assert fields["result"] == str(int(ref.ParseResult.ERR_MAGIC)), fields
+    with pytest.raises(ref.LinkFrameError) as excinfo:
+        ref.parse(frame)
+    assert excinfo.value.result is ref.ParseResult.ERR_MAGIC
 
 
 @pytest.mark.parametrize(
@@ -269,10 +310,12 @@ def test_reserved_flag_bits_are_ignored_not_rejected(tmp_path, linkframe_tool_pa
     go behind the version nibble instead, precisely so this default stays safe.
     """
     flags = ref.FLAG_ACK_REQUESTED | (1 << reserved_bit)
+    # raw=True: the encoder correctly refuses to emit a reserved bit, so forging
+    # the byte is the only way to produce the frame a NEWER SENDER would send.
     frame = encode_with_tool(
         tmp_path, linkframe_tool_path,
         frame_type=int(ref.FrameType.DATA), flags=flags, fragment_index=0,
-        payload=b"\x07", **SAMPLE,
+        payload=b"\x07", raw=True, **SAMPLE,
     )
     assert frame[2] & (1 << reserved_bit), (
         "the tool must have written the raw flags byte through - otherwise this "
@@ -295,23 +338,54 @@ def test_reserved_flag_bits_are_ignored_not_rejected(tmp_path, linkframe_tool_pa
 
 def test_encoder_never_puts_reserved_bits_on_the_air(tmp_path, linkframe_tool_path):
     """The receiver tolerates reserved bits; the SENDER must never set them
-    (section 7.3: "always 0 until a future PR assigns them"). Echoing back a
-    bit a parsed frame happened to carry is the obvious way that breaks, so
-    encode() ignores reserved_flags entirely."""
-    header = ref.LinkFrameHeader(**SAMPLE)
-    header.reserved_flags = 0xFC
-    assert ref.encode(header)[2] == 0
+    (section 7.3: "always 0 until a future PR assigns them"). Echoing back a bit
+    a parsed frame happened to carry is the obvious way that breaks, so both
+    encoders ignore reserved_flags entirely.
 
-    # And the C encoder likewise, checked through the one path that can ask it
-    # for a reserved bit: `encode` passes the flags byte to the encoder before
-    # overwriting it, so a value with only reserved bits set must come back 0
-    # from the encoder itself. Verified by encoding with flags=0 and confirming
-    # the byte is 0 regardless of what a header struct might carry.
+    This test earns its keep only if the encoder is actually ASKED for a
+    reserved bit and its own output is what gets inspected. An earlier version
+    was vacuous on the C side for two independent reasons - the tool never
+    populated reserved_flags, and it overwrote the flags byte afterwards - which
+    left byte 2 of the C encoder's output unobserved by the entire suite: an
+    encoder that set a reserved bit on every frame, or swapped the two known
+    flags, passed 100%. Hence flags=0xFD (ack + every reserved bit) through
+    plain `encode`, plus a byte-exact comparison so byte 2 is never again the
+    byte nobody looks at.
+    """
+    all_reserved_plus_ack = ref.FLAG_ACK_REQUESTED | ref.FLAGS_RESERVED_MASK
+    assert all_reserved_plus_ack == 0xFD
+
+    header = ref.LinkFrameHeader(ack_requested=True, **SAMPLE)
+    header.reserved_flags = ref.FLAGS_RESERVED_MASK
+    python_frame = ref.encode(header)
+    assert python_frame[2] == ref.FLAG_ACK_REQUESTED
+
     frame = encode_with_tool(
         tmp_path, linkframe_tool_path,
-        frame_type=int(ref.FrameType.DATA), flags=0, fragment_index=0, **SAMPLE,
+        frame_type=int(ref.FrameType.DATA), flags=all_reserved_plus_ack,
+        fragment_index=0, **SAMPLE,
     )
-    assert frame[2] == 0
+    assert frame[2] == ref.FLAG_ACK_REQUESTED, (
+        f"the C encoder emitted flags byte {frame[2]:#04x}; it must keep the known "
+        f"ack_requested bit and drop every reserved one"
+    )
+    # Whole-frame equality, so byte 2 is covered by an exact expectation rather
+    # than only by the assertion above.
+    assert frame == python_frame
+
+
+def test_encoder_keeps_the_two_known_flags_distinct(tmp_path, linkframe_tool_path):
+    """Guards against the two assigned bits being swapped - which byte 2 being
+    unobserved also used to hide. Uses more_fragments alone, so the frame is
+    rejected on parse; only the emitted byte matters here."""
+    for flags, label in ((ref.FLAG_ACK_REQUESTED, "ack only"),
+                         (ref.FLAG_MORE_FRAGMENTS, "more_fragments only")):
+        frame = encode_with_tool(
+            tmp_path, linkframe_tool_path,
+            frame_type=int(ref.FrameType.DATA), flags=flags, fragment_index=0,
+            name=f"flags_{flags}.bin", **SAMPLE,
+        )
+        assert frame[2] == flags, f"{label}: emitted {frame[2]:#04x}, expected {flags:#04x}"
 
 
 def test_ack_with_a_payload_is_rejected(tmp_path, linkframe_tool_path):
@@ -368,8 +442,16 @@ def test_data_frame_with_no_payload_parses(tmp_path, linkframe_tool_path):
          "traffic before knowing who you are is how a half-provisioned node "
          "answers for someone else"),
         (0x00000042, ref.ADDR_INVALID, False, "unconfigured node, unicast"),
+        (ref.ADDR_INVALID, ref.ADDR_INVALID, False,
+         "the case that makes the unconfigured-node guard load-bearing: without "
+         "it, destination 0 'matches' a node whose own id is still 0, so a "
+         "factory-fresh node acts on traffic addressed to the invalid address. "
+         "An implementation applying the guard only to broadcast passes every "
+         "other case here"),
         (ref.ADDR_INVALID, 0x00000042, False,
-         "0 is the invalid/unconfigured address and is never a real destination"),
+         "rejected simply because 0 is neither this node's id nor broadcast - "
+         "there is no separate 'destination must not be 0' rule, and this case "
+         "does not imply one"),
     ],
 )
 def test_address_acceptance(linkframe_tool_path, destination_id, local_node_id, accepted, why):
@@ -383,23 +465,99 @@ def test_address_acceptance(linkframe_tool_path, destination_id, local_node_id, 
     assert ref.is_for_node(destination_id, local_node_id) is accepted, why
 
 
-def test_encode_rejects_malformed_numeric_arguments(tmp_path, linkframe_tool_path):
+ENCODE_ARG_NAMES = ("frame_type", "flags", "fragment_index", "destination_id",
+                    "source_id", "session_id", "sequence")
+
+
+def encode_args_with(position, value):
+    """The nine `encode` arguments with one replaced, so a malformed-input test
+    can target any field rather than only the last uint32."""
+    args = ["1", "0", "0", str(SAMPLE["destination_id"]), str(SAMPLE["source_id"]),
+            str(SAMPLE["session_id"]), str(SAMPLE["sequence"])]
+    args[position] = value
+    return args
+
+
+@pytest.mark.parametrize("position,name", list(enumerate(ENCODE_ARG_NAMES)))
+@pytest.mark.parametrize(
+    "bad_value",
+    ["xyz", "-1", "99999999999999999999", "1.5", "", "-0", " 5", "\t7", "+5",
+     "5 ", "0x10", "1e3", "5abc", "1,000"],
+)
+def test_encode_rejects_malformed_numeric_arguments(tmp_path, linkframe_tool_path,
+                                                    position, name, bad_value):
     """Same discipline as the codec tool: a typo'd argument must fail loudly
     rather than silently become another value, or a test asserting "this frame
-    is rejected" could be passing for the wrong reason entirely."""
+    is rejected" could be passing for the wrong reason entirely.
+
+    Every argument position, not just one: the first three go through
+    boomlink_tool_parse_u8 and the rest through parse_u32, and testing only a
+    uint32 left the u8 path unexercised - widening its limit to 0xFFFF passed
+    the whole suite while `encode 300 ...` silently became frame_type 12.
+    """
     out_path = tmp_path / "out.bin"
-    bad = ("xyz", "-1", "99999999999999999999", "1.5", "", "-0", " 5", "\t7", "+5",
-           "5 ", "0x10", "1e3", "5abc", "1,000")
-    for bad_value in bad:
-        # Substituted for the sequence argument; any uint32 field would do.
-        result = run_linkframe_tool(
-            linkframe_tool_path, "encode", "1", "0", "0",
-            str(SAMPLE["destination_id"]), str(SAMPLE["source_id"]),
-            str(SAMPLE["session_id"]), bad_value, "", str(out_path),
-        )
-        assert result.returncode == 2, (
-            f"sequence={bad_value!r} should be a parse error, got rc={result.returncode}"
-        )
+    result = run_linkframe_tool(
+        linkframe_tool_path, "encode", *encode_args_with(position, bad_value),
+        "", str(out_path),
+    )
+    assert result.returncode == 2, (
+        f"{name}={bad_value!r} should be a parse error, got rc={result.returncode}"
+    )
+
+
+@pytest.mark.parametrize("position,name", [(0, "frame_type"), (1, "flags"),
+                                           (2, "fragment_index")])
+@pytest.mark.parametrize("over_u8", ["256", "300", "65536", "4294967296"])
+def test_encode_rejects_uint8_arguments_out_of_range(tmp_path, linkframe_tool_path,
+                                                      position, name, over_u8):
+    """The three byte-wide arguments must reject anything above 255 outright.
+    Silently masking instead is not harmless: `frame_type 300` would become
+    300 & 0x0F = 12, i.e. a valid-looking frame of an unknown type, and a test
+    expecting a rejection would pass for entirely the wrong reason."""
+    out_path = tmp_path / "out.bin"
+    result = run_linkframe_tool(
+        linkframe_tool_path, "encode", *encode_args_with(position, over_u8),
+        "", str(out_path),
+    )
+    assert result.returncode == 2, (
+        f"{name}={over_u8} exceeds a uint8 and should be a parse error, "
+        f"got rc={result.returncode}"
+    )
+
+
+def test_parse_rejects_an_out_of_range_expected_magic(tmp_path, linkframe_tool_path):
+    """`parse`'s optional expected_magic argument is the fourth uint8 the tool
+    parses, and the only one outside `encode`."""
+    path = tmp_path / "frame.bin"
+    path.write_bytes(ref.encode(ref.LinkFrameHeader(**SAMPLE)))
+    result = run_linkframe_tool(linkframe_tool_path, "parse", str(path), "256")
+    assert result.returncode == 2, result.stdout
+
+
+def test_payload_at_the_tool_cap_round_trips(tmp_path, linkframe_tool_path,
+                                             linkframe_constants):
+    """The tightest buffer relation in the tool: `hex[2 * max_payload + 1]`
+    against a payload of exactly max_payload bytes. Exercised here rather than
+    left to reasoning, because hex_encode's abort guard exists precisely because
+    a one-byte error in this relation once turned a real overflow test green -
+    and this also gives the reported `max_payload` key a consumer."""
+    max_payload = linkframe_constants["max_payload"]
+    payload = bytes((i % 251) for i in range(max_payload))
+    frame = encode_with_tool(
+        tmp_path, linkframe_tool_path,
+        frame_type=int(ref.FrameType.DATA), flags=0, fragment_index=0,
+        payload=payload, **SAMPLE,
+    )
+    assert len(frame) == linkframe_constants["header_size"] + max_payload
+
+    fields = parse_with_tool(tmp_path, linkframe_tool_path, frame)
+    assert fields["result"] == str(int(ref.ParseResult.OK)), fields
+    assert fields["payload_len"] == str(max_payload)
+    assert fields["payload"] == payload.hex()
+
+    header, parsed_payload = ref.parse(frame)
+    assert parsed_payload == payload
+    assert header.sequence == SAMPLE["sequence"]
 
 
 def test_frame_type_over_a_nibble_is_rejected(tmp_path, linkframe_tool_path):
