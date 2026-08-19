@@ -5,7 +5,7 @@ document is intended as an engineering handoff for STM32/CubeMX setup and
 firmware bring-up, not as a replacement for the Altium project or component
 datasheets.
 
-Bring-up testy pro první osazenou revizi jsou v
+Bring-up tests for the first assembled revision live in
 [`bringup-checklist.md`](bringup-checklist.md).
 
 ## Source Status
