@@ -228,9 +228,14 @@ def _merge_tab(parquet_files):
     if st.button('Merge & Save', type='primary', key='lib_merge_btn'):
         selected_abs = [os.path.join(st.session_state.lib_root, r) for r in selected_rels]
         try:
-            merged_df, duplicates = merge_parquets(selected_abs)
+            merged_df, duplicates, event_types = merge_parquets(selected_abs)
             if duplicates:
                 st.warning(f'Duplicate UIDs ({len(duplicates)}): {", ".join(duplicates[:10])}')
+            if len(event_types) > 1:
+                st.warning(
+                    f'Merging records of different event types ({", ".join(event_types)}) — '
+                    'each record keeps its own metadata fields.'
+                )
             dest = os.path.join(output_path, output_name)
             save_parquet(merged_df, dest)
             st.success(f'Merged {len(merged_df)} records → {dest}')

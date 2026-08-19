@@ -7,7 +7,7 @@ import json
 import numpy as np
 import pandas as pd
 from scipy.io.wavfile import write as wav_write
-from typing import List, Optional
+from typing import List, Tuple
 
 from core.event_types import PRIMARY_KEY, METADATA_FIELDS
 
@@ -177,11 +177,26 @@ class _file_lock:
         return False
 
 
+def _serialize_other_params(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Store other_params as JSON. Written as dicts, pyarrow infers one struct schema for
+    the whole column and back-fills None for every key a record does not have, which
+    corrupts metadata as soon as records of different event types share a file.
+    """
+    if 'other_params' not in df.columns:
+        return df
+    df = df.copy()
+    df['other_params'] = df['other_params'].apply(
+        lambda x: x if isinstance(x, str) else json.dumps(x if isinstance(x, dict) else {}, default=str)
+    )
+    return df
+
+
 def _write_parquet_atomic(df: pd.DataFrame, path: str):
     """Write via a temp file so an interrupted write cannot truncate the library index."""
     tmp_path = f'{path}.tmp-{os.getpid()}'
     try:
-        df.to_parquet(tmp_path, index=False)
+        _serialize_other_params(df).to_parquet(tmp_path, index=False)
         os.replace(tmp_path, path)
     except Exception:
         try:
@@ -194,7 +209,7 @@ def _write_parquet_atomic(df: pd.DataFrame, path: str):
 def _append_record(parquet_path: str, record: AudioRecording):
     with _file_lock(parquet_path):
         if os.path.exists(parquet_path):
-            df = pd.read_parquet(parquet_path)
+            df = load_parquet(parquet_path)
         else:
             df = pd.DataFrame()
 
@@ -231,9 +246,18 @@ def save_parquet(df: pd.DataFrame, path: str):
         _write_parquet_atomic(df, path)
 
 
-def merge_parquets(paths: List[str]) -> pd.DataFrame:
-    """Merge multiple parquet files, warn on duplicate IDs."""
+def merge_parquets(paths: List[str]) -> Tuple[pd.DataFrame, List[str], List[str]]:
+    """
+    Merge multiple parquet files.
+    Returns (merged, duplicate_ids, event_types) — event_types lets the caller flag a
+    merge that mixes record schemas.
+    """
     frames = [load_parquet(p) for p in paths]
     merged = pd.concat(frames, ignore_index=True)
     duplicates = merged[merged.duplicated(subset=['id'], keep=False)]['id'].unique()
-    return merged, list(duplicates)
+
+    event_types = {
+        params.get('event_type') for params in merged.get('other_params', [])
+        if isinstance(params, dict) and params.get('event_type')
+    }
+    return merged, list(duplicates), sorted(event_types)
