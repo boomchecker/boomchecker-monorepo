@@ -3,22 +3,39 @@ name: Deploy Docs to GitHub Pages
 on:
   push:
     branches: [ main ]
+  # Build (but don't deploy) on PRs that touch docs, so `mkdocs build --strict`
+  # catches a broken link or a nav problem in review instead of only when it
+  # breaks the deploy on main.
+  pull_request:
+    paths:
+      - 'docs/**'
+      - 'mkdocs.yml'
+      # mkdoxy's input (see mkdocs.yml's `src-dirs`): a C comment here is part of
+      # the rendered docs, so it can break the --strict build too.
+      - 'scripts/median-filter/csrc/**'
+      - '.github/workflows/docs-pages.yaml'
   workflow_dispatch:
 
+# Least privilege at the top level; the deploy job below adds what it needs.
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
-  group: docs-pages
-  cancel-in-progress: true
+  # Per-ref, so a PR build can't cancel main's deploy (and vice versa).
+  group: docs-pages-${{ github.ref }}
+  # Superseded PR validation runs are worth cancelling, an in-flight Pages
+  # DEPLOYMENT is not - cancelling one mid-publish on two quick merges can leave
+  # the site on the older commit until something else triggers a deploy. Matches
+  # GitHub's own Pages starter workflow, which uses false for this reason.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
 
       - name: Install Doxygen + Graphviz
         run: |
@@ -33,7 +50,11 @@ jobs:
       - name: Install Python deps
         run: |
           python -m pip install --upgrade pip
-          pip install mkdocs-material mkdoxy
+          # Major-version capped rather than floating: this builds with
+          # --strict, so an upstream release that promotes any INFO-level
+          # validation (e.g. nav.omitted_files) to a warning would turn the
+          # docs deploy red with no change in this repo.
+          pip install 'mkdocs-material>=9,<10' 'mkdoxy>=1.2,<2'
 
       - name: Build documentation
         run: |
@@ -43,12 +64,18 @@ jobs:
         run: echo "docs.boomchecker.cz" > site/CNAME
 
       - uses: actions/upload-pages-artifact@v3
+        if: github.event_name != 'pull_request'
         with:
           path: site
 
   deploy:
     needs: build
+    # PRs build for validation only - never publish from one.
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deploy.outputs.page_url }}

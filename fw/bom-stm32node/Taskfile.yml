@@ -1,0 +1,43 @@
+# Building this firmware needs the host Python packages that Nanopb code
+# generation uses (protobuf, grpcio-tools) - see the PATH note on `build`
+# below. Create them once with `task setup` in ../common/boomlink.
+version: "3"
+
+tasks:
+  build:
+    desc: Build STM32 firmware (Debug)
+    aliases: [b]
+    cmds:
+      # ../common/boomlink/.venv first on PATH so CMake's find_package(Python3)
+      # picks up an interpreter that actually has protobuf/grpcio-tools
+      # installed. This build add_subdirectory()'s into fw/common/boomlink,
+      # which runs the Nanopb generator at build time to turn its proto/*.proto
+      # into the *.pb.c/.pb.h the firmware links - so those host Python
+      # packages are a hard requirement of building the FIRMWARE now, not just
+      # of the host protocol test suite. Without this, `task build` fails at
+      # configure time on any machine whose bare `python3` lacks them, even
+      # after `task setup` in fw/common/boomlink created the venv (same reason
+      # fw/common/boomlink/Taskfile.yml does this for its own build).
+      - PATH=$PWD/../common/boomlink/.venv/bin:$PATH cmake --preset Debug
+      - PATH=$PWD/../common/boomlink/.venv/bin:$PATH cmake --build --preset Debug
+
+  flash:
+    desc: Flash STM32 board over ST-Link via OpenOCD (openocd-stm32)
+    aliases: [f]
+    deps:
+      - build
+    cmds:
+      - openocd-stm32 -f interface/stlink-dap.cfg -c "transport select dapdirect_swd" -f target/stm32h5x.cfg -c "program build/Debug/bom-stm32node.elf verify reset exit"
+
+  clean:
+    desc: Remove the build directory
+    aliases: [c]
+    cmds:
+      - rm -rf build
+
+  monitor:
+    desc: Open the stm32node-cli TUI against the board (interactive terminal - test/record commands, port picker)
+    aliases: [m]
+    dir: ../apps/stm32node-cli
+    cmds:
+      - .venv/bin/python -m stm32node_cli tui {{.CLI_ARGS}}

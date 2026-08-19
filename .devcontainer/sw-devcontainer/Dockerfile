@@ -51,15 +51,18 @@ RUN curl --location https://taskfile.dev/install.sh | sh -s -- -b /usr/local/bin
 # Install Changesets CLI
 RUN npm install -g @changesets/cli
 
+# AI tools: Codex CLI + Claude Code CLI
+RUN npm install -g @openai/codex @anthropic-ai/claude-code
+
 # Create dev user (minimal change, avoids root shell issues)
 RUN useradd -ms /bin/zsh dev
 # Allow dev user to sudo without password for package installs
 RUN usermod -aG sudo dev && echo "dev ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/dev
 
-# Prepare Codex config dir so a mounted volume keeps history with correct ownership
-RUN mkdir -p /home/dev/.codex && \
-    chown dev:dev /home/dev/.codex && \
-    chmod 755 /home/dev/.codex
+# Prepare Codex/Claude config dirs so the mounted volumes keep correct ownership
+RUN mkdir -p /home/dev/.codex /home/dev/.claude && \
+    chown -R dev:dev /home/dev/.codex /home/dev/.claude && \
+    chmod 755 /home/dev/.codex /home/dev/.claude
 
 USER dev
 

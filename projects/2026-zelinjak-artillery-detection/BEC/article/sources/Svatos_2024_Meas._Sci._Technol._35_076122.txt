@@ -1,0 +1,716 @@
+Measurement Science
+and Technology
+
+
+
+PAPER • OPEN ACCESS                                                                              You may also like
+                                                                                                     - Asynchronous data-driven classification of
+Cepstral coefficients effectiveness for gunshot                                                        weapon systems
+                                                                                                       Xin Jin, Kushal Mukherjee, Shalabh Gupta
+classifying                                                                                            et al.
+
+                                                                                                     - Hybrid feature extraction method of
+                                                                                                       MFCC+GFCC helicopter noise based on
+To cite this article: Jakub Svatos and Jan Holub 2024 Meas. Sci. Technol. 35 076122                    wavelet decomposition
+                                                                                                       Wen-long Hu, Shun-shan Feng, Bo Zhang
+                                                                                                       et al.
+
+                                                                                                     - Sound Event Detection Based on
+                                                                                                       Convolutional Neural Networks with
+View the article online for updates and enhancements.                                                  Overlapping Pooling Structure
+                                                                                                       Hang Zhu and Hongjie Wan
+
+
+
+
+                             This content was downloaded from IP address 86.49.226.158 on 16/05/2026 at 14:04
+                                                                                                                           Measurement Science and Technology
+
+Meas. Sci. Technol. 35 (2024) 076122 (11pp)                                                                              https://doi.org/10.1088/1361-6501/ad3c5d
+
+
+
+
+Cepstral coefficients effectiveness for
+gunshot classifying
+Jakub Svatos∗ and Jan Holub
+Department of Measurement, Faculty of Electrical Engineering, Czech Technical University in Prague,
+Prague, Czech Republic
+
+E-mail: svatoja1@fel.cvut.cz
+
+Received 1 February 2024, revised 26 March 2024
+Accepted for publication 9 April 2024
+Published 18 April 2024
+
+
+Abstract
+This paper analyses the efficiency of various frequency cepstral coefficients (FCC) in a
+non-speech application, specifically in classifying acoustic impulse events-gunshots. There are
+various methods for such event identification available. The majority of these methods are based
+on time or frequency domain algorithms. However, both of these domains have their limitations
+and disadvantages. In this article, an FCC, combining the advantages of both frequency and time
+domains, is presented and analyzed. These originally speech features showed potential not only
+in speech-related applications but also in other acoustic applications. The comparison of the
+classification efficiency based on features obtained using four different FCC, namely mel-FCC
+(MFCC), inverse mel-frequency cepstral coefficients (IMFCC), linear-frequency cepstral
+coefficients (LFCC), and gammatone-frequency cepstral coefficients (GTCC) is presented. An
+optimal frame length for an FCC calculation is also explored. Various gunshots from short guns
+and rifle guns of different calibers and multiple acoustic impulse events, similar to the gunshots,
+to represent false alarms are used. More than 600 acoustic events records have been acquired and
+used for training and validation of two designed classifiers, support vector machine, and neural
+network. Accuracy, recall and Matthew’s correlation coefficient measure the classification
+success rate. The results reveal the superiority of GFCC to other analyzed methods.
+Keywords: acoustic measurements, gunshot detection, cepstral coefficients,
+multiple signal classification, neural network
+
+
+1. Introduction                                                                         technologies, like cameras or drones, in combination with
+                                                                                        physical security measures, such as guards or patrol officers,
+With the growing prevalence of shootings in public areas and                            offer limited protection and may prove inadequate in cer-
+the rise in gun ownership among citizens over all around                                tain situations. In such scenarios, an automatic acoustic-based
+the world, the demand for autonomous systems capable of                                 detection system holds an advantage over the described meth-
+detecting and identifying dangerous events like a gunshot                               ods. The advantage of such an automatic acoustic system lies
+is growing not only in public spaces, e.g. hospitals, cam-                              in the ability to detect, localize and effectively classify the type
+puses, hospitals, parks, or government buildings not men-                               of acoustic event and, in a case of a gunshot, even estimate the
+tioning traditional military applications. Existing surveillance                        caliber of a gun. Acoustic surveillance systems have the poten-
+                                                                                        tial to identify dangerous events in various environments and,
+∗
+                                                                                        when strategically placed, to track the source of continuous
+    Author to whom any correspondence should be addressed.
+                                                                                        threats. Such a system has been introduced and described by
+                                                                                        the authors in [1]. The crucial parameters for the autonomous
+                   Original content from this work may be used under the terms
+                                                                                        acoustic surveillance system to correctly identify the acoustic
+                   of the Creative Commons Attribution 4.0 licence. Any fur-
+ther distribution of this work must maintain attribution to the author(s) and the       event, such as a gunshot, are features extracted from the recor-
+title of the work, journal citation and DOI.                                            ded acoustic impulse signal used for classification.
+
+
+                                                                                    1                       © 2024 The Author(s). Published by IOP Publishing Ltd
+Meas. Sci. Technol. 35 (2024) 076122                                                                                      J Svatos and J Holub
+
+
+
+                                                                         examining the power spectra of gunshots of different calibers
+                                                                         recorded at the same distance precludes the use of a simple
+                                                                         filtering method [10].
+                                                                             This article directly follows on from the authors work
+                                                                         presented in [1], where authors introduced the complete sys-
+                                                                         tem for the detection, localization and classification of impulse
+                                                                         acoustic events. It has been revealed the gunshot pattern due
+                                                                         to its complexity cannot be reliably detected using common
+                                                                         time or frequency domain methods. Therefore, the authors
+                                                                         introduced novel two stage detection algorithm. Firstly, the
+                                                                         recorded audio signal is pre-processed in the time domain
+                                                                         with the algorithm based on a median filter, which is able to
+                                                                         detect the impulse in the signal to the signal-to-noise ratio up
+             Figure 1. (a) Muzzle blast (b) Shock wave.                  to 5 dB. The second stage perform calculation of the mel-
+                                                                         frequency cepstral coefficients (MFCC) which are used as a
+                                                                         features for the classification of the impulse event, a gun-
+    The acoustic pattern of a gunshot can be characterized by            shot more specifically, into individual calibers. The presen-
+two phenomena, muzzle blast, caused by an explosive charge               ted system is fully automated, is capable to localize and
+creating hot, high-pressure gases to expand as acoustic energy           identify the source of the event and it does not require a
+from the gun barrel, which has a pattern similar to the N letter,        human operator, therefore its operational costs are incom-
+and, in case of a supersonic projectile, shock wave, caused by           parably lower in comparison with commercially available
+combinations of compression and expansion shock. The shock               systems [11–14].
+wave, also called N-wave, for its specific look, propagates in a             In the article [1], it has been also shown the signal pro-
+conic shape in a perpendicular trajectory, away from the bullet          cessing method based on MFCC originally used in other
+trajectory. An example of a muzzle blast and a shock wave is             acoustic applications can be reliably used for a gunshot recog-
+in figure 1.                                                             nition. The method was tested on a various gunshots taken
+    In figure 1(a), there is an ‘N-pattern’ characterized for            in the same military area shooting range with the promising
+muzzle blast that lasts about 5 ms. The gunshot was taken                results.
+from a CZ BREN2 rifle gun of caliber 5.56 NATO with an SD                    In this article authors comparing the effectivity of the vari-
+ammunition of a velocity of approx. 320 m s−1 . Figure 1(b)              ous frequency cepstral coefficients (FCC) in a gunshot detec-
+shows an ‘N-wave’ corresponding to a shock wave that lasts               tion and recognition applications and testing the optimal frame
+<3 ms. The gunshot was fired from CZ 75 SP-01 Phantom                    length with an acoustic signal going to be processed with
+(9 mm Luger) with a shell velocity of approx. 380 m s−1 . A              the FCC. The emphasis has been put not only on a vari-
+more detailed explanation of the gunshot theory can be found             ety of and impulse acoustic event but also on a diversity
+in [2–5]. The acoustic response of a gunshot depends on many             of an environment where the events has been recorded. The
+factors: the barrel caliber, barrel length, type of bullet and its       introduced methods are MFCC, Inverse MFCC (IMFCC),
+velocity, the chemical properties of the propellant, or environ-         Linear-FCC (LFCC), and Gammatone-frequency Cepstral
+mental conditions such as air temperature, air humidity, wind            Coefficients (GTCC). These FCC showed very good perform-
+speed, and direction. All these factors affect the resulting pat-        ance in speech recognition tasks, but recently it has also been
+tern. In addition, the environment where the shot was fired may          used in various acoustic applications such as music genre
+also affect the shape of the recorded pattern. In dense areas,           classification, animal sounds classification, or environmental
+reflections and diffractions caused by objects or the ground             sound recognition.
+itself can significantly alter the pattern [6]. Since gunshot                Since the recorded audio signal is not a stationary wave-
+characteristics are a complex problem and are determined by              form, framing the signal must be performed as a first step of
+many factors, commonly used methods for feature extraction               every feature extraction method. This enables the represent-
+from acoustic impulse signals based on the time or frequency             ation of non-stationary audio waveforms, by their nature, as
+domain cannot be reliably applied. Considering the gunshot               stationary frames of the signal. In commonly used methods for
+as an impulse signal, traditional frequency domain signal pro-           audio signal processing such as speech, music genre, animal,
+cessing methods such as spectral analysis rather provide the             or ambient sound recognition, the typical frame length is from
+acoustic characteristic of the surrounding environment than              10 ms to 40 ms [15–19].
+the pattern of a gunshot [7]. The characteristic N-pattern of                Therefore, the optimal length of the frame for feature
+a gunshot is also affected by many phenomena that cause it               extraction using cepstral analysis is also part of the experi-
+to change due to, for example, nonlinear dispersion effects.             ment. Taking into account the time duration of all gunshot phe-
+In case of a supersonic projectile, the shock wave completely            nomena, including reflections and time delays between muzzle
+dissipates once the projectile velocity drops below the super-           blast and shockwave for measured bullet speeds and distances
+sonic velocity or hits an obstacle. In dense areas where mul-            and with regard to a variety of false alarms, three different sizes
+tiple acoustic reflections may occur, this can further prevent           of the frames with the acoustic signal have been tested, 15 ms,
+reliable application of wavelet methods [8, 9]. Furthermore,             30 ms and 50 ms.
+
+                                                                     2
+Meas. Sci. Technol. 35 (2024) 076122                                                                                     J Svatos and J Holub
+
+
+
+   Presented experiments use the extracted features by the four
+different FCC to identify and classify various acoustic impulse
+signals into false alarms and gunshots, and in the case of a
+gunshot, into the individual calibers. As a classifier, a support
+vector machine (SVM) classifier and a neural network (NN)
+are used, and a metric for their success evaluation includes
+Accuracy, Recall and Matthew’s Correlation Coefficient.
+   The paper is organized as follows. Section 2 introducing the
+selected methods for the feature extraction. Section 3 explain-
+ing data acquisition and their processing, the examples of the
+impulse events are shown and detailed description of the meth-
+ods is presented and discussed. Section 4 contains the results
+of the experiment followed by Section 5, where the results are
+discussed. The conclusion and future work directions are out-
+lined in the section 6.
+
+
+2. Feature extraction method                                             Figure 2. The block diagram of the feature extraction algorithms.
+
+The analysis of the gunshot pattern described in the
+Introduction section revealed its complexity. It has been shown         [20], and GTCC are considered the most noise-robust features
+that conventional methods for feature extraction may not work           in audio recognition applications. The extraction of GTCC is
+reliably. Therefore, more complex processing offering the               similar to MFCC but is based on the gammatone filter bank,
+advantages of both time and frequency domains shows the                 which output is the frequency-time domain representation of
+direction of reliable identification of a gunshot and its clas-         an acoustic signal. Unlike MFCC, the GTCC are more robust
+sification into individual calibers. This can be done using             against noise. The main applications of GTCC are environ-
+methods based on a cepstral analysis. Cepstral analysis com-            mental sound identification and speech recognition [35].
+bines both time and frequency domains, and cepstral features                To summarize the above, the most efficient cepstral coeffi-
+possess several advantages, including source-filter separa-             cients in environmental and general ambient sound recognition
+tion, conciseness, and orthogonality, making them convenient            and classification are MFCC and its modifications and GTCC.
+for training machine learning algorithms [20–22]. It already            In these applications, some studies favor GTCC, some studies
+proved its effectiveness in feature extraction in another acous-        favor MFCC over GTCC [34, 36], or [37].
+tic field, speech-oriented applications.                                    This study focuses on an efficiency comparison of these
+    The best-known and commonly used method for fea-                    methods and their modifications in gunshot identification and
+ture extraction based on cepstral coefficients which apply              classification. It also exploring a different sizes of frame which
+fast Fourier transform (FFT), filters, and power spectra, is            is used for features calculation. All the cepstral coefficients
+MFCC. MFCC has a wide range of uses in audio spectral                   feature extraction methods used the same approach as shown
+characteristics applications focusing on the identification of          in figure 2.
+speech and speaker, music-genre classification, or classific-               The input audio signal is firstly split into short time frames.
+ation of sounds in general [23–28]. These cepstral coeffi-              The frames are usually set to be from 10 ms up to 50 ms
+cients are based on a mel-frequency spacing of the filters              long, and it can have an effect on the resulting effectivity of
+bank and its energies. It mimics the audio perception of a              the extracted features for classification [38–44]. Subsequently,
+human ear. The filter bank applied for feature extraction can           FFT is calculated. To minimize the discontinuity of the framed
+use the base mel-frequency filter bank or its modifications,            signal, each frame is windowed by multiplying each frame
+LFCC or inverse mel-frequency (IMFCC) filter banks [29].                by a hamming window. The spectra are then filtered by a fil-
+Another two cepstral coefficients, derived from Linear pre-             ter bank, calculating a nonlinear rectification function to the
+diction coefficients, are linear prediction cepstral coefficients       filtered signal (log or power function), and, finally, the dis-
+(LPCC) and perceptual linear prediction coefficients (PLPC).            crete cosine transform is performed. As a result, cepstral coef-
+LPCC is mainly used in noise elimination [30] or music genre            ficients, which will be served as features extracted from audio
+classification [31], or speech recognition [32]. PLPC involves          signals for later classification, are calculated.
+critical band spectral resolution, equal-loudness curve, and
+intensity loudness power law [20]. These cepstral coefficients
+are mainly used for animal sound classification [29], emotion           3. Data acquisition and processing
+identification [30], and speech recognition systems [33]. The
+last two cepstral coefficients are both derived from the human          To assess the effectiveness of the proposed feature extraction
+auditory response and the analysis performed in the cochlea             methods, multiple acoustic impulse events, including gunshots
+[34]. Greenwood function cepstral coefficients are primarily            and false alarms, which pattern is similar to gunshots, have
+used for animal and bird sound identification and classification        been recorded and processed.
+
+                                                                    3
+Meas. Sci. Technol. 35 (2024) 076122                                                                                  J Svatos and J Holub
+
+
+
+                                                                                      Table 1. An overview of samples.
+
+                                                                            Class                              Number of samples
+
+                                                                            9 mm (v ≈ 380 m s−1 )                     101
+                                                                            5.56 NATO SD (v ≈ 320 m s−1 )             131
+                                                                            7.62 mm Tokarev (v ≈ 280 m s−1 )           72
+                                                                            .22 (v ≈ 300 m s−1 )                       78
+                                                                            False alarms                              107
+
+
+
+
+Figure 3. The scheme of the shooting range where the experiments
+were taken.
+
+
+    For a gunshot recordings, experiment on a military shooting
+range in Czechia were conducted. The experiment involved
+recordings of four different types of firearms gunshots from
+various distances from the sensor. The military shooting range
+where all gunshots experiments was taken is in figure 3. It
+worth nothing to mention the clear visibility of the sensor to
+all of shooters positions.
+    9 mm short gun, 5.56 NATO rifle gun, .22 short gun, and
+7.62 mm Tokarev short gun were recorded as a representation
+of gunshot patterns. During the experiment, each weapon was
+used with the same ammunition type (i.e. speed of the bullet).
+The ammunition type used covered both subsonic and super-
+sonic speeds close to the speed of the sound, ranging from
+vmin ≈ 280 m s−1 to vmax ≈ 380 m s−1 .
+    For the purpose of verifying the correct recognition of
+gunshots from other impulse environmental sounds, a diverse
+impulse acoustic event having a similar pattern to a gunshot
+                                                                           Figure 4. An example of measured patterns of a gunshots.
+has been selected to provide the basis for false alarms. The
+emphasis has been placed on selecting events that can be mis-
+taken for a gunshot.
+    All recorded events has been captured by PreSonus PRM1             More details about the algorithm implementation can be found
+electret microphone and digitized by Rubix 44 USB audio                in [1].
+Interface with 24-bit analogue-to-digital converter and with               Measured acoustic patterns example for all four tested gun-
+the sampling frequency of f s = 48 kHz. The distance between           shots are presented in figure 4. The figure shows the detail of
+the acoustic event and the microphone was approx. from 20 m            a filtered acoustic signal where the peak was detected and its
+to 60 m in the case of gunshots and an in much closer dis-             near vicinity with no reflections.
+tance of approx. units of meters in a case of false alarms to              The selected false alarms are represented by hand claps,
+achieve similar amplitude intensity as for gunshots. About 500         bubble wraps popping, hand slams, door slams and other kind
+impulse acoustic events have been recorded and processed to            of slams. In general, the events which have the similar acous-
+test the individual feature extraction methods based on cepstral       tic response as a gunshot. All of the other sounds have been
+coefficients. The overview of all events and their amounts is in       recorded by the authors using the same way as in the case of
+table 1. In the case of gunshots, there is also a bullet muzzle        gunshots.
+velocity v presented.                                                      An example of the gunshot pattern and selected false alarm
+    A simple impulse-type pre-detection algorithm based on             similarity is presented in figures 5 and 6. Figure 5 shows
+a modified median filter preprocess recorded and digitized             a recorded acoustic pattern corresponding to subsonic shots
+acoustic signal and splits it into the adjustable frame length.        (5.56 NATO SD ammunition) and its details—muzzle blast at
+
+
+
+
+                                                                   4
+Meas. Sci. Technol. 35 (2024) 076122                                                                                     J Svatos and J Holub
+
+
+
+
+Figure 5. Acoustic pattern corresponding to a 5.56 NATO SD
+                                                                        Figure 7. Signal corresponding to a gunshot taken by a .22 caliber
+ammunition.
+                                                                        in a noisy environment.
+
+
+
+                                                                        bullets (from speed of the sound for temperature of 30 ◦ C
+                                                                        v30◦ C ≈ 350 m s−1 to a maximum supersonic speed of bullet
+                                                                        speed of vbullet ≈ 380 m s−1 ) used in the experiment and the
+                                                                        distances between the shooter and the recording device (up to
+                                                                        60 m), the shortest frame size has been set to 15 ms. Taking
+                                                                        into account the reflections and the acoustic pattern length of
+                                                                        false alarms, additional two frame sizes of 30 ms, and 50 ms,
+                                                                        have been tested to compare the effectivity of the presented
+                                                                        feature extraction methods.
+                                                                            After framing the signal, the frames are multiplied by a
+                                                                        hamming window, and FFT is performed. Using the FFT and
+                                                                        by applying a filter bank, individual FCCs are calculated as
+                                                                        shown in figure 2. The previous experiments with acoustic
+                                                                        signals [1, 38, 42, 45, 46] showed the optimal numbers of fil-
+                                                                        ters are about 20–30 filters. Therefore, the filter bank with 26
+                                                                        filters was designed and applied. The number of filters was
+     Figure 6. Acoustic pattern corresponding to a door slam.           chosen as a trade-off between classification accuracy and filter
+                                                                        bank calculation complexity. The bandwidth of the filter bank
+                                                                        starts at f min = 1 Hz and ends at f max = 24 kHz for all four
+times approx. 0.05 s (taken at a distance of 50 m) and 0.4 s            methods, MFCC, IMFCC, LFCC, and GTCC. The implemen-
+(taken at a distance of 30 m).                                          ted filter banks based on mel-frequency are shown in figure 8.
+    While figure 6 depicts the acoustic pattern of a door slam          The frequency characteristic of the Gammatone filter bank is
+recorded from a much closer distance of approx. 4 m. An N-              in figure 9.
+shaped pattern typical for a gunshot is clearly visible in a time           The implementation of all functions and algorithms
+of approx. 0.2 s.                                                       described above has been done by authors in the MATLAB
+    Upon comparing both Figures, it becomes evident that the            software. More details about the implementation can be found
+acoustic pattern produced by gunshots and that of a door slam           in [47, 48].
+could be mistaken for each other if we solely rely on detect-               The calculated 26 cepstral coefficients are then used as fea-
+ing the N-shaped pattern. Last but not least, figure 7 shows an         tures for a SVM classifier with a polynomial kernel of second
+example of recorded gunshot taken in a noisy environment.               order and a NN with 20 layers (an input layer, 18 hidden
+    Again, it can be seen, without a particular signal processing       layers, and an output layer). The layers were trained using
+it cannot be possible to detect correctly a gunshot.                    the Levenberg-Marquardt training method and MATLAB NN
+    As a part of the experiment, different lengths of the               training tool [49]. Both designed classifiers were tested for an
+frames containing the detected acoustic peak are con-                   effectivity comparison of the four different FCC in acoustic
+sidered. From the complexity of a gunshot, the speed of                 impulse events detection.
+
+                                                                    5
+Meas. Sci. Technol. 35 (2024) 076122                                                                                      J Svatos and J Holub
+
+
+
+                                                                                         Table 2. An overview of samples.
+
+                                                                                                                Number of         Number
+                                                                                                                  samples        of samples
+                                                                         Class number      Class                for training     for testing
+
+                                                                         0                 False alarms              86               21
+                                                                         1                 9 mm                      70               31
+                                                                         2                 5.56 NATO SD             100               31
+                                                                         3                 7.62 mm Tokarev           55               17
+                                                                         4                 .22                       60               18
+
+
+
+
+                 Figure 8. mel-frequency filter bank.
+
+
+
+
+   Figure 9. Frequency characteristic of Gammatone filter bank.
+
+
+4. Results
+
+As shown in table 1, four types of gunshots and various types
+of false alarms with similar pattern to a gunshot have been
+recorded, processed and classified to test the efficiency of the
+individual cepstral coefficients and the optimal frame length
+of the input data. In this way, five classes for the multi-label
+classification task are set: 0 (false alarms), 1 (9 mm), 2 (5.56
+NATO SD), 3 (7.62 mm Tokarev), and 4 (.22). The 26 extrac-
+ted features for four FCC methods for each sample has been
+                                                                         Figure 10. Confusion matrixes for SVM classifier and all three
+divided into training and testing data sets.                             frame sizes.
+    Approx. 75% of samples from each class (four gunshots
+classes and false alarms class) were used for training and val-
+idation, and the rest (≈25%) were used for testing. The train-              The experiment results for all the feature extraction meth-
+ing process was performed using the MATLAB Neural Fitting                ods, and both classifiers (SVM and NN) are presented in the
+tool, where the data division to training, validation, and testing       following figures and tables.
+groups was random. The Levenberg–Marquardt optimization                     Figure 10 depicts confusion matrices of all four FCC fea-
+algorithm for training was selected because of a relatively lim-         ture extraction methods for the SVM classifier and for all three
+ited number of data. mean squared error was has been used as             frame lengths of 15 ms, 30 ms and 50 ms.
+a performance measure, and MEX function for calculations                    Based on the confusion matrices calculated above, some
+[50]. The resulting NN was trained after 370 iterations. The             patterns of the methods are clearly visible. The mel-frequency-
+overview of all sample numbers used for testing and training             based cepstral coefficients have similar results. On the other
+is in table 2.                                                           hand, Gammatone-FCC show a much more promising score.
+
+                                                                     6
+Meas. Sci. Technol. 35 (2024) 076122                                                                                       J Svatos and J Holub
+
+
+
+
+                                                                                                            TP
+                                                                                                  RLC =                                    (2)
+                                                                                                          TP + FN
+
+                                                                                                    TP · TN − FP · FN
+                                                                           MCC = √                                                         (3)
+                                                                                       (TP + FP) (TP + FN) (TN + FP) (TN + FN)
+
+                                                                          where T stands for true, F stands for false, P stands for posit-
+                                                                          ive, and N stands for negative.
+                                                                              Tables 3 and 4 present results for the first two classes, 9 mm,
+                                                                          and 5.56 NATO SD ammunition, with a velocity close to the
+                                                                          speed of the sound and with a similar pattern to each other (see
+                                                                          figure 4).
+                                                                              It is evident that all three mel-frequency type cepstral
+                                                                          coefficients have very similar results. In comparison, GTCC
+                                                                          achieved a much better score in almost all cases. Also, it is vis-
+                                                                          ible that with the increasing frame length, classification suc-
+                                                                          cess is getting more accurate. On the other hand, a longer
+                                                                          frame could contain more reflections typical for the place
+                                                                          where the sensor is located, and, therefore, it will include an
+                                                                          acoustic impulse response of the local reverberant environ-
+                                                                          ment. This will cause the frame to more likely contain more
+                                                                          information about the acoustical surroundings than the gun-
+                                                                          shot itself. The achieved results also favor NN over the SVM
+                                                                          classifier in most cases.
+                                                                              Tables 5 and 6 show results of another two resembling gun-
+                                                                          shot patterns—7.62 Tokarev and .22 ammunitions. The results
+                                                                          are presented in Tables 5 and 6 confirm the superiority of the
+                                                                          GTCC over the other FCC and the slightly better classification
+                                                                          success of the NN and for a longer frame length.
+                                                                              It can also be seen if there is no variability in an environ-
+                                                                          ment and the same gun is used, the results are significantly
+                                                                          better than in cases of 9 mm and 5.56 NATO SD classes taken
+                                                                          by multiple firearms.
+Figure 11. Confusion matrixes for NN classifier and all three frame
+sizes.                                                                        The overall worst results from all five classes are shown
+                                                                          in table 7. It is caused by the significant variability of recor-
+                                                                          ded false alarms and its intended similarity to gunshot patterns
+Also, it is visible that with the increasing frame length,                of all types. Nevertheless, the same scenario as in gunshot-
+the classification is more successful. The resulting confusion            type classes is apparent. The GTCC gives the best results from
+matrices for the NN classifier are in figure 11.                          all four feature extraction methods, confirming the superiority
+   These confusion matrices confirm the results obtained with             over the Gammatone-based methods. Again, longer frames are
+the SVM classifier. It shows the dominance of GTCC over                   more successful in the classification. Since most of the false
+the mel-frequency type cepstral coefficients. Also, it reveals            alarms have been recorded in closed spaces, thus its recordings
+that the NN tends to classify better than SVM for some of the             contain many reflections. Therefore, longer frames include
+classes in the performed tests.                                           more extracted patterns for a classifier.
+   Using the proper metrics calculated from confusion mat-                    In case of need for individual false alarms classification,
+rixes, it is possible to closely examine the results and under-           like glass breaking or a human scream from another impulse
+stand the presented feature extraction methods and the differ-            event like hand claps or various slams, a significantly larger
+ent frame lengths’ overall effectiveness. This allows to reveal           dataset containing a sufficient amount from each of these indi-
+which methods and its parameters are more efficient in our                vidual events has to be recorded and used for a proper training
+case of usage.                                                            of a classifier. However, results similar to those achieved for a
+   The metrics used for an evaluation were Accuracy (ACC)                 gunshot classification can be expected for individual cepstral
+(1), Recall (RLC), also known as sensitivity (2), and                     coefficients. On the other hand, the optimal frame length can
+Matthews’ correlation coefficient (MCC) (3) [51].                         vary since some of these events can last for a longer period of
+                                                                          time. From this, it can be said that the longer frames should
+                                                                          offer better results.
+                                  TP + TN                                     However, in this article, the focus is on identification and
+                   ACC =                                        (1)
+                             TP + FP + TN + FN                            classification effectiveness using various cepstral coefficients
+
+                                                                      7
+Meas. Sci. Technol. 35 (2024) 076122                                                                                            J Svatos and J Holub
+
+
+
+                                                  Table 3. Classification results for a 9 mm class.
+
+                    Frame        Feature           SVM            NN            SVM          NN              SVM       NN
+                    length       extractor        ACC (%)       ACC (%)        RLC (%)     RLC (%)          MCC (-)   MCC (-)
+
+                    15 ms        MFCC               83,90         85,59          80,65       67,74           0,62      0,62
+                                 LFCC               83,90         83,90          80,65       64,52           0,62      0,57
+                                 IMFCC              85,59         90,68          83,87       87,10           0,66      0,77
+                                 GTCC               93,22         97,46          87,10       93,55           0,82      0,93
+                    30 ms        MFCC               84,75         87,29          67,74       87,10           0,60      0,70
+                                 LFCC               87,29         83,90          70,97       70,97           0,66      0,59
+                                 IMFCC              85,59         92,37          67,74       80,65           0,62      0,80
+                                 GTCC               97,46         98,31          90,32       93,55           0,93      0,96
+                    50 ms        MFCC               84,75         93,22          74,19       90,32           0,61      0,83
+                                 LFCC               88,98         86,44          77,42       77,42           0,71      0,66
+                                 IMFCC              89,83         90,68          74,19       80,65           0,73      0,76
+                                 GTCC               97,46         99,15          90,32       96,77           0,93      0,98
+
+
+                                              Table 4. Classification results for a 5.56 NATO SD class.
+
+                    Frame        Feature           SVM            NN          SVM         NN                 SVM       NN
+                    length       extractor        ACC (%)       ACC (%)       RLC (%)     RLC (%)           MCC (-)   MCC (-)
+
+                    15 ms        MFCC               87,29         88,98       61,29       61,29              0,65      0,71
+                                 LFCC               87,29         90,68       61,29       74,19              0,65      0,75
+                                 IMFCC              87,29         89,83       61,29       67,74              0,65      0,73
+                                 GTCC               93,22         98,31       83,87       96,77              0,82      0,96
+                    30 ms        MFCC               86,44         92,37       74,19       80,65              0,65      0,80
+                                 LFCC               87,29         89,83       74,19       80,65              0,67      0,74
+                                 IMFCC              87,29         92,37       74,19       90,32              0,67      0,81
+                                 GTCC               98,31         99,15       100         100                0,96      0,98
+                    50 ms        MFCC               88,98         94,92       80,65       83,87              0,72      0,87
+                                 LFCC               91,53         89,83       83,87       80,65              0,78      0,74
+                                 IMFCC              94,92         94,07       90,32       83,87              0,87      0,84
+                                 GTCC               98,31         99,15       100         100                0,96      0,98
+
+
+                                             Table 5. Classification results for a 7.62 mm Tokarev class.
+
+                    Frame        Feature        SVM           NN              SVM         NN              SVM         NN
+                    length       extractor      ACC (%)       ACC (%)         RLC (%)     RLC (%)         MCC (-)     MCC (-)
+
+                    15 ms        MFCC           95,76         94,07           83,33       77,78           0,83        0,77
+                                 LFCC           95,76         96,61           83,33       88,89           0,83        0,87
+                                 IMFCC          94,07         95,76           77,78       83,33           0,77        0,83
+                                 GTCC           98,31         99,15           94,44       94,44           0,93        0,97
+                    30 ms        MFCC           97,46         98,31           88,89       94,44           0,90        0,93
+                                 LFCC           96,61         95,76           83,33       83,33           0,86        0,83
+                                 IMFCC          96,61         97,46           88,89       88,89           0,87        0,90
+                                 GTCC           99,15         100             94,44       100             0,97        1
+                    50 ms        MFCC           94,92         98,31           83,33       94,44           0,80        0,93
+                                 LFCC           97,46         94,92           88,89       83,33           0,90        0,80
+                                 IMFCC          97,46         97,46           88,89       88,89           0,90        0,90
+                                 GTCC           100           100             100         100             1           1
+
+
+of gunshots only, and thus, the classification success into indi-             feature extraction methods. The mel-frequency type triangu-
+vidual false alarm classes is not subject to this study.                      lar magnitude response filter cuts the frequencies outside the
+                                                                              filter in contrast with the smooth shape of the Gammatone
+                                                                              magnitude filter, which has an increased overlap of the fil-
+5. Discussion                                                                 ters and includes more spectral information about the acous-
+                                                                              tic signal. The Matthews’ correlation coefficient is well over
+All five tested classes indicate the superiority of the GTCC                  0.90 for GTCC in almost all cases for both classifiers. This
+feature extraction method over the mel-frequency type                         is confirmed by very high Recall values, which indicate the
+
+                                                                          8
+Meas. Sci. Technol. 35 (2024) 076122                                                                                        J Svatos and J Holub
+
+
+
+                                                 Table 6. Classification results for a .22 class.
+
+                    Frame        Feature        SVM            NN             SVM           NN           SVM       NN
+                    length       extractor     ACC (%)       ACC (%)         RLC (%)      RLC (%)       MCC (-)   MCC (-)
+
+                    15 ms        MFCC            94,07         94,07           70,59        70,59        0,75       0,75
+                                 LFCC            94,07         95,76           70,59        76,47        0,75       0,82
+                                 IMFCC           93,22         95,76           64,71        76,47        0,70       0,82
+                                 GTCC            97,46         98,31           88,24        94,12        0,89       0,93
+                    30 ms        MFCC            96,61         98,31           82,35        88,24        0,86       0,93
+                                 LFCC            96,61         95,76           82,35        76,47        0,86       0,82
+                                 IMFCC           96,61         97,46           82,35        88,24        0,86       0,89
+                                 GTCC            98,31         99,15           94,12        94,12        0,93       0,97
+                    50 ms        MFCC            94,07         98,31           70,59        88,24        0,75       0,93
+                                 LFCC            96,61         94,07           82,35        70,59        0,86       0,75
+                                 IMFCC           97,46         97,46           88,24        88,24        0,89       0,89
+                                 GTCC            99,15         99,15           94,12        94,12        0,97       0,97
+
+
+                                             Table 7. Classification results for a False alarm class.
+
+                    Frame        Feature        SVM            NN           SVM         NN               SVM       NN
+                    length       extractor     ACC (%)       ACC (%)        RLC (%)     RLC (%)         MCC (-)   MCC (-)
+
+                    15 ms        MFCC            83,05         76,27        66,67       76,19            0,48       0,43
+                                 LFCC            83,05         82,20        66,67       76,19            0,48       0,51
+                                 IMFCC           83,90         80,51        71,43       66,67            0,52       0,44
+                                 GTCC            97,46         98,31        100         100              0,92       0,95
+                    30 ms        MFCC            94,07         93,22        95,24       76,19            0,82       0,76
+                                 LFCC            91,53         87,29        95,24       71,43            0,76       0,59
+                                 IMFCC           93,22         93,22        95,24       85,71            0,80       0,78
+                                 GTCC            98,31         98,31        100         100              0,95       0,95
+                    50 ms        MFCC            91,53         94,92        76,19       95,24            0,71       0,84
+                                 LFCC            91,53         92,37        85,71       80,95            0,73       0,74
+                                 IMFCC           88,14         93,22        80,95       95,24            0,64       0,80
+                                 GTCC            98,31         99,15        100         100              0,95       0,97
+
+
+correct detection of true positives and show the suitability of             relationships within the data. Another possible reasons can be
+the GTCC in gunshot identification and classification.                      NN have a greater capacity to learn from noisy data and gener-
+    The classification algorithm also tested the optimal length             alize well to unseen examples. It needs to be said the classific-
+of the frame with the detected acoustic impulse event for given             ation success of the classifier depends on the size and variab-
+distances between the sensor and the event/gunshot. The res-                ility of the training set. However, under the same conditions,
+ults revealed that longer frames showed better results across               the NN will surpass the SVM classifier slightly.
+both classifiers. The optimal frame length for acoustic gun-
+shot detection depends on the distance between the sensor
+(up to ≈100 m) and the shooter; for a bullet’s speed, travel-               6. Conclusion
+ing about the speed of sound should be about 30–50 ms long.
+The longer frames can cause the extracted features to contain               The article introduced the classification of acoustic impulse
+more likely information about the acoustic surroundings than                signals-gunshots, and compared classification success across
+about the gunshot itself. On the other hand, a frame that is too            four feature extraction methods based on cepstral coefficients.
+short can lose some of the critical information about the event,            The tested methods were MFCC, IMFCC, LFCC, and GTCC,
+skipping some of the phenomena produced by a gunshot. This                  which were primarily used for speech or ambient sound recog-
+is, again, confirmed by the resulting RLC and MCC values.                   nition applications. Various frame lengths are also presented
+    Finally, the NN classifier produced better results than the             as input parameters for the feature extraction method. Three
+SVM classifier across almost all the frame lengths and all four             different frame lengths of 15 ms, 30 ms, and 50 ms were
+types of feature extraction algorithms.                                     tested to show the optimal frame length. Finally, two machine
+    In general SVM find linear or in our case a nonlinear (the              learning classification algorithms were implemented: SVMs
+second order polynomial kernel) decision boundaries that sep-               and NNs. The experiment included four different gun calibers:
+arate classes based on the support vectors, which may not                   9 mm, 5.56 NATO SD, 7.62 mm Tokarev, and .22, and a
+capture as much complexity. On the other hand, the NN can                   set of false alarms consisting of impulse events with similar
+learn complex decision boundaries that can capture intricate                acoustic patterns to gunshots. These false alarms included
+
+
+                                                                        9
+Meas. Sci. Technol. 35 (2024) 076122                                                                                          J Svatos and J Holub
+
+
+
+slams, slaps, bubble wraps popping, etc. The experiment res-                [11] Mazerolle G L 1998 Using Gunshot Detection Technology in
+ults revealed the dominance of the GTCC classification accur-                       High-Crime Areas, Research in Progress Preview (US
+acy compared to the others, mel-frequency type cepstral coef-                       Department of Justice)
+                                                                            [12] 2022 V5 systems: wireless gunshot detection and location
+ficients. Moreover, the results showed the optimal frame length                     solution (available at: https://v5systems.us/products/v5psu-
+with the detected acoustic impulse event to be 30–50 ms. Last                       ptz/) (Accessed 12 June 2022)
+but not least, the NN outperforms the SVM classifier in almost              [13] Magand F, Donzier A and Molliex F 2004 PILAR Acoustic
+all cases. In conclusion, it can be assessed that GTCC gives                        Gunshot Detection & Localization System: Principles of
+the best results in a non-speech recognition application, such                      Acoustic Localization of Small Caliber Gunshots
+                                                                                    (CFA/DAGA Strasbourg) pp 563–4
+as gunshot detection.                                                       [14] Bree H E 1997 The microflown PhD Dissertation University
+    In the future, the authors will focus on a more significant                     of Twente, Enschede, Nederland
+variability of weapon calibres and a greater variety of envir-              [15] Al-Shoshan A I 2006 Speech and music classification and
+onments where shooting will be carried out and focus on an                          separation: a review J. King Saud Univ. Eng. Sci. 19 95–132
+NN design.                                                                  [16] Eringis D and Tamulevicius G 2014 Improving speech
+                                                                                    recognition rate through analysis parameters in electrical
+                                                                                    Control Commun. Eng. 5 61–66
+Data availability statement                                                 [17] Paliwal K K, Lyons J G and Wysocki K K 2010 Preference for
+                                                                                    20-40 ms window duration in speech analysis 4th Int. Conf.
+                                                                                    on Signal Processing and Communication Systems,
+The data cannot be made publicly available upon publication                         ICSPCS’2010 (Gold Coast, Australia)
+due to legal restrictions preventing unrestricted public distri-            [18] Olvera M, Vincent E, Serizel R and Gasso G 2021
+bution. The data that support the findings of this study are                        Foreground-background ambient sound scene separation
+available upon reasonable request from the authors.                                 2020 28th European Signal Processing Conf. (EUSIPCO)
+                                                                                    (Amsterdam, Netherlands) pp 281–5
+                                                                            [19] Salomons E L, van Leeuwen H and Havinga P J M 2016
+ORCID iDs                                                                           Impact of multiple sound types on environmental sound
+                                                                                    classification 2016 IEEE SENSORS (Orlando, FL)
+                                                                                    pp 1–3
+Jakub Svatos  https://orcid.org/0000-0002-8106-6970                        [20] Kumar Singh V, Sharma K and Nath Sur S 2023 A survey on
+Jan Holub  https://orcid.org/0000-0003-3350-534X                                   preprocessing and classification techniques for acoustic
+                                                                                    scene Expert Syst. Appl. 229 1–35
+                                                                            [21] Ye J, Kobayashi T and Murakawa M 2017 Urban sound event
+References                                                                          classification based on local and global features aggregation
+                                                                                    Appl. Acoust. 117 246–56
+ [1] Svatos J and Holub J 2023 Impulse acoustic event detection,            [22] Zaheer R, Ahmad I, Habibi D, Islam K Y and Phung Q V 2023
+       classification, and localization system IEEE Trans. Instrum.                 A survey on artificial intelligence-based acoustic source
+       Meas. 72 6501515                                                             identification IEEE Access 11 60078–108
+ [2] Maher R C 2006 Modeling and signal processing of acoustic              [23] Sahidullah M and Saha G 2012 Design, analysis and
+       gunshot recordings 2006 IEEE 12th Digital Signal                             experimental evaluation of block based transformation in
+       Processing Workshop & 4th IEEE Signal Processing                             MFCC computation for speaker recognition Speech
+       Education Workshop (Teton National Park, WY) pp 257–61                       Commun. 54 543–65
+ [3] Maher R C 2007 Acoustical characterization of gunshots IEEE            [24] Wang W, Li S, Yang J, Liu Z and Zhou W 2016 Feature
+       Workshop on Signal Processing Applications for Public                        extraction of underwater target in auditory sensation area
+       Security and Forensics (Washington, DC, USA) pp 1–5                          based on MFCC Proc. IEEE/OES China Ocean Acoustic
+ [4] Akman C, Sönmez T, Özuğur Ö, Başlı A B and                                   pp 1–6
+       Leblebicioğlu M K 2018 Sensor fusion, sensitivity analysis          [25] Sousa Soares B, Sousa Luz J, Ahmadian S, Hedjam R,
+       and calibration in shooter localization systems Sens.                        Khosravi A and Nahavandi S 2022 MFCC-based descriptor
+       Actuators A 271 66–75                                                        for bee queen presence detection Expert Syst. Appl.
+ [5] Deželak F, Curović L and Čudina M 2016 Determination of                     201 116942
+       the sound energy level of a gunshot and its applications in          [26] Chen J, Huang Y, Li Q and Paliwal K K 2004 Recognition of
+       room acoustics Appl. Acoust. 105 99–109                                      noisy speech using dynamic spectral subband centroids
+ [6] Curovic L, Murovec J, Novaković T and Prezelj J 2022                          IEEE Signal Process. Lett. 11 258–61
+       Time–frequency methods for characterization of room                  [27] Zhao J 2018 J. Phys.: Conf. Ser. 1621 2020 Int. Conf. on
+       impulse responses and decay time measurement                                 Computer Science and Communication Technology
+       Measurement 196 111223                                                       (ICCSCT) (China)
+ [7] Ahmed T, Uppal M and Muhammad A 2013 Improving                         [28] Dave N 2013 Feature extraction methods lpc, plp and mfcc in
+       efficiency and reliability of gunshot detection systems Proc.                speech recognition Int. J. Adv. Res. Eng. Technol. 1 1–4
+       IEEE Int. Conf. Acoust. Speech Signal Process. pp 513–7              [29] Lei H and Gonzalo E L 2009 Mel, Linear, and Antimel
+ [8] Sadler B, Sadler L and Pham T 1997 Optimal and robust                          Frequency Cepstral Coefficients in Broad Phonetic Regions
+       shockwave detection and estimation Proc. IEEE ICASSP                         for Telephone Speaker Recognition (Interspeech)
+       vol 3 pp 1889–92                                                     [30] Maddage N C, Xu C and Wang Y 2003 A SVM-based
+ [9] Libal U and Spyra K 2014 Wavelet based shock wave and                          Classification Approach to Musical Audio, ISMIR 2003
+       muzzle blast classification for different supersonic                         (Johns Hopkins University)
+       projectiles Expert Syst. Appl. 41 5097–104                           [31] Bernard A and Alwan A 2001 Source and channel coding for
+[10] Chacon-Rodriguez A and Julian P 2008 Evaluation of gunshot                     remote speech recognition over error-prone channels 2001
+       detection algorithms Argentine School Micro-Nanoelectron.                    IEEE Int. Conf. on Acoustics, Speech, and Signal
+       Technol. Appl. 2008 49–54                                                    Processing vol 4 (IEEE) pp 2613–6
+
+
+                                                                       10
+Meas. Sci. Technol. 35 (2024) 076122                                                                                           J Svatos and J Holub
+
+
+
+[32] Clemins P J and Johnson M T 2006 Generalized perceptual                 [42] Zhan Y, Leung H, Kwak K C and Yoon H 2009 Automated
+       linear prediction features for animal vocalization analysis J.                speaker recognition for home service robots using genetic
+       Acoust. Soc. Am. 120 527–34                                                   algorithm and dempster–shafer fusion technique IEEE
+[33] Patterson R D and Holdsworth J 1996 A Functional Model of                       Trans. Instrum. Meas. 58 3058–68
+       Neural Activity Patterns and Auditory Images, in Advances             [43] Ramirez A D P, de la Rosa Vargas J I, Valdez R R and
+       in Speech, Hearing and Language Processing vol 3, ed                          Becerra A 2018 A comparative between mel frequency
+       W A Ainsworth (JAI Press) pp 554–62                                           cepstral coefficients (MFCC) and inverse mel frequency
+[34] Zhao X and Wang D 2013 Analyzing noise robustness of                            cepstral coefficients (IMFCC) features for an automatic bird
+       MFCC and GFCC features in speaker identification 2013                         species recognition system 2018 IEEE Latin American
+       IEEE Int. Conf. on Acoustics, Speech and Signal Processing                    Conf. on Computational Intelligence (LA-CCI) vol
+       pp 7204–8                                                                     7-9 (Gudalajara, Mexico) pp 1–4
+[35] Su Y, Zhang K, Wang J, Zhou D and Madani K 2020                         [44] Glodek M and Tschechne S 2011 Multiple classifier systems
+       Performance analysis of multiple aggregated acoustic                          for the classification of audio-visual emotional states
+       features for environment sound classification Appl. Acoust.                   Affective Computing and Intelligent Interaction: 4th Int.
+       158 107050                                                                    Conf., ACII 2011 (Memphis, TN, USA, 9–12 October 2011)
+[36] Sugan N et al 2018 Performance comparison of different                          (Springer) pp 359–68
+       cepstral coefficients based features for recognition of               [45] Jiang J et al 2020 Interpretable features for underwater
+       emotions from speech utterance 2018 Int. CET Conf. on                         acoustic target recognition Measurement 205 108586
+       Control, Communication, and Computing (IC4),                          [46] Sigurdsson S, Petersen K B and Lehn-Schiøler T 2006 Mel
+       Trivandrum (https://doi.org/10.1109/CETIC4.2018.                              frequency cepstral coefficients: an evaluation of robustness
+       8531065)                                                                      of MP3 encoded music ISMIR pp 286–9
+[37] Burgos W 2014 Gammatone and MFCC features in speaker                    [47] Slaney M 1993 An efficient implementation of the
+       recognition Master’s Thesis Florida Institute of Technology,                  Patterson-Holdsworth auditory filter bank. Apple Computer,
+       Florida                                                                       Perception Group Tech. Rep. 35 (available at: https://
+[38] Fernandes V and Mascarehnas L 2018 Speech emotion                               citeseerx.ist.psu.edu/document?repid=rep1&type=pdf&
+       recognition using mel frequency cepstral coefficient and                      doi=07eab74512fa7d1b9554274a61a0d077d4a6ecc4)
+       SVM classifier 2018 Int. Conf. on System Modeling &                   [48] Mathwork 2023 Help center (available at: www.mathworks.
+       Advancement in Research Trends (SMART) (Moradabad,                            com/help/index.html)
+       India) pp 200–4                                                       [49] Liu H 2010 On the Levenberg-Marquardt training method for
+[39] Valero X and Alias F 2012 Gammatone cepstral coefficients:                      feed-forward neural networks 2010 6th Int. Conf. on
+       biologically inspired features for non-speech audio                           Natural Computation (Yantai, China) pp 456–60
+       classification IEEE Trans. Multimedia 14 1684–9                       [50] Mathwork 2023 Optimize neural network training speed and
+[40] Öztürk F and Hocaoğlu A K 2019 The most effective MFCC                         memory (available at: www.mathworks.com/help/
+       parameter values in acoustic signal based traffic density                     deeplearning/ug/optimize-neural-network-training-speed-
+       detection 2019 27th Signal Processing and Communications                      and-memory.html)
+       Applications Conf. (SIU) (Sivas, Turkey) pp 1–4                       [51] Setiawan A W 2020 Image segmentation metrics in skin
+[41] Khalilzad Z and Tadj C 2023 Using CCA-fused cepstral                            lesion: accuracy, sensitivity, specificity, dice coefficient,
+       features in a deep learning-based cry diagnostic system for                   Jaccard index, and Matthews correlation coefficient 2020
+       detecting an ensemble of pathologies in newborns                              Int. Conf. on Computer Engineering, Network, and
+       Diagnostics 13 no.5                                                           Intelligent Multimedia (CENIM) pp 97–102
+
+
+
+
+                                                                        11
+

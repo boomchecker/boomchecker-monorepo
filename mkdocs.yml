@@ -93,6 +93,8 @@ nav:
           - firmware/bom-stm32node/index.md
           - Toolchain: firmware/bom-stm32node/toolchain.md
           - Build & flash: firmware/bom-stm32node/build.md
+          - Microphone & recording: firmware/bom-stm32node/microphone.md
+          - BoomLink protocol: firmware/bom-stm32node/boomlink.md
   - Apps:
       - Overview: apps/index.md
       - API backend: apps/api-backend.md

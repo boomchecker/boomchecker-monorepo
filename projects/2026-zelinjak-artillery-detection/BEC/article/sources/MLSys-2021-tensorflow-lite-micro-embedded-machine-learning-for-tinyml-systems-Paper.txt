@@ -1,0 +1,789 @@
+                           T ENSOR F LOW L ITE M ICRO :
+                E MBEDDED M ACHINE L EARNING ON T INY ML S YSTEMS
+
+
+                         Robert David 1 Jared Duke 1 Advait Jain 1 Vijay Janapa Reddi 1 2
+                       Nat Jeffries 1 Jian Li 1 Nick Kreeger 1 Ian Nappier 1 Meghna Natraj 1
+                          Shlomi Regev 1 Rocky Rhodes 1 Tiezhen Wang 1 Pete Warden 1
+
+                                                     A BSTRACT
+     TensorFlow Lite Micro (TFLM) is an open-source ML inference framework for running deep-learning models on
+     embedded systems. TFLM tackles the efficiency requirements imposed by embedded-system resource constraints
+     and the fragmentation challenges that make cross-platform interoperability nearly impossible. The framework
+     adopts a unique interpreter-based approach that provides flexibility while overcoming these unique challenges.
+     In this paper, we explain the design decisions behind TFLM and describe its implementation. We present an
+     evaluation of TFLM to demonstrate its low resource requirements and minimal run-time performance overheads.
+
+1   I NTRODUCTION                                               vices requires overcoming two crucial challenges. First
+                                                                and foremost, embedded systems have no unified TinyML
+Tiny machine learning (TinyML) is a burgeoning field at         framework. When engineers have deployed neural networks
+the intersection of embedded systems and machine learning.      to such systems, they have built one-off frameworks that
+The world has over 250 billion microcontrollers (IC Insights,   require manual optimization for each hardware platform.
+2020), with strong growth projected over coming years. As       Such custom frameworks have tended to be narrowly fo-
+such, a new range of embedded applications are emerging         cused, lacking features to support multiple applications and
+for neural networks. Because these models are extremely         lacking portability across a wide range of hardware. The
+small (few hundred KBs), running on microcontrollers or         developer experience has therefore been painful, requiring
+DSP-based embedded subsystems, they can operate contin-         hand optimization of models to run on a specific device.
+uously with minimal impact on device battery life.              And altering these models to run on another device necessi-
+The most well-known and widely deployed example of this         tated manual porting and repeated optimization effort. An
+new TinyML technology is keyword spotting, also called          important second-order effect of this situation is that the
+hotword or wakeword detection (Chen et al., 2014; Gru-          slow pace and high cost of training and deploying mod-
+enstein et al., 2017; Zhang et al., 2017). Amazon, Apple,       els to embedded hardware prevents developers from easily
+Google, and others use tiny neural networks on billions of      justifying the investment required to build new features.
+devices to run always-on inferences for keyword detection—      Another challenge limiting TinyML is that hardware vendors
+and this is far from the only TinyML application. Low-          have related but separate needs. Without a generic TinyML
+latency analysis and modeling of sensor signals from micro-     framework, evaluating hardware performance in a neutral,
+phones, low-power image sensors, accelerometers, gyros,         vendor-agnostic manner has been difficult. Frameworks are
+PPG optical sensors, and other devices enable consumer and      tied to specific devices, and it is hard to determine the source
+industrial applications, including predictive maintenance       of improvements because they can come from hardware,
+(Goebel et al., 2020; Susto et al., 2014), acoustic-anomaly     software, or the complete vertically integrated solution.
+detection (Koizumi et al., 2019), visual object detection
+(Chowdhery et al., 2019), and human-activity recognition        The lack of a proper framework has been a barrier to acceler-
+(Chavarriaga et al., 2013; Zhang & Sawchuk, 2012).              ating TinyML adoption and application in products. Beyond
+                                                                deploying a model to an embedded target, the framework
+Unlocking machine learning’s potential in embedded de-          must also have a means of training a model on a higher-
+      1
+        Google 2 Harvard University. Correspondence to:         compute platform. TinyML must exploit a broad ecosystem
+Pete Warden <petewarden@google.com>, Vijay Janapa Reddi         of tools for ML, as well for orchestrating and debugging
+<vj@eecs.harvard.edu>.                                          models, which are beneficial for production devices.
+Proceedings of the 4 th MLSys Conference, San Jose, CA, USA,    Prior efforts have attempted to bridge this gap. We can distill
+2021. Copyright 2021 by the author(s).                          the major issues facing the frameworks into the following:
+                                                    TensorFlow Lite Micro
+
+   • Inability to easily and portably deploy models across       machine learning. Because machine-learning performance
+     multiple embedded hardware architectures                    is largely dictated by linear-algebra computations, the inter-
+   • Lack of optimizations that take advantage of the under-     preter design imposes minimal run-time overhead.
+     lying hardware without requiring framework develop-
+     ers to make platform-specific efforts                       2     T ECHNICAL C HALLENGES
+   • Lack of productivity tools that connect training
+                                                                 Many issues make developing an ML framework for embed-
+     pipelines to deployment platforms and tools
+                                                                 ded systems particularly difficult, as discussed here.
+   • Incomplete infrastructure for compression, quantiza-
+     tion, model invocation, and execution                       2.1   Missing Features
+   • Minimal support features for performance profiling,
+     debugging, orchestration, and so on                         Embedded platforms are defined by their tight limitations.
+                                                                 Therefore, many advances from the past few decades that
+   • No benchmarks that allow vendors to quantify their
+                                                                 have made software development faster and easier are un-
+     chip’s performance in a fair and reproducible manner
+                                                                 available to these platforms because the resource tradeoffs
+   • Lack of testing in real-world applications.                 are too expensive. Examples include dynamic memory
+                                                                 management, virtual memory, an operating system, a stan-
+To address these issues, we introduce TensorFlow Lite Mi-        dard instruction set, a file system, floating-point hardware,
+cro (TFLM), which mitigates the slow pace and high cost          and other tools that seem fundamental to modern program-
+of training and deploying models to embedded hardware by         mers (Kumar et al., 2017). Though some platforms provide
+emphasizing portability and flexibility. TFLM makes it easy      a subset of these features, a framework targeting widespread
+to get TinyML applications running across architectures,         adoption in this market must avoid relying on them.
+and it allows hardware vendors to incrementally optimize
+kernels for their devices. It gives vendors a neutral platform   2.2   Fragmented Market and Ecosystem
+to prove their performance and offers these benefits:
+                                                                 Many embedded-system uses only require fixed software
+   • Our interpreter-based approach is portable, flexible,       developed alongside the hardware, usually by an affili-
+     and easily adapted to new applications and features         ated team. The lack of applications capable of running
+                                                                 on the platform is therefore much less important than it
+   • We minimize the use of external dependencies and            is for general-purpose computing. Moreover, backward
+     library requirements to be hardware agnostic                instruction-set-architecture (ISA) compatibility with older
+   • We enable hardware vendors to provide platform-             software matters less than in mainstream systems because
+     specific optimizations on a per-kernel basis without        everything that runs on an embedded system is probably
+     writing target-specific compilers                           compiled from source code anyway. Thus, embedded hard-
+   • We allow hardware vendors to easily integrate their ker-    ware can aggressively diversify to meet power requirements,
+     nel optimizations to ensure performance in production       whereas even the latest x86 processor can still run instruc-
+     and comparative hardware benchmarking                       tions that are nearly three decades old (Intel, 2013).
+   • Our model-architecture framework is open to a wide          These differences mean the pressure to converge on one
+     machine-learning ecosystem and the TensorFlow Lite          or two dominant platforms or ISAs is much weaker in the
+     model conversion and optimization infrastructure            embedded space, leading to fragmentation. Many ISAs have
+   • We provide benchmarks that are being adopted by             thriving ecosystems, and the benefits they bring to partic-
+     industry-leading benchmark bodies like MLPerf               ular applications outweigh developers’ cost of switching.
+   • Our framework supports popular, well-maintained             Companies even allow developers to add their own ISA
+     Google applications that are in production.                 extensions (Waterman & Asanovic, 2019; ARM, 2019).
+                                                                 Matching the wide variety of embedded architectures are
+This paper makes several contributions: First, we clearly lay    the numerous tool chains and integrated development envi-
+out the challenges to developing a machine-learning frame-       ronments (IDEs) that support them. Many of these systems
+work for embedded devices that supports the fragmented           are only available through a commercial license with the
+embedded ecosystem. Second, we provide design and imple-         hardware manufacturer, and in cases where a customer has
+mentation details for a system specifically created to cope      requested specialized instructions, they may be inaccessi-
+with these challenges. And third, we demonstrate that an         ble to everyone. These arrangements have no open-source
+interpreter-based approach, which is traditionally viewed        ecosystem, leading to device fragmentation that prevents a
+as a low-performance alternative to compilation, is in fact      lone development team from producing software that runs
+highly suitable for the embedded domain—specifically, for        well on many different embedded platforms.
+                                                     TensorFlow Lite Micro
+
+2.3   Resource Constraints                                        3.1   Minimize Feature Scope for Portability
+People who build embedded devices do so because a general-        We believe an embedded machine-learning (ML) framework
+purpose computing platform exceeds their design limits.           should assume the model, input data, and output arrays are in
+The biggest drivers are cost, with a microcontroller typically    memory, and it should only handle ML calculations based on
+selling for less than a few dollars (IC Insights, 2020); power    those values. The design should exclude any other function,
+consumption, as embedded devices may require just a few           no matter how useful. In practice, this approach means the
+milliwatts of power, whereas mobile and desktop CPUs re-          library should omit features such as loading models from a
+quire watts; and form factor, since capable microcontrollers      file system or accessing peripherals for inputs.
+are smaller than a grain of rice (Wu et al., 2018).
+                                                                  This principle is crucial as many embedded platforms are
+To meet their needs, hardware designers trade off capabil-        missing basic features, such as memory management and
+ities. A common characteristic of an embedded system is           library support (Section 2.1), that mainstream platforms take
+its low memory capacity. At one end of the spectrum, a            for granted. Supporting the myriad possibilities would make
+big embedded system has a few megabytes of flash ROM              porting the ML framework across devices unwieldy.
+and at most a megabyte of SRAM. At the other end, a small
+                                                                  Fortunately, ML models are functional, having clear inputs,
+embedded system has just a few hundred kilobytes or fewer,
+                                                                  outputs, and possibly some internal state but no external
+often split between ROM and RAM (Zhang et al., 2017).
+                                                                  side effects. Running a model need not involve calls to
+These constraints mean both working memory and perma-             peripherals or other operating-system functions. To remain
+nent storage are much smaller than most software written for      efficient, we focus only on implementing those calculations.
+general-purpose platforms would assume. In particular, the
+size of the compiled code in storage requires minimization.       3.2   Enable Vendor Contributions to Span Ecosystem
+Most software written for general-purpose platforms con-          All embedded devices can benefit from high-performance
+tains code that often goes uncalled on a given device. Choos-     kernels optimized for a given microprocessor. But no one
+ing the code path at run time is a better use of engineering      team can easily support such kernels for the entire embed-
+resources than shipping more-highly custom executables.           ded market because of the ecosystem’s fragmentation (see
+Such run-time flexibility is hard to justify when code size is    Section 2.2). Worse, optimization approaches vary greatly
+a concern and the potential uses are fewer. As a result, devel-   depending on the target microprocessor architecture.
+opers must break through the a library’s abstraction if they
+want to make modifications to suit their target hardware.         The companies with the strongest motivation to deliver max-
+                                                                  imum performance on a set of devices are the ones that
+                                                                  design and sell the underlying embedded microprocessors.
+2.4   Ongoing Changes to Deep Learning
+                                                                  Although developers at these companies are highly experi-
+Machine learning remains in its infancy despite its break-        enced at optimizing traditional numerical algorithms (e.g.,
+neck pace. Researchers are still experimenting with new           digital signal processing) for their hardware, they often lack
+operations and network architectures to glean better predic-      deep-learning experience. Therefore, evaluating whether
+tions from their models. Their success in improving results       their optimization changes are detrimental or acceptable to
+leads product designers to demand these enhanced models.          model accuracy and overall performance is difficult.
+Because new mathematical operations—or other fundamen-            To improve the development experience for hardware ven-
+tal changes to neural-network calculations—often drive the        dors and application developers, we make sure optimizing
+model advances, adopting these models in software means           the core library operations is easy. One goal is to ensure
+porting the changes, too. Since research directions are hard      substantial technical support (tests and benchmarks) for de-
+to predict and advances are frequent, keeping a framework         veloper modifications and to encourage submission to a
+up to date and able to run the newest, best models requires       library repository (details are presented in Section 4).
+a lot of work. Hence, for instance, while TensorFlow has
+more than 1,400 operations (TensorFlow, 2020e), Tensor-           3.3   Reuse TensorFlow Tools for Scalability
+Flow Lite, which is deployed on more than four billions
+edge devices worldwide, supports only about 130 opera-            The TensorFlow training environment includes more than
+tions. Not all operations are worth supporting, however.          1,400 operations, similar to other training frameworks (Ten-
+                                                                  sorFlow, 2020e). Most inference frameworks, however,
+                                                                  explicitly support only a subset of these operations, making
+3     D ESIGN P RINCIPLES                                         exports difficult. An exporter takes a trained model (such
+To address the challenges, we developed a set of developer        as a TensorFlow model) and generates a TensorFlow Lite
+principles to guide the design of TFLM that we discuss here.      model file (.tflite); after conversion, the model file can be
+                                                                            TensorFlow Lite Micro
+
+  TensorFlow Training Environment   TensorFlow Lite Exporter      TensorFlow Lite
+                                                                   Flatbuffer File
+                                                                                        Because writing a robust model converter takes a tremen-
+                  Training
+                   Graph
+                                                Inference
+                                                  Graph
+                                                               Ordered Op
+                                                                  List
+                                                                                        dous amount of engineering work, we built atop the existing
+                                                                              Weights
+                                                                                        TensorFlow Lite tool chain. As Figure 1 shows, we use
+                                                                                        the TensorFlow Lite toolchain to ease conversion and op-
+                                                                                        timization and the converter outputs a FlatBuffer file used
+                        Figure 1. Model-export workflow.                                by TFLM to load the inference models. We exploited this
+                                                                                        strong integration with the TensorFlow training environment
+deployed to a client device (e.g., a mobile or embedded sys-                            and extended it for rapidly supporting deeply embedded
+tem) and run locally using the TensorFlow Lite interpreter.                             machine-learning systems. For example, we reuse the Ten-
+Exporters receive a constant stream of new operations, most                             sorFlow Lite reference kernels, thus giving users a harmo-
+defined only by their implementation code. Because the                                  nized environment for model development and execution.
+operands lack clean semantic definitions beyond their im-
+plementations and unit tests, supporting these operations                               3.4   Build System for Heterogeneous Support
+is difficult. Attempting to do so is like working with the                              A crucial feature is a flexible build environment. The build
+elaborate CISC ISA without access to the ISA manual.                                    system must support the highly heterogeneous ecosystem
+Manually converting/exporting one or two models to a new                                and avoid falling captive to any one platform. Otherwise,
+representation is easy. Users will want to convert a large                              developers would avoid adopting it due to the lack of porta-
+space of potential models, however, and the task of under-                              bility and so would the hardware platform vendors.
+standing and changing model architectures to accommodate                                In desktop and mobile systems, frameworks commonly pro-
+a framework’s requirements is difficult. Often, only af-                                vide precompiled libraries and other binaries as the main
+ter users have built and trained a model do they discover                               software-delivery method. This approach is impractical in
+whether all of its operations are compatible with the target                            embedded platforms because they encompass too many dif-
+inference framework. Worse, many users employ high-level                                ferent devices, operating systems, and tool-chain combina-
+APIs, such as Keras (Chollet et al., 2015), which may hide                              tions to allow a balancing of modularity, size, and other con-
+low-level operations, complicating the task of removing                                 straints. Additionally, embedded system developers must
+depencence on operations. Also, researchers and product                                 often make code changes to meet such constraints.
+developers often split responsibilities, with the former cre-
+ating models and the latter deploying them. Since product                               We prioritize code that is easy to build using various IDEs
+developers are the ones who discover the export errors, they                            and tool chains. This approach means we avoid techniques
+may lack the expertise or permission to retrain the model.                              that rely on build-system features that do not genearlize
+                                                                                        across platforms. Examples of such features include setting
+Model operators have no governing principles or a unified                               custom include paths, compiling tools for the host processor,
+set of rules. Even if an inference framework supports an                                using custom binaries or shell scripts to produce code, and
+operation, particular data types may not, or the operation                              defining preprocessor macros on the command line.
+may exclude certain parameter ranges or may only serve in
+conjunction with other operations. This situation creates a                             Our principle is that we should be able to create source files
+barrier to providing error messages that guide developers.                              and headers for a given platform, and users should then be
+                                                                                        able to drag and drop those files into their IDE or tool chain
+Resource constraints also add many requirements to an ex-                               and compile them without any changes. We call it the “Bag
+porter. Most training frameworks focus on floating-point                                of Files” principle. Anything more complex would prevent
+calculations, since they are the most flexible numerical rep-                           adoption by many platforms and developers.
+resentation and are well optimized for desktop CPUs and
+GPUs. Fitting into small memories, however, makes eight-
+bit and other quantized representations valuable for embed-                             4     I MPLEMENTATION
+ded deployment. Some techniques can convert a model
+                                                                                        We discuss our implementation decisions and tradeoffs we
+trained in floating point to a quantized representation (Krish-
+                                                                                        make as we describe specific modules in detail.
+namoorthi, 2018), but they all increase exporter complexity.
+Some also require support during the training process, ne-
+                                                                                        4.1   System Overview
+cessitating changes to the creation framework as well. Other
+optimizations are also expected during export, such as fold-                            The first step in developing a TFLM application is to cre-
+ing constant expressions into fixed values—even in complex                              ate a live neural-network-model object in memory. The
+cases like batch normalization (Zhang et al., 2017)—and                                 application developer produces an “operator resolver” ob-
+removing dropout and similar operations that are only useful                            ject through the client API. The “OpResolver” API controls
+during training (Srivastava et al., 2014).                                              which operators link to the final binary, minimizing file size.
+                                                     TensorFlow Lite Micro
+
+The second step is to supply a contiguous memory “arena”
+                                                                                              Application
+that holds intermediate results and other variables the in-
+terpreter needs. Doing so is necessary because we assume
+dynamic memory allocation is unavailable.                                                      Client API
+
+
+The third step is to create an interpreter instance (Sec-                                     TF Lite Micro
+tion 4.2), supplying it with the model, operator resolver, and                                 Interpreter
+
+arena as arguments. The interpreter allocates all required
+memory from the arena during the initialization phase. We                       Model           Memory           Operator
+                                                                                Loader          Planner          Resolver
+avoid any allocations afterward to ensure heap fragmen-
+tation avoids causing errors for long-running applications.
+                                                                                              Operator API
+Operator implementations may allocate memory for use dur-
+ing the evaluation, so the operator preparation functions are
+                                                                                Operator                         Operator
+called during this phase, allowing their memory needs to be                  Implementation        ...        Implementation
+communicated to the interpreter. The application-supplied
+OpResolver maps the operator types listed in the serial-
+ized model to the implementation functions. A C API call                     Figure 2. Implementation-module overview.
+handles all communication between the interpreter and op-
+                                                                   time, and this data controls which operators to execute and
+erators to ensure operator implementations are modular and
+                                                                   where to draw the model parameters from.
+independent of the interpreter’s details. This approach eases
+replacement of operator implementations with optimized             We chose an interpreter on the basis of our experience de-
+versions, and it also encourages reuse of other systems’           ploying production models on embedded hardware. We see
+operator libraries (e.g., as part of a code-generation project).   a need to easily update models in the field—a task that may
+                                                                   be infeasible using code generation. Using an interpreter,
+The fourth step is execution. The application retrieves point-
+                                                                   however, sharing code across multiple models and applica-
+ers to the memory regions that represent the model inputs
+                                                                   tions is easier, as is maintaining the code, since it allows
+and populates them with values (often derived from sensors
+                                                                   updates without re-exporting the model. Moreover, unlike
+or other user-supplied data). Once the inputs are available,
+                                                                   traditional interpreters with lots of branching overhead rel-
+the application invokes the interpreter to perform the model
+                                                                   ative to a function call, ML model interpretation benefits
+calculations. This process involves iterating through the
+                                                                   from long-running kernel complexity. Each kernel runtime
+topologically sorted operations, using offsets calculated dur-
+                                                                   is large and amortizes the interpreter overhead (Section 5).
+ing memory planning to locate the inputs and outputs, and
+calling the evaluation function for each operation.                The alternative to an interpreter-based inference engine is
+                                                                   to generate native code from a model during export using C
+Finally, after it evaluates all the operations, the interpreter
+                                                                   or C++, baking operator function calls into fixed machine
+returns control to the application. Invocation is a simple
+                                                                   code. It can increase performance at the expense of porta-
+blocking call. Most MCUs are single-threaded and they
+                                                                   bility, since the code would need recompilation for each
+use interrupts for urgent tasks so it is acceptable. But an
+                                                                   target. Code generation intersperses settings such as model
+application can still perform one from a thread, and platform-
+                                                                   architecture, weights, and layer dimensions in the binary,
+specific operators can still split their work across processors.
+                                                                   which means replacing the entire executable to modify a
+Once invocation finishes, the application can query the in-
+                                                                   model. In contrast, an interpreted approach keeps all this
+terpreter to determine the location of the arrays containing
+                                                                   information in a separate memory file/area, allowing model
+the model-calculation outputs and then use those outputs.
+                                                                   updates to replace a single file or contiguous memory area.
+The framework omits any threading or multitasking support,
+                                                                   We incorporate some important code-generation features in
+since any such features would require less-portable code and
+                                                                   our approach. For example, because our library is buildable
+operating-system dependencies. However, we support mul-
+                                                                   from source files alone (Section 3.4), we achieve much of
+titenancy. The framework can run multiple models as long
+                                                                   the compilation simplicity of generated code.
+as they do not need to run concurrently with one another.
+                                                                   4.3   Model Loading
+4.2   TFLM Interpreter
+                                                                   As mentioned, the interpreter loads a data structure that
+TFLM is an interpreter-based machine-learning inference
+                                                                   clearly defines a model. For this work, we used the Ten-
+framework. The interpreter loads a data structure that clearly
+                                                                   sorFlow Lite portable data schema (TensorFlow, 2020b).
+defines a machine learning model. Although the execution
+                                                                   Reusing the export tools from TensorFlow Lite enabled us
+code is static, the interpreter handles the model data at run
+                                                                   to import a wide variety of models at little engineering cost.
+                                                    TensorFlow Lite Micro
+
+4.3.1    Model Serialization                                       Lowest address of buffer                                      Highest address of buffer
+                                                                                               Global Tensor Arena Buffer
+TensorFlow Lite for smartphones and other mobile devices
+                                                                       Head                                                               Tail
+employs the FlatBuffer serialization format to hold models                            Alloc Alloc      “Temp” Allocation Arena
+                                                                    Allocations                                                        Allocations
+(TensorFlow, 2020a). The binary footprint of the accessor
+code is typically less than two kilobytes. It is a header-
+only library, making compilation easy, and it is memory                           Figure 3. Two-stack allocation strategy.
+efficient because the serialization protocol does not require
+unpacking to another representation. The downside to this        preparation, the interpreter determines the lifetime and size
+format is that its C++ header requires the platform compiler     of all buffers necessary to run the model. These buffers in-
+to support the C++11 specification.                              clude run-time tensors, persistent memory to store metadata,
+                                                                 and scratch memory to temporarily hold values while the
+We had to work with several vendors to upgrade their tool        model runs (Section 4.4.1). After accounting for all required
+chains to handle this version, but since we had implicitly       buffers, the framework creates a memory plan that reuses
+chosen modern C++ by basing our framework on Tensor-             nonpersistent buffers when possible while ensuring buffers
+Flow Lite, it has been a minor obstacle. Another challenge       are valid during their required lifetime (Section 4.4.2).
+of this format was that most of the target embedded devices
+lacked file systems, but because it uses a memory-mapped         4.4.1      Persistent Memory and Scratchpads
+representation, files are easy to convert into C source files
+containing data arrays. These files are compilable into the      We require applications to supply a fixed-size memory arena
+binary, to which the application can easily refer.               when they create the interpreter and to keep the arena intact
+                                                                 throughout the interpreter’s lifetime. Allocations with the
+4.3.2    Model Representation                                    same lifetime can treat this arena as a stack. If an allocation
+                                                                 takes up too much space, we raise an application-level error.
+We also copied the TensorFlow Lite representation, the
+stored schema of data and values that represent the model.       To prevent memory errors from interrupting a long-running
+This schema was designed for mobile platforms with storage       program, we ensure that allocations only occur during the
+efficiency and fast access in mind, so it has many features      interpreter’s initialization phase. No allocation (through our
+that eased development for embedded platforms. For ex-           mechanisms) is possible during model invocation.
+ample, operations reside in a topologically sorted list rather   This simplistic approach works well for initial prototyping,
+than a directed-acyclic graph. Performing calculations is        but it wastes memory because many allocations could over-
+as simple as looping through the operation list in order,        lap with others in time. One example is data structures that
+whereas a full graph representation would require prepro-        are only necessary during initialization. Their values are
+cessing to satisfy the operations’ input dependencies.           irrelevant after initialization, but because their lifetime is
+The drawback of this representation is that it was designed      the same as the interpreter’s, they continue to take up arena
+to be portable from system to system, so it requires run-time    space. A model’s evaluation phase also requires variables
+processing to yield the information that inferencing requires.   that need not persist from one invocation to another.
+For example, it abstracts operator parameters from the ar-       Hence, we modified the allocation scheme so that
+guments, which later pass to the functions that implement        initialization- and evaluation-lifetime allocations reside in a
+those operations. Thus, each operation requires a few code       separate stack relative to interpreter-lifetime objects. This
+lines executed at run time to convert from the serialized rep-   feat uses a stack that increments from the lowest address
+resentation to the structure in the underlying implementation.   for the function-lifetime objects (“Head” in Figure 3) and a
+The code overhead is small, but it reduces the readability       stack that decrements from the arena’s highest address for
+and compactness of the operator implementations.                 interpreter-lifetime allocations (“Tail” in Figure 3). When
+Memory planning is a related issue. On mobile devices,           the two stack pointers cross, they indicate a lack of capacity.
+TensorFlow Lite supports variable-size inputs, so all depen-     The two-stack allocation strategy works well for both shared
+dent operations may also vary in size. Planning the optimal      buffers and persistent buffers. But model preparation also
+layout of intermediate buffers for the calculations must take    holds allocation data that model inference no longer needs.
+place at run time when all buffer dimensions are known.          Therefore, we used the space in between the two stacks as
+                                                                 temporary allocations when a model is in memory planning.
+4.4     Memory Management                                        Any temporary data required during model inference resides
+We are unable to assume the operating system can dynami-         in the persistent-stack allocation section.
+cally allocate memory. So the framework allocates and man-       Our approach reduces the arena size as the initialization
+ages memory from a provided memory arena. During model
+                                                     TensorFlow Lite Micro
+
+allocations can be discarded after that function is done,                                Memory Size               Memory Size
+
+and the memory is reusable for evaluation variables. This          Time    Operator #1
+approach also enables advanced applications to reuse the
+                                                                           Operator #2
+arena’s function-lifetime section in between evaluation calls.
+                                                                           Operator #3      A          B                 A   B
+                                                                           Operator #4
+4.4.2   Memory Planner
+                                                                           Operator #5
+A more complex optimization opportunity involves the                       Operator #6                     C                 C
+space required for intermediate calculations during model                  Operator #7                         D     D
+evaluation. An operator may write to one or more output
+                                                                           Operator #8
+buffers, and later operators may later read them as inputs.
+If the output is not exposed to the application as a model                               (a) Naive                 (b) Bin packing
+output, its contents need only remain until the last operation
+that needs them has finished. Its presence is also unneces-                  Figure 4. Intermediate allocation strategies.
+sary until just before the operation that populates it executes.   host before run time. The memory layout is stored as model
+Memory reuse is possible by overlapping allocations that           FlatBuffer metadata and contains an array of fixed-memory
+are unneeded during the same evaluation sections.                  arena offsets for an arbitrary number of variable tensors.
+The memory allocations required over time can be visual-
+ized using rectangles (Figure 4a), where one dimension is          4.5    Multitenancy
+memory size and the other is the time during which each            Embedded-system constraints can force application-model
+allocation must be preserved. The overall memory can be            developers to create several specialized models instead of
+substantially reduced if some areas are reused or compacted        one large monolithic model. Hence, supporting multiple
+together. Figure 4b shows a more optimal memory layout.            models on the same embedded system may be necessary.
+Memory compaction is an instance of bin packing (Martello,         If an application has multiple models that need not run
+1990). Calculating the perfect allocation strategy for arbi-       simultaneously, it is possible to have two separate instances
+trary models without exhaustively trying all possibilities is      running in isolation from one another. However, this is
+an unsolved problem, but a first-fit decreasing algorithm          inefficient because the temporary space cannot be reused.
+(Garey et al., 1972) usually provides reasonable solutions.
+                                                                   Instead, TFLM supports multitenancy with some memory-
+In our case, this approach consists of gathering a list of         planner changes that are transparent to the developer. TFLM
+all temporary allocations, including size and lifetime; sort-      supports memory-arena reuse by enabling the multiple
+ing the list in descending order by size; and placing each         model interpreters to allocate memory from a single arena.
+allocation in the first sufficiently large gap, or at the end
+of the buffer if no such gap exists. We do not support dy-         We allow interpreter-lifetime areas to stack on each other in
+namic shapes in the TFLM framework, so we must know                the arena and reuse the function-lifetime section for model
+at initialization all the information necessary to perform         evaluation. The reusable (nonpersistent) part is set to the
+this algorithm. The “Memory Planner” (shown in Figure 2)           largest requirement, based on all models allocating in the
+encapsulates this process; it allows us to minimize the arena      arena. The nonreusable (persistent) allocations grow for
+portion devoted to intermediate tensors. Doing so offers a         each model—allocations are model specific (Figure 4b).
+substantial memory-use reduction for many models.
+                                                                   4.6    Multithreading
+Memory planning at run time incurs more overhead during
+model preparation than a preplanned memory-allocation              TFLM is thread-safe as long as there is no state correspond-
+strategy. This cost, however, comes with the benefit of            ing to the model that is kept outside the interpreter and the
+model generality. TFLM models simply list the operator             model’s memory allocation within the arena.
+and tensor requirements. At run time, we allocate and enable
+                                                                   The interpreter’s only variables are kept in the arena, and
+this capability for many model types.
+                                                                   each interpreter instance is uniquely bound to a specific
+Offline-planned tensor allocation is an alternative memory-        model. Therefore, TFLM can safely support multiple inter-
+planning feature of TFLM. It allows a more compact mem-            preter instances running from different tasks or threads.
+ory plan, gives memory-plan ownership and control to the
+                                                                   TFLM can also run safely on multiple MCU cores. Since
+end user, imposes less overhead on the MCU during ini-
+                                                                   the only variables used by the interpreter are kept in the
+tialization, and enables more-efficient power options by
+                                                                   arena, this works well in practice. The executable code is
+allowing different memory banks to store certain memory
+                                                                   shared, but the arenas ensure there are no threading issues.
+areas. We allow the user to create a memory layout on a
+                                                                                 TensorFlow Lite Micro
+
+
+                                                                                         Head
+      TF Lite Micro                                                                      (stack)                   Model
+       Interpreter                                                                                 TF Lite Micro                                                                                Head
+                                                                                                                 binds to
+                                                                                                    Interpreter                                                                                 (stack)
+
+
+                             TfLiteTensor   |       data       | shape     Shape array
+          Memory
+          Allocator          TfLiteTensor       |       data    | shape    Shape array                                              TfLiteTensor   |       data       | shape     Shape array
+                      owns
+                               TfLiteTensor         |    data    | shape   Shape array   Tail                                       TfLiteTensor       |       data    | shape    Shape array
+                                                                                                          Memory            owns
+                                                                                         (stack)          Allocator                   TfLiteTensor         |    data    | shape   Shape array   Tail
+                binds to                                Tensor Arena                                                                                                                            (stack)
+        Model                                                                                                                                                  Tensor Arena
+
+
+                                 (a) Single-model                                                                                  (b) Multiple models.
+
+Figure 5. Memory-allocation strategy for a single model versus a multi-tenancy scenario. In TFLM, there is a one-to-one binding between
+a model, an interpreter and the memory allocations made for the model (which may come from a shared memory arena).
+
+
+4.7   Operator Support                                                                             files replace the reference implementations during all build
+                                                                                                   steps when targeting the named platform or library (e.g., us-
+Operators are the calculation units in neural-network graphs.
+                                                                                                   ing TAGS="cmsis-nn"). Each platform is given a unique
+They represent a sizable amount of computation, typically
+                                                                                                   tag. The tag is a command line argument to the build system
+requiring many thousands or even millions of individual
+                                                                                                   that replaces the reference kernels during compilation. In
+arithmetic operations (e.g., multiplies or additions). They
+                                                                                                   a similar vein, library modifiers can swap or change the
+are functional, with well-defined inputs, outputs, and state
+                                                                                                   implementations incrementally with no changes to the build
+variables as well as no side effects beyond them.
+                                                                                                   scripts and the overarching build system we put in place.
+Because the model execution’s latency, power consumption,
+and code size tend to be dominated by the implementations                                          4.9    Build System
+of these operations, they are typically specialized for partic-
+ular platforms to take advantage of hardware characteristics.                                      To address the embedded market’s fragmentation (Sec-
+In practice, we attracted library optimizations from hard-                                         tion 2.2), we needed our code to compile on many platforms.
+ware vendors such as Arm, Cadence, Ceva, and Synopsys.                                             We therefore wrote the code to be highly portable, exhibiting
+                                                                                                   few dependencies, but it was insufficient to give potential
+Well-defined operator boundaries mean it is possible to de-                                        users a good experience on a particular device.
+fine an API that communicates the inputs and outputs but
+hides implementation details behind an abstraction. Sev-                                           Most embedded developers employ a platform-specific IDE
+eral chip vendors have provided a library of neural network                                        or tool chain that abstracts many details of building subcom-
+kernels designed to deliver maximum neural-network per-                                            ponents and presents libraries as interface modules. Simply
+formance when running on their processors. For example,                                            giving developers a folder hierarchy containing source-code
+Arm has provided optimized CMSIS-NN libraries divided                                              files would still leave them with multiple steps before they
+into several functions, each covering a category: convolu-                                         could build and compile that code into a usable library.
+tion, activation, fully connected layer, pooling, softmax, and                                     Therefore, we chose a single makefile based build sys-
+optimized basic math. TFLM uses CMSIS-NN to deliver                                                tem to determine which files the library required, then gen-
+high performance as we demonstrate in Section 5.                                                   erated the project files for the associated tool chains. The
+                                                                                                   makefile held the source-file list, and we stored the platform-
+4.8   Platform Specialization                                                                      specific project files as templates that the project-generation
+                                                                                                   process filled in with the source-file information. That pro-
+TFLM gives developers flexibility to modify the library
+                                                                                                   cess may also perform other postprocessing to convert the
+code. Because operator implementations (kernels) often
+                                                                                                   source files to a format suitable for the target tool chain.
+consume the most time when executing models, they are
+prominent targets for platform-specific optimization.                                              Our platform-agnostic approach has enabled us to support a
+                                                                                                   variety of tool chains with minimal engineering work, but
+We wanted to make swapping in new implementations easy.
+                                                                                                   it does have some drawbacks. We implemented the project
+To do so, we allow specialized versions of the C++ source
+                                                                                                   generation through an ad hoc mixture of makefile scripts and
+code to override the default reference implementation. Each
+                                                                                                   Python. This strategy makes the process difficult to debug,
+kernel has a reference implementation that is in a directory,
+                                                                                                   maintain, and extend. Our intent is for future versions to
+but subfolders contain optimized versions for particular plat-
+                                                                                                   keep the concept of a master source-file list that only the
+forms (e.g., the Arm CMSIS-NN library).
+                                                                                                   makefile holds, but then delegate the actual generation to
+As we explain in Section 4.9, the platform-specific source                                         better-structured Python in a more maintainable way.
+                                                        TensorFlow Lite Micro
+
+5      S YSTEM E VALUATION                                          inputs through a single model, measuring the time to process
+                                                                    each input and produce an inference output. The benchmark
+TFLM has undergone testing and it has been deployed ex-             does not measure the time necessary to bring up the model
+tensively with many processors based on the Arm Cortex-M            and configure the run time, since the recurring inference cost
+architecture (Arm, 2020). It has been ported to other ar-           dominates total CPU cycles on most long-running systems.
+chitectures including ESP32 (Espressif, 2020) and many
+digital signal processors (DSPs). The framework is also
+                                                                    5.2   Benchmark Performance
+available as an Arduino library. It can generate projects for
+environments such as Mbed (ARM, 2020) as well. In this              We provide two sets of benchmark results. First are the base-
+section, we use two representative platforms to assess and          line results from running the benchmarks on reference ker-
+quantify TFLM’s computational and memory overheads.                 nels, which are simple operator-kernel implementations de-
+                                                                    signed for readability rather than performance. Second are
+5.1     Experimental Setup                                          results for optimized kernels compared with the reference
+                                                                    kernels. The optimized versions employ high-performance
+Our benchmarks focus on the (1) performance benefits of             ARM CMSIS-NN and Cadence libraries (Lai et al., 2018).
+optimized kernels and (2) platforms we can support and the
+performance we achieve on them. So, we focus on extreme             The results in Table 2 are for the CPU (Table 2a) and DSP
+endpoints rather than on the overall spectrum. Specifically,        (Table 2b). The total run time appears under the “Total
+we evaluate two extreme hardware designs and ML models.             Cycles” column, and the run time excluding the interpreter
+                                                                    appears under the “Calculation Cycles” column. The differ-
+We evaluate two extreme hardware designs: MCU (general)             ence between them is the minimal interpreter overhead. The
+and ultra-low-power DSP (specialized). The details for              “Interpreter Overhead” column in both Table 2a and Table 2b
+the two hardware platforms are shown in Table 1. First              is insignificant compared with the total model run time on
+is the Sparkfun Edge, which has an Ambiq Apollo3 MCU.               both the CPU and DSP. The overhead on the microcontroller
+Apollo3 is powered by an Arm Cortex-M4 core and operates            CPU (Table 2a) is less than 0.1% for long-running models,
+in burst mode at 96 MHz (Ambiq Micro, 2020). The second             such as VWW. In the case of short-running models such
+platform is an Xtensa Hifi Mini DSP, which is based on the          as Google Hotword, the overhead is still minimal at about
+Cadence Tensilica architecture (Cadence, 2020).                     3% to 4%. The same general trend holds in Table 2b for
+We evaluate two extreme ML models in terms of model size            non-CPU architectures like the Xtensa HiFi Mini DSP.
+and complexity for embedded devices. We use the Visual              Comparing the reference kernel versions to the optimized
+Wake Words (VWW) person-detection model (Chowdhery                  kernel versions reveals considerable performance improve-
+et al., 2019), which represents a common microcontroller vi-        ment. For example, between “VWW Reference” and
+sion task of identifying whether a person appears in a given        “VWW Optimized,” the CMSIS-NN library offers more than
+image. The model is trained and evaluated on images from            a 4x speedup on the Cortex-M4 microcontroller. Optimiza-
+the Microsoft COCO data set (Lin et al., 2014). It primarily        tion on the Xtensa HiFi Mini DSP offers a 7.7x speedup. For
+stresses and measures the performance of convolutional op-          “Google Hotword,” the optimized kernel speed on Cortex-
+erations. Also, we use the Google Hotword model, which              M4 is only 25% better than the baseline reference model
+aids in detecting the key phrase “OK Google.” This model            because less time goes to the kernel calculations. Each in-
+is designed to be small and fast enough to run constantly           ner loop accounts for less time with respect to the total run
+on a low-power DSP in smartphones and other devices with            time of the benchmark model. On the specialized DSP, the
+Google Assistant. Because it is proprietary, we use a version       optimized kernels have a significant impact on performance.
+with scrambled weights and biases. More evaluation is bet-
+ter but TinyML is nascent and not many benchmarks exist.
+                                                                    5.3   Memory Overhead
+The benchmarks we use are part of TinyMLPerf (Banbury
+et al., 2020) and also used by MCUNet (Lin et al., 2020).           We assess TFLM’s total memory usage. TFLM’s memory
+                                                                    usage includes the code size for the interpreter, memory
+Our benchmarks are INT8 TensorFlow Lite models in a
+                                                                    allocator, memory planner, etc. plus any operators that are
+serialized FlatBuffer format. The benchmarks run multiple
+                                                                    required by the model. Hence, the total memory usage varies
+                                                                    greatly by the model. Large models and models with com-
+    Platform          Processor    Clock    Flash       RAM
+    Sparkfun Edge     Arm CPU                                       plex operators (e.g. VWW) consume more memory than
+                                   96 MHz   1 MB        0.38 MB     their smaller counterparts like Google Hotword. In addition
+    (Ambiq Apollo3)   Cortex-M4
+    Tensilica HiFi
+                      Xtensa DSP
+                                   10 MHz   1 MB        1 MB
+                                                                    to VWW and Google Hotword, in this section, we added an
+                      HiFi Mini                                     even smaller reference convolution model containing just
+                                                                    two convolution layers, a max-pooling layer, a dense layer,
+             Table 1. Embedded-platform benchmarking.
+                                                                    and an activation layer to emphasize the differences.
+                                                     TensorFlow Lite Micro
+
+                     Total           Calculation     Interpreter                         Total           Calculation   Interpreter
+    Model                                                          Model
+                     Cycles          Cycles          Overhead                            Cycles          Cycles        Overhead
+    VWW                                                            VWW
+                     18,990.8K       18,987.1K       < 0.1%                              387,341.8K      387,330.6K    < 0.1%
+    Reference                                                      Reference
+    VWW                                                            VWW
+                     4,857.7K        4,852.9K        < 0.1%                              49,952.3K       49,946.4K     < 0.1%
+    Optimized                                                      Optimized
+    Google Hotword                                                 Google Hotword
+                     45.1K           43.7K           3.3%                                990.4K          987.4K        0.3%
+    Reference                                                      Reference
+    Google Hotword                                                 Google Hotword
+                     36.4K           34.9K           4.1%                                88.4K           84.6K         4.3%
+    Optimized                                                      Optimized
+             (a) Sparkfun Edge (Apollo3 Cortex-M4)                                      (b) Xtensa HiFi Mini DSP
+
+                                    Table 2. Performance results for TFLM target platforms.
+
+
+Overall, TFLM applications have a small footprint. The                                    Persistent   Nonpersistent   Total
+                                                                       Model
+                                                                                          Memory       Memory          Memory
+interpreter footprint, by itself, is less than 2KB (at max).
+                                                                       Convolutional
+                                                                                          1.29 kB      7.75 kB         9.04 kB
+Table 3 shows that for the convolutional and Google Hot-               Reference
+word models, the memory consumed is at most 13 KB. For                 Google Hotword
+                                                                                          12.12 kB     680 bytes       12.80 kB
+the larger VWW model, the framework consumes 26.5 KB.                  Reference
+                                                                       VWW
+                                                                                          26.50 kB     55.30 kB        81.79 kB
+To further analyze memory usage, recall that TFLM allo-                Reference
+cates program memory into two main sections: persistent
+                                                                           Table 3. Memory consumption on Sparkfun Edge.
+and nonpersistent. Table 3 reveals that depending on the
+model characteristics, one section can be larger than the          have evaluated. Graph Lowering (GLOW) (Rotem et al.,
+other. The results show that we adjust to the needs of the         2018) is an open-source compiler that accelerates neural-
+different models while maintaining a small footprint.              network performance across a range of hardware platforms.
+                                                                   STM32Cube.AI (STMicroelectronics, 2020) takes models
+5.4    Benchmarking and Profiling                                  from Keras, TensorFlow Lite, and others to generate code
+                                                                   optimized for a range of STM32-series MCUs. TinyEngine
+TFLM provides a set of benchmarks and profiling APIs               (Lin et al., 2020) is a code-generator-based compiler that
+(TensorFlow, 2020c) to compare hardware platforms and              helps eliminate memory overhead for MCU deployments.
+to let developers measure performance as well as iden-             TVM (Chen et al., 2018) is an open-source ML compiler
+tify opportunities for optimization. Benchmarks provide            for CPUs, GPUs, and ML accelerators that has been ported
+a consistent and fair way to measure hardware performance.         to Cortex-M7 and other MCUs. uTensor (uTensor, 2020), a
+MLPerf (Reddi et al., 2020; Mattson et al., 2020) adopted          precursor to TFLM, consists of an offline tool that translates
+the TFLM benchmarks; the tinyMLPerf benchmark suite                a TensorFlow model into Arm microcontroller C++ machine
+imposes accuracy metrics for them (Banbury et al., 2020).          code and it has a run time for execution management.
+Although benchmarks measure performance, profiling is              In contrast to all of these related works, TFLM adopts
+necessary to gain useful insights into model behavior.             a unique interpreter based approach for flexibility. An
+TFLM has hooks for developers to instrument specific code          interpreter-based approach provides an alternative design
+sections (TensorFlow, 2020d). These hooks allow a TinyML           point for others to consider when engineering their inference
+application developer to measure overhead using a general-         system to address the ecosystem challenges (Section 2).
+purpose interpreter rather than a custom neural-network
+engine for a specific model, and they can examine a model’s
+performance-critical paths. These features allow identifica-       7     C ONCLUSION
+tion, profiling, and optimization of bottleneck operators.         TFLM enables the transfer of deep learning onto embedded
+                                                                   systems, significantly broadening the reach of ML. TFLM
+6     R ELATED W ORK                                               is a framework that has been specifically engineered to run
+                                                                   machine learning effectively and efficiently on embedded
+There are a number of compiler frameworks for infer-               devices with only a few kilobytes of memory. TFLM’s
+ence on TinyML systems. Examples include Microsoft’s               fundamental contributions are the design decisions that we
+ELL (Microsoft, 2020), which is a cross-compiler tool              made to address the unique challenges of embedded sys-
+chain that enables users to run ML models on resource              tems: hardware heterogeneity in the fragmented ecosystem,
+constrained platforms, similar to the platforms that we            missing software features and severe resource constraints.
+                                                  TensorFlow Lite Micro
+
+ACKNOWLEDGEMENTS                                               Chen, T., Moreau, T., Jiang, Z., Zheng, L., Yan, E., Shen,
+                                                                 H., Cowan, M., Wang, L., Hu, Y., Ceze, L., et al. TVM:
+TFLM is an open-source project and a community-based             An automated end-to-end optimizing compiler for deep
+open-source project. As such, it rests on the work of            learning. In 13th {USENIX} Symposium on Operating
+many. We extend our gratitude to many individuals, teams,        Systems Design and Implementation ({OSDI} 18), pp.
+and organizations: Fredrik Knutsson and the CMSIS-NN             578–594, 2018.
+team; Rod Crawford and Matthew Mattina from Arm; Raj
+Pawate from Cadence; Erich Plondke and Evgeni Gousef           Chollet, F. et al.     Keras, 2015.      URL https://
+from Qualcomm; Jamie Campbell from Synopsys; Yair                keras.io/.
+Siegel from Ceva; Sai Yelisetty from DSP Group; Zain
+Asgar from Stanford; Dan Situnayake from Edge Impulse;         Chowdhery, A., Warden, P., Shlens, J., Howard, A., and
+Neil Tan from the uTensor project; Sarah Sirajuddin, Rajat       Rhodes, R. Visual wake words dataset. arXiv preprint
+Monga, Jeff Dean, Andy Selle, Tim Davis, Megan Kacholia,         arXiv:1906.05721, 2019.
+Stella Laurenzo, Benoit Jacob, Dmitry Kalenichenko, An-
+drew Howard, Aakanksha Chowdhery, and Lawrence Chan            Espressif. Espressif ESP32, 2020. URL https:
+from Google; and Radhika Ghosal, Sabrina Neuman, Mark            //www.espressif.com/en/products/socs/
+Mazumder, and Colby Banbury from Harvard University.             esp32.
+
+                                                               Garey, M. R., Graham, R. L., and Ullman, J. D. Worst-case
+R EFERENCES                                                      analysis of memory allocation algorithms. In Proceed-
+                                                                 ings of the fourth annual ACM symposium on Theory of
+Ambiq Micro.      Apollo 3 Blue Datasheet,
+                                                                 computing, pp. 143–150, 1972.
+ 2020.    URL https://cdn.sparkfun.com/
+ assets/learn tutorials/9/0/9/                                 Goebel, K. et al. NASA PCoE Datasets, 2020. URL https:
+ Apollo3 Blue MCU Data Sheet v0 9 1.pdf.                        //ti.arc.nasa.gov/tech/dash/groups/
+ARM. Arm Enables Custom Instructions for embed-                  pcoe/prognostic-data-repository/.
+ ded CPUs, 2019. URL https://www.arm.com/                      Gruenstein, A., Alvarez, R., Thornton, C., and Ghodrat, M.
+ company/news/2019/10/arm-enables-                               A cascade architecture for keyword spotting on mobile
+ custom-instructions-for-embedded-                               devices. arXiv preprint arXiv:1712.03603, 2017.
+ cpus.
+                                                               IC Insights.   MCUs Expected to Make Mod-
+ARM. Mbed, 2020. URL https://os.mbed.com.
+                                                                 est Comeback after 2020 Drop, 2020. URL
+Arm.    Arm Cortex M, 2020.   URL https:                         https://www.icinsights.com/news/
+  //developer.arm.com/ip-products/                               bulletins/MCUs-Expected-To-Make-
+  processors/cortex-m.                                           Modest-Comeback-After-2020-Drop--/.
+
+Banbury, C. R., Reddi, V. J., Lam, M., Fu, W., Fazel,          Intel. Intel-64 and ia-32 architectures software developer’s
+  A., Holleman, J., Huang, X., Hurtado, R., Kanter,               manual. Volume 3A: System Programming Guide, Part, 1
+  D., Lokhmotov, A., et al. Benchmarking tinyml                  (64), 2013.
+  systems: Challenges and direction. arXiv preprint
+                                                               Koizumi, Y., Saito, S., Uematsu, H., Harada, N., and
+  arXiv:2003.04821, 2020.
+                                                                 Imoto, K.       ToyADMOS: A dataset of miniature-
+Cadence. Tensilica Hi-Fi DSP Family, 2020. URL                   machine operating sounds for anomalous sound detec-
+  https://ip.cadence.com/uploads/928/                            tion. In Proceedings of IEEE Workshop on Applica-
+  TIP PB HiFi DSP FINAL-pdf.                                     tions of Signal Processing to Audio and Acoustics (WAS-
+                                                                 PAA), pp. 308–312, November 2019. URL https:
+Chavarriaga, R., Sagha, H., Calatroni, A., Digumarti, S. T.,    //ieeexplore.ieee.org/document/8937164.
+  Tröster, G., Millán, J. d. R., and Roggen, D. The op-
+  portunity challenge: A benchmark database for on-body        Krishnamoorthi, R. Quantizing deep convolutional networks
+  sensor-based activity recognition. Pattern Recognition         for efficient inference: A whitepaper. arXiv preprint
+  Letters, 34(15):2033–2042, 2013.                               arXiv:1806.08342, 2018.
+
+Chen, G., Parada, C., and Heigold, G. Small-footprint          Kumar, A., Goyal, S., and Varma, M. Resource-efficient
+  keyword spotting using deep neural networks. In 2014           machine learning in 2 kb ram for the internet of things.
+  IEEE International Conference on Acoustics, Speech and         In International Conference on Machine Learning, pp.
+  Signal Processing (ICASSP), pp. 4087–4091. IEEE, 2014.        1935–1944, 2017.
+                                                 TensorFlow Lite Micro
+
+Lai, L., Suda, N., and Chandra, V. CMSIS-NN: Efficient       TensorFlow. TensorFlow Lite Guide, 2020b. URL https:
+  neural network kernels for Arm Cortex-M cpus. arXiv          //www.tensorflow.org/lite/guide.
+  preprint arXiv:1801.06601, 2018.
+                                                             TensorFlow. Tensorflow Lite Micro Benchmarks, 2020c.
+Lin, J., Chen, W.-M., Lin, Y., Cohn, J., Gan, C., and Han,     URL       https://github.com/tensorflow/
+  S. Mcunet: Tiny deep learning on IoT devices. arXiv          tensorflow/tree/master/tensorflow/
+  preprint arXiv:2007.10319, 2020.                             lite/micro/benchmarks.
+
+Lin, T.-Y., Maire, M., Belongie, S., Hays, J., Perona, P.,   TensorFlow. Tensorflow Lite Micro Profiler, 2020d.
+  Ramanan, D., Dollár, P., and Zitnick, C. L. Microsoft       URL       https://github.com/tensorflow/
+  COCO: Common objects in context. In European confer-         tensorflow/blob/master/tensorflow/
+  ence on computer vision, pp. 740–755. Springer, 2014.        lite/micro/micro profiler.cc.
+
+Martello, S. Chapter 8: Bin packing, knapsack prob-          TensorFlow.     TensorFlow Core Ops, 2020e.
+ lems: algorithms and computer implementations. Wiley-         URL       https://github.com/tensorflow/
+ Interscience series in discrete mathematics and optimiza-     tensorflow/blob/master/tensorflow/
+ tion, 1990.                                                   core/ops/ops.pbtxt.
+
+Mattson, P., Reddi, V. J., Cheng, C., Coleman, C., Di-       uTensor. uTensor, 2020. URL https://github.com/
+ amos, G., Kanter, D., Micikevicius, P., Patterson, D.,        uTensor/uTensor.
+ Schmuelling, G., Tang, H., et al. MLPerf: An industry
+ standard benchmark suite for machine learning perfor-       Waterman, A. and Asanovic, K. The risc-v instruction set
+ mance. IEEE Micro, 40(2):8–16, 2020.                         manual, volume i: Unprivileged isa document, version
+                                                              20190608-baseratified. RISC-V Foundation, Tech. Rep,
+Microsoft. Embedded Learning Library, 2020.         URL       2019.
+ https://microsoft.github.io/ELL/.
+                                                             Wu, X., Lee, I., Dong, Q., Yang, K., Kim, D., Wang, J.,
+Reddi, V. J., Cheng, C., Kanter, D., Mattson, P.,             Peng, Y., Zhang, Y., Saliganc, M., Yasuda, M., et al. A
+  Schmuelling, G., Wu, C.-J., Anderson, B., Breughe, M.,      0.04 mm 3 16nw wireless and batteryless sensor system
+  Charlebois, M., Chou, W., et al. MLPerf inference bench-    with integrated cortex-m0+ processor and optical commu-
+  mark. In 2020 ACM/IEEE 47th Annual International            nication for cellular temperature measurement. In 2018
+  Symposium on Computer Architecture (ISCA), pp. 446–         IEEE Symposium on VLSI Circuits, pp. 191–192. IEEE,
+  459. IEEE, 2020.                                            2018.
+
+Rotem, N., Fix, J., Abdulrasool, S., Catron, G., Deng,       Zhang, M. and Sawchuk, A. A. Usc-had: a daily activity
+  S., Dzhabarov, R., Gibson, N., Hegeman, J., Lele, M.,        dataset for ubiquitous activity recognition using wearable
+  Levenstein, R., et al. Glow: Graph lowering com-             sensors. In Proceedings of the 2012 ACM Conference on
+  piler techniques for neural networks. arXiv preprint         Ubiquitous Computing, pp. 1036–1043, 2012.
+  arXiv:1805.00907, 2018.
+                                                             Zhang, Y., Suda, N., Lai, L., and Chandra, V. Hello edge:
+Srivastava, N., Hinton, G., Krizhevsky, A., Sutskever, I.,     Keyword spotting on microcontrollers. arXiv preprint
+  and Salakhutdinov, R. Dropout: a simple way to prevent       arXiv:1711.07128, 2017.
+  neural networks from overfitting. The journal of machine
+  learning research, 15(1):1929–1958, 2014.
+
+STMicroelectronics. STM32Cube.AI, 2020. URL
+  https://www.st.com/content/st com/en/
+  stm32-ann.html.
+
+Susto, G. A., Schirru, A., Pampuri, S., McLoone, S., and
+  Beghi, A. Machine learning for predictive maintenance:
+  A multiple classifier approach. IEEE Transactions on
+  Industrial Informatics, 11(3):812–820, 2014.
+
+TensorFlow. TensorFlow Lite FlatBuffer Model, 2020a.
+  URL      https://www.tensorflow.org/lite/
+  api docs/cc/class/tflite/flat-buffer-
+  model.
+

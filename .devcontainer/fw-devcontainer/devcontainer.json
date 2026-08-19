@@ -4,6 +4,8 @@
   "service": "fw-devcontainer",
   "runServices": ["fw-devcontainer"],
   "workspaceFolder": "/workspace",
+  "containerUser": "root",
+  "postCreateCommand": ".devcontainer/fw-devcontainer/post-create.sh",
   "customizations": {
     "vscode": {
       "settings": {
@@ -35,6 +37,8 @@
         "ms-vscode.cpptools-extension-pack",
         "ms-vscode.cpptools-themes",
         "ms-vscode.makefile-tools",
+        "marus25.cortex-debug",
+        "mcu-debug.debug-tracker-vscode",
         "esbenp.prettier-vscode",
         "gruntfuggly.todo-tree",
         "xaver.clang-format",
@@ -42,5 +46,5 @@
       ]
     }
   },
-  "remoteUser": "dev"
+  "remoteUser": "boom"
 }

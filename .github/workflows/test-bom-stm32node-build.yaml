@@ -1,0 +1,120 @@
+name: Test bom-stm32node Firmware Build
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.gitmodules'
+      - 'fw/bom-stm32node/**'
+      - 'fw/common/boomlink/**'
+      - '.github/workflows/test-bom-stm32node-build.yaml'
+
+permissions:
+  contents: read
+
+jobs:
+  test-build:
+    name: Build firmware (Debug)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          # This job only reads the checkout to configure/build; it never
+          # needs authenticated git access afterwards, so don't leave the
+          # job token persisted in the workspace's git config for later
+          # steps to pick up.
+          persist-credentials: false
+
+      - name: Install ARM GCC toolchain and Ninja
+        run: |
+          sudo apt-get update
+          # libnewlib-arm-none-eabi and libstdc++-arm-none-eabi-newlib are only
+          # apt "Recommends" of gcc-arm-none-eabi, not hard dependencies, so
+          # they are named explicitly here: without them there is no C++
+          # standard library for the target and every .cpp under App/radio/
+          # (and the vendored RadioLib) fails to compile/link.
+          sudo apt-get install -y \
+            gcc-arm-none-eabi \
+            libnewlib-arm-none-eabi \
+            libstdc++-arm-none-eabi-newlib \
+            ninja-build
+
+      - name: Set up Python for Nanopb code generation
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: fw/common/boomlink/requirements.txt
+
+      - name: Install Nanopb generator dependencies
+        run: |
+          # The firmware build now add_subdirectory()'s into
+          # fw/common/boomlink, which runs the Nanopb generator (and protoc,
+          # via grpcio-tools' bundled copy) at build time to turn
+          # fw/common/boomlink/proto/*.proto into the *.pb.c/.pb.h the
+          # boomlink_protocol library compiles - see
+          # fw/common/boomlink/CMakeLists.txt. Installed from the same
+          # requirements.txt as the host protocol build (not a hand-picked
+          # `pip install protobuf grpcio-tools`) so both jobs are pinned to
+          # the same version RANGES (requirements.txt still uses ranges, so
+          # this doesn't guarantee an identical resolved version on every
+          # run - just removes the one hardcoded, unpinned-anywhere copy
+          # that could drift from that shared range on its own).
+          pip install --quiet -r fw/common/boomlink/requirements.txt
+
+      - name: Register GCC problem matcher
+        # Same rationale as the host workflow: this build compiles the generated
+        # *.pb.c and every firmware source with -Wall (and no -Werror on the
+        # boomlink sources), so without a matcher a new warning here is neither
+        # a failure nor an annotation - just text in a log. arm-none-eabi-gcc
+        # emits the same "file:line:col: severity: message" shape the matcher
+        # already handles.
+        run: echo "::add-matcher::.github/problem-matchers/gcc.json"
+
+      - name: Configure
+        working-directory: ./fw/bom-stm32node
+        run: cmake --preset Debug
+
+      - name: Build
+        working-directory: ./fw/bom-stm32node
+        run: cmake --build --preset Debug
+
+      - name: Verify ELF was produced
+        working-directory: ./fw/bom-stm32node
+        run: |
+          echo "Verifying build output..."
+          if [ ! -f build/Debug/bom-stm32node.elf ]; then
+            echo "❌ Build failed - bom-stm32node.elf not found"
+            exit 1
+          fi
+
+          echo "✅ ELF info:"
+          arm-none-eabi-size build/Debug/bom-stm32node.elf
+
+      - name: Verify BoomProtocol is actually linked in, not just compiled
+        working-directory: ./fw/bom-stm32node
+        run: |
+          # boomlink_protocol previously compiled for ARM without a single
+          # symbol from it being referenced anywhere in the firmware (see
+          # `proto` in Core/Src/cli.c) - the PR 2 acceptance criterion
+          # "STM32 build can encode/decode an Envelope using Nanopb" was
+          # unmet despite the build being green. A future refactor could
+          # silently reintroduce that by dropping the `proto` CLI binding;
+          # this step fails the build if boomlink_encode_envelope stops
+          # being present in the linked ELF, not just compiled somewhere.
+          if ! arm-none-eabi-nm build/Debug/bom-stm32node.elf | grep -q boomlink_encode_envelope; then
+            echo "❌ boomlink_encode_envelope is not linked into bom-stm32node.elf"
+            exit 1
+          fi
+          echo "✅ BoomProtocol symbols are linked into the firmware image"
+
+      - name: Build summary
+        run: |
+          echo "### ✅ Build Successful!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- STM32H563 + RadioLib/SX1262 firmware compiled (Debug) ✓" >> $GITHUB_STEP_SUMMARY
+          echo "- ELF produced ✓" >> $GITHUB_STEP_SUMMARY
+          echo "- BoomProtocol linked and referenced (not just compiled) ✓" >> $GITHUB_STEP_SUMMARY

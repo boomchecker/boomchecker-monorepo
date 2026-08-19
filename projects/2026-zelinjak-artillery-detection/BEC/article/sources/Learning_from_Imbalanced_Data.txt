@@ -1,0 +1,1629 @@
+IEEE TRANSACTIONS ON KNOWLEDGE AND DATA ENGINEERING,                    VOL. 21,     NO. 9,    SEPTEMBER 2009                                         1263
+
+
+
+
+                         Learning from Imbalanced Data
+                                       Haibo He, Member, IEEE, and Edwardo A. Garcia
+
+       Abstract—With the continuous expansion of data availability in many large-scale, complex, and networked systems, such as
+       surveillance, security, Internet, and finance, it becomes critical to advance the fundamental understanding of knowledge discovery and
+       analysis from raw data to support decision-making processes. Although existing knowledge discovery and data engineering techniques
+       have shown great success in many real-world applications, the problem of learning from imbalanced data (the imbalanced learning
+       problem) is a relatively new challenge that has attracted growing attention from both academia and industry. The imbalanced learning
+       problem is concerned with the performance of learning algorithms in the presence of underrepresented data and severe class
+       distribution skews. Due to the inherent complex characteristics of imbalanced data sets, learning from such data requires new
+       understandings, principles, algorithms, and tools to transform vast amounts of raw data efficiently into information and knowledge
+       representation. In this paper, we provide a comprehensive review of the development of research in learning from imbalanced data.
+       Our focus is to provide a critical review of the nature of the problem, the state-of-the-art technologies, and the current assessment
+       metrics used to evaluate learning performance under the imbalanced learning scenario. Furthermore, in order to stimulate future
+       research in this field, we also highlight the major opportunities and challenges, as well as potential important research directions for
+       learning from imbalanced data.
+
+       Index Terms—Imbalanced learning, classification, sampling methods, cost-sensitive learning, kernel-based learning, active learning,
+       assessment metrics.
+
+                                                                                 Ç
+
+1    INTRODUCTION
+
+R   ECENT developments in science and technology have
+    enabled the growth and availability of raw data to
+occur at an explosive rate. This has created an immense
+                                                                                     several major workshops, conferences, and special issues
+                                                                                     including the American Association for Artificial Intelli-
+                                                                                     gence (now the Association for the Advancement of
+opportunity for knowledge discovery and data engineering                             Artificial Intelligence) workshop on Learning from Imbal-
+research to play an essential role in a wide range of                                anced Data Sets (AAAI ’00) [1], the International Conference
+applications from daily civilian life to national security,                          on Machine Learning workshop on Learning from Imbal-
+from enterprise information processing to governmental                               anced Data Sets (ICML’03) [2], and the Association for
+decision-making support systems, from microscale data                                Computing Machinery Special Interest Group on Knowl-
+analysis to macroscale knowledge discovery. In recent                                edge Discovery and Data Mining Explorations (ACM
+years, the imbalanced learning problem has drawn a                                   SIGKDD Explorations ’04) [3].
+significant amount of interest from academia, industry,                                  With the great influx of attention devoted to the
+and government funding agencies. The fundamental issue                               imbalanced learning problem and the high activity of
+with the imbalanced learning problem is the ability of                               advancement in this field, remaining knowledgeable of all
+imbalanced data to significantly compromise the perfor-                              current developments can be an overwhelming task. Fig. 1
+mance of most standard learning algorithms. Most standard                            shows an estimation of the number of publications on the
+algorithms assume or expect balanced class distributions or                          imbalanced learning problem over the past decade based on
+equal misclassification costs. Therefore, when presented                             the Institute of Electrical and Electronics Engineers (IEEE)
+with complex imbalanced data sets, these algorithms fail to                          and Association for Computing Machinery (ACM) data-
+properly represent the distributive characteristics of the                           bases. As can be seen, the activity of publications in this
+data and resultantly provide unfavorable accuracies across                           field is growing at an explosive rate. Due to the relatively
+the classes of the data. When translated to real-world                               young age of this field and because of its rapid expansion,
+domains, the imbalanced learning problem represents a                                consistent assessments of past and current works in the
+recurring problem of high importance with wide-ranging                               field in addition to projections for future research are
+implications, warranting increasing exploration. This in-                            essential for long-term development. In this paper, we seek
+creased interest is reflected in the recent installment of                           to provide a survey of the current understanding of the
+                                                                                     imbalanced learning problem and the state-of-the-art solu-
+                                                                                     tions created to address this problem. Furthermore, in order
+. The authors are with the Department of Electrical and Computer                     to stimulate future research in this field, we also highlight
+  Engineering, Stevens Institute of Technology, Hoboken, NJ 07030.
+  E-mail: hhe@stevens.edu, edwardo.garcia@nyu.edu.                                   the major opportunities and challenges for learning from
+Manuscript received 1 May 2008; revised 6 Oct. 2008; accepted 1 Dec. 2008;
+                                                                                     imbalanced data.
+published online 19 Dec. 2008.                                                           In particular, we first describe the nature of the imbal-
+Recommended for acceptance by C. Clifton.                                            anced learning problem in Section 2, which provides the
+For information on obtaining reprints of this article, please send e-mail to:        foundation for our review of imbalanced learning solutions.
+tkde@computer.org, and reference IEEECS Log Number
+TKDE-2008-05-0233.                                                                   In Section 3, we provide a critical review of the innovative
+Digital Object Identifier no. 10.1109/TKDE.2008.239.                                 research developments targeting the imbalanced learning
+    Authorized licensed use limited to: CZECH TECHNICAL UNIVERSITY. Downloaded on May 16,2026 at 15:03:47 UTC from IEEE Xplore. Restrictions apply.
+                                               1041-4347/09/$25.00 ß 2009 IEEE       Published by the IEEE Computer Society
+1264                                          IEEE TRANSACTIONS ON KNOWLEDGE AND DATA ENGINEERING,                 VOL. 21,   NO. 9,   SEPTEMBER 2009
+
+
+                                                                             set contains 10,923 “Negative” (majority class) samples and
+                                                                             260 “Positive” (minority class) samples. Preferably, we
+                                                                             require a classifier that provides a balanced degree of
+                                                                             predictive accuracy (ideally 100 percent) for both the
+                                                                             minority and majority classes on the data set. In reality,
+                                                                             we find that classifiers tend to provide a severely imbal-
+                                                                             anced degree of accuracy, with the majority class having
+                                                                             close to 100 percent accuracy and the minority class having
+                                                                             accuracies of 0-10 percent, for instance [13], [15]. Suppose a
+                                                                             classifier achieves 10 percent accuracy on the minority class
+                                                                             of the mammography data set. Analytically, this would
+                                                                             suggest that 234 minority samples are misclassified as
+Fig. 1. Number of publications on imbalanced learning.
+                                                                             majority samples. The consequence of this is equivalent to
+                                                                             234 cancerous patients classified (diagnosed) as noncancer-
+problem, including sampling methods, cost-sensitive learn-                   ous. In the medical industry, the ramifications of such a
+ing methods, kernel-based learning methods, and active                       consequence can be overwhelmingly costly, more so than
+learning methods. Assessment metrics for imbalanced                          classifying a noncancerous patient as cancerous [16]. There-
+learning are reviewed in Section 4, which provides various                   fore, it is evident that for this domain, we require a classifier
+suggested methods that are used to compare and evaluate                      that will provide high accuracy for the minority class
+the performance of different imbalanced learning algo-                       without severely jeopardizing the accuracy of the majority
+rithms. Considering how learning from imbalanced data
+                                                                             class. Furthermore, this also suggests that the conventional
+is a relatively new topic in the research community, in
+                                                                             evaluation practice of using singular assessment criteria,
+Section 5, we present a detailed discussion on the opportu-
+                                                                             such as the overall accuracy or error rate, does not provide
+nities and challenges for research development in this field.
+                                                                             adequate information in the case of imbalanced learning.
+We hope that this section will provide some useful
+                                                                             Therefore, more informative assessment metrics, such as the
+suggestions to promote and guide the long-term advance-
+                                                                             receiver operating characteristics curves, precision-recall
+ment of research in this area. Finally, a conclusion is
+                                                                             curves, and cost curves, are necessary for conclusive
+provided in Section 6.
+                                                                             evaluations of performance in the presence of imbalanced
+                                                                             data. These topics will be discussed in detail in Section 4 of
+2      NATURE OF THE PROBLEM                                                 this paper. In addition to biomedical applications, further
+Technically speaking, any data set that exhibits an unequal                  speculation will yield similar consequences for domains
+distribution between its classes can be considered imbal-                    such as fraud detection, network intrusion, and oil-spill
+anced. However, the common understanding in the                              detection, to name a few [5], [16], [17], [18], [19].
+community is that imbalanced data correspond to data                             Imbalances of this form are commonly referred to as
+sets exhibiting significant, and in some cases extreme,                      intrinsic, i.e., the imbalance is a direct result of the nature of
+imbalances. Specifically, this form of imbalance is referred                 the dataspace. However, imbalanced data are not solely
+to as a between-class imbalance; not uncommon are between-                   restricted to the intrinsic variety. Variable factors such as
+class imbalances on the order of 100:1, 1,000:1, and 10,000:1,               time and storage also give rise to data sets that are
+where in each case, one class severely outrepresents                         imbalanced. Imbalances of this type are considered extrinsic,
+another [4], [5], [6]. Although this description would seem                  i.e., the imbalance is not directly related to the nature of the
+to imply that all between-class imbalances are innately                      dataspace. Extrinsic imbalances are equally as interesting as
+binary (or two-class), we note that there are multiclass data                their intrinsic counterparts since it may very well occur that
+in which imbalances exist between the various classes [7],                   the dataspace from which an extrinsic imbalanced data set
+[8], [9], [10], [11], [12]. In this paper, we only briefly touch             is attained may not be imbalanced at all. For instance,
+upon the multiclass imbalanced learning problem, focusing                    suppose a data set is procured from a continuous data
+instead on the two-class imbalanced learning problem for                     stream of balanced data over a specific interval of time, and
+space considerations.                                                        if during this interval, the transmission has sporadic
+   In order to highlight the implications of the imbalanced                  interruptions where data are not transmitted, then it is
+learning problem in the real world, we present an example                    possible that the acquired data set can be imbalanced in
+from biomedical applications. Consider the “Mammogra-                        which case the data set would be an extrinsic imbalanced
+phy Data Set,” a collection of images acquired from a series                 data set attained from a balanced dataspace.
+of mammography exams performed on a set of distinct                              In addition to intrinsic and extrinsic imbalance, it is
+patients, which has been widely used in the analysis of                      important to understand the difference between relative
+algorithms addressing the imbalanced learning problem                        imbalance and imbalance due to rare instances (or “absolute
+[13], [14], [15]. Analyzing the images in a binary sense, the                rarity”) [20], [21]. Consider a mammography data set with
+natural classes (labels) that arise are “Positive” or “Nega-                 100,000 examples and a 100:1 between-class imbalance. We
+tive” for an image representative of a “cancerous” or                        would expect this data set to contain 1,000 minority class
+“healthy” patient, respectively. From experience, one would                  examples; clearly, the majority class dominates the minority
+expect the number of noncancerous patients to exceed                         class. Suppose we then double the sample space by testing
+greatly the number of cancerous patients; indeed, this data                  more patients, and suppose further that the distribution
+    Authorized licensed use limited to: CZECH TECHNICAL UNIVERSITY. Downloaded on May 16,2026 at 15:03:47 UTC from IEEE Xplore. Restrictions apply.
+HE AND GARCIA: LEARNING FROM IMBALANCED DATA                                                                                                         1265
+
+
+                                                                            not enclosed) represents the dominant majority class
+                                                                            concept. For both classes, the number of examples in the
+                                                                            dominant clusters significantly outnumber the examples in
+                                                                            their respective subconcept clusters, so that this dataspace
+                                                                            exhibits both within-class and between-class imbalances.
+                                                                            Moreover, if we completely remove the examples in cluster
+                                                                            B, the dataspace would then have a homogeneous minority
+                                                                            class concept that is easily identified (cluster C), but can go
+                                                                            unlearned due to its severe underrepresentation.
+Fig. 2. (a) A data set with a between-class imbalance. (b) A high-              The existence of within-class imbalances is closely
+complexity data set with both between-class and within-class imbal-         intertwined with the problem of small disjuncts, which has
+ances, multiple concepts, overlapping, noise, and lack of representative    been shown to greatly depreciate classification performance
+data.
+                                                                            [23], [27], [28], [29]. Briefly, the problem of small disjuncts
+                                                                            can be understood as follows: A classifier will attempt to
+does not change, i.e., the minority class now contains                      learn a concept by creating multiple disjunct rules that
+2,000 examples. Clearly, the minority class is still out-                   describe the main concept [20], [25], [26]. In the case of
+numbered; however, with 2,000 examples, the minority class                  homogeneous concepts, the classifier will generally create
+is not necessarily rare in its own right but rather relative to             large disjuncts, i.e., rules that cover a large portion (cluster)
+the majority class. This example is representative of a
+                                                                            of examples pertaining to the main concept. However, in
+relative imbalance. Relative imbalances arise frequently in
+                                                                            the case of heterogeneous concepts, small disjuncts, i.e.,
+real-world applications and are often the focus of many
+                                                                            rules that cover a small cluster of examples pertaining to
+knowledge discovery and data engineering research efforts.
+                                                                            the main concept, arise as a direct result of underrepre-
+Some studies have shown that for certain relative imbal-
+                                                                            sented subconcepts [20], [25], [26]. Moreover, since classi-
+anced data sets, the minority concept is accurately learned
+                                                                            fiers attempt to learn both majority and minority concepts,
+with little disturbance from the imbalance [22], [23], [24].
+                                                                            the problem of small disjuncts is not only restricted to the
+These results are particularly suggestive because they show
+                                                                            minority concept. On the contrary, small disjuncts of the
+that the degree of imbalance is not the only factor that
+                                                                            majority class can arise from noisy misclassified minority
+hinders learning. As it turns out, data set complexity is the
+                                                                            class examples or underrepresented subconcepts. However,
+primary determining factor of classification deterioration,
+                                                                            because of the vast representation of majority class data,
+which, in turn, is amplified by the addition of a relative
+                                                                            this occurrence is infrequent. A more common scenario is
+imbalance.
+    Data complexity is a broad term that comprises issues                   that noise may influence disjuncts in the minority class. In
+such as overlapping, lack of representative data, small                     this case, the validity of the clusters corresponding to the
+disjuncts, and others. In a simple example, consider the                    small disjuncts becomes an important issue, i.e., whether
+depicted distributions in Fig. 2. In this figure, the stars and             these examples represent an actual subconcept or are
+circles represent the minority and majority classes, respec-                merely attributed to noise. For example, in Fig. 2b, suppose
+tively. By inspection, we see that both distributions in                    a classifier generates disjuncts for each of the two noisy
+Figs. 2a and 2b exhibit relative imbalances. However, notice                minority samples in cluster A, then these would be
+how Fig. 2a has no overlapping examples between its classes                 illegitimate disjuncts attributed to noise compared to
+and has only one concept pertaining to each class, whereas                  cluster C, for example, which is a legitimate cluster formed
+Fig. 2b has both multiple concepts and severe overlapping.                  from a severely underrepresented subconcept.
+Also of interest is subconcept C in the distribution of Fig. 2b.                The last issue we would like to discuss is the
+This concept might go unlearned by some inducers due to its                 combination of imbalanced data and the small sample size
+lack of representative data; this issue embodies imbalances                 problem [30], [31]. In many of today’s data analysis and
+due to rare instances, which we proceed to explore.                         knowledge discovery applications, it is often unavoidable
+    Imbalance due to rare instances is representative of                    to have data with high dimensionality and small sample
+domains where minority class examples are very limited,                     size; some specific examples include face recognition and
+i.e., where the target concept is rare. In this situation, the              gene expression data analysis, among others. Traditionally,
+lack of representative data will make learning difficult                    the small sample size problem has been studied exten-
+regardless of the between-class imbalance [20]. Further-                    sively in the pattern recognition community [30]. Dimen-
+more, the minority concept may additionally contain a                       sionality reduction methods have been widely adopted to
+subconcept with limited instances, amounting to diverging                   handle this issue, e.g., principal component analysis (PCA)
+degrees of classification difficulty [25], [26]. This, in fact, is          and various extension methods [32]. However, when the
+the result of another form of imbalance, a within-class                     representative data sets’ concepts exhibit imbalances of the
+imbalance, which concerns itself with the distribution of                   forms described earlier, the combination of imbalanced
+representative data for subconcepts within a class [27], [28],              data and small sample size presents a new challenge to the
+[29]. These ideas are again highlighted in our simplified                   community [31]. In this situation, there are two critical
+example in Fig. 2. In Fig. 2b, cluster B represents the                     issues that arise simultaneously [31]. First, since the
+dominant minority class concept and cluster C represents a                  sample size is small, all of the issues related to absolute
+subconcept of the minority class. Cluster D represents two                  rarity and within-class imbalances are applicable. Second
+subconcepts of the majority class and cluster A (anything                   and more importantly, learning algorithms often fail to
+   Authorized licensed use limited to: CZECH TECHNICAL UNIVERSITY. Downloaded on May 16,2026 at 15:03:47 UTC from IEEE Xplore. Restrictions apply.
+1266                                          IEEE TRANSACTIONS ON KNOWLEDGE AND DATA ENGINEERING,                 VOL. 21,   NO. 9,   SEPTEMBER 2009
+
+
+generalize inductive rules over the sample space when                        S ¼ fðxxi ; yi Þg; i ¼ 1; . . . ; m, where xi 2 X is an instance in
+presented with this form of imbalance. In this case, the                     the n-dimensional feature space X ¼ ff1 ; f2 ; . . . ; fn g, and
+combination of small sample size and high dimensionality                     yi 2 Y ¼ f1; . . . ; C g is a class identity label associated with
+hinders learning because of difficultly involved in forming                  instance xi . In particular, C ¼ 2 represents the two-class
+conjunctions over the high degree of features with limited                   classification problem. Furthermore, we define subsets
+samples. If the sample space is sufficiently large enough, a                 Smin  S and Smaj  S, where Smin is the set of minority
+set of general (albeit complex) inductive rules can be                       class examples in S, and Smaj is the set of majority class
+defined for the dataspace. However, when samples are                         examples in S, so that Smin \ Smaj ¼ fg and Smin [
+limited, the rules formed can become too specific, leading                   Smaj ¼ fS g. Lastly, any sets generated from sampling
+to overfitting. In regards to learning from such data sets,                  procedures on S are labeled E, with disjoint subsets Emin
+this is a relatively new research topic that requires much                   and Emaj representing the minority and majority samples of
+needed attention in the community. As a result, we will                      E, respectively, whenever they apply.
+touch upon this topic again later in our discussions.
+                                                                             3.1 Sampling Methods for Imbalanced Learning
+                                                                             Typically, the use of sampling methods in imbalanced
+3      THE STATE-OF-THE-ART SOLUTIONS                                        learning applications consists of the modification of an
+       FOR IMBALANCED LEARNING                                               imbalanced data set by some mechanisms in order to
+The topics discussed in Section 2 provide the foundation for                 provide a balanced distribution. Studies have shown that
+most of the current research activities on imbalanced                        for several base classifiers, a balanced data set provides
+learning. In particular, the immense hindering effects that                  improved overall classification performance compared to
+                                                                             an imbalanced data set [35], [36], [37]. These results justify
+these problems have on standard learning algorithms are
+                                                                             the use of sampling methods for imbalanced learning.
+the focus of most of the existing solutions. When standard
+                                                                             However, they do not imply that classifiers cannot learn
+learning algorithms are applied to imbalanced data, the
+                                                                             from imbalanced data sets; on the contrary, studies have
+induction rules that describe the minority concepts are often
+                                                                             also shown that classifiers induced from certain imbalanced
+fewer and weaker than those of majority concepts, since the
+                                                                             data sets are comparable to classifiers induced from the
+minority class is often both outnumbered and under-
+                                                                             same data set balanced by sampling techniques [22], [23].
+represented. To provide a concrete understanding of the
+                                                                             This phenomenon has been directly linked to the problem
+direct effects of the imbalanced learning problem on
+                                                                             of rare cases and its corresponding consequences, as
+standard learning algorithms, we observe a case study of
+                                                                             described in Section 2. Nevertheless, for most imbalanced
+the popular decision tree learning algorithm.
+                                                                             data sets, the application of sampling techniques does
+   In this case, imbalanced data sets exploit inadequacies in
+                                                                             indeed aid in improved classifier accuracy.
+the splitting criterion at each node of the decision tree [23],
+[24], [33]. Decision trees use a recursive, top-down greedy                  3.1.1 Random Oversampling and Undersampling
+search algorithm that uses a feature selection scheme (e.g.,                 The mechanics of random oversampling follow naturally from
+information gain) to select the best feature as the split                    its description by adding a set E sampled from the minority
+criterion at each node of the tree; a successor (leaf) is then               class: for a set of randomly selected minority examples in
+created for each of the possible values corresponding to the                 Smin , augment the original set S by replicating the selected
+split feature [26], [34]. As a result, the training set is                   examples and adding them to S. In this way, the number of
+successively partitioned into smaller subsets that are                       total examples in Smin is increased by jEj and the class
+ultimately used to form disjoint rules pertaining to class                   distribution balance of S is adjusted accordingly. This
+concepts. These rules are finally combined so that the final                 provides a mechanism for varying the degree of class
+hypothesis minimizes the total error rate across each class.                 distribution balance to any desired level. The oversampling
+The problem with this procedure in the presence of                           method is simple to both understand and visualize, thus we
+imbalanced data is two-fold. First, successive partitioning                  refrain from providing any specific examples of its
+of the dataspace results in fewer and fewer observations of                  functionality.
+minority class examples resulting in fewer leaves describing                     While oversampling appends data to the original data
+minority concepts and successively weaker confidences                        set, random undersampling removes data from the original
+estimates. Second, concepts that have dependencies on                        data set. In particular, we randomly select a set of majority
+different feature space conjunctions can go unlearned by the                 class examples in Smaj and remove these samples from S so
+sparseness introduced through partitioning. Here, the first                  that jSj ¼ jSmin j þ jSmaj j  jEj. Consequently, undersam-
+issue correlates with the problems of relative and absolute                  pling readily gives us a simple method for adjusting the
+imbalances, while the second issue best correlates with the                  balance of the original data set S.
+between-class imbalance and the problem of high dimen-                           At first glance, the oversampling and undersampling
+sionality. In both cases, the effects of imbalanced data on                  methods appear to be functionally equivalent since they
+decision tree classification performance are detrimental. In                 both alter the size of the original data set and can actually
+the following sections, we evaluate the solutions proposed                   provide the same proportion of balance. However, this
+to overcome the effects of imbalanced data.                                  commonality is only superficial, each method introduces its
+   For clear presentation, we establish here some of the                     own set of problematic consequences that can potentially
+notations used in this section. Considering a given training                 hinder learning [25], [38], [39]. In the case of under-
+data set S with m examples (i.e., jSj ¼ m), we define:                       sampling, the problem is relatively obvious: removing
+    Authorized licensed use limited to: CZECH TECHNICAL UNIVERSITY. Downloaded on May 16,2026 at 15:03:47 UTC from IEEE Xplore. Restrictions apply.
+HE AND GARCIA: LEARNING FROM IMBALANCED DATA                                                                                                         1267
+
+
+examples from the majority class may cause the classifier to
+miss important concepts pertaining to the majority class. In
+regards to oversampling, the problem is a little more
+opaque: since oversampling simply appends replicated data
+to the original data set, multiple instances of certain
+examples become “tied,” leading to overfitting [38]. In
+particular, overfitting in oversampling occurs when classi-
+fiers produce multiple clauses in a rule for multiple copies
+of the same example which causes the rule to become too
+specific; although the training accuracy will be high in this
+scenario, the classification performance on the unseen
+                                                                            Fig. 3. (a) Example of the K-nearest neighbors for the xi example under
+testing data is generally far worse [25].
+                                                                            consideration (K ¼ 6). (b) Data creation based on euclidian distance.
+3.1.2 Informed Undersampling
+Two examples of informed undersampling that have shown                      examples is the largest. Experimental results suggested that
+good results are presented in [40], the EasyEnsemble and                    the NearMiss-2 method can provide competitive results for
+BalanceCascade algorithms. The objective of these two                       imbalanced learning.
+methods is to overcome the deficiency of information loss                      There are also other types of informed undersampling
+introduced in the traditional random undersampling                          methods. For instance, the one-sided selection (OSS)
+method. The implementation of EasyEnsemble is very                          method [42] selects a representative subset of the majority
+straightforward: it develops an ensemble learning system                    class E and combines it with the set of all minority
+by independently sampling several subsets from the                          examples Smin to form a preliminary set N; N ¼ fE [ Smin g.
+majority class and developing multiple classifiers based                    This set N is further refined by using a data cleaning
+on the combination of each subset with the minority class                   technique. We will return to the discussion of this method
+data. In this way, EasyEnsemble can be considered as an                     in Section 3.1.5, now turning our attention to synthetic
+unsupervised learning algorithm that explores the majority                  sampling methods.
+class data by using independent random sampling with
+                                                                            3.1.3 Synthetic Sampling with Data Generation
+replacement. On the other hand, the BalanceCascade
+algorithm takes a supervised learning approach that                         In regards to synthetic sampling, the synthetic minority
+develops an ensemble of classifiers to systematically select                oversampling technique (SMOTE) is a powerful method that
+which majority class examples to undersample. Specifically,                 has shown a great deal of success in various applications [13].
+for the first hypothesis of the ensemble, Hð1Þ, consider a                  The SMOTE algorithm creates artificial data based on the
+sampled set of majority class examples, E, such that jE j ¼                 feature space similarities between existing minority exam-
+jSmin j and subject the ensemble to set N ¼ fE [ Smin g to                  ples. Specifically, for subset Smin 2 S, consider the K-nearest
+induce Hð1Þ. Observing the results of Hð1Þ, identify all xi 2               neighbors for each example xi 2 Smin , for some specified
+N that are correctly classified as belonging to Smaj , call this            integer K; the K-nearest neighbors are defined as the
+              
+collection Nmaj   . Then, since we already have Hð1Þ, it is                 K elements of Smin whose euclidian distance between itself
+reasonable to assume that Nmaj  
+                                   is somewhat redundant in                 and xi under consideration exhibits the smallest magnitude
+Smaj given that Hð1Þ is already trained. Based on this, we                  along the n-dimensions of feature space X. To create a
+remove set Nmaj 
+                    from Smaj and generate a new sampled set                synthetic sample, randomly select one of the K-nearest
+of majority class samples, E, with jE j ¼ jSmin j and again                 neighbors, then multiply the corresponding feature vector
+subject the ensemble to set N ¼ fE [ Smin g to derive Hð2Þ.                 difference with a random number between ½0; 1, and finally,
+This procedure is iterated to a stopping criteria at which                  add this vector to xi
+point a cascading combination scheme is used to form a                                            xnew ¼ xi þ ðx^i  xi Þ  ;                        ð1Þ
+final hypothesis [40].
+   Another example of informed undersampling uses the                       where xi 2 Smin is the minority instance under considera-
+K-nearest neighbor (KNN) classifier to achieve under-                       tion, x^i is one of the K-nearest neighbors for xi : x^i 2 Smin ,
+sampling. Based on the characteristics of the given data                    and  2 ½0; 1 is a random number. Therefore, the resulting
+distribution, four KNN undersampling methods were                           synthetic instance according to (1) is a point along the line
+proposed in [41], namely, NearMiss-1, NearMiss-2, Near-                     segment joining xi under consideration and the randomly
+Miss-3, and the “most distant” method. The NearMiss-1                       selected K-nearest neighbor x^i .
+method selects those majority examples whose average                           Fig. 3 shows an example of the SMOTE procedure. Fig. 3a
+distance to the three closest minority class examples is the                shows a typical imbalanced data distribution, where the stars
+smallest, while the NearMiss-2 method selects the majority                  and circles represent examples of the minority and majority
+class examples whose average distance to the three farthest                 class, respectively. The number of K-nearest neighbors is set
+minority class examples is the smallest. NearMiss-3 selects                 to K ¼ 6. Fig. 3b shows a created sample along the line
+a given number of the closest majority examples for each                    between xi and x^i , highlighted by the diamond shape. These
+minority example to guarantee that every minority example                   synthetic samples help break the ties introduced by simple
+is surrounded by some majority examples. Finally, the                       oversampling, and furthermore, augment the original data
+“most distance” method selects the majority class examples                  set in a manner that generally significantly improves
+whose average distance to the three closest minority class                  learning. Though it has shown many promising benefits,
+   Authorized licensed use limited to: CZECH TECHNICAL UNIVERSITY. Downloaded on May 16,2026 at 15:03:47 UTC from IEEE Xplore. Restrictions apply.
+1268                                         IEEE TRANSACTIONS ON KNOWLEDGE AND DATA ENGINEERING,                     VOL. 21,    NO. 9,       SEPTEMBER 2009
+
+
+                                                                            First, calculate the number of synthetic data examples that
+                                                                            need to be generated for the entire minority class:
+                                                                                                                   
+                                                                                               G ¼ jSmaj j  jSmin j  ;           ð3Þ
+                                                                            where  2 ½0; 1 is a parameter used to specify the desired
+                                                                            balance level after the synthetic data generation process.
+                                                                            Next, for each example xi 2 Smin , find the K-nearest
+                                                                            neighbors according to the euclidean distance and calculate
+                                                                            the ratio i defined as:
+
+                                                                                                       i =K
+Fig. 4. Data creation based on Borderline instance.                                             i ¼         ;       i ¼ 1; . . . ; jSmin j;                ð4Þ
+                                                                                                        Z
+the SMOTE algorithm also has its drawbacks, including over                  where i is the number of examples in the K-nearest
+generalization and variance [43]. We will further analyze                   neighbors of xi that belong to Smaj , and Z is a normalization
+                                                                                                                                P
+these limitations in the following discussion.                              constant so that i is a distribution function ( i ¼ 1).
+                                                                            Then, determine the number of synthetic data samples that
+3.1.4 Adaptive Synthetic Sampling                                           need to be generated for each xi 2 Smin :
+In the SMOTE algorithm, the problem of over general-
+ization is largely attributed to the way in which it creates                                                  gi ¼ i  G:                                  ð5Þ
+synthetic samples. Specifically, SMOTE generates the same                      Finally, for each xi 2 Smin , generate gi synthetic data
+number of synthetic data samples for each original minority                 samples according to (1). The key idea of the ADASYN
+example and does so without consideration to neighboring                    algorithm is to use a density distribution  as a criterion to
+examples, which increases the occurrence of overlapping                     automatically decide the number of synthetic samples that
+between classes [43]. To this end, various adaptive                         need to be generated for each minority example by
+sampling methods have been proposed to overcome this                        adaptively changing the weights of different minority
+limitation; some representative work includes the Border-                   examples to compensate for the skewed distributions.
+line-SMOTE [44] and Adaptive Synthetic Sampling (ADA-
+SYN) [45] algorithms.                                                       3.1.5 Sampling with Data Cleaning Techniques
+    Of particular interest with these adaptive algorithms are               Data cleaning techniques, such as Tomek links, have been
+the techniques used to identify minority seed samples. In                   effectively applied to remove the overlapping that is
+the case of Borderline-SMOTE, this is achieved as follows:                  introduced from sampling methods. Generally speaking,
+First, determine the set of nearest neighbors for each                      Tomek links [46] can be defined as a pair of minimally
+xi 2 Smin ; call this set Si:mNN ; Si:mNN  S. Next, for each             distanced nearest neighbors of opposite classes. Given an
+xi , identify the number of nearest neighbors that belongs to               instance pair: ðx         xi ; x j Þ, where xi 2 Smin ; x j 2 Smaj , and
+the majority class, i.e., jSi:mNN \ Smaj j. Finally, select those          dðxxi ; x j Þ is the distance between xi and xj , then the ðx               xi ; xj Þ
+xi that satisfy:                                                            pair is called a Tomek link if there is no instance x k , such
+                                                                            that dðx                  xi ; x j Þ or dðx
+                                                                                       xi ; x k Þ < dðx                              xi ; x j Þ. In this way,
+                                                                                                                      xj ; x k Þ < dðx
+                    m
+                       jSi:mNN \ Smaj j < m:                       ð2Þ    if two instances form a Tomek link then either one of these
+                    2
+                                                                            instances is noise or both are near a border. Therefore, one
+    Equation (2) suggests that only those xi that have more                 can use Tomek links to “cleanup” unwanted overlapping
+majority class neighbors than minority class neighbors are                  between classes after synthetic sampling where all Tomek
+selected to form the set “DANGER” [44]. Therefore, the                      links are removed until all minimally distanced nearest
+examples in DANGER represent the borderline minority                        neighbor pairs are of the same class. By removing over-
+class examples (the examples that are most likely to be                     lapping examples, one can establish well-defined class
+misclassified). The DANGER set is then fed to the SMOTE                     clusters in the training set, which can, in turn, lead to well-
+algorithm to generate synthetic minority samples in the                     defined classification rules for improved classification
+neighborhood of the borders. One should note that if                        performance. Some representative work in this area
+jSi:mNN \ Smaj j ¼ m, i.e., if all of the m nearest neighbors of           includes the OSS method [42], the condensed nearest
+xi are majority examples, such as the instance C in Fig. 4,                 neighbor rule and Tomek Links ðCNNþTomek LinksÞ
+then this xi is considered as noise and no synthetic                        integration method [22], the neighborhood cleaning rule
+examples are generated for it. Fig. 4 illustrates an example                (NCL) [36] based on the edited nearest neighbor (ENN)
+of the Borderline-SMOTE procedure. Comparing Fig. 4 and                     rule—which removes examples that differ from two of its
+Fig. 3, we see that the major difference between Borderline-                three nearest neighbors, and the integrations of SMOTE
+SMOTE and SMOTE is that SMOTE generates synthetic                           with ENN ðSMOTEþENNÞ and SMOTE with Tomek links
+instances for each minority instance, while Borderline-                     ðSMOTEþTomekÞ [22].
+SMOTE only generates synthetic instances for those                              Fig. 5 shows a typical procedure of using SMOTE and
+minority examples “closer” to the border.                                   Tomek to clean the overlapping data points.
+    ADASYN, on the other hand, uses a systematic method to                      Fig. 5a shows the original data set distribution for an
+adaptively create different amounts of synthetic data accord-               artificial imbalanced data set; note the inherent overlapping
+ing to their distributions [45]. This is achieved as follows:               that exists between the minority and majority examples.
+   Authorized licensed use limited to: CZECH TECHNICAL UNIVERSITY. Downloaded on May 16,2026 at 15:03:47 UTC from IEEE Xplore. Restrictions apply.
+HE AND GARCIA: LEARNING FROM IMBALANCED DATA                                                                                                         1269
+
+
+
+
+Fig. 5. (a) Original data set distribution. (b) Post-SMOTE data set.
+(c) The identified Tomek Links. (d) The data set after removing Tomek
+links.
+
+Fig. 5b shows the data set distribution after synthetic
+sampling by SMOTE. As can be seen, there is an increased
+                                                                            Fig. 6. (a) Original data set distribution. (b) Distance vectors of examples
+amount of overlapping introduced by SMOTE. In Fig. 5c,
+                                                                            and cluster means. (c) Newly defined cluster means and cluster borders.
+the Tomek links are identified, which are represented by the
+                                                                            (d) The data set after cluster-based oversampling method.
+dashed boxes. Last, Fig. 5d shows the data set after cleanup
+is performed. We can see that the algorithm produces more
+                                                                            (represented by triangles) for three random examples of
+well-defined class clusters, which potentially contributes to
+                                                                            each cluster, i.e., k ¼ 3. Fig. 6b also shows the distance
+improved classification performance. Furthermore, the idea
+                                                                            vectors for the five individually introduced examples
+illustrated in Fig. 5 is important since it introduces a
+                                                                            x1 ; x 2 ; x 3 ; x 4 , and x 5 . Fig. 6c shows the updated cluster
+consideration for class clusters; we further investigate class
+                                                                            means and cluster borders as a result of the five
+clusters in the following discussion of the cluster-based
+                                                                            introduced examples. Once all examples are exhausted,
+sampling algorithm.
+                                                                            the CBO algorithm inflates all majority class clusters other
+3.1.6 Cluster-Based Sampling Method                                         than the largest by oversampling so that all majority class
+Cluster-based sampling algorithms are particularly inter-                   clusters are of the same size as the largest (i.e., clusters B
+esting because they provide an added element of flexibility                 and C will each have 20 examples). We denote the total
+that is not available in most simple and synthetic sampling                 number of majority class examples after the oversampling
+algorithms, and accordingly can be tailored to target very                  process as NCBO ; NCBO ¼ jSmaj j þ jEmaj j (e.g., NCBO ¼ 60
+specific problems. In [27], the cluster-based oversampling                  in our example). Then, we oversample the minority
+(CBO) algorithm is proposed to effectively deal with the                    clusters so that each cluster contains NCBO =mmin total
+within-class imbalance problem in tandem with the                           examples (i.e., each minority clusters D and E will have a
+between-class imbalance problem.                                            total number of 60=2 ¼ 30 examples after the oversam-
+   The CBO algorithm makes use of the K-means clustering                    pling procedure). Fig. 6d shows the final data set after
+technique. This procedure takes a random set of K examples                  applying the CBO method. Compared to Fig. 6a, we can
+from each cluster (for both classes) and computes the mean                  see that the final data set has a stronger representation of
+feature vector of these examples, which is designated as the                rare concepts. We would also like to note that different
+cluster center. Next, the remaining training examples are                   oversampling methods can be integrated into the CBO
+presented one at a time and for each example, the euclidean                 algorithm. For instance, Jo and Japkowicz [27] used the
+distance vector between it and each cluster center is                       random oversampling method discussed in Section 3.1.1,
+computed. Each training example is then assigned to the                     while our example in Fig. 6 uses synthetic sampling.
+cluster that exhibits the smallest distance vector magnitude.               Empirical results of CBO are very suggestive into the
+Lastly, all cluster means are updated and the process is                    nature of the imbalanced learning problem; namely, that
+repeated until all examples are exhausted (i.e., only one                   targeting within-class imbalance in tandem with the
+cluster mean is essentially updated for each example).                      between-class imbalance is an effective strategy for imbal-
+   Fig. 6 illustrates these steps. Fig. 6a shows the original               anced data sets.
+distribution. Here, the majority class has three clusters A,
+B, and C (mmaj ¼ 3), and each of the clusters has 20, 10,                   3.1.7 Integration of Sampling and Boosting
+and 8 examples, respectively. The minority class has two                    The integration of sampling strategies with ensemble
+clusters, D and E (mmin ¼ 2), each with eight and five                      learning techniques has also been studied in the commu-
+examples, respectively. Fig. 6b shows the cluster means                     nity. For instance, the SMOTEBoost [47] algorithm is based
+   Authorized licensed use limited to: CZECH TECHNICAL UNIVERSITY. Downloaded on May 16,2026 at 15:03:47 UTC from IEEE Xplore. Restrictions apply.
+1270                                         IEEE TRANSACTIONS ON KNOWLEDGE AND DATA ENGINEERING,                 VOL. 21,   NO. 9,   SEPTEMBER 2009
+
+
+on the idea of integrating SMOTE with Adaboost.M2.
+Specifically, SMOTEBoost introduces synthetic sampling at
+each boosting iteration. In this way, each successive
+classifier ensemble focuses more on the minority class.
+Since each classifier ensemble is built on a different
+sampling of data, the final voted classifier is expected to
+have a broadened and well-defined decision region for the
+minority class.
+   Another integrated approach, the DataBoost-IM [14]
+method, combines the data generation techniques intro-                      Fig. 7. Multiclass cost matrix.
+duced in [48] with AdaBoost.M1 to achieve high predictive
+accuracy for the minority class without sacrificing accuracy                also incorporates the benefits of boosted ensembles to
+on the majority class. Briefly, DataBoost-IM generates                      improve performance. It was shown to provide very
+synthetic samples according to the ratio of difficult-to-learn              efficient results in empirical studies, which suggests that
+samples between classes. Concretely, for a data set S with                  synthetic procedures can be successful without jeopardizing
+corresponding subsets Smin  S and Smaj  S, and weighted                   runtime costs.
+distribution Dt representing the relative difficulty of learn-
+                                                                            3.2   Cost-Sensitive Methods\for Imbalanced
+ing for each example xi 2 S, we rank xi in descending order                       Learning
+according to their respective weight. We then select the top
+                                                                            While sampling methods attempt to balance distributions
+jSj  errorðtÞ examples to populate set E; E  S, where
+                                                                            by considering the representative proportions of class
+errorðtÞ is the error rate of the current learned classifier.
+                                                                            examples in the distribution, cost-sensitive learning meth-
+Thus, E is a collection of the hard-to-learn (hard) samples
+from both classes and has subsets Emin  E and Emaj  E.                    ods consider the costs associated with misclassifying
+Moreover, since minority class samples are generally more                   examples [49], [50]. Instead of creating balanced data
+difficult to learn than majority class samples, it is expected              distributions through different sampling strategies, cost-
+that jEmaj j  jEmin j.                                                     sensitive learning targets the imbalanced learning problem
+                                                                            by using different cost matrices that describe the costs for
+   Once the difficult examples are identified, DataBoost-IM
+                                                                            misclassifying any particular data example. Recent research
+proceeds to create synthetic samples according to a two-
+                                                                            indicates that there is a strong connection between cost-
+tier process: first, identify the “seeds” of E from which                   sensitive learning and learning from imbalanced data;
+synthetic samples are formed, and then, generate synthetic                  therefore, the theoretical foundations and algorithms of
+data based on these samples. The seed identification                        cost-sensitive methods can be naturally applied to imbal-
+procedure is based on the ratio of class representation in                  anced learning problems [3], [20], [51]. Moreover, various
+E and S. The number of majority class seeds ML is defined                   empirical studies have shown that in some application
+                 jSmaj j                                                    domains, including certain specific imbalanced learning
+as ML ¼ minðjSmin      j ; jEmaj jÞ, and the number of minority
+seeds MS is defined as MS ¼ minð maj
+                                             jS jML                        domains [11], [52], [53], cost-sensitive learning is superior to
+                                               jSmin j ; jEmin jÞ. We
+                                                                            sampling methods. Therefore, cost-sensitive techniques
+then proceed to generate synthetic set Esyn , with subsets
+                                                                            provide a viable alternative to sampling methods for
+Esmin  Esyn and Esmaj  Esyn , such that jEsmin j ¼ MS 
+                                                                            imbalanced learning domains.
+jSmin j and jEsmaj j ¼ ML  jSmaj j . Set S is then augmented
+by Esyn to provide a more balanced class distribution with                  3.2.1 Cost-Sensitive Learning Framework
+more new instances of the minority class. Lastly, the                       Fundamental to the cost-sensitive learning methodology is
+weighted distribution Dt is updated with consideration to                   the concept of the cost matrix. The cost matrix can be
+the newly added synthetic samples.                                          considered as a numerical representation of the penalty of
+   Evidence that synthetic sampling methods are effective                   classifying examples from one class to another. For
+in dealing with learning from imbalanced data is quite                      example, in a binary classification scenario, we define
+strong. However, the data generation methods discussed                      CðMin; MajÞ as the cost of misclassifying a majority class
+thus far are complex and computationally expensive.                         example as a minority class example and let CðMaj; MinÞ
+Noting the essential problem of “ties” in random over-                      represents the cost of the contrary case. Typically, there is
+sampling as discussed in Section 3.1.1, Mease et al. [38]                   no cost for correct classification of either class and the cost
+propose a much simpler technique for breaking these ties:                   of misclassifying minority examples is higher than the
+instead of generating new data from computational                           contrary case, i.e., CðMaj; MinÞ > CðMin; MajÞ. The objec-
+methods, use the duplicate data obtained from random                        tive of cost-sensitive learning then is to develop a hypoth-
+oversampling and introduce perturbations (“jittering”) to                   esis that minimizes the overall cost on the training data set,
+this data to break ties. The resulting algorithm, over/                     which is usually the Bayes conditional risk. These concepts
+undersampling with jittering (JOUS-Boost), introduces                       are easily extended to multiclass data by considering Cði; jÞ
+independently and identically distributed (iid) noise at                    which represents the cost of predicting class i when the true
+each iteration of boosting to minority examples for which                   class is j, where i; j 2 Y ¼ f1; . . . ; C g. Fig. 7 shows a typical
+oversampling creates replicates [38]. This idea is relatively               cost matrix for a multiclass problem. InPthis case, the
+simple compared to its synthetic sampling counterparts and                  conditional risk is defined as Rðijx          xÞ ¼ j P ðjjxxÞC ði; jÞ,
+   Authorized licensed use limited to: CZECH TECHNICAL UNIVERSITY. Downloaded on May 16,2026 at 15:03:47 UTC from IEEE Xplore. Restrictions apply.
+HE AND GARCIA: LEARNING FROM IMBALANCED DATA                                                                                                         1271
+
+
+where P ðjjx xÞ represents the probability of each class j for a                                                          xi Þyi Þ=Zt ;
+                                                                                         Dtþ1 ðiÞ ¼ Ci Dt ðiÞ expðt ht ðx                           ð8Þ
+given example x [49], [54].
+   There are many different ways of implementing cost-                                                                      xi Þyi Þ=Zt :
+                                                                                        Dtþ1 ðiÞ ¼ Ci Dt ðiÞ expðt Ci ht ðx                         ð9Þ
+sensitive learning, but, in general, the majority of techniques                Equations (7), (8), and (9) corresponds to the AdaC1,
+fall under three categories. The first class of techniques apply            AdaC2, and AdaC3 methods, respectively. Here, the cost item
+misclassification costs to the data set as a form of dataspace              Ci is the associated cost for each xi and Ci s of higher value
+weighting; these techniques are essentially cost-sensitive                  correspond to examples with higher misclassification costs.
+bootstrap sampling approaches where misclassification                       In essence, these algorithms increase the probability of
+costs are used to select the best training distribution for                 sampling a costly example at each iteration, giving the
+induction. The second class applies cost-minimizing techni-                 classifier more instances of costly examples for a more
+ques to the combination schemes of ensemble methods; this                   targeted approach of induction. In general, it was observed
+class consists of various Metatechniques where standard                     that the inclusion of cost factors into the weighting scheme of
+learning algorithms are integrated with ensemble methods                    Adaboost imposes a bias toward the minority concepts and
+to develop cost-sensitive classifiers. Both of these classes                also increases the use of more relevant data samples in each
+have rich theoretical foundations that justify their ap-                    hypothesis, providing for a more robust form of classification.
+proaches, with cost-sensitive dataspace weighting methods                      Another cost-sensitive boosting algorithm that follows a
+building on the translation theorem [55], and cost-sensitive                similar methodology is AdaCost [59]. AdaCost, like AdaC1,
+Metatechniques building on the Metacost framework [54]. In                  introduces cost sensitivity inside the exponent of the weight
+fact, many of the existing research works often integrate the               updating formula of Adaboost. However, instead of apply-
+Metacost framework with dataspace weighting and adap-                       ing the cost items directly, AdaCost uses a cost-adjustment
+tive boosting to achieve stronger classification results. To                function that aggressively increases the weights of costly
+this end, we consider both of these classes of algorithms as                misclassifications and conservatively decreases the weights
+one in the following section. The last class of techniques                  of high-cost examples that are correctly classified. This
+incorporates cost-sensitive functions or features directly into             modification becomes:
+classification paradigms to essentially “fit” the cost-sensitive
+framework into these classifiers. Because many of these                                                                 xi Þyi i Þ=Zt ;
+                                                                                          Dtþ1 ðiÞ ¼ Dt ðiÞ expðt ht ðx                        ð10Þ
+techniques are specific to a particular paradigm, there is no
+unifying framework for this class of cost-sensitive learning,               with the cost-adjustment function i , defined as i ¼
+but in many cases, solutions that work for one paradigm can                                  xi ÞÞ; Ci Þ, where signðyi ; ht ðx
+                                                                             ðsignðyi ; ht ðx                                xi ÞÞ is positive for
+often be abstracted to work for others. As such, in our                     correct classification and negative for misclassification. For
+discussion of these types of techniques, we consider a few                  clear presentation, one can use þ when signðyi ; ht ðx        xi ÞÞ ¼ 1
+methods on a case-specific basis.                                           and  when signðyi ; ht ðx    xi ÞÞ ¼ 1. This method also allows
+                                                                            some flexibility in the amount of emphasis given to the
+3.2.2 Cost-Sensitive Dataspace Weighting                                    importance of an example. For instance, Fan et al. [59]
+        with Adaptive Boosting                                              suggest þ ¼ 0:5Ci þ 0:5 and  ¼ 0:5Ci þ 0:5 for good
+                                                                            results in most applications, but these coefficients can be
+Motivated by the pioneering work of the AdaBoost
+                                                                            adjusted according to specific needs. An empirical compar-
+algorithms [56], [57], several cost-sensitive boosting meth-
+                                                                            ison over four imbalanced data sets of AdaC1, AdaC2,
+ods for imbalanced learning have been proposed. Three
+                                                                            AdaC3, and AdaCost and two other similar algorithms,
+cost-sensitive boosting methods, AdaC1, AdaC2, and
+                                                                            CSB1 and CSB2 [60], was performed in [58] using decision
+AdaC3, were proposed in [58] which introduce cost items
+                                                                            trees and a rule association system as the base classifiers. It
+into the weight updating strategy of AdaBoost. The key idea
+of the AdaBoost.M1 method is to iteratively update the                      was noted that in all cases, a boosted ensemble performed
+distribution function over the training data. In this way, on               better than the stand-alone base classifiers using F-measure
+each iteration t :¼ 1; . . . ; T , where T is a preset number of            (see Section 4.1) as the evaluation metric, and in nearly all
+the total number of iterations, the distribution function Dt is             cases, the cost-sensitive boosted ensembles performed
+updated sequentially and used to train a new hypothesis:                    better than plain boosting.
+                                                                                Though these cost-sensitive algorithms can significantly
+             Dtþ1 ðiÞ ¼ Dt ðiÞ expðt ht ðx
+                                           xi Þyi Þ=Zt ;             ð6Þ    improve classification performance, they take for granted the
+                                                                            availability of a cost matrix and its associated cost items. In
+where   t ¼ 12 lnð1"
+                    "t Þ
+                       t
+                           is the weight updating parameter,                many situations, an explicit description of misclassification
+    xi Þ is the prediction output of hypothesis ht on the
+ht ðx                                                                       costs is unknown, i.e., only an informal assertion is known,
+instance xi ; "t is the error of hypothesis ht over the training            such as misclassifications on the positive class are more expensive
+            P
+data "t ¼ i:ht ðxxi Þ6¼yi Dt ðiÞ, and Zt is a normalization factor          than the negative class [51]. Moreover, determining a cost
+                                                 P                          representation of a given domain can be particularly
+so that Dtþ1 is a distribution function, i.e., m  i¼1 Dtþ1 ðiÞ ¼ 1.
+With this description in mind, a cost factor can be applied in              challenging and in some cases impossible [61]. As a result,
+                                                                            the techniques discussed in this section are not applicable in
+three ways, inside of the exponential, outside of the
+                                                                            these situations and other solutions must be established. This
+exponential, and both inside and outside the exponential.                   is the prime motivation for the cost-sensitive fitting techni-
+Analytically, this translates to                                            ques mentioned earlier. In the following sections, we provide
+            Dtþ1 ðiÞ ¼ Dt ðiÞ expðt Ci ht ðx
+                                             xi Þyi Þ=Zt ;           ð7Þ    an overview of these methods for two popular learning
+                                                                            paradigms, namely, decision trees and neural networks.
+   Authorized licensed use limited to: CZECH TECHNICAL UNIVERSITY. Downloaded on May 16,2026 at 15:03:47 UTC from IEEE Xplore. Restrictions apply.
+1272                                         IEEE TRANSACTIONS ON KNOWLEDGE AND DATA ENGINEERING,                 VOL. 21,   NO. 9,   SEPTEMBER 2009
+
+
+3.2.3 Cost-Sensitive Decision Trees                                         3.2.4 Cost-Sensitive Neural Networks
+In regards to decision trees, cost-sensitive fitting can take               Cost-sensitive neural networks have also been widely
+three forms: first, cost-sensitive adjustments can be applied               studied in the community for imbalanced learning. The
+to the decision threshold; second, cost-sensitive considera-                neural network is generally represented by a densely
+tions can be given to the split criteria at each node; and lastly,          interconnected set of simple neurons. Most practical
+cost-sensitive pruning schemes can be applied to the tree.                  applications of the neural network classifier involve a
+   A decision tree threshold moving scheme for imbalanced                   multilayer structure, such as the popular multilayer
+data with unknown misclassification costs was observed in                   perceptron (MLP) model [64], and learning is facilitated
+[51]. The relationships between the misclassification costs of              by using the back propagation algorithm in tandem with
+                                                                            the gradient descent rule. Concretely, assume that one
+each class, the distribution of training examples, and the
+                                                                            defines an error function as
+placement of the decision threshold have been established in
+[62]. However, Maloof [51] notes that the precise definition                                                 1X
+                                                                                                   Eð!Þ ¼       ðtk  ok Þ2 ;                    ð11Þ
+of these relationships can be task-specific, rendering a                                                     2
+systematic approach for threshold selection based on these                  where ! is a set of weights that require training, and tk and ok
+relationships unfeasible. Therefore, instead of relying on the              are the target value and network output value for a neuron k,
+training distribution or exact misclassification costs, the                 respectively. The gradient descent rule aims to find the
+proposed technique uses the ROC evaluation procedure (see                   steepest descent to modify the weights at each iteration:
+Section 4.2) to plot the range of performance values as the
+decision threshold is moved from the point where the total                                           !n ¼ r! Eð!n Þ;                          ð12Þ
+misclassifications on the positive class are maximally costly               where  is the specified neural network learning rate and
+to the point where total misclassifications on the negative                 r! represents the gradient operator with respect to
+class are maximally costly. The decision threshold that                     weights !. Moreover, a probabilistic estimate for the
+yields the most dominant point on the ROC curve is then                     output can be defined by normalizing the output values
+used as the final decision threshold.                                       of all output neurons.
+   When considering cost sensitivity in the split criterion, the               With this framework at hand, cost sensitivity can be
+task at hand is to fit an impurity function that is insensitive             introduced to neural networks in four ways [65]: first, cost-
+to unequal costs. For instance, traditionally accuracy is used              sensitive modifications can be applied to the probabilistic
+as the impurity function for decision trees, which chooses                  estimate; second, the neural network outputs (i,e., each ok )
+the split with minimal error at each node. However, this                    can be made cost-sensitive; third, cost-sensitive modifica-
+metric is sensitive to changes in sample distributions (see                 tions can be applied to the learning rate ; and fourth, the
+                                                                            error minimization function can be adapted to account for
+Section 4.1), and thus, inherently sensitive to unequal costs.
+                                                                            expected costs.
+In [63], three specific impurity functions, Gini, Entropy, and
+                                                                               In regards to the probability estimate, Kukar and
+DKM, were shown to have improved cost insensitivity
+                                                                            Kononenko [65] integrate cost factors into the testing stage
+compared with the accuracy/error rate baseline. Moreover,                   of classification to adaptively modify the probability
+these empirical experiments also showed that using the                      estimate of the neural network output. This has the benefit
+DKM function generally produced smaller unpruned                            of maintaining the original structure (and outputs) of the
+decision trees that at worse provided accuracies comparable                 neural network while strengthening the original estimates
+to Gini and Entropy. A detailed theoretical basis explaining                on the more expensive class through cost consideration.
+the conclusions of these empirical results was later estab-                 Empirical results in [65] showed that this technique
+lished in [49], which generalizes the effects of decision tree              improves the performance over the original neural network,
+growth for any choice of spit criteria.                                     although the improvement is not drastic. However, we note
+   The final case of cost-sensitive decision tree fitting                   that a more significant performance increase can be
+applies to pruning. Pruning is beneficial for decision trees                achieved by applying this estimate to ensemble methods
+because it improves generalization by removing leaves with                  by using cross-validation techniques on a given set; a
+class probability estimates below a specified threshold.                    similar approach is considered in [11], however using a
+However, in the presence of imbalanced data, pruning                        slightly different estimate.
+procedures tend to remove leaves describing the minority                       The second class of neural network cost-sensitive fitting
+                                                                            techniques directly changes the outputs of the neural
+concept. It has been shown that though pruning trees
+                                                                            network. In [65], the outputs of the neural network are
+induced from imbalanced data can hinder performance,
+                                                                            altered during training to bias the neural network to focus
+using unpruned trees in such cases does not improve
+                                                                            more on the expensive class. Empirical results on this
+performance [23]. As a result, attention has been given to                  method showed an improvement in classification perfor-
+improving the class probability estimate at each node to                    mance on average, but also showed a high degree of
+develop more representative decision tree structures such                   variance in the performance measures compared to the least
+that pruning can be applied with positive effects. Some                     expected cost over the evaluated data sets. We speculate
+representative works include the Laplace smoothing meth-                    that ensemble methods can be applied to alleviate this
+od of the probability estimate and the Laplace pruning                      problem, but to our knowledge, such experiments have not
+technique [49].                                                             been performed to date.
+   Authorized licensed use limited to: CZECH TECHNICAL UNIVERSITY. Downloaded on May 16,2026 at 15:03:47 UTC from IEEE Xplore. Restrictions apply.
+HE AND GARCIA: LEARNING FROM IMBALANCED DATA                                                                                                         1273
+
+
+   The learning rate  can also influence the weight                        concept. In this case, it might occur that the support vectors
+adjustment (see (12)). As a result, cost-sensitive factors can              representing the minority concept are “far away” from this
+be applied to the learning rate to change the impact that the               “ideal” line, and as a result, will contribute less to the final
+modification procedure has on the weights, where costly                     hypothesis [74], [75], [76]. Moreover, if there is a lack of data
+examples will have a greater impact on weight changes. The                  representing the minority concept, there could be an
+key idea of this approach is to put more attention on costly                imbalance of representative support vectors that can also
+examples during learning by effectively decreasing the                      degrade performance. These same characteristics are also
+learning rate for each corresponding costly example. This                   readily evident in linear nonseparable spaces. In this case, a
+also suggests that low-cost examples will train at a faster                 kernel function is used to map the linear nonseparable
+rate than costly examples, so this method also strikes a                    space into a higher dimensional space where separation is
+balance in training time. Experiments on this technique have                achievable. However, in this case, the optimal hyperplane
+shown it to be very effective for training neural networks                  separating the classes will be biased toward the majority
+with significant improvements over the base classifier [65].                class in order to minimize the high error rates of
+   The final adaptation of cost-sensitive neural networks                   misclassifying the more prevalent majority class. In the
+replaces the error-minimizing function shown in (11) by an                  worst case, SVMs will learn to classify all examples as
+expected cost minimization function. This form of cost-                     pertaining to the majority class—a tactic that, if the
+sensitive fitting was shown to be the most dominant of the                  imbalance is severe, can provide the minimal error rate
+methods discussed in this section [65]. It also is in line with             across the dataspace.
+the back propagation methodology and theoretic founda-
+tions established on the transitivity between error-minimiz-                3.3.2 Integration of Kernel Methods
+ing and cost-minimizing classifiers.                                                 with Sampling Methods
+   Though we only provide a treatment for decision trees                    There have been many works in the community that apply
+and neural networks, many cost-sensitive fitting techniques                 general sampling and ensemble techniques to the SVM
+exist for other types of learning paradigms as well. For                    framework. Some examples include the SMOTE with
+instance, a great deal of works have focused on cost-                       Different Costs (SDCs) method [75] and the ensembles of
+sensitive Bayesian Classifiers [66], [67], [68], [69] and some              over/undersampled SVMs [77], [78], [79], [80]. For example,
+works exist which integrate cost functions with support                     the SDC algorithm uses different error costs [75] for different
+vector machines [70], [71], [72]. Interested readers can refer              classes to bias the SVM in order to shift the decision boundary
+to these works for a broader overview.                                      away from positive instances and make positive instances
+3.3   Kernel-Based Methods and Active Learning                              more densely distributed in an attempt to guarantee a more
+      Methods for Imbalanced Learning                                       well-defined boundary. Meanwhile, the methods proposed
+Although sampling methods and cost-sensitive learning                       in [78], [79] develop ensemble systems by modifying the data
+methods seem to dominate the current research efforts in                    distributions without modifying the underlying SVM classi-
+imbalanced learning, numerous other approaches have also                    fier. Lastly, Wang and Japkowicz [80] proposed to modify the
+been pursued in the community. In this section, we briefly                  SVMs with asymmetric misclassification costs in order to
+review kernel-based learning methods and active learning                    boost performance. This idea is similar to the AdaBoost.M1
+methods for imbalanced learning. Since kernel-based                         [56], [57] algorithm in that it uses an iterative procedure to
+learning methods provide state-of-the-art techniques for                    effectively modify the weights of the training observations. In
+many of today’s data engineering applications, the use of                   this way, one can build a modified version of the training
+kernel-based methods to understand imbalanced learning                      data based on such sequential learning procedures to
+has naturally attracted growing attention recently.                         improve classification performance.
+                                                                                The Granular Support Vector Machines—Repetitive Un-
+3.3.1 Kernel-Based Learning Framework                                       dersampling algorithm (GSVM-RU) was proposed in [81] to
+The principles of kernel-based learning are centered on the                 integrate SVM learning with undersampling methods. This
+theories of statistical learning and Vapnik-Chervonenkis                    method is based on granular support vector machines
+(VC) dimensions [73]. The representative kernel-based                       (GSVMs) which were developed in a series of papers
+learning paradigm, support vector machines (SVMs), can                      according to the principles from statistical learning theory
+provide relatively robust classification results when applied               and granular computing theory [82], [83], [84]. The major
+to imbalanced data sets [23]. SVMs facilitate learning by                   characteristics of GSVMs are two-fold. First, GSVMs can
+using specific examples near concept boundaries (support                    effectively analyze the inherent data distribution by obser-
+vectors) to maximize the separation margin (soft-margin                     ving the trade-offs between the local significance of a subset of
+maximization) between the support vectors and the                           data and its global correlation. Second, GSVMs improve the
+hypothesized concept boundary (hyperplane), meanwhile                       computational efficiency of SVMs through use of parallel
+minimizing the total classification error [73].                             computation. In the context of imbalanced learning, the
+   The effects of imbalanced data on SVMs exploit                           GSVM-RU method takes advantage of the GSVM by using an
+inadequacies of the soft-margin maximization paradigm                       iterative learning procedure that uses the SVM itself for
+[74], [75]. Since SVMs try to minimize total error, they are                undersampling [81]. Concretely, since all minority (positive)
+inherently biased toward the majority concept. In the                       examples are considered to be informative, a positive
+simplest case, a two-class space is linearly separated by an                information granule is formed from these examples. Then, a
+“ideal” separation line in the neighborhood of the majority                 linear SVM is developed using the positive granule and the
+   Authorized licensed use limited to: CZECH TECHNICAL UNIVERSITY. Downloaded on May 16,2026 at 15:03:47 UTC from IEEE Xplore. Restrictions apply.
+1274                                         IEEE TRANSACTIONS ON KNOWLEDGE AND DATA ENGINEERING,                 VOL. 21,   NO. 9,   SEPTEMBER 2009
+
+
+remaining examples in the data set (i.e., Smaj ); the negative              imbalanced learning problem by modifying the kernel
+examples that are identified as support vectors by this SVM,                matrix in the feature space. Theoretical analyses and
+the so-called “negative local support vectors” (NLSVs), are                 empirical studies showed that this method not only
+formed into a negative information granule and are removed                  provides competitive accuracy, but it can also be applied
+from the original training data to obtain a smaller training                to both vector data and sequence data by modifying the
+data set. Based on this reduced training data set, a new linear             kernel matrix.
+SVM is developed, and again, the new set of NLSVs is formed                     In a more integrated approach of kernel based learning,
+into a negative granule and removed from the data set. This                 Liu and Chen [89] and [90] propose the total margin-based
+procedure is repeated multiple times to obtain multiple                     adaptive fuzzy SVM kernel method (TAF-SVM) to improve
+negative information granules. Finally, an aggregation                      SVM robustness. The major beneficial characteristics of
+operation that considers global correlation is used to select               TAF-SVM are three-fold. First, TAF-SVM can handle over-
+specific sample sets from those iteratively developed nega-                 fitting by “fuzzifying” the training data, where certain
+tive information granules, which are then combined with all                 training examples are treated differently according to their
+positive samples to develop a final SVM model. In this way,                 relative importance. Second, different cost algorithms are
+the GSVM-RU method uses the SVM itself as a mechanism for                   embedded into TAF-SVM, which allows this algorithm to
+undersampling to sequentially develop multiple information                  self-adapt to different data distribution skews. Last, the
+granules with different informative samples, which are later                conventional soft-margin maximization paradigm is re-
+combined to develop a final SVM for classification.                         placed by the total margin paradigm, which considers both
+                                                                            the misclassified and correctly classified data examples in
+3.3.3 Kernel Modification Methods
+                                                                            the construction of the optimal separating hyperplane.
+        for Imbalanced Learning
+                                                                                A particularly interesting kernel modification method for
+In addition to the aforementioned sampling and ensemble                     imbalanced learning is the k-category proximal support
+kernel-based learning methods, another major category of                    vector machine (PSVM) with Newton refinement [91]. This
+kernel-based learning research efforts focuses more con-                    method essentially transforms the soft-margin maximization
+cretely on the mechanics of the SVM itself; this group of                   paradigm into a simple system of k linear equations for
+methods is often called kernel modification method.                         either linear or nonlinear classifiers, where k is the number
+   One example of kernel modification is the kernel
+                                                                            of classes. One of the major advantages of this method is that
+classifier construction algorithm proposed in [85] based
+                                                                            it can perform the learning procedure very fast because this
+on orthogonal forward selection (OFS) and the regularized
+                                                                            method requires nothing more sophisticated than solving
+orthogonal weighted least squares (ROWLSs) estimator.
+                                                                            this simple system of linear equations. Lastly, in the presence
+This algorithm optimizes generalization in the kernel-based
+                                                                            of extremely imbalanced data sets, Raskutti and Kowalcyzk
+learning model by introducing two major components that
+                                                                            [74] consider both sampling and dataspace weighting
+deal with imbalanced data distributions for two-class data
+                                                                            compensation techniques in cases where SVMs completely
+sets. The first component integrates the concepts of leave-
+                                                                            ignore one of the classes. In this procedure, two balancing
+one-out (LOO) cross validation and the area under curve
+                                                                            modes are used in order to balance the data: a similarity
+(AUC) evaluation metric (see Section 4.2) to develop an
+LOO-AUC objective function as a selection mechanism of                      detector is used to learn a discriminator based predominantly
+the most optimal kernel model. The second component                         on positive examples, and a novelty detector is used to learn a
+takes advantage of the cost sensitivity of the parameter                    discriminator using primarily negative examples.
+estimation cost function in the ROWLS algorithm to assign                       Several other kernel modification methods exist in the
+greater weight to erroneous data examples in the minority                   community including the support cluster machines (SCMs)
+class than those in the majority class.                                     for large-scale imbalanced data sets [92], the kernel neural
+   Other examples of kernel modification are the various                    gas (KNG) algorithm for imbalanced clustering [93], the
+techniques for adjusting the SVM class boundary. These                      P2PKNNC algorithm based on the k-nearest neighbors
+methods apply boundary alignment techniques to improve                      classifier and the P2P communication paradigm [94], the
+SVM classification [76], [86], [87]. For instance, in [76],                 hybrid kernel machine ensemble (HKME) algorithm includ-
+three algorithmic approaches for adjusting boundary                         ing a binary support vector classifier (BSVC) and a one-class
+skews were presented: the boundary movement (BM)                            support vector classifier (SV C) with Gaussian radial basis
+approach, the biased penalties (BPs) approach, and the                      kernel function [95], and the Adaboost relevance vector
+class-boundary alignment (CBA) approach. Additionally,                      machine (RVM) [96], amongst others. Furthermore, we
+in [86] and [87], the kernel-boundary alignment (KBA)                       would like to note that for many kernel-based learning
+algorithm was proposed which is based on the idea of                        methods, there is no strict distinction between the afore-
+modifying the kernel matrix generated by a kernel function                  mentioned two major categories of Sections 3.3.2 and 3.3.3. In
+according to the imbalanced data distribution. The under-                   many situations, learning methods take a hybrid approach
+lying theoretical foundation of the KBA method builds on                    where sampling and ensemble techniques are integrated
+the adaptive conformal transformation (ACT) methodol-                       with kernel modification methods for improved perfor-
+ogy, where the conformal transformation on a kernel                         mance. For instance, [75] and [76] are good examples of
+function is based on the consideration of the feature-space                 hybrid solutions for imbalanced learning. In this section, we
+distance and the class-imbalance ratio [88]. By generalizing                categorize kernel-based learning in two sections for better
+the foundation of ACT, the KBA method tackles the                           presentation and organization.
+   Authorized licensed use limited to: CZECH TECHNICAL UNIVERSITY. Downloaded on May 16,2026 at 15:03:47 UTC from IEEE Xplore. Restrictions apply.
+HE AND GARCIA: LEARNING FROM IMBALANCED DATA                                                                                                         1275
+
+
+                                                                            [102] analyzed the effect of undersampling and over-
+                                                                            sampling techniques with active learning for the word
+                                                                            sense disambiguation (WSD) imbalanced learning problem.
+                                                                            The active learning method studied in this work is based on
+                                                                            the uncertainty sampling methodology; here, the challenge
+                                                                            is how to measure the uncertainty of an unlabeled instance
+                                                                            in order to select the maximally uncertain instance to
+                                                                            augment the training data. In this case, Entropy was used as
+                                                                            a metric for determining uncertainty. Additionally, two
+Fig. 8. Data imbalance ratio within and outside the margin [98].            stopping mechanisms based on maximum confidence and
+                                                                            minimal error were investigated in [102]. Simulation results
+3.3.4 Active Learning Methods for Imbalanced Learning                       concluded that one can use max-confidence as the upper
+Active learning methods have also been investigated in the                  bound and min-error as the lower bound of the stopping
+community for imbalanced learning problems. Tradition-                      conditions for active learning in this case. Another active
+ally, active learning methods are used to solve problems                    learning sampling method is the simple active learning
+related to unlabeled training data. Recently, however,                      heuristic (SALH) approach proposed in [103]. The key idea
+various issues on active learning from imbalanced data                      of this method is to provide a generic model for the
+sets have been discussed in literature [97], [98], [99], [100].             evolution of genetic programming (GP) classifiers by
+Moreover, we point out that active learning approaches for                  integrating the stochastic subsampling method and a
+imbalanced learning are often integrated into kernel-based                  modified Wilcoxon-Mann-Whitney (WMW) cost function
+learning methods; as a result, we discuss both methods in                   [103]. The major advantages of the SALH method include
+the same light.                                                             the ability to actively bias the data distribution for learning,
+    SVM-based active learning aims to select the most                       the existence of a robust cost function, and the improve-
+informative instances from the unseen training data in                      ment of the computational cost related to the fitness
+order to retrain the kernel-based model [99], i.e., those                   evaluation. Simulation results over six data sets were used
+instances that are closest to the current hyperplane. Fig. 8                to illustrate the effectiveness of this method.
+illustrates the motivation for the selection procedure for                  3.4 Additional Methods for Imbalanced Learning
+imbalanced data sets [98]. Assume that Fig. 8 represents the
+                                                                            In closing our review of the state-of-the-art solutions for
+class distribution of an imbalanced data set, where the
+                                                                            imbalanced learning, we would like to note that community
+shaded region corresponds to the class distribution within                  solutions to handle the imbalanced learning problem are
+the margin. In this case, the imbalance ratio of data within                not solely in the form of sampling methods, cost-sensitive
+the margin is much smaller than the imbalance ratio of the                  methods, kernel-based methods, and active learning meth-
+entire data set. Motivated by this observation, Ertekin et al.              ods. For instance, the one-class learning or novelty detection
+[98] and [99] proposed an efficient SVM-based active                        methods have also attracted much attention in the commu-
+learning method which queries a small pool of data at each                  nity [3]. Generally speaking, this category of approaches
+iterative step of active learning instead of querying the                   aims to recognize instances of a concept by using mainly, or
+entire data set. In this procedure, an SVM is trained on the                only, a single class of examples (i.e., recognition-based
+given training data, after which the most informative                       methodology) rather than differentiating between instances
+instances are extracted and formed into a new training set                  of both positive and negative classes as in the conventional
+according to the developed hyperplane. Finally, the                         learning approaches (i.e., discrimination-based inductive
+procedure uses this new training set and all unseen training                methodology). Representative works in this area include the
+data to actively retrain the SVM using the LASVM online                     one-class SVMs [74], [104], [105], [106], [107], [108] and the
+SVM learning algorithm [101] to facilitate the active                       autoassociator (or autoencoder) method [109], [110], [111],
+learning procedure.                                                         [112]. Specifically, Raskutti and Kowalcyzk [74] suggested
+    Ertekin et al. [98] and [99] also point out that the search             that one-class learning is particularly useful in dealing with
+process for the most informative instances can be compu-                    extremely imbalanced data sets with high feature space
+tationally expensive because, for each instance of unseen                   dimensionality. Additionally, Japkowicz [109] proposed an
+data, the algorithm needs to recalculate the distance                       approach to train an autoassociator to reconstruct the
+between each instance and the current hyperplane. To                        positive class at the output layer, and it was suggested that
+solve this problem, they proposed a method to effectively                   under certain conditions, such as in multimodal domains,
+select such informative instances from a random set of                      the one-class learning approach may be superior to the
+training populations to reduce the computational cost for                   discrimination-based approaches. Meanwhile, Manevitz
+large-scale imbalanced data sets [98], [99]. Additionally,                  and Yousef [105] and [110] presented the successful
+early stopping criteria for active learning are also discussed              applications of the one-class learning approach to the
+in this work which can be used to achieve faster conver-                    document classification domain based on SVMs and
+gence of the active learning process as compared to the                     autoencoder, respectively. In [111], a comparison of
+random sample selection solution.                                           different sampling methods and the one-class autoassocia-
+    In addition to kernel-based integrations, active learning               tor method was presented, which provides useful sugges-
+integrations with sampling techniques have also been                        tions about the advantages and limitations of both methods.
+investigated in the community. For instance, Zhu and Hovy                   The novelty detection approach based on redundancy
+   Authorized licensed use limited to: CZECH TECHNICAL UNIVERSITY. Downloaded on May 16,2026 at 15:03:47 UTC from IEEE Xplore. Restrictions apply.
+1276                                         IEEE TRANSACTIONS ON KNOWLEDGE AND DATA ENGINEERING,                 VOL. 21,   NO. 9,   SEPTEMBER 2009
+
+
+compression and nonredundancy differentiation techniques
+was investigated in [112]. Recently, Lee and Cho [107]
+suggested that novelty detection methods are particularly
+useful for extremely imbalanced data sets, while regular
+discrimination-based inductive classifiers are suitable for a
+relatively moderate imbalanced data sets.
+    Recently, the Mahalanobis-Taguchi System (MTS) has also
+been used for imbalanced learning [113]. The MTS was
+originally developed as a diagnostic and forecasting techni-
+que for multivariate data [114], [115]. Unlike most of the
+classification paradigms, learning in the MTS is performed by               Fig. 9. Confusion matrix for performance evaluation.
+developing a continuous measurement scale using single-
+class examples instead of the entire training data. Because of                 As is evident, the range of existing solutions to the
+its characteristics, it is expected that the MTS model will not             imbalanced learning problem is both multifaceted and well
+be influenced by the skewed data distribution, therefore                    associated. Consequently, the assessment techniques used
+providing robust classification performance. Motivated by                   to evaluate these solutions share similar characteristics. We
+these observations, Su and Hsiao [113] presented an evalua-                 now turn our attention to these techniques.
+tion of the MTS model for imbalanced learning with
+comparisons to stepwise discriminate analysis (SDA), back-
+propagation neural networks, decision trees, and SVMs. This                 4     ASSESSMENT METRICS
+work showed the effectiveness of the MTS in the presence of                       FOR IMBALANCED LEARNING
+imbalanced data. Moreover, Su and Hsiao [113] also present a                As the research community continues to develop a greater
+probabilistic thresholding method based on the Chebyshev’s                  number of intricate and promising imbalanced learning
+theorem to systematically determine an appropriate thresh-                  algorithms, it becomes paramount to have standardized
+old for MTS classification.                                                 evaluation metrics to properly assess the effectiveness of
+    Another important example relates to the combination of                 such algorithms. In this section, we provide a critical review
+imbalanced data and the small sample size problem, as                       of the major assessment metrics for imbalanced learning.
+discussed in Section 2. Two major approaches were
+                                                                            4.1 Singular Assessment Metrics
+proposed in [31] to address this issue. First, rank metrics
+were proposed as the training and model selection criteria                  Traditionally, the most frequently used metrics are accuracy
+instead of the traditional accuracy metric. Rank metrics                    and error rate. Considering a basic two-class classification
+helps facilitate learning from imbalanced data with small                   problem, let f p; ng be the true positive and negative class
+                                                                            label and fY ; N g be the predicted positive and negative
+sample sizes and high dimensionality by placing a greater
+                                                                            class labels. Then, a representation of classification perfor-
+emphasis on learning to distinguish classes themselves
+                                                                            mance can be formulated by a confusion matrix (contingency
+instead of the internal structure (feature space conjunctions)
+                                                                            table), as illustrated in Fig. 9.
+of classes. The second approach is based on the multitask
+                                                                               In this paper, we use the minority class as the positive
+learning methodology. The idea here is to use a shared
+                                                                            class and the majority class as the negative class. Following
+representation of the data to train extra task models related
+                                                                            this convention, accuracy and error rate are defined as
+to the main task, therefore amplifying the effective size of
+the underrepresented class by adding extra training                                           TP þ TN
+                                                                                Accuracy ¼            ;       ErrorRate ¼ 1  accuracy: ð13Þ
+information to the data [31].                                                                 PC þ NC
+    Finally, we would also like to note that although the
+                                                                                These metrics provide a simple way of describing a
+current efforts in the community are focused on two-class
+                                                                            classifier’s performance on a given data set. However, they
+imbalanced problems, multiclass imbalanced learning pro-
+                                                                            can be deceiving in certain situations and are highly
+blems exist and are of equal importance. For instance, in [7], a
+                                                                            sensitive to changes in data. In the simplest situation, if a
+cost-sensitive boosting algorithm AdaC2.M1 was proposed                     given data set includes 5 percent of minority class examples
+to tackle the class imbalance problem with multiple classes.                and 95 percent of majority examples, a naive approach of
+In this paper, a genetic algorithm was used to search the                   classifying every example to be a majority class example
+optimum cost setup for each class. In [8], an iterative method              would provide an accuracy of 95 percent. Taken at face
+for multiclass cost-sensitive learning was proposed based on                value, 95 percent accuracy across the entire data set appears
+three key ideas: iterative cost weighting, dataspace expan-                 superb; however, on the same token, this description fails to
+sion, and gradient boosting with stochastic ensembles. In [9],              reflect the fact that 0 percent of minority examples are
+a min-max modular network was proposed to decompose a                       identified. That is to say, the accuracy metric in this case does
+multiclass imbalanced learning problem into a series of small               not provide adequate information on a classifier’s function-
+two-class subproblems. Other works of multiclass imbal-                     ality with respect to the type of classification required.
+anced learning include the rescaling approach for multiclass                    Many representative works on the ineffectiveness of
+cost-sensitive neural networks [10], [11], the ensemble                     accuracy in the imbalanced learning scenario exist in the
+knowledge for imbalance sample sets (eKISS) method [12],                    community [14], [20], [47], [51], [58], [116], [117], [118].
+and others.                                                                 The fundamental issue can be explained by evaluating the
+   Authorized licensed use limited to: CZECH TECHNICAL UNIVERSITY. Downloaded on May 16,2026 at 15:03:47 UTC from IEEE Xplore. Restrictions apply.
+HE AND GARCIA: LEARNING FROM IMBALANCED DATA                                                                                                         1277
+
+
+confusion matrix in Fig. 9: The left column represents
+positive instances of the data set and the right column
+represents the negative instances. Therefore, the propor-
+tion of the two columns is representative of the class
+distribution of the data set, and any metric that uses
+values from both columns will be inherently sensitive to
+imbalances. As we can see from (13), accuracy uses both
+columns’ information; therefore, as class distribution
+varies, measures of the performance will change even
+though the underlying fundamental performance of the
+classifier does not. As one can imagine, this can be very
+problematic when comparing the performance of different
+learning algorithms over different data sets because of the
+inconsistency of performance representation. In other
+words, in the presence of imbalanced data, it becomes
+difficult to make relative analysis when the evaluation                          Fig. 10. ROC curve representation.
+metrics are sensitive to data distributions.
+   In lieu of accuracy, other evaluation metrics are frequently                  functionality of a classifier than the accuracy metric,
+adopted in the research community to provide comprehen-                          however remaining sensitive to data distributions. Another
+sive assessments of imbalanced learning problems, namely,                        metric, the G-Mean metric (17), evaluates the degree of
+precision; recall; F -measure, and G-mean. These metrics are                     inductive bias in terms of a ratio of positive accuracy and
+defined as:                                                                      negative accuracy. Though F-Measure and G-Mean are great
+                                                                                 improvements over accuracy, they are still ineffective in
+                                          TP                                     answering more generic questions about classification
+                       P recision ¼             ;                       ð14Þ
+                                        TP þ FP                                  evaluations. For instance, how can we compare the performance
+                                                                                 of different classifiers over a range sample distributions?
+                                       TP
+                         Recall ¼            ;                          ð15Þ     4.2   Receiver Operating Characteristics
+                                     TP þ FN
+                                                                                       (ROC) Curves
+                             ð1 þ Þ2  Recall  P recision                      In order to overcome such issues, the ROC assessment
+           F -Measure ¼                                     ;           ð16Þ     technique [119], [120] makes use of the proportion of two
+                                2  Recall þ P recision
+                                                                                 single-column-based evaluation metrics, namely, true posi-
+where  is a coefficient to adjust the relative importance of                    tives rate (T P rate) and false positives rate (F P rate),
+precision versus recall (usually,  ¼ 1):                                        which are defined as:
+                       rﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃ
+                               TP                        TN                                                 TP                     FP
+            G-mean ¼                                                   : ð17Þ                 T P rate ¼      ;      F P rate ¼      :          ð18Þ
+                          TP þ FN TN þ FP                                                                   PC                     NC
+    Intuitively, precision is a measure of exactness (i.e., of the                   The ROC graph is formed by plotting T P rate over
+examples labeled as positive, how many are actually labeled                      F P rate, and any point in ROC space corresponds to the
+correctly), whereas recall is a measure of completeness (i.e.,                   performance of a single classifier on a given distribution.
+how many examples of the positive class were labeled                             The ROC curve is useful because it provides a visual
+correctly). These two metrics, much like accuracy and error,                     representation of the relative trade-offs between the benefits
+share an inverse relationship between each other. However,                       (reflected by true positives) and costs (reflected by false
+unlike accuracy and error, precision and recall are not both                     positives) of classification in regards to data distributions.
+sensitive to changes in data distributions. A quick inspection                       For hard-type classifiers that output only discrete class
+on the precision and recall formulas readily yields that                         labels, each classifier will produce a (T P rate; F P rate) pair
+precision (14) is sensitive to data distributions, while recall                  that corresponds to a single point in the ROC space. Fig. 10
+(15) is not. On the other hand, that recall is not distribution                  illustrates a typical ROC graph with points A, B, C, D, E, F,
+dependent is almost superfluous because an assertion based                       and G representing ROC points and curves L1 and L2
+solely on recall is equivocal, since recall provides no insight                  representing ROC curves. According to the structure of the
+to how many examples are incorrectly labeled as positive.                        ROC graph, point A ð0; 1Þ represents a perfect classification.
+Similarly, precision cannot assert how many positive                             Generally speaking, one classifier is better than another if its
+examples are labeled incorrectly. Nevertheless, when used                        corresponding point in ROC space closer to point A (upper
+properly, precision and recall can effectively evaluate                          left hand in the ROC space) than the other. Any classifier
+classification performance in imbalanced learning scenarios.                     whose corresponding ROC point is located on the diagonal,
+Specifically, the F-Measure metric (16) combines precision                       such as point E in Fig. 10, is representative of a classifier
+and recall as a measure of the effectiveness of classification                   that will provide a random guess of the class labels (i.e., a
+in terms of a ratio of the weighted importance on either recall                  random classifier). Therefore, any classifier that appears in
+or precision as determined by the  coefficient set by the                       the lower right triangle of ROC space performs worse than
+user. As a result, F-Measure provides more insight into the                      random guessing, such as the classifier associated with
+   Authorized licensed use limited to: CZECH TECHNICAL UNIVERSITY. Downloaded on May 16,2026 at 15:03:47 UTC from IEEE Xplore. Restrictions apply.
+1278                                         IEEE TRANSACTIONS ON KNOWLEDGE AND DATA ENGINEERING,                 VOL. 21,   NO. 9,   SEPTEMBER 2009
+
+
+point F in the shaded area in Fig. 10. Nevertheless, a
+classifier that performs worse than random guessing does
+not mean that the classifier cannot provide useful informa-
+tion. On the contrary, the classifier is informative; however,
+the information is incorrectly applied. For instance, if one
+negates the classification results of classifier F, i.e., reverse
+its classification decision on each instance, then this will
+produce point G in Fig. 10, the symmetric classification
+point of F.
+   In the case of soft-type classifiers, i.e., classifiers that
+output a continuous numeric value to represent the
+confidence of an instance belonging to the predicted class,
+a threshold can be used to produce a series of points in ROC
+                                                                            Fig. 11. Cost curve representation.
+space. This technique can generate an ROC curve instead of
+a single ROC point, as illustrated by curves L1 and L2 in
+Fig. 10. In order to assess different classifiers’ performance              positives, it will not significantly change the FP_rate since the
+in this case, one generally uses the area under the curve                   denominator (Nc) is very large (see (18)). Hence, the ROC
+(AUC) as an evaluation criterion [119], [120]. For instance,                graph will fail to capture this phenomenon. The precision
+in Fig. 10, the L2 ROC curve provides a larger AUC                          metric, on the other hand, considers the ratio of TP with
+measure compared to that of L1; therefore, the correspond-                  respect to TPþFP (see Fig. 9 and (14)); hence, it can correctly
+ing classifier associated with curve L2 can provide better                  capture the classifier’s performance when the number of
+average performance compared to the classifier associated                   false positives drastically change [123]. Hence, as evident by
+with curve L1. Of course, one should also note that it is                   this example, the PR curve is an advantageous technique for
+possible for a high AUC classifier to perform worse in a                    performance assessment in the presence of highly skewed
+specific region in ROC space than a low AUC classifier                      data. As a result, many of the current research work in the
+[119], [120]. We additionally note that it is generally very                community use PR curves for performance evaluations and
+straightforward to make hard-type classifiers provide soft-                 comparisons [124], [125], [126], [127].
+type outputs based on the observations of the intrinsic                     4.4 Cost Curves
+characteristics of those classifiers [54], [56], [121], [122].
+                                                                            Another shortcoming of ROC curves is that they lack the
+4.3 Precision-Recall (PR) Curves                                            ability to provide confidence intervals on a classifier’s
+Although ROC curves provide powerful methods to                             performance and are unable to infer the statistical
+visualize performance evaluation, they also have their                      significance of different classifiers’ performance [128],
+own limitations. In the case of highly skewed data sets, it                 [129]. They also have difficulties providing insights on a
+is observed that the ROC curve may provide an overly                        classifier’s performance over varying class probabilities or
+optimistic view of an algorithm’s performance. Under such                   misclassification costs [128], [129]. In order to provide a
+situations, the PR curves can provide a more informative                    more comprehensive evaluation metric to address these
+representation of performance assessment [123].                             issues, cost curves were proposed in [128], [129], [130]. A
+   Given a confusion matrix as in Fig. 9 and the definition of              cost curve is a cost-sensitive evaluation technique that
+precision (14) and recall (15), the PR curve is defined by                  provides the ability to explicitly express a classifier’s
+plotting precision rate over the recall rate. PR curves exhibit             performance over varying misclassification costs and class
+a strong correspondence to ROC curves: A curve dominates                    distributions in a visual format. Thus, the cost curve
+in ROC space if and only if it dominates in PR space [123].                 method retains the attractive visual representation fea-
+However, an algorithm that optimizes the AUC in the ROC                     tures of ROC analysis and further provides a technique
+space is not guaranteed to optimize the AUC in PR space                     that yields a broadened range of information regarding
+[123]. Moreover, while the objective of ROC curves is to be                 classification performance.
+in the upper left hand of the ROC space, a dominant PR                         Generally speaking, the cost curve method plots perfor-
+curve resides in the upper right hand of the PR space. PR                   mance (i.e., normalized expected cost) over operation
+space also characterizes curves analogous to the convex hull                points, which are represented by a probability cost function
+in the ROC space, namely, the achievable PR curve [123].                    that is based on the probability of correctly classifying a
+Hence, PR space has all the analogous benefits of ROC                       positive sample. The cost space exhibits a duality with ROC
+space, making it an effective evaluation technique. For                     space where each point in ROC space is represented by a
+space considerations, we refrain from providing a repre-                    line in cost space, and vice versa [128]. Any (FP, TP)
+sentative figure of PR space and instead direct interested                  classification pair in ROC space is related to a line in cost
+readers to [123].                                                           space by
+   To see why the PR curve can provide more informative
+                                                                                        E½C ¼ ð1  T P  F P Þ  P CF ðþÞ þ F P ;               ð19Þ
+representations of performance assessment under highly
+imbalanced data, we consider a distribution where negative                  where E[C] is the expected cost and PCF ðþÞ is the
+examples significantly exceed the number of positive                        probability of an example being from the positive class.
+examples (i.e., Nc > Pc ). In this case, if a classifier’s                  Fig. 11 provides an example of cost space; here, we
+performance has a large change in the number of false                       highlight the correspondence between the ROC points of
+   Authorized licensed use limited to: CZECH TECHNICAL UNIVERSITY. Downloaded on May 16,2026 at 15:03:47 UTC from IEEE Xplore. Restrictions apply.
+HE AND GARCIA: LEARNING FROM IMBALANCED DATA                                                                                                         1279
+
+
+Fig. 10 and their lines in cost space. For instance, the bottom             definition (see (17)) to the geometric means of recall values
+axis represents perfect classification, while the top axis                  of every class for multiclass imbalanced learning.
+represents the contrary case; these lines correspond to ROC
+points A and B, respectively.
+   With a collection of cost lines at hand, a cost curve is then
+                                                                            5     OPPORTUNITIES AND CHALLENGES
+created by selecting a classification line for each possible                The availability of vast amounts of raw data in many of
+operation point. For example, a cost curve can be created                   today’s real-world applications enriches the opportunities
+that minimizes the normalized expected cost across all                      of learning from imbalanced data to play a critical role
+possible operation points. In particular, this technique                    across different domains. However, new challenges arise at
+allows for a clearer visual representation of classification                the same time. Here, we briefly discuss several aspects for
+performance compared to ROC curves, as well as more                         the future research directions in this domain.
+direct assessments between classifiers as they range over
+operation points.                                                           5.1 Understanding the Fundamental Problems
+                                                                            Currently, most of the research efforts in imbalanced
+4.5    Assessment Metrics for Multiclass                                    learning focus on specific algorithms and/or case studies;
+       Imbalanced Learning                                                  only a very limited amount of theoretical understanding
+While all of the assessment metrics discussed so far in this                on the principles and consequences of this problem have
+section are appropriate for two-class imbalanced learning                   been addressed. For example, although almost every
+problems, some of them can be modified to accommodate                       algorithm presented in literature claims to be able to
+the multiclass imbalanced learning problems. For instance,                  improve classification accuracy over certain benchmarks,
+Fawcett [119] and [120] discussed multiclass ROC graphs.                    there exist certain situations in which learning from the
+For an n classes problem, the confusion matrix presented in
+                                                                            original data sets may provide better performance. This
+Fig. 9 becomes an n  n matrix, with n correct classifications
+                                                                            raises an important question: to what extent do imbalanced
+(the major diagonal elements) and n2  n errors (the off-
+                                                                            learning methods help with learning capabilities? This is a
+diagonal elements). Therefore, instead of representing the
+                                                                            fundamental and critical question in this field for the
+trade-offs between a single benefit (TP) and cost (FP), we
+                                                                            following reasons. First, suppose there are specific (exist-
+have to manage n benefits and n2  n costs. A straightfor-
+ward way of doing this is to generate n different ROC                       ing or future) techniques or methodologies that signifi-
+graphs, one for each class [119], [120]. For instance,                      cantly outperform others across most (or, ideally, all)
+considering a problem with a total of W classes, the ROC                    applicable domains, then rigorous studies of the under-
+graph i; ROCi , plots classification performance using class                lying effects of such methods would yield fundamental
+wi as the positive class and all other classes as the negative              understandings of the problem at hand. Second, as data
+class. However, this approach compromises one of the                        engineering research methodologies materialize into real-
+major advantages of using ROC analysis for imbalanced                       world solutions, questions such as “how will this solution
+learning problems: It becomes sensitive to the class skew                   help” or “can this solution efficiently handle various types
+because the negative class in this situation is the combina-                of data,” become the basis on which economic and
+tion of n  1 classes (see Sections 4.1 and 4.2).                           administrative decisions are made. Thus, the consequences
+   Similarly, under the multiclass imbalanced learning                      of this critical question have wide-ranging effects in the
+scenario, the AUC values for two-class problems become                      advancement of this field and data engineering at large.
+multiple pairwise discriminability values [131]. To calculate                  This important question follows directly from a previous
+such multiclass AUCs, Provost and Domingos [121]                            proposition addressed by Provost in the invited paper for
+proposed a probability estimation-based approach: First,                    the AAAI 2000 Workshop on Imbalanced Data Sets [100]:
+the ROC curve for each reference class wi is generated and                     “[In regards to imbalanced learning,]. . . isn’t the best research
+their respective AUCs are measured. Second, all of the                      strategy to concentrate on how machine learning algorithms can
+AUCs are combined by a weight coefficient according to the                  deal most effectively with whatever data they are given?”
+reference class’s prevalence in the data. Although this                        We believe that this fundamental question should be
+approach is quite simple in calculation, it is sensitive to the             investigated with greater intensity both theoretically and
+class skews for the same reason as mentioned before. To                     empirically in order to thoroughly understand the essence
+eliminate this constraint, Hand and Till [131] proposed the                 of imbalanced learning problems. More specifically, we
+M measure, a generalization approach that aggregates all                    believe that the following questions require careful and
+pairs of classes based on the inherent characteristics of the               thorough investigation:
+AUC. The major advantage of this method is that it is
+insensitive to class distribution and error costs. Interested                   1.   What kind of assumptions will make imbalanced
+readers can refer to [131] for a more detailed overview of                           learning algorithms work better compared to learn-
+this technique.                                                                      ing from the original distributions?
+   In addition to multiclass ROC analysis, the community                        2.   To what degree should one balance the original
+has also adopted other assessment metrics for multiclass                             data set?
+imbalanced learning problems. For instance, in cost-sensi-                      3.   How do imbalanced data distributions affect the
+tive learning, it is natural to use misclassification costs for                      computational complexity of learning algorithms?
+performance evaluation for multiclass imbalanced problems                       4.   What is the general error bound given an imbal-
+[8], [10], [11]. Also, Sun et al. [7] extend the G-mean                              anced data distribution?
+   Authorized licensed use limited to: CZECH TECHNICAL UNIVERSITY. Downloaded on May 16,2026 at 15:03:47 UTC from IEEE Xplore. Restrictions apply.
+1280                                         IEEE TRANSACTIONS ON KNOWLEDGE AND DATA ENGINEERING,                 VOL. 21,   NO. 9,   SEPTEMBER 2009
+
+
+   5.    Is there a general theoretical methodology that can                    1.  lack of a uniform benchmark for standardized
+         alleviate the impediment of learning from imbal-                           performance assessments;
+         anced data sets for specific algorithms and applica-                  2. lack of data sharing and data interoperability across
+         tion domains?                                                              different disciplinary domains;
+    Fortunately, we have noticed that these critical funda-                    3. increased procurement costs, such as time and labor,
+mental problems have attracted growing attention in the                             for the research community as a whole group since
+community. For instance, important works are presented in                           each research group is required to collect and
+[37] and [24] that directly relate to the aforementioned                            prepare their own data sets.
+question 2 regarding the “level of the desired degree of                       With these factors in mind, we believe that a well-
+balance.” In [37], the rate of oversampling and under-                      organized, publicly available benchmark specifically dedi-
+sampling was discussed as a possible aid for imbalanced                     cated to imbalanced learning will significantly benefit the
+learning. Generally speaking, though the resampling para-                   long-term research development of this field. Furthermore,
+digm has had successful cases in the community, tuning                      as a required component, an effective mechanism to promote
+these algorithms effectively is a challenging task. To                      the interoperability and communication across various
+alleviate this challenge, Estabrooks et al. [37] suggested                  disciplines should be incorporated into such a benchmark
+that a combination of different expressions of resampling                   to ultimately uphold a healthy, diversified community.
+methods may be an effective solution to the tuning problem.
+                                                                            5.3 Need of Standardized Evaluation Practices
+Weiss and Provost [24] have analyzed, for a fixed training
+                                                                            As discussed in Section 4, the traditional technique of
+set size, the relationship between the class distribution of
+                                                                            using a singular evaluation metric is not sufficient when
+training data (expressed as the percentage of minority class
+                                                                            handling imbalanced learning problems. Although most
+examples) and classifier performance in terms of accuracy
+                                                                            publications use a broad assortment of singular assess-
+and AUC. This work provided important suggestions
+                                                                            ment metrics to evaluate the performance and potential
+regarding “how do different training data class distribu-
+                                                                            trade-offs of their algorithms, without an accompanied
+tions affect classification performance” and “which class
+                                                                            curve-based analysis, it becomes very difficult to provide
+distribution provides the best classifier” [24]. Based on a
+                                                                            any concrete relative evaluations between different algo-
+thorough analysis of 26 data sets, it was suggested that if
+                                                                            rithms, or answer the more rigorous questions of
+accuracy is selected as the performance criterion, the best
+                                                                            functionality. Therefore, it is necessary for the community
+class distribution tends to be near the naturally occurring
+                                                                            to establish—as a standard—the practice of using the
+class distribution. However, if the AUC is selected as the                  curve-based evaluation techniques described in Sec-
+assessment metric, then the best class distribution tends to                tions 4.2, 4.3, and 4.4 in their analysis. Not only because
+be near the balanced class distribution. Based on these                     each technique provides its own set of answers to
+observations, a “budget-sensitive” progressive sampling                     different fundamental questions, but also because an
+strategy was proposed to efficiently sample the minority                    analysis in the evaluation space of one technique can be
+and majority class examples such that the resulting training                correlated to the evaluation space of another, leading to
+class distribution can provide the best performance.                        increased transitivity and a broader understanding of the
+    In summary, the understanding of all these questions will               functional abilities of existing and future works. We hope
+not only provide fundamental insights to the imbalanced                     that a standardized set of evaluation practices for proper
+learning issue, but also provide an added level of compara-                 comparisons in the community will provide useful guides
+tive assessment between existing and future methodologies.                  for the development and evaluation of future algorithms
+It is essential for the community to investigate all of these               and tools.
+questions in order for research developments to focus on the
+fundamental issues regarding imbalanced learning.                           5.4    Incremental Learning from Imbalanced
+                                                                                   Data Streams
+5.2 Need of a Uniform Benchmark Platform                                    Traditional static learning methods require representative
+Data resources are critical for research development in the                 data sets to be available at training time in order to develop
+knowledge discovery and data engineering field. Although                    decision boundaries. However, in many realistic application
+there are currently many publicly available benchmarks for                  environments, such as Web mining, sensor networks,
+assessing the effectiveness of different data engineering                   multimedia systems, and others, raw data become available
+algorithm/tools, such as the UCI Repository [132] and the                   continuously over an indefinite (possibly infinite) learning
+NIST Scientific and Technical Databases [133], there are a                  lifetime [134]. Therefore, new understandings, principles,
+very limited number of benchmarks, if any, that are solely                  methodologies, algorithms, and tools are needed for such
+dedicated to imbalanced learning problems. For instance,                    stream data learning scenarios to efficiently transform raw
+many of the existing benchmarks do not clearly identify                     data into useful information and knowledge representation
+imbalanced data sets and their suggested evaluation use in                  to support the decision-making processes. Although the
+an organized manner. Therefore, many data sets require                      importance of stream data mining has attracted increasing
+additional manipulation before they can be applied to                       attention recently, the attention given to imbalanced data
+imbalanced learning scenarios. This limitation can create a                 streams has been rather limited. Moreover, in regards to
+bottleneck for the long-term development of research in                     incremental learning from imbalanced data streams, many
+imbalanced learning in the following aspects:                               important questions need to be addressed, such as:
+   Authorized licensed use limited to: CZECH TECHNICAL UNIVERSITY. Downloaded on May 16,2026 at 15:03:47 UTC from IEEE Xplore. Restrictions apply.
+HE AND GARCIA: LEARNING FROM IMBALANCED DATA                                                                                                          1281
+
+
+    1. How can we autonomously adjust the learning                           discussions of the fundamental nature of the imbalanced
+       algorithm if an imbalance is introduced in the                        learning problem, the state-of-the-art solutions used to
+       middle of the learning period?                                        address this problem, and the several major assessment
+   2. Should we consider rebalancing the data set during                     techniques used to evaluate this problem will serve as a
+       the incremental learning period? If so, how can we                    comprehensive resource for existing and future knowledge
+       accomplish this?                                                      discovery and data engineering researchers and practi-
+   3. How can we accumulate previous experience and                          tioners. Additionally, we hope that our insights on the many
+       use this knowledge to adaptively improve learning                     opportunities and challenges available in this relatively new
+       from new data?                                                        research area will help guide the potential research direc-
+   4. How do we handle the situation when newly                              tions for the future development of this field.
+       introduced concepts are also imbalanced (i.e., the
+       imbalanced concept drifting issue)?
+   A concrete understanding and active exploration in these                  REFERENCES
+areas can significantly advance the development of technol-                  [1]    “Learning from Imbalanced Data Sets,” Proc. Am. Assoc. for
+                                                                                    Artificial Intelligence (AAAI) Workshop, N. Japkowicz, ed., 2000,
+ogy for real-world incremental learning scenarios.                                  (Technical Report WS-00-05).
+                                                                             [2]    “Workshop Learning from Imbalanced Data Sets II,” Proc. Int’l
+5.5 Semisupervised Learning from Imbalanced Data                                    Conf. Machine Learning, N.V. Chawla, N. Japkowicz, and A. Kolcz,
+The semisupervised learning problem concerns itself with                            eds., 2003.
+learning when data sets are a combination of labeled and                     [3]    N.V. Chawla, N. Japkowicz, and A. Kolcz, “Editorial: Special Issue
+                                                                                    on Learning from Imbalanced Data Sets,” ACM SIGKDD Explora-
+unlabeled data, as opposed to fully supervised learning                             tions Newsletter, vol. 6, no. 1, pp. 1-6, 2004.
+where all training data are labeled. The key idea of                         [4]    H. He and X. Shen, “A Ranked Subspace Learning Method for
+semisupervised learning is to exploit the unlabeled exam-                           Gene Expression Data Classification,” Proc. Int’l Conf. Artificial
+                                                                                    Intelligence, pp. 358-364, 2007.
+ples by using the labeled examples to modify, refine, or                     [5]    M. Kubat, R.C. Holte, and S. Matwin, “Machine Learning for the
+reprioritize the hypothesis obtained from the labeled data                          Detection of Oil Spills in Satellite Radar Images,” Machine
+alone [135]. For instance, cotraining works under the                               Learning, vol. 30, nos. 2/3, pp. 195-215, 1998.
+assumption of two-viewed sets of feature spaces. Initially,                  [6]    R. Pearson, G. Goney, and J. Shwaber, “Imbalanced Clustering for
+                                                                                    Microarray Time-Series,” Proc. Int’l Conf. Machine Learning, Work-
+two separate classifiers are trained with the labeled                               shop Learning from Imbalanced Data Sets II, 2003.
+examples on two sufficient and conditionally independent                     [7]    Y. Sun, M.S. Kamel, and Y. Wang, “Boosting for Learning Multiple
+feature subsets. Then, each classifier is used to predict the                       Classes with Imbalanced Class Distribution,” Proc. Int’l Conf. Data
+                                                                                    Mining, pp. 592-602, 2006.
+unlabeled data and recover their labels according to their                   [8]    N. Abe, B. Zadrozny, and J. Langford, “An Iterative Method for
+respective confidence levels [136], [137]. Other representa-                        Multi-Class Cost-Sensitive Learning,” Proc. ACM SIGKDD Int’l
+tive works for semisupervised learning include the self-                            Conf. Knowledge Discovery and Data Mining, pp. 3-11, 2004.
+training methods [138], [139], semisupervised support                        [9]    K. Chen, B.L. Lu, and J. Kwok, “Efficient Classification of Multi-
+                                                                                    Label and Imbalanced Data Using Min-Max Modular Classifiers,”
+vector machines [140], [141], graph-based methods [142],                            Proc. World Congress on Computation Intelligence—Int’l Joint Conf.
+[143], and Expectation-Maximization (EM) algorithm with                             Neural Networks, pp. 1770-1775, 2006.
+generative mixture models [144], [145]. Although all of                      [10]   Z.H. Zhou and X.Y. Liu, “On Multi-Class Cost-Sensitive Learn-
+                                                                                    ing,” Proc. Nat’l Conf. Artificial Intelligence, pp. 567-572, 2006.
+these methods have illustrated great success in many                         [11]   X.Y. Liu and Z.H. Zhou, “Training Cost-Sensitive Neural Net-
+machine learning and data engineering applications, the                             works with Methods Addressing the Class Imbalance Problem,”
+issue of semisupervised learning under the condition of                             IEEE Trans. Knowledge and Data Eng., vol. 18, no. 1, pp. 63-77, Jan.
+imbalanced data sets has received very limited attention in                         2006.
+                                                                             [12]   C. Tan, D. Gilbert, and Y. Deville, “Multi-Class Protein Fold
+the community. Some important questions include:                                    Classification Using a New Ensemble Machine Learning Ap-
+                                                                                    proach,” Genome Informatics, vol. 14, pp. 206-217, 2003.
+    1.How can we identify whether an unlabeled data                          [13]   N.V. Chawla, K.W. Bowyer, L.O. Hall, and W.P. Kegelmeyer,
+      example came from a balanced or imbalanced                                    “SMOTE: Synthetic Minority Over-Sampling Technique,”
+      underlying distribution?                                                      J. Artificial Intelligence Research, vol. 16, pp. 321-357, 2002.
+                                                                             [14]   H. Guo and H.L. Viktor, “Learning from Imbalanced Data Sets
+  2. Given an imbalanced training data with labels, what                            with Boosting and Data Generation: The DataBoost IM Ap-
+      are the effective and efficient methods for recovering                        proach,” ACM SIGKDD Explorations Newsletter, vol. 6, no. 1,
+      the unlabeled data examples?                                                  pp. 30-39, 2004.
+                                                                             [15]   K. Woods, C. Doss, K. Bowyer, J. Solka, C. Priebe, and W.
+  3. What kind of biases may be introduced in the                                   Kegelmeyer, “Comparative Evaluation of Pattern Recognition
+      recovery process (through the conventional semisu-                            Techniques for Detection of Microcalcifications in Mammogra-
+      pervised learning techniques) given imbalanced,                               phy,” Int’l J. Pattern Recognition and Artificial Intelligence, vol. 7,
+      labeled data?                                                                 no. 6, pp. 1417-1436, 1993.
+                                                                             [16]   R.B. Rao, S. Krishnan, and R.S. Niculescu, “Data Mining for
+  We believe that all of these questions are important not                          Improved Cardiac Care,” ACM SIGKDD Explorations Newsletter,
+only for theoretical research development, but also for                             vol. 8, no. 1, pp. 3-10, 2006.
+                                                                             [17]   P.K. Chan, W. Fan, A.L. Prodromidis, and S.J. Stolfo, “Distributed
+many practical application scenarios.
+                                                                                    Data Mining in Credit Card Fraud Detection,” IEEE Intelligent
+                                                                                    Systems, vol. 14, no. 6, pp. 67-74, Nov./Dec. 1999.
+                                                                             [18]   P. Clifton, A. Damminda, and L. Vincent, “Minority Report in
+6    CONCLUSIONS                                                                    Fraud Detection: Classification of Skewed Data,” ACM SIGKDD
+In this paper, we discussed a challenging and critical                              Explorations Newsletter, vol. 6, no. 1, pp. 50-59, 2004.
+                                                                             [19]   P. Chan and S. Stolfo, “Toward Scalable Learning with Non-
+problem in the knowledge discovery and data engineering                             Uniform Class and Cost Distributions,” Proc. Int’l Conf. Knowledge
+field, the imbalanced learning problem. We hope that our                            Discovery and Data Mining, pp. 164-168, 1998.
+    Authorized licensed use limited to: CZECH TECHNICAL UNIVERSITY. Downloaded on May 16,2026 at 15:03:47 UTC from IEEE Xplore. Restrictions apply.
+1282                                            IEEE TRANSACTIONS ON KNOWLEDGE AND DATA ENGINEERING,                  VOL. 21,   NO. 9,   SEPTEMBER 2009
+
+[20] G.M. Weiss, “Mining with Rarity: A Unifying Framework,” ACM                [45] H. He, Y. Bai, E.A. Garcia, and S. Li, “ADASYN: Adaptive
+     SIGKDD Explorations Newsletter, vol. 6, no. 1, pp. 7-19, 2004.                  Synthetic Sampling Approach for Imbalanced Learning,” Proc.
+[21] G.M. Weiss, “Mining Rare Cases,” Data Mining and Knowledge                      Int’l J. Conf. Neural Networks, pp. 1322-1328, 2008.
+     Discovery Handbook: A Complete Guide for Practitioners and                 [46] I. Tomek, “Two Modifications of CNN,” IEEE Trans. System, Man,
+     Researchers, pp. 765-776, Springer, 2005.                                       Cybernetics, vol. 6, no. 11, pp. 769-772, Nov. 1976.
+[22] G.E.A.P.A. Batista, R.C. Prati, and M.C. Monard, “A Study of the           [47] N.V. Chawla, A. Lazarevic, L.O. Hall, and K.W. Bowyer,
+     Behavior of Several Methods for Balancing Machine Learning                      “SMOTEBoost: Improving Prediction of the Minority Class in
+     Training Data,” ACM SIGKDD Explorations Newsletter, vol. 6, no. 1,              Boosting,” Proc. Seventh European Conf. Principles and Practice of
+     pp. 20-29, 2004.                                                                Knowledge Discovery in Databases, pp. 107-119, 2003.
+[23] N. Japkowicz and S. Stephen, “The Class Imbalance Problem: A               [48] H. Guo and H.L. Viktor, “Boosting with Data Generation:
+     Systematic Study,” Intelligent Data Analysis, vol. 6, no. 5, pp. 429-           Improving the Classification of Hard to Learn Examples,” Proc.
+     449, 2002.                                                                      Int’l Conf. Innovations Applied Artificial Intelligence, pp. 1082-1091,
+[24] G.M. Weiss and F. Provost, “Learning When Training Data Are                     2004.
+     Costly: The Effect of Class Distribution on Tree Induction,”               [49] C. Elkan, “The Foundations of Cost-Sensitive Learning,” Proc. Int’l
+     J. Artificial Intelligence Research, vol. 19, pp. 315-354, 2003.                Joint Conf. Artificial Intelligence, pp. 973-978, 2001.
+[25] R.C. Holte, L. Acker, and B.W. Porter, “Concept Learning and the           [50] K.M. Ting, “An Instance-Weighting Method to Induce Cost-
+     Problem of Small Disjuncts,” Proc. Int’l J. Conf. Artificial                    Sensitive Trees,” IEEE Trans. Knowledge and Data Eng., vol. 14,
+     Intelligence, pp. 813-818, 1989.                                                no. 3, pp. 659-665, May/June 2002.
+[26] J.R. Quinlan, “Induction of Decision Trees,” Machine Learning,             [51] M.A. Maloof, “Learning When Data Sets Are Imbalanced and
+     vol. 1, no. 1, pp. 81-106, 1986.
+                                                                                     When Costs Are Unequal and Unknown,” Proc. Int’l Conf. Machine
+[27] T. Jo and N. Japkowicz, “Class Imbalances versus Small                          Learning, Workshop Learning from Imbalanced Data Sets II, 2003.
+     Disjuncts,” ACM SIGKDD Explorations Newsletter, vol. 6, no. 1,
+                                                                                [52] K. McCarthy, B. Zabar, and G.M. Weiss, “Does Cost-Sensitive
+     pp. 40-49, 2004.
+                                                                                     Learning Beat Sampling for Classifying Rare Classes?” Proc. Int’l
+[28] N. Japkowicz, “Class Imbalances: Are We Focusing on the Right
+                                                                                     Workshop Utility-Based Data Mining, pp. 69-77, 2005.
+     Issue?” Proc. Int’l Conf. Machine Learning, Workshop Learning from
+     Imbalanced Data Sets II, 2003.                                             [53] X.Y. Liu and Z.H. Zhou, “The Influence of Class Imbalance on
+                                                                                     Cost-Sensitive Learning: An Empirical Study,” Proc. Int’l Conf.
+[29] R.C. Prati, G.E.A.P.A. Batista, and M.C. Monard, “Class Imbal-
+                                                                                     Data Mining, pp. 970-974, 2006.
+     ances versus Class Overlapping: An Analysis of a Learning
+     System Behavior,” Proc. Mexican Int’l Conf. Artificial Intelligence,       [54] P. Domingos, “MetaCost: A General Method for Making
+     pp. 312-321, 2004.                                                              Classifiers Cost-Sensitive,” Proc. Int’l Conf. Knowledge Discovery
+[30] S.J. Raudys and A.K. Jain, “Small Sample Size Effects in Statistical            and Data Mining, pp. 155-164, 1999.
+     Pattern Recognition: Recommendations for Practitioners,” IEEE              [55] B. Zadrozny, J. Langford, and N. Abe, “Cost-Sensitive Learning by
+     Trans. Pattern Analysis and Machine Intelligence, vol. 13, no. 3,               Cost-Proportionate Example Weighting,” Proc. Int’l Conf. Data
+     pp. 252-264, Mar. 1991.                                                         Mining, pp. 435-442, 2003.
+[31] R. Caruana, “Learning from Imbalanced Data: Rank Metrics and               [56] Y. Freund and R.E. Schapire, “Experiments with a New Boosting
+     Extra Tasks,” Proc. Am. Assoc. for Artificial Intelligence (AAAI) Conf.,        Algorithm,” Proc. Int’l Conf. Machine Learning, pp. 148-156, 1996.
+     pp. 51-57, 2000 (AAAI Technical Report WS-00-05).                          [57] Y. Freund and R.E. Schapire, “A Decision-Theoretic General-
+[32] W.H. Yang, D.Q. Dai, and H. Yan, “Feature Extraction Uncorre-                   ization of On-Line Learning and an Application to Boosting,”
+     lated Discriminant Analysis for High-Dimensional Data,” IEEE                    J. Computer and System Sciences, vol. 55, no. 1, pp. 119-139, 1997.
+     Trans. Knowledge and Data Eng., vol. 20, no. 5, pp. 601-614, May           [58] Y. Sun, M.S. Kamel, A.K.C. Wong, and Y. Wang, “Cost-Sensitive
+     2008.                                                                           Boosting for Classification of Imbalanced Data,” Pattern Recogni-
+[33] N.V. Chawla, “C4.5 and Imbalanced Data Sets: Investigating the                  tion, vol. 40, no. 12, pp. 3358-3378, 2007.
+     Effect of Sampling Method, Probabilistic Estimate, and Decision            [59] W. Fan, S.J. Stolfo, J. Zhang, and P.K. Chan, “AdaCost:
+     Tree Structure,” Proc. Int’l Conf. Machine Learning, Workshop                   Misclassification Cost-Sensitive Boosting,” Proc. Int’l Conf. Machine
+     Learning from Imbalanced Data Sets II, 2003.                                    Learning, pp. 97-105, 1999.
+[34] T.M. Mitchell, Machine Learning. McGraw Hill, 1997.                        [60] K.M. Ting, “A Comparative Study of Cost-Sensitive Boosting
+[35] G.M. Weiss and F. Provost, “The Effect of Class Distribution on                 Algorithms,” Proc. Int’l Conf. Machine Learning, pp. 983-990, 2000.
+     Classifier Learning: An Empirical Study,” Technical Report ML-             [61] M. Maloof, P. Langley, S. Sage, and T. Binford, “Learning to Detect
+     TR-43, Dept. of Computer Science, Rutgers Univ., 2001.                          Rooftops in Aerial Images,” Proc. Image Understanding Workshop,
+[36] J. Laurikkala, “Improving Identification of Difficult Small Classes             pp. 835-845, 1997.
+     by Balancing Class Distribution,” Proc. Conf. AI in Medicine in            [62] L. Breiman, J. Friedman, R. Olshen, and C. Stone, Classification and
+     Europe: Artificial Intelligence Medicine, pp. 63-66, 2001.                      Regression Trees. Chapman & Hall/CRC Press, 1984.
+[37] A. Estabrooks, T. Jo, and N. Japkowicz, “A Multiple Resampling             [63] C. Drummond and R.C. Holte, “Exploiting the Cost (In)Sensitivity
+     Method for Learning from Imbalanced Data Sets,” Computational                   of Decision Tree Splitting Criteria,” Proc. Int’l Conf. Machine
+     Intelligence, vol. 20, pp. 18-36, 2004.                                         Learning, pp. 239-246, 2000.
+[38] D. Mease, A.J. Wyner, and A. Buja, “Boosted Classification Trees           [64] S. Haykin, Neural Networks: A Comprehensive Foundation, second
+     and Class Probability/Quantile Estimation,” J. Machine Learning                 ed. Prentice-Hall, 1999.
+     Research, vol. 8, pp. 409-439, 2007.
+                                                                                [65] M.Z. Kukar and I. Kononenko, “Cost-Sensitive Learning with
+[39] C. Drummond and R.C. Holte, “C4.5, Class Imbalance, and Cost
+                                                                                     Neural Networks,” Proc. European Conf. Artificial Intelligence,
+     Sensitivity: Why Under Sampling Beats Over-Sampling,” Proc.
+                                                                                     pp. 445-449, 1998.
+     Int’l Conf. Machine Learning, Workshop Learning from Imbalanced
+     Data Sets II, 2003.                                                        [66] P. Domingos and M. Pazzani, “Beyond Independence: Conditions
+[40] X.Y. Liu, J. Wu, and Z.H. Zhou, “Exploratory Under Sampling for                 for the Optimality of the Simple Bayesian Classifier,” Proc. Int’l
+     Class Imbalance Learning,” Proc. Int’l Conf. Data Mining, pp. 965-              Conf. Machine Learning, pp. 105-112, 1996.
+     969, 2006.                                                                 [67] G.R.I. Webb and M.J. Pazzani, “Adjusted Probability Naive
+[41] J. Zhang and I. Mani, “KNN Approach to Unbalanced Data                          Bayesian Induction,” Proc. Australian Joint Conf. Artificial Intelli-
+     Distributions: A Case Study Involving Information Extraction,”                  gence, pp. 285-295, 1998.
+     Proc. Int’l Conf. Machine Learning (ICML ’2003), Workshop Learning         [68] R. Kohavi and D. Wolpert, “Bias Plus Variance Decomposition for
+     from Imbalanced Data Sets, 2003.                                                Zero-One Loss Functions,” Proc. Int’l Conf. Machine Learning, 1996.
+[42] M. Kubat and S. Matwin, “Addressing the Curse of Imbalanced                [69] J. Gama, “Iterative Bayes,” Theoretical Computer Science, vol. 292,
+     Training Sets: One-Sided Selection,” Proc. Int’l Conf. Machine                  no. 2, pp. 417-430, 2003.
+     Learning, pp. 179-186, 1997.                                               [70] G. Fumera and F. Roli, “Support Vector Machines with Embedded
+[43] B.X. Wang and N. Japkowicz, “Imbalanced Data Set Learning with                  Reject Option,” Proc. Int’l Workshop Pattern Recognition with Support
+     Synthetic Samples,” Proc. IRIS Machine Learning Workshop, 2004.                 Vector Machines, pp. 68-82, 2002.
+[44] H. Han, W.Y. Wang, and B.H. Mao, “Borderline-SMOTE: A New                  [71] J.C. Platt, “Fast Training of Support Vector Machines Using
+     Over-Sampling Method in Imbalanced Data Sets Learning,” Proc.                   Sequential Minimal Optimization,” Advances in Kernel Methods:
+     Int’l Conf. Intelligent Computing, pp. 878-887, 2005.                           Support Vector Learning, pp. 185-208, MIT Press, 1999.
+   Authorized licensed use limited to: CZECH TECHNICAL UNIVERSITY. Downloaded on May 16,2026 at 15:03:47 UTC from IEEE Xplore. Restrictions apply.
+HE AND GARCIA: LEARNING FROM IMBALANCED DATA                                                                                                          1283
+
+[72] J.T. Kwok, “Moderating the Outputs of Support Vector Machine            [96] A. Tashk, R. Bayesteh, and K. Faez, “Boosted Bayesian Kernel
+     Classifiers,” IEEE Trans. Neural Networks, vol. 10, no. 5, pp. 1018-          Classifier Method for Face Detection,” Proc. Int’l Conf. Natural
+     1031, Sept. 1999.                                                             Computation, pp. 533-537, 2007.
+[73] V.N. Vapnik, The Nature of Statistical Learning Theory. Springer,       [97] N. Abe, “Invited Talk: Sampling Approaches to Learning from
+     1995.                                                                         Imbalanced Data Sets: Active Learning, Cost Sensitive Learning
+[74] B. Raskutti and A. Kowalczyk, “Extreme Re-Balancing for SVMs:                 and Deyond,” Proc. Int’l Conf. Machine Learning, Workshop Learning
+     A Case Study,” ACM SIGKDD Explorations Newsletter, vol. 6, no. 1,             from Imbalanced Data Sets II, 2003.
+     pp. 60-69, 2004.                                                        [98] S. Ertekin, J. Huang, L. Bottou, and L. Giles, “Learning on the
+[75] R. Akbani, S. Kwek, and N. Japkowicz, “Applying Support Vector                Border: Active Learning in Imbalanced Data Classification,” Proc.
+     Machines to Imbalanced Data Sets,” Lecture Notes in Computer                  ACM Conf. Information and Knowledge Management, pp. 127-136,
+     Science, vol. 3201, pp. 39-50, 2004.                                          2007.
+[76] G. Wu and E. Chang, “Class-Boundary Alignment for Imbalanced            [99] S. Ertekin, J. Huang, and C.L. Giles, “Active Learning for Class
+     Data Set Learning,” Proc. Int’l Conf. Data Mining (ICDM ’03),                 Imbalance Problem,” Proc. Int’l SIGIR Conf. Research and Develop-
+     Workshop Learning from Imbalanced Data Sets II, 2003.                         ment in Information Retrieval, pp. 823-824, 2007.
+[77] F. Vilarino, P. Spyridonos, P. Radeva, and J. Vitria, “Experiments      [100] F. Provost, “Machine Learning from Imbalanced Data Sets 101,”
+     with SVM and Stratified Sampling with an Imbalanced Problem:                  Proc. Learning from Imbalanced Data Sets: Papers from the Am.
+     Detection of Intestinal Contractions,” Lecture Notes in Computer              Assoc. for Artificial Intelligence Workshop, 2000 (Technical Report
+     Science, vol. 3687, pp. 783-791, 2005.                                        WS-00-05).
+[78] P. Kang and S. Cho, “EUS SVMs: Ensemble of Under sampled                [101] Bordes, S. Ertekin, J. Weston, and L. Bottou, “Fast Kernel
+     SVMs for Data Imbalance Problems,” Lecture Notes in Computer                  Classifiers with Online and Active Learning,” J. Machine Learning
+     Science, vol. 4232, pp. 837-846, 2006.                                        Research, vol. 6, pp. 1579-1619, 2005.
+[79] Y. Liu, A. An, and X. Huang, “Boosting Prediction Accuracy on
+                                                                             [102] J. Zhu and E. Hovy, “Active Learning for Word Sense Disambi-
+     Imbalanced Data Sets with SVM Ensembles,” Lecture Notes in
+                                                                                   guation with Methods for Addressing the Class Imbalance
+     Artificial Intelligence, vol. 3918, pp. 107-118, 2006.
+                                                                                   Problem,” Proc. Joint Conf. Empirical Methods in Natural Language
+[80] B.X. Wang and N. Japkowicz, “Boosting Support Vector Machines
+                                                                                   Processing and Computational Natural Language Learning, pp. 783-
+     for Imbalanced Data Sets,” Lecture Notes in Artificial Intelligence,
+                                                                                   790, 2007.
+     vol. 4994, pp. 38-47, 2008.
+[81] Y. Tang and Y.Q. Zhang, “Granular SVM with Repetitive                   [103] J. Doucette and M.I. Heywood, “GP Classification under
+     Undersampling for Highly Imbalanced Protein Homology Pre-                     Imbalanced Data Sets: Active Sub-Sampling AUC Approxima-
+     diction,” Proc. Int’l Conf. Granular Computing, pp. 457- 460, 2006.           tion,” Lecture Notes in Computer Science, vol. 4971, pp. 266-277,
+                                                                                   2008.
+[82] Y.C. Tang, B. Jin, and Y.-Q. Zhang, “Granular Support Vector
+     Machines with Association Rules Mining for Protein Homology             [104] B. Scholkopt, J.C. Platt, J. Shawe-Taylor, A.J. Smola, and R.C.
+     Prediction,” Artificial Intelligence in Medicine, special issue on            Williamson, “Estimating the Support of a High-Dimensional
+     computational intelligence techniques in bioinformatics, vol. 35,             Distribution,” Neural Computation, vol. 13, pp. 1443-1471, 2001.
+     nos. 1/2, pp. 121-134, 2005.                                            [105] L.M. Manevitz and M. Yousef, “One-Class SVMs for Document
+[83] Y.C. Tang, B. Jin, Y.-Q. Zhang, H. Fang, and B. Wang, “Granular               Classification,” J. Machine Learning Research, vol. 2, pp. 139-154,
+     Support Vector Machines Using Linear Decision Hyperplanes for                 2001.
+     Fast Medical Binary Classification,” Proc. Int’l Conf. Fuzzy Systems,   [106] L. Zhuang and H. Dai, “Parameter Estimation of One-Class SVM
+     pp. 138-142, 2005.                                                            on Imbalance Text Classification,” Lecture Notes in Artificial
+[84] Y.C. Tang, Y.Q. Zhang, Z. Huang, X.T. Hu, and Y. Zhao,                        Intelligence, vol. 4013, pp. 538-549, 2006.
+     “Granular SVM-RFE Feature Selection Algorithm for Reliable              [107] H.J. Lee and S. Cho, “The Novelty Detection Approach for
+     Cancer-Related Gene Subsets Extraction on Microarray Gene                     Difference Degrees of Class Imbalance,” Lecture Notes in Computer
+     Expression Data,” Proc. IEEE Symp. Bioinformatics and Bioeng.,                Science, vol. 4233, pp. 21-30, 2006.
+     pp. 290-293, 2005.                                                      [108] L. Zhuang and H. Dai, “Parameter Optimization of Kernel-Based
+[85] X. Hong, S. Chen, and C.J. Harris, “A Kernel-Based Two-Class                  One-Class Classifier on Imbalance Text Learning,” Lecture Notes in
+     Classifier for Imbalanced Data Sets,” IEEE Trans. Neural Networks,            Artificial Intelligence, vol. 4099, pp. 434-443, 2006.
+     vol. 18, no. 1, pp. 28-41, Jan. 2007.                                   [109] N. Japkowicz, “Supervised versus Unsupervised Binary-Learning
+[86] G. Wu and E.Y. Chang, “Aligning Boundary in Kernel Space for                  by Feedforward Neural Networks,” Machine Learning, vol. 42,
+     Learning Imbalanced Data Set,” Proc. Int’l Conf. Data Mining,                 pp. 97-122, 2001.
+     pp. 265-272, 2004.                                                      [110] L. Manevitz and M. Yousef, “One-Class Document Classification
+[87] G. Wu and E.Y. Chang, “KBA: Kernel Boundary Alignment                         via Neural Networks,” Neurocomputing, vol. 70, pp. 1466-1481,
+     Considering Imbalanced Data Distribution,” IEEE Trans. Knowl-                 2007.
+     edge and Data Eng., vol. 17, no. 6, pp. 786-795, June 2005.             [111] N. Japkowicz, “Learning from Imbalanced Data Sets: A Compar-
+[88] G. Wu and E.Y. Chang, “Adaptive Feature-Space Conformal                       ison of Various Strategies,” Proc. Am. Assoc. for Artificial Intelligence
+     Transformation for Imbalanced-Data Learning,” Proc. Int’l Conf.               (AAAI) Workshop Learning from Imbalanced Data Sets, pp. 10-15,
+     Machine Learning, pp. 816-823, 2003.                                          2000 (Technical Report WS-00-05).
+[89] Y.H. Liu and Y.T. Chen, “Face Recognition Using Total Margin-           [112] N. Japkowicz, C. Myers, and M. Gluck, “A Novelty Detection
+     Based Adaptive Fuzzy Support Vector Machines,” IEEE Trans.                    Approach to Classification,” Proc. Joint Conf. Artificial Intelligence,
+     Neural Networks, vol. 18, no. 1, pp. 178-192, Jan. 2007.                      pp. 518-523, 1995.
+[90] Y.H. Liu and Y.T. Chen, “Total Margin Based Adaptive Fuzzy
+                                                                             [113] C.T. Su and Y.H. Hsiao, “An Evaluation of the Robustness of MTS
+     Support Vector Machines for Multiview Face Recognition,” Proc.
+                                                                                   for Imbalanced Data,” IEEE Trans. Knowledge and Data Eng.,
+     Int’l Conf. Systems, Man and Cybernetics, pp. 1704-1711, 2005.
+                                                                                   vol. 19, no. 10, pp. 1321-1332, Oct. 2007.
+[91] G. Fung and O.L. Mangasarian, “Multicategory Proximal Support
+     Vector Machine Classifiers,” Machine Learning, vol. 59, nos. 1/2,       [114] G. Taguchi, S. Chowdhury, and Y. Wu, The Mahalanobis-Taguchi
+     pp. 77-97, 2005.                                                              System. McGraw-Hill, 2001.
+[92] J. Yuan, J. Li, and B. Zhang, “Learning Concepts from Large Scale       [115] G. Taguchi and R. Jugulum, The Mahalanobis-Taguchi Strategy. John
+     Imbalanced Data Sets Using Support Cluster Machines,” Proc. Int’l             Wiley & Sons, 2002.
+     Conf. Multimedia, pp. 441-450, 2006.                                    [116] M.V. Joshi, V. Kumar, and R.C. Agarwal, “Evaluating Boosting
+[93] A.K. Qin and P.N. Suganthan, “Kernel Neural Gas Algorithms                    Algorithms to Classify Rare Classes: Comparison and Improve-
+     with Application to Cluster Analysis,” Proc. Int’l Conf. Pattern              ments,” Proc. Int’l Conf. Data Mining, pp. 257-264, 2001.
+     Recognition, 2004.                                                      [117] F.J. Provost and T. Fawcett, “Analysis and Visualization of
+[94] X.P. Yu and X.G. Yu, “Novel Text Classification Based on K-                   Classifier Performance: Comparison under Imprecise Class and
+     Nearest Neighbor,” Proc. Int’l Conf. Machine Learning Cybernetics,            Cost Distributions,” Proc. Int’l Conf. Knowledge Discovery and Data
+     pp. 3425-3430, 2007.                                                          Mining, pp. 43-48, 1997.
+[95] P. Li, K.L. Chan, and W. Fang, “Hybrid Kernel Machine Ensemble          [118] F.J. Provost, T. Fawcett, and R. Kohavi, “The Case against
+     for Imbalanced Data Sets,” Proc. Int’l Conf. Pattern Recognition,             Accuracy Estimation for Comparing Induction Algorithms,” Proc.
+     pp. 1108-1111, 2006.                                                          Int’l Conf. Machine Learning, pp. 445-453, 1998.
+   Authorized licensed use limited to: CZECH TECHNICAL UNIVERSITY. Downloaded on May 16,2026 at 15:03:47 UTC from IEEE Xplore. Restrictions apply.
+1284                                           IEEE TRANSACTIONS ON KNOWLEDGE AND DATA ENGINEERING,               VOL. 21,   NO. 9,   SEPTEMBER 2009
+
+[119] T. Fawcett, “ROC Graphs: Notes and Practical Considerations for                                 Haibo He received the BS and MS degrees in
+      Data Mining Researchers,” Technical Report HPL-2003-4, HP                                       electrical engineering from Huazhong University
+      Labs, 2003.                                                                                     of Science and Technology (HUST), Wuhan,
+[120] T. Fawcett, “An Introduction to ROC Analysis,” Pattern Recogni-                                 China, in 1999 and 2002, respectively, and the
+      tion Letters, vol. 27, no. 8, pp. 861-874, 2006.                                                PhD degree in electrical engineering from Ohio
+[121] F. Provost and P. Domingos, “Well-Trained Pets: Improving                                       University, Athens, in 2006. He is currently an
+      Probability Estimation Trees,” CeDER Working Paper: IS-00-04,                                   assistant professor in the Department of Elec-
+      Stern School of Business, New York Univ., 2000.                                                 trical and Computer Engineering, Stevens In-
+[122] T. Fawcett, “Using Rule Sets to Maximize ROC Performance,”                                      stitute of Technology, Hoboken, New Jersey.
+      Proc. Int’l Conf. Data Mining, pp. 131-138, 2001.                                               His research interests include machine learning,
+[123] J. Davis and M. Goadrich, “The Relationship between Precision-          data mining, computational intelligence, VLSI and FPGA design, and
+      Recall and ROC Curves,” Proc. Int’l Conf. Machine Learning,             embedded intelligent systems design. He has served regularly on the
+      pp. 233-240, 2006.                                                      organization committees and the program committees of many
+[124] R. Bunescu, R. Ge, R. Kate, E. Marcotte, R. Mooney, A. Ramani,          international conferences and has also been a reviewer for the leading
+      and Y. Wong, “Comparative Experiments on Learning Informa-              academic journals in his fields, including the IEEE Transactions on
+      tion Extractors for Proteins and Their Interactions,” Artificial        Knowledge and Data Engineering, the IEEE Transactions on Neural
+      Intelligence in Medicine, vol. 33, pp. 139-155, 2005.                   Networks, the IEEE Transactions on Systems, Man and Cybernetics
+[125] J. Davis, E. Burnside, I. Dutra, D. Page, R. Ramakrishnan, V.S.         (part A and part B), and others. He has also served as a guest editor for
+      Costa, and J. Shavlik, “View Learning for Statistical Relational        several international journals, such as Soft Computing (Springer) and
+      Learning: With an Application to Mammography,” Proc. Int’l Joint        Applied Mathematics and Computation (Elsevier), among others. He
+      Conf. Artificial Intelligence, pp. 677-683, 2005.                       has delivered several invited talks including the IEEE North Jersey
+[126] P. Singla and P. Domingos, “Discriminative Training of Markov           Section Systems, Man & Cybernetics invited talk on “Self-Adaptive
+      Logic Networks,” Proc. Nat’l Conf. Artificial Intelligence, pp. 868-    Learning for Machine Intelligence.” He was the recipient of the
+      873, 2005.                                                              Outstanding Master Thesis Award of Hubei Province, China, in 2002.
+[127] T. Landgrebe, P. Paclik, R. Duin, and A.P. Bradley, “Precision-         Currently, he is the editor of the IEEE Computational Intelligence
+      Recall Operating Characteristic (P-ROC) Curves in Imprecise             Society (CIS) Electronic Letter (E-letter), and a committee member of
+      Environments,” Proc. Int’l Conf. Pattern Recognition, pp. 123-127,      the IEEE Systems, Man, and Cybernetic (SMC) Technical Committee
+      2006.                                                                   on Computational Intelligence. He is a member of the IEEE, the ACM,
+[128] R.C. Holte and C. Drummond, “Cost Curves: An Improved                   and the AAAI.
+      Method for Visualizing Classifier Performance,” Machine Learning,
+      vol. 65, no. 1, pp. 95-130, 2006.                                                             Edwardo A. Garcia received the BS degree in
+[129] R.C. Holte and C. Drummond, “Cost-Sensitive Classifier Evalua-                                mathematics from New York University, New
+      tion,” Proc. Int’l Workshop Utility-Based Data Mining, pp. 3-9, 2005.                         York, and the BE degree in computer engineer-
+[130] R.C. Holte and C. Drummond, “Explicitly Representing Expected                                 ing from Stevens Institute of Technology, Hobo-
+      Cost: An Alternative to ROC Representation,” Proc. Int’l Conf.                                ken, New Jersey, both in 2008. He currently
+      Knowledge Discovery and Data Mining, pp. 198-207, 2000.                                       holds research appointments with the Depart-
+[131] D.J. Hand and R.J. Till, “A Simple Generalization of the Area                                 ment of Electrical and Computer Engineering at
+      under the ROC Curve to Multiple Class Classification Problems,”                               Stevens Institute of Technology and with the
+      Machine Learning, vol. 45, no. 2, pp. 171-186, 2001.                                          Department of Anesthesiology at New York
+[132] UC Irvine Machine Learning Repository, http://archive.ics.uci.                                University School of Medicine. His research
+      edu/ml/, 2009.                                                          interests include machine learning, biologically inspired intelligence,
+[133] NIST Scientific and Technical Databases, http://nist.gov/srd/           cognitive neuroscience, data mining for medical diagnostics, and
+      online.htm, 2009.                                                       mathematical methods for f-MRI.
+[134] H. He and S. Chen, “IMORL: Incremental Multiple Objects
+      Recognition Localization,” IEEE Trans. Neural Networks, vol. 19,
+      no. 10, pp. 1727-1738, Oct. 2008.                                       . For more information on this or any other computing topic,
+[135] X. Zhu, “Semi-Supervised Learning Literature Survey,” Technical         please visit our Digital Library at www.computer.org/publications/dlib.
+      Report TR-1530, Univ. of Wisconsin-Madson, 2007.
+[136] A. Blum and T. Mitchell, “Combining Labeled and Unlabeled
+      Data with Co-Training,” Proc. Workshop Computational Learning
+      Theory, pp. 92-100, 1998.
+[137] T.M. Mitchell, “The Role of Unlabeled Data in Supervised
+      Learning,” Proc. Int’l Colloquium on Cognitive Science, 1999.
+[138] C. Rosenberg, M. Hebert, and H. Schneiderman, “Semi-Super-
+      vised Self-Training of Object Detection Models,” Proc. IEEE
+      Workshops Application of Computer Vision, pp. 29-36, 2005.
+[139] M. Wang, X.S. Hua, L.R. Dai, and Y. Song, “Enhanced Semi-
+      Supervised Learning for Automatic Video Annotation,” Proc. Int’l
+      Conf. Multimedia and Expo, pp. 1485-1488, 2006.
+[140] K.P. Bennett and A. Demiriz, “Semi-Supervised Support Vector
+      Machines,” Proc. Conf. Neural Information Processing Systems,
+      pp. 368-374, 1998.
+[141] V. Sindhwani and S.S. Keerthi, “Large Scale Semi-Supervised
+      Linear SVMs,” Proc. Int’l SIGIR Conf. Research and Development in
+      Information Retrieval, pp. 477-484, 2006.
+[142] A. Blum and S. Chawla, “Learning from Labeled and Unlabeled
+      Data Using Graph Mincuts,” Proc. Int’l Conf. Machine Learning,
+      pp. 19-26, 2001.
+[143] D. Zhou, B. Scholkopf, and T. Hofmann, “Semi-Supervised
+      Learning on Directed Graphs,” Proc. Conf. Neural Information
+      Processing Systems, pp. 1633-1640, 2004.
+[144] A. Fujino, N. Ueda, and K. Saito, “A Hybrid Generative/
+      Discriminative Approach to Semi-Supervised Classifier Design,”
+      Proc. Nat’l Conf. Artificial Intelligence, pp. 764-769, 2005.
+[145] D.J. Miller and H.S. Uyar, “A Mixture of Experts Classifier with
+      Learning Based on Both Labeled and Unlabelled Data,” Proc. Ann.
+      Conf. Neural Information Processing Systems, pp. 571-577, 1996.
+   Authorized licensed use limited to: CZECH TECHNICAL UNIVERSITY. Downloaded on May 16,2026 at 15:03:47 UTC from IEEE Xplore. Restrictions apply.
+

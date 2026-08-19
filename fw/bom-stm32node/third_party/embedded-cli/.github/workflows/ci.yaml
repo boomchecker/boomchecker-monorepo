@@ -1,0 +1,200 @@
+name: CMake
+
+on:
+  push:
+  pull_request:
+  release:
+    types: [published]
+
+env:
+  BUILD_TYPE: Debug
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - build_single_header: OFF
+          - build_single_header: ON
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: true
+
+      - name: Install dependencies
+        run: |
+          pip install gcovr
+
+      - name: Create Build Environment
+        run: cmake -E make_directory ${{github.workspace}}/build
+
+      - name: Configure CMake
+        # Use a bash shell so we can use the same syntax for environment variable
+        # access regardless of the host operating system
+        shell: bash
+        working-directory: ${{github.workspace}}/build
+        run: |
+          cmake $GITHUB_WORKSPACE -DCMAKE_BUILD_TYPE=$BUILD_TYPE \
+                                  -DBUILD_SINGLE_HEADER=${{ matrix.build_single_header }} \
+                                  -DBUILD_EXAMPLES=true -DBUILD_TESTS=true -DTESTS_COV=ON
+
+      - name: Build
+        working-directory: ${{github.workspace}}/build
+        shell: bash
+        run: cmake --build . --config $BUILD_TYPE
+
+      - name: Test
+        working-directory: ${{github.workspace}}/build
+        shell: bash
+        # Execute tests defined by the CMake configuration.
+        # See https://cmake.org/cmake/help/latest/manual/ctest.1.html for more detail
+        run: ctest -C $BUILD_TYPE
+
+      - name: Coverage
+        working-directory: ${{github.workspace}}/build
+        shell: bash
+        run: cmake --build . --target coverage_xml
+
+      - name: Upload test logs
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: testing-shl-${{ matrix.build_single_header }}
+          path: ${{github.workspace}}/build/Testing
+
+      - name: Upload coverage
+        if: ${{ matrix.build_single_header == 'OFF' }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: coverage
+          path: ${{github.workspace}}/build/coverage_xml.xml
+
+      - name: Upload generated header
+        if: ${{ matrix.build_single_header == 'ON' }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: single-header
+          path: ${{github.workspace}}/lib/shl/embedded_cli.h
+
+      - name: Upload coverage to codecov
+        if: ${{ matrix.build_single_header == 'OFF' }}
+        uses: codecov/codecov-action@v3
+        with:
+          files: ${{ github.workspace }}/build/coverage_xml.xml
+
+  build-arduino-example:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Generate single header lib
+        working-directory: ${{github.workspace}}/lib
+        run: python3 build-shl.py
+
+      - name: Copy single header file to sketch dir
+        run: cp ${{github.workspace}}/lib/shl/embedded_cli.h ${{github.workspace}}/examples/arduino-cli/embedded_cli.h
+
+      - name: Compile arduino sketch
+        uses: arduino/compile-sketches@v1
+        with:
+          sketch-paths: |
+            - examples/arduino-cli
+
+  build-win:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+          - arch: Win32
+
+    runs-on: windows-2025
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: true
+
+      - name: Create Build Environment
+        run: cmake -E make_directory ${{github.workspace}}/build
+
+      - name: Configure CMake
+        working-directory: ${{github.workspace}}/build
+        run: cmake -DBUILD_SINGLE_HEADER=ON -DBUILD_EXAMPLES=true -DBUILD_TESTS=true -G "Visual Studio 17 2022" -A ${{ matrix.arch }} ..
+
+      - name: Build
+        working-directory: ${{github.workspace}}/build
+        run: cmake --build . --config Release
+
+      - name: Test
+        working-directory: ${{github.workspace}}/build
+        shell: bash
+        run: ctest -C Release
+
+      - name: Upload test logs
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: testing-win-${{ matrix.arch }}
+          path: ${{github.workspace}}/build/Testing
+
+      - name: Upload windows examples
+        uses: actions/upload-artifact@v6
+        with:
+          name: windows-example-${{ matrix.arch }}
+          path: ${{github.workspace}}/build/examples/win32-example/Release/embedded_cli_win32.exe
+
+  build-mac:
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: true
+
+      - name: Create Build Environment
+        run: cmake -E make_directory ${{github.workspace}}/build
+
+      - name: Configure CMake
+        working-directory: ${{github.workspace}}/build
+        run: cmake $GITHUB_WORKSPACE -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DBUILD_EXAMPLES=true -DBUILD_SINGLE_HEADER=ON -DBUILD_TESTS=true
+
+      - name: Build
+        working-directory: ${{github.workspace}}/build
+        run: cmake --build . --config $BUILD_TYPE
+
+      - name: Test
+        working-directory: ${{github.workspace}}/build
+        run: ctest -C $BUILD_TYPE
+
+      - name: Upload test logs
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: testing-mac
+          path: ${{github.workspace}}/build/Testing
+
+  add-release-assets:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'release'
+    needs: [build]
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          path: artifacts
+
+      - name: Display structure of downloaded files
+        working-directory: artifacts
+        run: ls -R
+
+      - uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: artifacts/single-header/embedded_cli.h
+          tag: ${{ github.ref }}
+          asset_name: embedded_cli.h
+          overwrite: true

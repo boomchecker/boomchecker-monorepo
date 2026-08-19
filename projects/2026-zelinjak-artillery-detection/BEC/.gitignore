@@ -1,0 +1,11 @@
+# LaTeX auxiliary files to ignore
+*.aux
+*.log
+*.out
+*.bbl
+*.blg
+*.toc
+*.synctex.gz
+
+# Python gitignores
+*.pyc
