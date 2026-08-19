@@ -154,13 +154,24 @@ boomlink_linkframe_parse_result_t boomlink_linkframe_parse(
 }
 
 bool boomlink_linkframe_is_for_node(uint32_t destination_id, uint32_t local_node_id) {
-  /* An unconfigured node accepts nothing at all, broadcast included - see the
-     header's contract. Checked first so the broadcast test below cannot
-     accidentally let a half-provisioned node act on traffic. */
-  if (local_node_id == BOOMLINK_ADDR_INVALID) {
+  /* A node whose own address is not a valid node ID accepts nothing at all,
+     broadcast included - see the header's contract. Checked FIRST so the two
+     tests below cannot accidentally let such a node act on traffic: without the
+     INVALID half, destination 0 "matches" a factory-fresh node whose id is still
+     0; without the BROADCAST half, a node misconfigured to 0xFFFFFFFF matches
+     every broadcast twice over and would answer for the whole network. Section
+     7.2 puts real node IDs at 0x00000001..0xFFFFFFFE, so both are out. */
+  if (local_node_id == BOOMLINK_ADDR_INVALID || local_node_id == BOOMLINK_ADDR_BROADCAST) {
     return false;
   }
   return destination_id == local_node_id || destination_id == BOOMLINK_ADDR_BROADCAST;
+}
+
+void boomlink_linkframe_header_init(boomlink_linkframe_header_t out_header[static 1]) {
+  memset(out_header, 0, sizeof(*out_header));
+  out_header->magic      = BOOMLINK_LINKFRAME_MAGIC_DEFAULT;
+  out_header->version    = BOOMLINK_LINKFRAME_VERSION;
+  out_header->frame_type = BOOMLINK_FRAME_TYPE_DATA;
 }
 
 const char *boomlink_linkframe_parse_result_str(boomlink_linkframe_parse_result_t result) {

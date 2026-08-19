@@ -650,6 +650,16 @@ def test_data_frame_with_no_payload_parses(tmp_path, linkframe_tool_path):
          "rejected simply because 0 is neither this node's id nor broadcast - "
          "there is no separate 'destination must not be 0' rule, and this case "
          "does not imply one"),
+        (ref.ADDR_BROADCAST, ref.ADDR_BROADCAST, False,
+         "the other end of section 7.2's range, and the mirror of the "
+         "unconfigured case: 0xFFFFFFFF is the broadcast address, not something "
+         "a node can BE (real ids are 0x00000001..0xFFFFFFFE). Without the "
+         "guard, a node misconfigured to the broadcast address matches every "
+         "broadcast frame twice over and would answer for the whole network"),
+        (0x00000042, ref.ADDR_BROADCAST, False,
+         "same misconfigured node, unicast to someone else - it must not accept "
+         "that either, and would not even without the guard, so this is the case "
+         "that keeps the one above from being the only thing holding the rule up"),
     ],
 )
 def test_address_acceptance(linkframe_tool_path, destination_id, local_node_id, accepted, why):

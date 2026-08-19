@@ -176,9 +176,22 @@ sketch:
   struct, where the overflow stays within a valid allocation and AddressSanitizer sees
   nothing. `[static N]` is not valid C++, and the caller that will actually encode frames
   is the C++ radio layer, so the header restores the same guarantee for C++ through a
-  small template wrapper. Both directions are checked by the
-  `boomlink_linkframe_cxx_bound` test, because nothing else in either build compiles this
-  header as C++ until the radio layer does.
+  small template wrapper. Consequences worth knowing before writing that caller: the
+  header must be included **bare**, never inside `extern "C" { }` (a template cannot have
+  C language linkage, and the radio layer's existing `.cpp` files all wrap their C
+  includes that way), and a C++ caller holding a bare `uint8_t *` rather than an array
+  has to go through `boomlink_linkframe_detail::` explicitly.
+- Both bounds are checked by the `boomlink_linkframe_c_bound` and
+  `boomlink_linkframe_cxx_bound` tests, which compile a deliberately-undersized caller and
+  require the compiler to reject it *for the right reason*, at more than one optimization
+  level. They exist because no target in either build exercises either bound - every
+  library and tool here is C and none passes a short buffer, and the C++ caller does not
+  exist yet - so both could be deleted outright with the whole suite green. Verified.
+- The struct grew a `boomlink_linkframe_header_init()`. `boomlink_linkframe_header_t h =
+  {0}` is a trap the encoder cannot refuse: magic 0, version 0 and frame type 0 are each
+  invalid, so a zeroed header encodes 20 bytes no receiver will accept, and the encoder
+  has no failure path by design. The Python reference had carried these three as dataclass
+  defaults from the start, so the two implementations were not equally easy to misuse.
 
 ```text
 fw/
@@ -487,6 +500,15 @@ destination_id == local_node_id
 OR
 destination_id == 0xFFFFFFFF
 ```
+
+The implementation adds one refinement the two rules above leave implicit: a node whose
+**own** address is not in `0x00000001..0xFFFFFFFE` accepts nothing at all, broadcast
+included. Both ends of that range matter. Without excluding `0x00000000`, a factory-fresh
+node acts on traffic addressed to the invalid address, since `destination_id ==
+local_node_id` holds when both are 0. Without excluding `0xFFFFFFFF`, a node misconfigured
+to the broadcast address matches every broadcast frame and would answer on behalf of the
+whole network. Acting on traffic before knowing who you are is the failure mode in both
+cases.
 
 Promiscuous monitoring is a separate runtime/debug mode and must not change normal
 address acceptance rules.

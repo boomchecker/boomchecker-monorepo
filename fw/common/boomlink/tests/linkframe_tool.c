@@ -159,6 +159,49 @@ static int run_selftest(void) {
     return 1;
   }
 
+  /* boomlink_linkframe_header_init() must produce a header that actually encodes
+     to an ACCEPTABLE frame, and the zero-initialised header it exists to replace
+     must not. Both halves matter: the first is the helper's whole purpose, and
+     without the second there is nothing recording WHY it exists - an init
+     function that set the same three fields to the wrong values would satisfy
+     the first check alone. */
+  boomlink_linkframe_header_t initialised;
+  boomlink_linkframe_header_init(&initialised);
+  initialised.destination_id = 0x42u;
+  uint8_t initialised_buf[BOOMLINK_LINKFRAME_HEADER_SIZE];
+  boomlink_linkframe_encode(&initialised, initialised_buf);
+  boomlink_linkframe_header_t init_decoded  = {0};
+  size_t                      init_len      = 0u;
+  boomlink_linkframe_parse_result_t init_result =
+      boomlink_linkframe_parse(initialised_buf, sizeof(initialised_buf),
+                               BOOMLINK_LINKFRAME_MAGIC_DEFAULT, &init_decoded, &init_len);
+  if (init_result != BOOMLINK_LINKFRAME_OK) {
+    fprintf(stderr,
+            "selftest: a header from boomlink_linkframe_header_init() did not encode to an "
+            "acceptable frame: %s\n",
+            boomlink_linkframe_parse_result_str(init_result));
+    return 1;
+  }
+  if (init_decoded.destination_id != 0x42u ||
+      init_decoded.frame_type != BOOMLINK_FRAME_TYPE_DATA) {
+    fprintf(stderr, "selftest: an initialised header did not survive the round-trip\n");
+    return 1;
+  }
+
+  boomlink_linkframe_header_t zeroed = {0};
+  uint8_t zeroed_buf[BOOMLINK_LINKFRAME_HEADER_SIZE];
+  boomlink_linkframe_encode(&zeroed, zeroed_buf);
+  boomlink_linkframe_header_t zero_decoded = {0};
+  size_t                      zero_len     = 0u;
+  if (boomlink_linkframe_parse(zeroed_buf, sizeof(zeroed_buf),
+                               BOOMLINK_LINKFRAME_MAGIC_DEFAULT, &zero_decoded,
+                               &zero_len) == BOOMLINK_LINKFRAME_OK) {
+    fprintf(stderr,
+            "selftest: a zero-initialised header encoded to an ACCEPTED frame - the reason "
+            "boomlink_linkframe_header_init() exists no longer holds\n");
+    return 1;
+  }
+
   /* The parser's fail-safe: "on any failure *out_header is zeroed and
      *out_payload_len is set to 0, so a caller that ignores the return value
      cannot act on a partially-filled header" (see the header's contract). That

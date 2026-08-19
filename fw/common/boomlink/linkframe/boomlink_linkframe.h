@@ -15,6 +15,14 @@
  *
  *          Target-agnostic: no STM32/HAL dependency, no radio dependency,
  *          no global state. Every function here is pure.
+ *
+ *          C++ callers: include this header BARE, never wrapped in
+ *          `extern "C" { }`. It manages its own linkage, and it ends in a
+ *          template (see the bottom of the file) - a template cannot have C
+ *          language linkage, so wrapping the include is a hard error, "template
+ *          with C linkage". Said here because the firmware's C++ radio layer,
+ *          the caller that template exists for, wraps its C includes exactly
+ *          that way today. tests/encoder_bound_ok.cpp pins the bare form.
  ******************************************************************************
  */
 #ifndef BOOMLINK_LINKFRAME_H
@@ -166,6 +174,28 @@ typedef enum {
 } boomlink_linkframe_parse_result_t;
 
 /**
+ * Fill `header` with the defaults every outgoing frame needs: this build's magic
+ * and version, and `frame_type` DATA. Every other field is zeroed, so the caller
+ * sets only what it actually means to say.
+ *
+ * Exists because `boomlink_linkframe_header_t h = {0}` is a trap and the encoder
+ * cannot refuse it: magic 0, version 0 and frame type 0 are each invalid, so a
+ * zero-initialised header encodes to 20 bytes no receiver will ever accept - and
+ * the encoder has no failure path to say so (by design; see below). Nothing
+ * about the struct hints that three of its fields must not be left at their
+ * natural default.
+ *
+ * This also brings the C to parity with the Python reference, whose
+ * LinkFrameHeader dataclass has carried these three as field defaults from the
+ * start - so the two implementations were not equally easy to misuse.
+ *
+ * Not a constructor and not required: a caller that sets all three itself is
+ * perfectly correct, and the parser fills a header without going through here.
+ */
+void boomlink_linkframe_header_init(
+    boomlink_linkframe_header_t out_header[BOOMLINK_LINKFRAME_ONE]);
+
+/**
  * Serialize `header` into `out`, which must have room for
  * BOOMLINK_LINKFRAME_HEADER_SIZE bytes - and the compiler enforces that, in
  * both languages (see below). Writes byte by byte in explicit little-endian
@@ -245,9 +275,13 @@ boomlink_linkframe_parse_result_t boomlink_linkframe_parse(
  * addressed to `destination_id` - section 7.2's rule: the destination matches
  * the node exactly, or is the broadcast address.
  *
- * A node that has not been configured yet (BOOMLINK_ADDR_INVALID) accepts
- * nothing, broadcast included: acting on traffic before knowing who you are
- * is how a half-provisioned node ends up answering for someone else.
+ * A node whose own address is not a valid node ID accepts nothing at all,
+ * broadcast included. Section 7.2 puts real node IDs at 0x00000001..0xFFFFFFFE,
+ * so that means both ends of the range: BOOMLINK_ADDR_INVALID (unconfigured) and
+ * BOOMLINK_ADDR_BROADCAST (a misconfiguration - the broadcast address is not
+ * something a node can BE). Acting on traffic before knowing who you are is how
+ * a half-provisioned node ends up answering for someone else, and a node that
+ * thinks it is the broadcast address would answer for everyone.
  */
 bool boomlink_linkframe_is_for_node(uint32_t destination_id, uint32_t local_node_id);
 

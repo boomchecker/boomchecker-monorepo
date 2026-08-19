@@ -67,6 +67,16 @@ class LinkFrameError(Exception):
 
 @dataclass
 class LinkFrameHeader:
+    """The C's boomlink_linkframe_header_t.
+
+    The magic/version/frame_type defaults below are the counterpart of
+    boomlink_linkframe_header_init(): all three MUST be set on an outgoing frame
+    and none of them has a usable zero value, so leaving them out here gives a
+    valid version-1 DATA frame rather than one no receiver would accept. The C
+    struct cannot carry defaults, which is why it needs an init function to be
+    equally hard to misuse.
+    """
+
     destination_id: int
     source_id: int
     session_id: int
@@ -169,8 +179,14 @@ def parse(buf: bytes, expected_magic: int = MAGIC_DEFAULT) -> tuple[LinkFrameHea
 
 
 def is_for_node(destination_id: int, local_node_id: int) -> bool:
-    """Section 7.2's acceptance rule. An unconfigured node (ADDR_INVALID)
-    accepts nothing, broadcast included."""
-    if local_node_id == ADDR_INVALID:
+    """Section 7.2's acceptance rule.
+
+    A node whose own address is not a valid node ID accepts nothing, broadcast
+    included. Section 7.2 puts real node IDs at 0x00000001..0xFFFFFFFE, so that
+    rules out both ADDR_INVALID (unconfigured - it would otherwise "match" a
+    frame addressed to 0) and ADDR_BROADCAST (a misconfiguration; a node that
+    thinks it IS the broadcast address would answer for the whole network).
+    """
+    if local_node_id in (ADDR_INVALID, ADDR_BROADCAST):
         return False
     return destination_id in (local_node_id, ADDR_BROADCAST)
