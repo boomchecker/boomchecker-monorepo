@@ -17,5 +17,16 @@
 # messages that depend on filling the radio's max payload). See the
 # static_assert in boomlink_codec.c that checks the generated
 # boomlink_Envelope_size against the real budget at compile time.
+#
+# Two constraints on any value you put here, both enforced at build time by
+# static_asserts in boomlink_codec.c - read their messages if one fires:
+#   * Keep it EVEN (a multiple of 4 under PB_FIELD_32BIT). Nanopb enforces the
+#     generated array struct's PADDED size, not max_size, so a value that
+#     leaves padding makes it accept a byte past the declared array - and that
+#     overrun is inside the struct, where AddressSanitizer cannot see it.
+#   * Never shrink it below a payload an existing tests/vectors/*.bin already
+#     carries (192 today, from pong_max_payload.bin). That is a breaking
+#     wire-format change per boomlink.md section 15.1, needing a
+#     protocol_version bump - not a regenerated vector.
 boomlink.Ping.payload  max_size:192
 boomlink.Pong.payload  max_size:192

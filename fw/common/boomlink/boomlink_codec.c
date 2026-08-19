@@ -5,31 +5,86 @@
  */
 #include "boomlink_codec.h"
 
+#include <stddef.h> /* offsetof */
+
 #include <pb_decode.h>
 #include <pb_encode.h>
 
+/* Nanopb does NOT enforce a bounded `bytes` field's max_size directly: its
+   decode-side check (pb_decode.c) compares against `field->data_size`, which
+   is sizeof the whole generated PB_BYTES_ARRAY_T struct - a `pb_size_t` length
+   prefix plus the byte array, rounded up to the struct's alignment. When
+   max_size is ODD (with the usual 2-byte pb_size_t) that struct carries one
+   byte of tail padding, so Nanopb accepts max_size + 1 bytes and writes the
+   last one INTO THE PADDING, past the end of the declared array.
+   That is a genuinely nasty shape of bug: the write stays inside the enclosing
+   struct, so it is intra-object and AddressSanitizer cannot see it, and the
+   discrepancy also makes every "the compiled bound is N" statement in this
+   package (codec_tool's `limits`, the buffers sized from it, the
+   one-over-the-bound rejection test) quietly wrong by one.
+   Rather than model two different bounds - one for what we may safely write,
+   one for what Nanopb will accept - require them to be equal. An odd bound
+   buys nothing and (with the default pb_size_t) is the only way the two can
+   diverge. Checked here, in the shared translation unit, so the firmware build
+   is covered too and not just the host-side test tool.
+
+   EVERY bounded `bytes` field needs its own line below - the check cannot be
+   written once for the whole schema, since C has no way to enumerate a
+   struct's members. A new one added without a line here (see README.md's
+   "Adding a new message group" checklist) is not protected. `string` fields
+   need nothing: Nanopb emits a plain char[N], whose alignment is 1, and
+   checks size + 1 against it exactly. */
+#define BOOMLINK_ASSERT_BOUNDED_BYTES(type, member)                                      \
+  _Static_assert(sizeof(((type *)0)->member) - offsetof(pb_bytes_array_t, bytes) ==       \
+                     sizeof(((type *)0)->member.bytes),                                   \
+                 #type "." #member " has a max_size that Nanopb would over-accept by a "  \
+                 "byte or more: it must equal sizeof the generated array struct minus "   \
+                 "its pb_size_t length prefix. With the default 2-byte pb_size_t that "   \
+                 "means an even max_size (under PB_FIELD_32BIT, a multiple of 4) - see "  \
+                 "nanopb/system.options")
+
+BOOMLINK_ASSERT_BOUNDED_BYTES(boomlink_Ping, payload);
+BOOMLINK_ASSERT_BOUNDED_BYTES(boomlink_Pong, payload);
+
 /* boomlink_Envelope_size (envelope.pb.h) is Nanopb's own worst-case encoded
    size for the current schema, computed from every bounded field in
-   nanopb/boomlink.options. Comparing it against the real on-air budget here -
-   RADIO_MAX_PAYLOAD (fw/bom-stm32node/App/radio/radio.h) minus the link frame
-   header (boomlink.md section 7.3, 20 bytes, landing in PR 3) - at compile
+   nanopb/system.options. Comparing it against the real on-air budget here -
+   BOOMLINK_RADIO_MAX_PAYLOAD minus BOOMLINK_LINK_FRAME_HEADER_SIZE (both
+   boomlink_codec.h; boomlink.md section 7.3, landing in PR 3) - at compile
    time means growing a bounded field enough to blow that budget is a build
    failure in this file, not a runtime surprise the first time a real
-   Envelope is too big to fit in one LoRa packet. 255 is duplicated rather
-   than included from radio.h: this package must not depend on
-   bom-stm32node's App/ layer (see boomlink.md section 4 repository rules). */
-#define BOOMLINK_RADIO_MAX_PAYLOAD 255
-#define BOOMLINK_LINK_FRAME_HEADER_SIZE 20
-#define BOOMLINK_ENVELOPE_BUDGET (BOOMLINK_RADIO_MAX_PAYLOAD - BOOMLINK_LINK_FRAME_HEADER_SIZE)
-
-_Static_assert(boomlink_Envelope_size <= BOOMLINK_ENVELOPE_BUDGET,
+   Envelope is too big to fit in one LoRa packet.
+   BOOMLINK_RADIO_MAX_PAYLOAD is a hand-maintained duplicate of radio.h's
+   real RADIO_MAX_PAYLOAD (see its own doc comment in boomlink_codec.h for
+   why); this is necessarily a one-directional check - it protects against
+   this package's own bounded fields growing too large, but can't detect
+   RADIO_MAX_PAYLOAD itself shrinking out from under it. fw/bom-stm32node's
+   own CLI code (Core/Src/cli.c's `proto selftest`) carries the real live
+   cross-check, since only firmware code has both RADIO_MAX_PAYLOAD and this
+   header in scope at once.
+   Compared in additive form (budget >= header + envelope) rather than
+   subtractive (envelope <= budget - header): with unsigned operands, a
+   subtractive comparison silently wraps to a huge value and wrongly passes
+   if header size ever exceeded the max payload - the exact bug once fixed
+   in cli.c's own cross-check. */
+_Static_assert(BOOMLINK_RADIO_MAX_PAYLOAD >= BOOMLINK_LINK_FRAME_HEADER_SIZE + boomlink_Envelope_size,
                "worst-case Envelope encoding no longer fits the LoRa link frame payload "
-               "budget - shrink a bounded field in nanopb/boomlink.options");
+               "budget - shrink a bounded field in nanopb/system.options");
+
+void boomlink_envelope_init(boomlink_Envelope *envelope) {
+  *envelope                        = (boomlink_Envelope)boomlink_Envelope_init_zero;
+  envelope->has_header             = true;
+  envelope->header.protocol_version = BOOMLINK_PROTOCOL_VERSION;
+}
 
 /* header.proto: "protocol_version: BoomProtocol compatibility version,
    initially 1" - 0 is proto3's default for an omitted scalar, so it means
    "the caller/peer never set this field" rather than a real version,
-   exactly like a missing `has_header`. */
+   exactly like a missing `has_header`. Deliberately not checked against
+   BOOMLINK_PROTOCOL_VERSION specifically: any nonzero version is accepted
+   for now (there is only one version, and nothing in the roadmap yet
+   specifies a rejection/negotiation policy for a future mismatch - that is
+   a decision for whichever PR introduces a second version). */
 static bool has_valid_header(const boomlink_Envelope *envelope) {
   return envelope->has_header && envelope->header.protocol_version != 0;
 }

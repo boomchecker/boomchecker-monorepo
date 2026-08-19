@@ -5,7 +5,34 @@
 The project is configured in **STM32CubeMX** (`bom-stm32node.ioc`). Generate the
 project with the **CMake** toolchain option selected in CubeMX (Project Manager →
 *Toolchain/IDE: CMake*). That produces a `CMakeLists.txt` and a
-`cmake/gcc-arm-none-eabi.cmake` toolchain file. Then, from `fw/bom-stm32node`:
+`cmake/gcc-arm-none-eabi.cmake` toolchain file.
+
+!!! important "One-time prerequisite: the code-generation venv"
+    This firmware `add_subdirectory()`s into `fw/common/boomlink`, which runs the
+    Nanopb generator **on the build host** to turn `proto/*.proto` into the
+    `*.pb.c`/`*.pb.h` the firmware links (see [BoomLink](boomlink.md)). That
+    makes the host Python packages
+    `protobuf` and `grpcio-tools` a hard requirement of building the firmware, not
+    just of running BoomProtocol's own tests — without them CMake stops at configure
+    time. Create them once, from the repository root:
+
+    ```bash
+    cd fw/common/boomlink && task setup
+    ```
+
+    `task build` in `fw/bom-stm32node` puts that venv on `PATH` automatically. If you
+    prefer the raw `cmake` invocation below, activate it yourself first — from
+    `fw/bom-stm32node`, that is `source ../common/boomlink/.venv/bin/activate` — or
+    make sure your `python3` has both packages.
+
+Then, from `fw/bom-stm32node`:
+
+```bash
+# Simplest path - handles the venv on PATH for you
+task build
+```
+
+or with `cmake` directly:
 
 ```bash
 # Configure (Ninja generator, ARM cross toolchain from CubeMX)

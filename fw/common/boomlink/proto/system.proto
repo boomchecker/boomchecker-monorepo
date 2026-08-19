@@ -20,7 +20,7 @@ message SystemMessage {
 // worth carrying here is an optional payload for exercising a specific
 // on-air packet size during bring-up testing.
 message Ping {
-  // Bounded - see nanopb/boomlink.options. Empty when the caller only cares
+  // Bounded - see nanopb/system.options. Empty when the caller only cares
   // about liveness, not payload size.
   bytes payload = 1;
 }

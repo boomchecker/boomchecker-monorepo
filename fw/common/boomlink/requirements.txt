@@ -4,3 +4,4 @@
 protobuf>=5,<7
 grpcio-tools>=1.60
 pytest>=8
+ruff>=0.5
