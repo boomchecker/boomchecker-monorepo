@@ -45,24 +45,16 @@ extern "C" {
    tests pins them together so they cannot drift. */
 #define BOOMLINK_LINKFRAME_HEADER_SIZE 20u
 
-/* Used to declare the encoder's output buffer as `uint8_t out[static 20]`.
-   That is not decoration: it tells the compiler the callee always writes 20
-   bytes, which makes GCC reject an undersized caller buffer at COMPILE time
-   (-Wstringop-overflow, an error under this package's -Werror). Without it the
-   encoder writes 20 bytes unconditionally, and the dangerous case is not the
-   obvious one - a too-small separate object is caught by AddressSanitizer, but
-   writing past a short array INSIDE a larger struct silently corrupts the
-   neighbouring member with no ASan report and no warning at all. That is the
-   same intra-object class that cost this package a round of review on the
-   Protobuf side.
-   `[static N]` is C only - it is not valid C++, and this header is reachable
-   from the firmware's C++ translation units through extern "C" - so under a
-   C++ compiler it degrades to a plain bound, which decays to a pointer exactly
-   as before. C++ callers simply do not get the check. */
+/* Used to declare a single-object output parameter as `T p[static 1]`. Worth
+   exactly what it says and no more: it puts "must not be NULL" in the signature
+   instead of only in a doc comment, and GCC/clang diagnose a LITERAL null passed
+   there (-Wnonnull). A null that arrives through a variable is not caught - the
+   sanitizer build is what covers that. `[static N]` is C only, so under C++ it
+   degrades to a plain bound, which decays to a pointer exactly as before. */
 #if defined(__cplusplus)
-#define BOOMLINK_LINKFRAME_HEADER_BOUND BOOMLINK_LINKFRAME_HEADER_SIZE
+#define BOOMLINK_LINKFRAME_ONE 1
 #else
-#define BOOMLINK_LINKFRAME_HEADER_BOUND static BOOMLINK_LINKFRAME_HEADER_SIZE
+#define BOOMLINK_LINKFRAME_ONE static 1
 #endif
 
 /* Default magic / network ID. Runtime-configurable per section 7.3 so two
@@ -85,10 +77,20 @@ extern "C" {
 
 /* flags bit assignments, section 7.3. Bits 2-7 are reserved and always sent
    as 0; a receiver must IGNORE an unrecognized one rather than drop the frame
-   (ordinary forward compatibility - see the parse function's contract). */
+   (ordinary forward compatibility - see the parse function's contract).
+   ASSIGNED_MASK is the list of bits this build understands, and RESERVED_MASK is
+   DERIVED from it rather than written out as 0xFC: the two can then never
+   disagree, which they otherwise could, and the parser would report an
+   already-assigned bit as "reserved/unrecognized" - a wrong answer in the one
+   field whose entire purpose is to say what a newer peer sent that we do not
+   understand. Assigning a future bit therefore means adding it to ASSIGNED_MASK
+   here (and to the Python mirror, which the test suite pins to these values). */
 #define BOOMLINK_LINKFRAME_FLAG_ACK_REQUESTED  0x01u
 #define BOOMLINK_LINKFRAME_FLAG_MORE_FRAGMENTS 0x02u
-#define BOOMLINK_LINKFRAME_FLAGS_RESERVED_MASK 0xFCu
+#define BOOMLINK_LINKFRAME_FLAGS_ASSIGNED_MASK \
+  ((uint8_t)(BOOMLINK_LINKFRAME_FLAG_ACK_REQUESTED | BOOMLINK_LINKFRAME_FLAG_MORE_FRAGMENTS))
+#define BOOMLINK_LINKFRAME_FLAGS_RESERVED_MASK \
+  ((uint8_t)(0xFFu & ~(unsigned)BOOMLINK_LINKFRAME_FLAGS_ASSIGNED_MASK))
 
 typedef enum {
   /* Wire values from section 7.3. 0 is deliberately not a valid frame type,
@@ -152,14 +154,23 @@ typedef enum {
   /* An ACK frame carrying a payload. Section 9.5: "An ACK frame has no
      payload". */
   BOOMLINK_LINKFRAME_ERR_ACK_HAS_PAYLOAD,
+  /* Not a result: how many there are. Keep last, and keep every real result
+     above it contiguous from 0. It exists so the test tool can report the COUNT
+     without hand-maintaining a number: the cross-language test checks that the
+     Python mirror of this enum has exactly this many members AND that every
+     name/value pair matches, so appending a result here without also reporting
+     it (tests/linkframe_tool.c's `limits`) and mirroring it in Python fails
+     instead of silently giving the reference parser a drop reason it can never
+     produce. */
+  BOOMLINK_LINKFRAME_RESULT_COUNT,
 } boomlink_linkframe_parse_result_t;
 
 /**
  * Serialize `header` into `out`, which must have room for
- * BOOMLINK_LINKFRAME_HEADER_SIZE bytes - declared so the compiler enforces
- * that in C (see BOOMLINK_LINKFRAME_HEADER_BOUND). Writes byte by byte in
- * explicit little-endian order rather than copying a struct, so the wire
- * format does not depend on the host's endianness, alignment or padding.
+ * BOOMLINK_LINKFRAME_HEADER_SIZE bytes - and the compiler enforces that, in
+ * both languages (see below). Writes byte by byte in explicit little-endian
+ * order rather than copying a struct, so the wire format does not depend on the
+ * host's endianness, alignment or padding.
  *
  * Takes no size argument and cannot fail, unlike
  * boomlink_encode_envelope(): the output length is a compile-time constant, so
@@ -167,11 +178,30 @@ typedef enum {
  * runtime. The array bound is what makes that safe.
  *
  * `header->reserved_flags` is ignored and the reserved bits are written as 0
- * (section 7.3: always 0 until a future PR assigns them). `version` and
- * `frame_type` are masked to their nibbles.
+ * (section 7.3: always 0 until a future PR assigns them). `frame_type` is masked
+ * to its nibble, which is load-bearing - the low nibble is OR'd under the
+ * version nibble, so an out-of-range type would otherwise corrupt the version.
+ * `version` is masked too, but that mask cannot change the emitted byte: the
+ * shift into the high nibble discards the same bits the mask would (see the
+ * encoder), so it is there to state the intent, not as a guard.
+ *
+ * Declared for C only. C++ callers get the same function, and the same bound,
+ * through the template at the bottom of this header - see the comment there.
  */
+#if !defined(__cplusplus)
+/* `uint8_t out[static 20]` is not decoration: it tells the compiler the callee
+   always writes 20 bytes, which makes GCC reject an undersized caller buffer at
+   COMPILE time (-Wstringop-overflow, an error under this package's -Werror).
+   Without it the encoder writes 20 bytes unconditionally, and the dangerous case
+   is not the obvious one - a too-small separate object is caught by
+   AddressSanitizer, but writing past a short array INSIDE a larger struct
+   silently corrupts the neighbouring member with no ASan report and no warning
+   at all. That is the same intra-object class that cost this package a round of
+   review on the Protobuf side. Verified to fire at every optimization level,
+   -O0 included, on host GCC/clang and on arm-none-eabi-gcc. */
 void boomlink_linkframe_encode(const boomlink_linkframe_header_t *header,
-                               uint8_t out[BOOMLINK_LINKFRAME_HEADER_BOUND]);
+                               uint8_t out[static BOOMLINK_LINKFRAME_HEADER_SIZE]);
+#endif
 
 /**
  * Parse and validate the link frame header at the start of `buf` (`len`
@@ -207,7 +237,8 @@ void boomlink_linkframe_encode(const boomlink_linkframe_header_t *header,
  */
 boomlink_linkframe_parse_result_t boomlink_linkframe_parse(
     const uint8_t *buf, size_t len, uint8_t expected_magic,
-    boomlink_linkframe_header_t *out_header, size_t *out_payload_len);
+    boomlink_linkframe_header_t out_header[BOOMLINK_LINKFRAME_ONE],
+    size_t out_payload_len[BOOMLINK_LINKFRAME_ONE]);
 
 /**
  * Whether a node whose address is `local_node_id` should accept a frame
@@ -225,7 +256,47 @@ bool boomlink_linkframe_is_for_node(uint32_t destination_id, uint32_t local_node
 const char *boomlink_linkframe_parse_result_str(boomlink_linkframe_parse_result_t result);
 
 #ifdef __cplusplus
+}  /* extern "C" */
+
+/* The encoder's output bound, restored for C++ callers.
+ *
+ * This matters because the caller that will actually encode frames is C++: the
+ * radio layer is C++ (fw/bom-stm32node/App/radio/, which exists for RadioLib),
+ * so the one place the intra-object corruption above is reachable is the one
+ * place `[static N]` - a C-only construct - would have said nothing at all.
+ *
+ * Shape: the pointer-taking prototype is declared ONLY inside this namespace,
+ * so the name a C++ caller finds at global scope is the template below, which
+ * binds a reference to the caller's array and checks its size. The C function
+ * would otherwise win overload resolution outright - array-to-pointer decay is
+ * an lvalue transformation, which [over.ics.rank] excludes when ranking, leaving
+ * a tie that the "prefer a non-template" tiebreaker settles against the
+ * template. Verified: with both at global scope the static_assert below is never
+ * even instantiated, so a 4-byte buffer compiles clean.
+ *
+ * `extern "C"` inside a namespace still refers to the unmangled C symbol
+ * (namespaces do not participate in C language linkage), so this is a
+ * compile-time-only construct: the emitted call is to boomlink_linkframe_encode
+ * exactly as from C. Verified with nm on all three compilers.
+ *
+ * Stricter than the C side on purpose: a C++ caller holding a bare `uint8_t *`
+ * (a pointer INTO a larger buffer, say) does not match the template and must
+ * call boomlink_linkframe_detail::boomlink_linkframe_encode() explicitly, which
+ * is a deliberate speed bump - that is precisely the call whose bounds nothing
+ * can check, so it should be visible at the call site.
+ */
+namespace boomlink_linkframe_detail {
+extern "C" void boomlink_linkframe_encode(const boomlink_linkframe_header_t *header,
+                                          uint8_t *out);
+}  // namespace boomlink_linkframe_detail
+
+template <size_t N>
+inline void boomlink_linkframe_encode(const boomlink_linkframe_header_t *header,
+                                      uint8_t (&out)[N]) {
+  static_assert(N >= BOOMLINK_LINKFRAME_HEADER_SIZE,
+                "the output buffer is smaller than a BoomLink link frame header");
+  boomlink_linkframe_detail::boomlink_linkframe_encode(header, &out[0]);
 }
-#endif
+#endif /* __cplusplus */
 
 #endif /* BOOMLINK_LINKFRAME_H */

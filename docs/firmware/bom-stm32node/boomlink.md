@@ -170,6 +170,15 @@ sketch:
 - The host parser sits next to the C as `boomlink_linkframe.py`. Neither this section nor
   PR 3's scope entry said where it should live; here is chosen because PR 5's
   `stm32node-cli` will import it, so it is shipped code rather than a test helper.
+- `boomlink_linkframe.h` is not purely C, and deliberately so. The encoder's output buffer
+  is declared `uint8_t out[static 20]`, which turns an undersized caller buffer into a
+  compile error - including the case that matters most, a short array *inside* a larger
+  struct, where the overflow stays within a valid allocation and AddressSanitizer sees
+  nothing. `[static N]` is not valid C++, and the caller that will actually encode frames
+  is the C++ radio layer, so the header restores the same guarantee for C++ through a
+  small template wrapper. Both directions are checked by the
+  `boomlink_linkframe_cxx_bound` test, because nothing else in either build compiles this
+  header as C++ until the radio layer does.
 
 ```text
 fw/

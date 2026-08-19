@@ -25,20 +25,23 @@ _Static_assert(BOOMLINK_LINKFRAME_VERSION <= 0x0Fu,
 _Static_assert(BOOMLINK_FRAME_TYPE_DATA <= 0x0Fu && BOOMLINK_FRAME_TYPE_ACK <= 0x0Fu,
                "frame type must fit the low nibble of byte 1");
 
-/* The reserved mask must be exactly the flag bits that are NOT assigned:
-   together the three cover the whole byte, and the assigned bits must not
-   appear in the mask. Without this, assigning a future FLAG_X = 0x04 without
-   clearing that bit from the mask would leave the parser reporting an already
-   assigned bit as "reserved/unrecognized" - a wrong diagnostic in the one field
-   whose purpose is to say what a newer peer sent that we do not understand. */
-_Static_assert(((BOOMLINK_LINKFRAME_FLAG_ACK_REQUESTED |
-                 BOOMLINK_LINKFRAME_FLAG_MORE_FRAGMENTS |
-                 BOOMLINK_LINKFRAME_FLAGS_RESERVED_MASK) == 0xFFu) &&
-                   (((BOOMLINK_LINKFRAME_FLAG_ACK_REQUESTED |
-                      BOOMLINK_LINKFRAME_FLAG_MORE_FRAGMENTS) &
-                     BOOMLINK_LINKFRAME_FLAGS_RESERVED_MASK) == 0u),
-               "the reserved flags mask is no longer exactly the unassigned flag bits - a "
-               "newly assigned bit must be removed from BOOMLINK_LINKFRAME_FLAGS_RESERVED_MASK");
+/* Section 7.3's reservation, as currently specified: bits 2-7 unassigned. The
+   reserved mask is derived from the assigned one (see the header), so the two
+   cannot contradict each other and this is not checking that - it pins the WIRE
+   FORMAT. Assigning a flag bit changes what a v1 receiver must tolerate, so it
+   has to be a deliberate set of edits - this assert, the assigned mask in the
+   header, boomlink.md section 7.3 and the Python mirror - not a side effect of
+   adding a macro.
+   What no assert here can catch: a new BOOMLINK_LINKFRAME_FLAG_X defined without
+   being added to BOOMLINK_LINKFRAME_FLAGS_ASSIGNED_MASK. The mask would stay
+   0xFC, this assert would pass, and the parser would report the newly assigned
+   bit as unrecognized. The two things that do push back are that the flag and
+   the mask sit on adjacent lines in the header, and that the cross-language test
+   compares both masks against the Python reference - so the mirror has to move
+   in lockstep even though the C alone would not notice. */
+_Static_assert(BOOMLINK_LINKFRAME_FLAGS_RESERVED_MASK == 0xFCu,
+               "flags bits 2-7 are the reserved ones per boomlink.md section 7.3; assigning "
+               "one is a wire-format change - update the spec and the Python mirror with it");
 
 /* Explicit little-endian access, one byte at a time. Not a memcpy of a
    uint32_t and not a packed struct: the wire format is fixed by the spec and
@@ -57,10 +60,17 @@ static uint32_t get_u32_le(const uint8_t *buf) {
 }
 
 void boomlink_linkframe_encode(const boomlink_linkframe_header_t *header,
-                               uint8_t out[BOOMLINK_LINKFRAME_HEADER_BOUND]) {
+                               uint8_t out[static BOOMLINK_LINKFRAME_HEADER_SIZE]) {
   out[OFF_MAGIC] = header->magic;
-  /* Both halves masked to a nibble: a caller passing a too-large version or
-     frame type would otherwise corrupt the neighbouring field silently. */
+  /* Both halves masked to a nibble, but only one of the two masks can actually
+     change this byte, and it is worth knowing which: frame_type's is
+     load-bearing - it is OR'd into the low nibble, so a value above 15 would
+     otherwise raise the version nibble and turn a bad type into a bad VERSION
+     (or, worse, into a different valid frame). version's cannot: `<< 4` followed
+     by the truncation to uint8_t already discards exactly the bits the mask
+     removes, for every possible input. It stays because the expression should
+     say what it means, and so the field can be widened or moved without the
+     safety silently depending on that coincidence. */
   out[OFF_VERSION_TYPE] =
       (uint8_t)(((header->version & 0x0Fu) << 4) | (header->frame_type & 0x0Fu));
 
@@ -86,7 +96,8 @@ void boomlink_linkframe_encode(const boomlink_linkframe_header_t *header,
 
 boomlink_linkframe_parse_result_t boomlink_linkframe_parse(
     const uint8_t *buf, size_t len, uint8_t expected_magic,
-    boomlink_linkframe_header_t *out_header, size_t *out_payload_len) {
+    boomlink_linkframe_header_t out_header[BOOMLINK_LINKFRAME_ONE],
+    size_t out_payload_len[BOOMLINK_LINKFRAME_ONE]) {
   /* Zero the outputs up front so every early return leaves the caller with a
      definitively empty header rather than a half-filled one. */
   memset(out_header, 0, sizeof(*out_header));
@@ -161,6 +172,10 @@ const char *boomlink_linkframe_parse_result_str(boomlink_linkframe_parse_result_
     case BOOMLINK_LINKFRAME_ERR_FRAME_TYPE:        return "unknown frame type";
     case BOOMLINK_LINKFRAME_ERR_FRAGMENTED:        return "fragmented frame (unsupported)";
     case BOOMLINK_LINKFRAME_ERR_ACK_HAS_PAYLOAD:   return "ACK frame carrying a payload";
+    /* Not a result - listed only because the switch has no default:, and it is
+       a real enumerator. Falls through to the string below, which is the right
+       answer for it. */
+    case BOOMLINK_LINKFRAME_RESULT_COUNT:          break;
   }
   /* No default: above, so adding an enumerator without a string is a
      -Wswitch warning (and an error under BOOMLINK_WERROR) rather than a

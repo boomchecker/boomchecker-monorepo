@@ -22,7 +22,13 @@ cmake_minimum_required(VERSION 3.21)
 # STM32 target; this dual-mode file is how that requirement is met without
 # maintaining the Nanopb-generation logic twice.
 if(CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
-  project(boomlink_protocol LANGUAGES C)
+  # CXX is enabled for one reason and builds nothing: it makes
+  # CMAKE_CXX_COMPILER available to the boomlink_linkframe_cxx_bound test below,
+  # which compiles two throwaway C++ translation units to check that
+  # boomlink_linkframe.h's encoder bound still holds for C++ callers. Every
+  # library and tool here is C. Under the firmware's ARM build this branch does
+  # not run, and that project enables CXX for its own reasons anyway.
+  project(boomlink_protocol LANGUAGES C CXX)
   set(CMAKE_C_STANDARD 11)
   set(CMAKE_C_STANDARD_REQUIRED ON)
   set(BOOMLINK_STANDALONE TRUE)
@@ -556,6 +562,26 @@ if(BOOMLINK_STANDALONE)
             ${CMAKE_CURRENT_SOURCE_DIR}/linkframe/boomlink_linkframe.c
             $<TARGET_FILE:boomlink_linkframe>
             $<TARGET_FILE:boomlink_linkframe_tool>
+  )
+
+  # The encoder's compile-time output bound, for C++ callers (see
+  # tests/check_cxx_bound.sh). Nothing else in either build compiles
+  # boomlink_linkframe.h as C++ - every target here and in the firmware that
+  # includes it today is C - while the caller that will actually encode frames is
+  # the firmware's C++ radio layer. So this is the only thing standing between
+  # that construct and silently rotting until a later phase discovers it on the
+  # target.
+  #
+  # -std=c++17 is passed explicitly rather than left to the compiler's default,
+  # to match fw/bom-stm32node/CMakeLists.txt's CMAKE_CXX_STANDARD - the caller
+  # this is a proxy for.
+  add_test(NAME boomlink_linkframe_cxx_bound
+    COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/tests/check_cxx_bound.sh
+            ${CMAKE_CXX_COMPILER}
+            -std=c++17
+            ${CMAKE_CURRENT_SOURCE_DIR}/linkframe
+            ${CMAKE_CURRENT_SOURCE_DIR}/tests/cxx_bound_ok.cpp
+            ${CMAKE_CURRENT_SOURCE_DIR}/tests/cxx_bound_too_small.cpp
   )
 
   # Host-side Python classes for the SAME .proto files, generated straight by

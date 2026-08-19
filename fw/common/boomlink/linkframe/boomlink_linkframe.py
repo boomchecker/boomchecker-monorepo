@@ -24,7 +24,13 @@ ADDR_BROADCAST = 0xFFFFFFFF
 
 FLAG_ACK_REQUESTED = 0x01
 FLAG_MORE_FRAGMENTS = 0x02
-FLAGS_RESERVED_MASK = 0xFC
+# Derived, not written out as 0xFC - mirroring the C, where the two masks
+# disagreeing would make the parser report an already-assigned bit as
+# "reserved/unrecognized". Assigning a future bit means adding it to
+# FLAGS_ASSIGNED_MASK here and in boomlink_linkframe.h; the test suite compares
+# both masks across the two implementations, so one side alone will not do.
+FLAGS_ASSIGNED_MASK = FLAG_ACK_REQUESTED | FLAG_MORE_FRAGMENTS
+FLAGS_RESERVED_MASK = 0xFF & ~FLAGS_ASSIGNED_MASK
 
 # "<BBBBIIII": little-endian, 4 single bytes then 4 uint32s - exactly section
 # 7.3's layout. struct's explicit "<" is what keeps this independent of the
@@ -78,8 +84,17 @@ class LinkFrameHeader:
 
 def encode(header: LinkFrameHeader) -> bytes:
     """Serialize a header to its 20 wire bytes. Reserved flag bits are always
-    written as 0, and version/frame_type are masked to their nibbles - both
-    matching boomlink_linkframe_encode()."""
+    written as 0, and version/frame_type are masked to their nibbles - all
+    matching boomlink_linkframe_encode().
+
+    Note the two nibble masks are not equally load-bearing. frame_type's
+    matters in both languages: it is OR'd into the low nibble, so a value above
+    15 would raise the version nibble and turn a bad type into a bad version.
+    version's is dead code in the C (the `<< 4` and the truncation to uint8_t
+    discard exactly what the mask would) but NOT here - Python has no silent
+    truncation to fall back on, so without it an over-wide version would make
+    struct.pack raise struct.error instead of producing the byte the C produces.
+    """
     flags = 0
     if header.ack_requested:
         flags |= FLAG_ACK_REQUESTED
