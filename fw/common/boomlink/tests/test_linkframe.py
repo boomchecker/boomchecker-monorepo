@@ -101,6 +101,15 @@ def test_python_parse_result_codes_match_the_c_enum(linkframe_constants):
         f"C reports parse results the Python mirror does not have: {reported - mirrored}; "
         f"Python has ones C does not report: {mirrored - reported}"
     )
+    # The check above compares two hand-maintained lists, so both of them being
+    # short in the same way passes it. This one does not: the count comes from
+    # the C enum's own sentinel (BOOMLINK_LINKFRAME_RESULT_COUNT), so a result
+    # appended to the enum and not reported by `limits` fails here even though
+    # the Python mirror was never touched.
+    assert len(reported) == linkframe_constants["parse_result_count"], (
+        f"the C enum has {linkframe_constants['parse_result_count']} parse results but "
+        f"`limits` reports {len(reported)} of them: {sorted(reported)}"
+    )
 
 
 def test_python_constants_match_the_c_header(linkframe_constants):
@@ -113,24 +122,40 @@ def test_python_constants_match_the_c_header(linkframe_constants):
     assert linkframe_constants["addr_broadcast"] == ref.ADDR_BROADCAST
     assert linkframe_constants["flag_ack_requested"] == ref.FLAG_ACK_REQUESTED
     assert linkframe_constants["flag_more_fragments"] == ref.FLAG_MORE_FRAGMENTS
+    # Both masks, not just the reserved one. Each side derives the reserved mask
+    # from its own assigned mask, so comparing only the derived value would let a
+    # bit assigned on one side alone slip through whenever the complement happened
+    # to agree - and the assigned mask is the one a new flag has to be added to.
+    assert linkframe_constants["flags_assigned_mask"] == ref.FLAGS_ASSIGNED_MASK
     assert linkframe_constants["flags_reserved_mask"] == ref.FLAGS_RESERVED_MASK
+    # The C's _Static_assert pins this too; asserted here so a mask change shows
+    # up as "the wire reservation moved" rather than only as a build failure in
+    # the other language.
+    assert linkframe_constants["flags_reserved_mask"] == 0xFC, (
+        "boomlink.md section 7.3 reserves flags bits 2-7; assigning one is a "
+        "wire-format change"
+    )
 
 
-def test_wire_layout_is_byte_exact():
-    """Pins section 7.3's layout to explicit bytes.
+def test_wire_layout_is_byte_exact(tmp_path, linkframe_tool_path):
+    """Pins section 7.3's layout to explicit bytes, for BOTH encoders.
 
     Spelled out here rather than kept as a binary golden-vector file (the way
     the Protobuf side does): for a 20-byte FIXED layout the expected bytes are
     the specification, so writing them where a reader can see the offsets is
-    strictly more useful than a file whose contents nobody can read. This is
-    what catches a wrong offset or a big-endian slip - a C-versus-Python
-    cross-check alone would not, since both could be wrong the same way only if
-    they shared code, which they deliberately do not.
+    strictly more useful than a file whose contents nobody can read.
+
+    This is the only test that pins the layout to the SPEC rather than to the
+    other implementation. The C-versus-Python cross-checks would indeed catch one
+    side drifting, but they say nothing about which side is right: someone
+    "fixing" the failing one to agree with the other resolves them all and
+    changes the wire format. These literals are what makes that a failure.
+
+    Both encoders are compared against the same literals, deliberately - the
+    Python one alone would leave the C's byte 2 covered only by the flags tests
+    below, which is roughly how that byte went unobserved in the first place.
     """
-    frame = ref.encode(
-        ref.LinkFrameHeader(frame_type=ref.FrameType.DATA, ack_requested=True, **SAMPLE)
-    )
-    assert frame == bytes(
+    expected = bytes(
         [
             0xB0,                    # magic / network ID
             0x11,                    # version 1 (high nibble) | DATA (low nibble)
@@ -142,7 +167,19 @@ def test_wire_layout_is_byte_exact():
             0x01, 0xFF, 0xEE, 0xDD,  # sequence       0xDDEEFF01
         ]
     )
-    assert len(frame) == ref.HEADER_SIZE
+    assert len(expected) == ref.HEADER_SIZE
+
+    python_frame = ref.encode(
+        ref.LinkFrameHeader(frame_type=ref.FrameType.DATA, ack_requested=True, **SAMPLE)
+    )
+    assert python_frame == expected
+
+    c_frame = encode_with_tool(
+        tmp_path, linkframe_tool_path,
+        frame_type=int(ref.FrameType.DATA), flags=ref.FLAG_ACK_REQUESTED,
+        fragment_index=0, **SAMPLE,
+    )
+    assert c_frame == expected
 
 
 def test_ack_frame_wire_layout_is_byte_exact():
@@ -402,9 +439,16 @@ def test_ack_with_a_payload_is_rejected(tmp_path, linkframe_tool_path):
 
 @pytest.mark.parametrize("length", [0, 1, 19])
 def test_short_buffers_are_rejected(tmp_path, linkframe_tool_path, length):
-    """A truncated frame must fail closed rather than read past the buffer -
-    exercised under ASan, so an over-read would be a hard failure, not a
-    plausible-looking parse."""
+    """A truncated frame must fail closed rather than read past the buffer.
+
+    The ASan part of that is not automatic and is worth naming: the tool copies
+    the input into a heap block of EXACTLY `len` bytes before parsing, so the
+    redzone sits immediately after the last valid byte. Handing the parser a
+    logical length into a larger fixed buffer instead makes any over-read
+    intra-object, where ASan is blind - verified: a parser reading bytes 12..19
+    before checking the length accepted a 0-byte input and the whole suite
+    passed green.
+    """
     frame = ref.encode(ref.LinkFrameHeader(**SAMPLE))[:length]
 
     fields = parse_with_tool(tmp_path, linkframe_tool_path, frame)
@@ -470,8 +514,10 @@ ENCODE_ARG_NAMES = ("frame_type", "flags", "fragment_index", "destination_id",
 
 
 def encode_args_with(position, value):
-    """The nine `encode` arguments with one replaced, so a malformed-input test
-    can target any field rather than only the last uint32."""
+    """The seven numeric `encode` arguments with one replaced, so a
+    malformed-input test can target any field rather than only the last uint32.
+    The remaining two (payload_hex, out_file) are appended by the caller, which
+    needs a tmp_path for the second anyway."""
     args = ["1", "0", "0", str(SAMPLE["destination_id"]), str(SAMPLE["source_id"]),
             str(SAMPLE["session_id"]), str(SAMPLE["sequence"])]
     args[position] = value
@@ -503,6 +549,14 @@ def test_encode_rejects_malformed_numeric_arguments(tmp_path, linkframe_tool_pat
     assert result.returncode == 2, (
         f"{name}={bad_value!r} should be a parse error, got rc={result.returncode}"
     )
+    # WHICH argument was blamed, not just that something was: the whole point of
+    # a message per argument is that a typo'd test does not look like a protocol
+    # failure, and without this a tool that named the wrong field - or the same
+    # field every time - would pass every case here.
+    assert name in result.stderr, (
+        f"{name}={bad_value!r} was rejected, but the message does not name the "
+        f"argument: {result.stderr!r}"
+    )
 
 
 @pytest.mark.parametrize("position,name", [(0, "frame_type"), (1, "flags"),
@@ -522,6 +576,10 @@ def test_encode_rejects_uint8_arguments_out_of_range(tmp_path, linkframe_tool_pa
     assert result.returncode == 2, (
         f"{name}={over_u8} exceeds a uint8 and should be a parse error, "
         f"got rc={result.returncode}"
+    )
+    assert name in result.stderr, (
+        f"{name}={over_u8} was rejected, but the message does not name the "
+        f"argument: {result.stderr!r}"
     )
 
 
@@ -560,18 +618,31 @@ def test_payload_at_the_tool_cap_round_trips(tmp_path, linkframe_tool_path,
     assert header.sequence == SAMPLE["sequence"]
 
 
-def test_frame_type_over_a_nibble_is_rejected(tmp_path, linkframe_tool_path):
+def test_frame_type_over_a_nibble_cannot_reach_the_version(tmp_path, linkframe_tool_path):
     """frame_type shares byte 1 with the version nibble, so a value above 15
-    would corrupt the version if it were not masked. The encoder masks it; this
-    checks the result is a version mismatch rather than a silently valid frame
-    of some other type."""
+    would raise the version if the encoder did not mask it.
+
+    33, not 17: with 17 the masked and unmasked results are the SAME byte
+    (0x10 | (17 & 0x0F) == 0x10 | 17 == 0x11), so a version of this test using
+    17 passed with the mask deleted - it asserted nothing. 33 = 0x21 puts a bit
+    in the high nibble: masked it is 0x11 (a valid version-1 DATA frame),
+    unmasked 0x31, which parses as version 3 and is dropped.
+    """
     out_path = tmp_path / "wide_type.bin"
     result = run_linkframe_tool(
-        linkframe_tool_path, "encode", "17", "0", "0",
+        linkframe_tool_path, "encode", "33", "0", "0",
         str(SAMPLE["destination_id"]), str(SAMPLE["source_id"]),
         str(SAMPLE["session_id"]), str(SAMPLE["sequence"]), "", str(out_path),
     )
     assert result.returncode == 0, result.stderr
     frame = out_path.read_bytes()
-    # 17 & 0x0F == 1 (DATA); the version nibble must be untouched.
-    assert frame[1] == (ref.VERSION << 4) | int(ref.FrameType.DATA)
+    # 33 & 0x0F == 1 (DATA); the version nibble must be untouched.
+    assert frame[1] == (ref.VERSION << 4) | int(ref.FrameType.DATA), (
+        f"byte 1 is {frame[1]:#04x}; an out-of-nibble frame_type reached the version"
+    )
+    # And the frame is therefore ordinary and valid, not dropped - which is the
+    # difference from the unmasked behaviour, so assert it rather than infer it.
+    fields = parse_with_tool(tmp_path, linkframe_tool_path, frame)
+    assert fields["result"] == str(int(ref.ParseResult.OK)), fields
+    assert fields["version"] == str(ref.VERSION)
+    assert fields["frame_type"] == str(int(ref.FrameType.DATA))

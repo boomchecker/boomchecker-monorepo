@@ -43,6 +43,7 @@
  */
 #include <stdbool.h>
 #include <stdio.h>
+#include <stdlib.h> /* malloc, free */
 #include <string.h>
 
 #include "boomlink_linkframe.h"
@@ -54,6 +55,14 @@
    harness limit, sized well past the 255-byte SX126x packet ceiling so a test
    can build an oversized frame and watch it be rejected. */
 #define LINKFRAME_TOOL_MAX_PAYLOAD 512u
+
+/* The one byte offset this harness pokes at, deliberately its OWN copy of
+   section 7.3's layout rather than something exported from
+   boomlink_linkframe.h. A test that read the offset from the implementation
+   would move with it, so an offset changing by mistake would still line up on
+   both sides and prove nothing - the same reason test_linkframe.py spells out
+   the expected 20 bytes as literals. */
+#define LINKFRAME_TOOL_OFF_FLAGS 2u
 
 static int run_selftest(void) {
   /* Round-trip every field through encode -> parse, with values chosen so a
@@ -104,15 +113,62 @@ static int run_selftest(void) {
     return 1;
   }
 
-  /* A truncated header must fail closed rather than read past the buffer. */
+  /* A truncated header must fail closed rather than read past the buffer.
+     Parsed from an exactly-sized heap block, not from a prefix of `buf`: with a
+     large backing object any over-read stays intra-object, where ASan is blind.
+     Sized to the logical length so the redzone sits right after the last valid
+     byte. */
+  uint8_t *short_block = malloc(BOOMLINK_LINKFRAME_HEADER_SIZE - 1u);
+  if (short_block == NULL) {
+    fprintf(stderr, "selftest: out of memory\n");
+    return 1;
+  }
+  memcpy(short_block, buf, BOOMLINK_LINKFRAME_HEADER_SIZE - 1u);
   boomlink_linkframe_header_t truncated = {0};
   size_t                     ignored   = 0u;
-  if (boomlink_linkframe_parse(buf, BOOMLINK_LINKFRAME_HEADER_SIZE - 1u,
-                               BOOMLINK_LINKFRAME_MAGIC_DEFAULT, &truncated,
-                               &ignored) != BOOMLINK_LINKFRAME_ERR_TOO_SHORT) {
+  boomlink_linkframe_parse_result_t short_result =
+      boomlink_linkframe_parse(short_block, BOOMLINK_LINKFRAME_HEADER_SIZE - 1u,
+                               BOOMLINK_LINKFRAME_MAGIC_DEFAULT, &truncated, &ignored);
+  free(short_block);
+  if (short_result != BOOMLINK_LINKFRAME_ERR_TOO_SHORT) {
     fprintf(stderr, "selftest: a short buffer was not rejected\n");
     return 1;
   }
+
+  /* The encoder must drop reserved flag bits (section 7.3: "always 0 until a
+     future PR assigns them"). Checked HERE, in self-contained C, as well as from
+     pytest: the Python-side check depends on run_encode populating
+     header.reserved_flags, and setting that field to 0 would make the pytest
+     test silently vacuous again without anything turning red - which is half of
+     how it was vacuous the first time. */
+  boomlink_linkframe_header_t reserved_probe = {
+      .magic          = BOOMLINK_LINKFRAME_MAGIC_DEFAULT,
+      .version        = BOOMLINK_LINKFRAME_VERSION,
+      .frame_type     = BOOMLINK_FRAME_TYPE_DATA,
+      .ack_requested  = true,
+      .reserved_flags = BOOMLINK_LINKFRAME_FLAGS_RESERVED_MASK,
+  };
+  uint8_t reserved_buf[BOOMLINK_LINKFRAME_HEADER_SIZE];
+  boomlink_linkframe_encode(&reserved_probe, reserved_buf);
+  if (reserved_buf[LINKFRAME_TOOL_OFF_FLAGS] != BOOMLINK_LINKFRAME_FLAG_ACK_REQUESTED) {
+    fprintf(stderr,
+            "selftest: the encoder emitted flags 0x%02X for a header asking for every "
+            "reserved bit; it must keep only ack_requested (0x%02X)\n",
+            (unsigned)reserved_buf[LINKFRAME_TOOL_OFF_FLAGS],
+            (unsigned)BOOMLINK_LINKFRAME_FLAG_ACK_REQUESTED);
+    return 1;
+  }
+
+  /* Deliberately NO probe for an out-of-nibble `version`, even though it is
+     reachable only from here (the encode subcommands do not expose `version`,
+     since every frame they build has to be a version-1 frame for the parse
+     tests). Such a probe could not fail: the shift into the high nibble followed
+     by the truncation to a byte discards exactly what the mask discards, for
+     every input, so deleting the mask changes no output byte - verified by
+     deleting it and watching the whole suite and this selftest stay green. It
+     would read as coverage while being incapable of failing, which is the same
+     trap as the frame_type=17 case in test_linkframe.py. The mirror-image
+     frame_type mask IS observable, and is covered from pytest with 33. */
 
   printf("selftest: ok\n");
   return 0;
@@ -130,6 +186,7 @@ static int run_limits(void) {
   printf("addr_broadcast=%u\n", (unsigned)BOOMLINK_ADDR_BROADCAST);
   printf("flag_ack_requested=%u\n", (unsigned)BOOMLINK_LINKFRAME_FLAG_ACK_REQUESTED);
   printf("flag_more_fragments=%u\n", (unsigned)BOOMLINK_LINKFRAME_FLAG_MORE_FRAGMENTS);
+  printf("flags_assigned_mask=%u\n", (unsigned)BOOMLINK_LINKFRAME_FLAGS_ASSIGNED_MASK);
   printf("flags_reserved_mask=%u\n", (unsigned)BOOMLINK_LINKFRAME_FLAGS_RESERVED_MASK);
   printf("max_payload=%u\n", (unsigned)LINKFRAME_TOOL_MAX_PAYLOAD);
   /* Same reason codec_tool reports it: assert_clean_rejection()'s guarantee
@@ -140,7 +197,14 @@ static int run_limits(void) {
      principle be built differently from codec_tool. */
   printf("sanitizers=%d\n", BOOMLINK_SANITIZE_ENABLED);
   /* Every parse result code, so the Python ParseResult enum is checked against
-     the C enumerators rather than assumed to match. */
+     the C enumerators rather than assumed to match. The count comes from the
+     enum's own sentinel, not from counting the lines below: without it, whether
+     an appended C result was noticed depended on someone remembering to add a
+     printf here, and forgetting left the reverse check (C reports a result the
+     Python mirror lacks) passing on an incomplete list - the exact failure the
+     reverse check exists to catch. Named parse_result_count rather than
+     result_count so it is not itself mistaken for one of the result_* keys. */
+  printf("parse_result_count=%d\n", (int)BOOMLINK_LINKFRAME_RESULT_COUNT);
   printf("result_ok=%d\n", (int)BOOMLINK_LINKFRAME_OK);
   printf("result_too_short=%d\n", (int)BOOMLINK_LINKFRAME_ERR_TOO_SHORT);
   printf("result_magic=%d\n", (int)BOOMLINK_LINKFRAME_ERR_MAGIC);
@@ -232,7 +296,7 @@ static int run_encode(int argc, char **argv, bool raw_flags) {
        must never do this - it would make the encoder's own output unobservable,
        which is exactly how an encoder that set a reserved bit on every frame
        once passed the whole suite. */
-    buf[2] = flags;
+    buf[LINKFRAME_TOOL_OFF_FLAGS] = flags;
   }
   if (payload_len > 0) {
     memcpy(&buf[BOOMLINK_LINKFRAME_HEADER_SIZE], payload, (size_t)payload_len);
@@ -287,10 +351,32 @@ static int run_parse(int argc, char **argv) {
     return 1;
   }
 
+  /* Parse from an EXACTLY len-sized heap block, not from `buf` directly.
+     Reading into a fixed 533-byte stack buffer and handing the parser the
+     logical `len` means any read past `len` still lands inside a valid, much
+     larger object - so it is intra-object, and AddressSanitizer cannot see it.
+     Verified: a parser that read bytes 12..19 before checking the length
+     accepted a 0-byte input, over-read 8 bytes, and the whole suite passed
+     green. A malloc'd block of exactly `len` puts ASan's redzones immediately
+     after the last valid byte, which is what makes the short-buffer tests
+     mean what they claim.
+     malloc(0) may legitimately return NULL, and a 0-byte input is a real test
+     case (it must be rejected as too short), so a NULL block with len 0 is
+     passed through rather than treated as an error. */
+  uint8_t *exact = NULL;
+  if (len > 0u) {
+    exact = malloc(len);
+    if (exact == NULL) {
+      fprintf(stderr, "parse: out of memory for a %zu-byte input\n", len);
+      return 1;
+    }
+    memcpy(exact, buf, len);
+  }
+
   boomlink_linkframe_header_t header      = {0};
   size_t                      payload_len = 0u;
   boomlink_linkframe_parse_result_t result =
-      boomlink_linkframe_parse(buf, len, expected_magic, &header, &payload_len);
+      boomlink_linkframe_parse(exact, len, expected_magic, &header, &payload_len);
 
   /* The result code is printed on BOTH paths, and the process exits 0 even for
      a rejected frame: a rejection is this subcommand's normal, expected output
@@ -299,6 +385,7 @@ static int run_parse(int argc, char **argv) {
   printf("result=%d\n", (int)result);
   printf("result_str=%s\n", boomlink_linkframe_parse_result_str(result));
   if (result != BOOMLINK_LINKFRAME_OK) {
+    free(exact);
     return 0;
   }
 
@@ -316,8 +403,9 @@ static int run_parse(int argc, char **argv) {
   printf("payload_len=%zu\n", payload_len);
 
   char hex[2u * LINKFRAME_TOOL_MAX_PAYLOAD + 1u];
-  boomlink_tool_hex_encode(&buf[BOOMLINK_LINKFRAME_HEADER_SIZE], payload_len, hex, sizeof(hex));
+  boomlink_tool_hex_encode(&exact[BOOMLINK_LINKFRAME_HEADER_SIZE], payload_len, hex, sizeof(hex));
   printf("payload=%s\n", hex);
+  free(exact);
   return 0;
 }
 
