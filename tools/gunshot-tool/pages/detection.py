@@ -390,11 +390,13 @@ def _setup_mode():
 
     if load_clicked and selected_files:
         try:
-            ch, sr_val, paths = load_audio_files(selected_files)
+            ch, sr_val, paths, load_warnings = load_audio_files(selected_files)
             st.session_state.det_channels = ch
             st.session_state.det_sr = sr_val
             st.session_state.det_channel_files = paths
             st.success(f'Loaded {len(ch)} channels, sr={sr_val} Hz, duration: {len(ch[0]) / sr_val:.1f} s')
+            for warning in load_warnings:
+                st.warning(warning)
         except Exception as e:
             st.error(f'Error: {e}')
 
