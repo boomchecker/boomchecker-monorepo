@@ -65,6 +65,15 @@ jobs:
           # that could drift from that shared range on its own).
           pip install --quiet -r fw/common/boomlink/requirements.txt
 
+      - name: Register GCC problem matcher
+        # Same rationale as the host workflow: this build compiles the generated
+        # *.pb.c and every firmware source with -Wall (and no -Werror on the
+        # boomlink sources), so without a matcher a new warning here is neither
+        # a failure nor an annotation - just text in a log. arm-none-eabi-gcc
+        # emits the same "file:line:col: severity: message" shape the matcher
+        # already handles.
+        run: echo "::add-matcher::.github/problem-matchers/gcc.json"
+
       - name: Configure
         working-directory: ./fw/bom-stm32node
         run: cmake --preset Debug

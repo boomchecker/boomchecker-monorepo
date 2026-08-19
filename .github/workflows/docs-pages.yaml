@@ -10,6 +10,9 @@ on:
     paths:
       - 'docs/**'
       - 'mkdocs.yml'
+      # mkdoxy's input (see mkdocs.yml's `src-dirs`): a C comment here is part of
+      # the rendered docs, so it can break the --strict build too.
+      - 'scripts/median-filter/csrc/**'
       - '.github/workflows/docs-pages.yaml'
   workflow_dispatch:
 
@@ -20,7 +23,11 @@ permissions:
 concurrency:
   # Per-ref, so a PR build can't cancel main's deploy (and vice versa).
   group: docs-pages-${{ github.ref }}
-  cancel-in-progress: true
+  # Superseded PR validation runs are worth cancelling, an in-flight Pages
+  # DEPLOYMENT is not - cancelling one mid-publish on two quick merges can leave
+  # the site on the older commit until something else triggers a deploy. Matches
+  # GitHub's own Pages starter workflow, which uses false for this reason.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build:
