@@ -12,6 +12,6 @@
 
 # Retraining artifacts reproducible via seeded training (task retrain*:train:all);
 # aggregated metrics (per_seed_metrics, summaries) stay committed.
-retrain*/models/
-retrain*/results/**/per_sample_seed*.csv
-retrain*/results/unseen_snr_per_sample_seed*.csv
+retraining/retrain*/models/
+retraining/retrain*/results/**/per_sample_seed*.csv
+retraining/retrain*/results/unseen_snr_per_sample_seed*.csv

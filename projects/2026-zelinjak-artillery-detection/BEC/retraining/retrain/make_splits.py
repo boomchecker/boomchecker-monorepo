@@ -20,7 +20,7 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 
 RETRAIN_ROOT = Path(__file__).resolve().parent
-PROJECT_ROOT = RETRAIN_ROOT.parents[1]
+PROJECT_ROOT = RETRAIN_ROOT.parents[2]
 
 VAL_FRACTION = 0.2
 SEED = 42

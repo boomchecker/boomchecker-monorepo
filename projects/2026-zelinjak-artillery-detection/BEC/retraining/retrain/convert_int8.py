@@ -16,7 +16,7 @@ import pandas as pd
 import tensorflow as tf
 
 RETRAIN_ROOT = Path(__file__).resolve().parent
-PROJECT_ROOT = RETRAIN_ROOT.parents[1]
+PROJECT_ROOT = RETRAIN_ROOT.parents[2]
 
 REPRESENTATIVE_SAMPLES = 100
 

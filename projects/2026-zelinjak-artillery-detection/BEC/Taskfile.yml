@@ -34,12 +34,12 @@ tasks:
   # Retrain tasks run under Linux/WSL (unlike the PowerShell LaTeX tasks above) and use
   # the project venv one level up.
   retrain:splits:
-    desc: Generate hard-coded train/val/test split (retrain/splits3.csv)
+    desc: Generate hard-coded train/val/test split (retraining/retrain/splits3.csv)
     dir: ..
     cmds:
-      - venv/bin/python BEC/retrain/make_splits.py
+      - venv/bin/python BEC/retraining/retrain/make_splits.py
     status:
-      - test -f BEC/retrain/splits3.csv
+      - test -f BEC/retraining/retrain/splits3.csv
 
   retrain:train:
     desc: "Train one seeded model with the proper 3-way protocol (default SEED=42; task retrain:train SEED=43)"
@@ -48,14 +48,14 @@ tasks:
     vars:
       SEED: '{{.SEED | default "42"}}'
     cmds:
-      - venv/bin/python BEC/retrain/train.py --seed {{.SEED}}
+      - venv/bin/python BEC/retraining/retrain/train.py --seed {{.SEED}}
 
   retrain:train:all:
     desc: Train all five seeds (42-46) for mean +/- std reporting
     dir: ..
     deps: [retrain:splits]
     cmds:
-      - for s in 42 43 44 45 46; do venv/bin/python BEC/retrain/train.py --seed $s || exit 1; done
+      - for s in 42 43 44 45 46; do venv/bin/python BEC/retraining/retrain/train.py --seed $s || exit 1; done
 
   retrain-wf:features:
     desc: Generate waveform-noise augmentation features (seed 142, disjoint from eval seeds 42-46)
@@ -72,14 +72,14 @@ tasks:
     vars:
       SEED: '{{.SEED | default "42"}}'
     cmds:
-      - venv/bin/python BEC/retrain-waveform/train.py --seed {{.SEED}}
+      - venv/bin/python BEC/retraining/retrain-waveform/train.py --seed {{.SEED}}
 
   retrain-wf:train:all:
     desc: Train all five waveform-augmented seeds (42-46)
     dir: ..
     deps: [retrain:splits, retrain-wf:features]
     cmds:
-      - for s in 42 43 44 45 46; do venv/bin/python BEC/retrain-waveform/train.py --seed $s || exit 1; done
+      - for s in 42 43 44 45 46; do venv/bin/python BEC/retraining/retrain-waveform/train.py --seed $s || exit 1; done
 
   retrain-wf2:train:
     desc: "Train one seed with waveform-noise augmentation ONLY, no MFCC jitter (default SEED=42)"
@@ -88,11 +88,11 @@ tasks:
     vars:
       SEED: '{{.SEED | default "42"}}'
     cmds:
-      - venv/bin/python BEC/retrain-waveform2/train.py --seed {{.SEED}}
+      - venv/bin/python BEC/retraining/retrain-waveform2/train.py --seed {{.SEED}}
 
   retrain-wf2:train:all:
     desc: Train all five waveform-only seeds (42-46)
     dir: ..
     deps: [retrain:splits, retrain-wf:features]
     cmds:
-      - for s in 42 43 44 45 46; do venv/bin/python BEC/retrain-waveform2/train.py --seed $s || exit 1; done
+      - for s in 42 43 44 45 46; do venv/bin/python BEC/retraining/retrain-waveform2/train.py --seed $s || exit 1; done

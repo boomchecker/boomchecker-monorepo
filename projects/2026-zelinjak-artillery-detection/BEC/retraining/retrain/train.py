@@ -29,7 +29,7 @@ import numpy as np
 import pandas as pd
 
 RETRAIN_ROOT = Path(__file__).resolve().parent
-PROJECT_ROOT = RETRAIN_ROOT.parents[1]
+PROJECT_ROOT = RETRAIN_ROOT.parents[2]
 sys.path.insert(0, str(PROJECT_ROOT / "ml"))
 
 NOISE_LEVELS = [0.1, 0.2, 0.3, 0.5]  # thesis ml/load_data.py values
