@@ -27,6 +27,18 @@ RUN apt update && apt install -y \
     clang-format \
     ca-certificates
 
+# STM32 platform support: ARM cross-toolchain + flashing/debugging tools.
+# STM32CubeMX-generated projects build with CMake + Ninja (both provided by the
+# ESP-IDF environment, sourced via export.sh in the shell). arm-none-eabi-gcc is the
+# bare-metal compiler; OpenOCD / st-flash handle flashing over ST-Link.
+RUN apt update && apt install -y \
+    gcc-arm-none-eabi \
+    binutils-arm-none-eabi \
+    libnewlib-arm-none-eabi \
+    gdb-multiarch \
+    openocd \
+    stlink-tools
+
 # Install Node.js LTS (v20) from NodeSource
 RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
     apt-get install -y nodejs && \

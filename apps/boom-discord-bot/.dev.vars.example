@@ -1,0 +1,8 @@
+# Local secrets for `wrangler dev`. Copy to `.dev.vars` (gitignored) and fill in.
+DISCORD_PUBLIC_KEY=
+CLAUDE_ROUTINE_FIRE_URL=
+CLAUDE_ROUTINE_BEARER_TOKEN=
+DISCORD_BOT_TOKEN=
+ROUTINE_CALLBACK_TOKEN=
+# Optional: public Worker URL for the callback. If empty, the request origin is used.
+PUBLIC_WORKER_BASE_URL=

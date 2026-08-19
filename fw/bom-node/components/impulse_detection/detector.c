@@ -21,6 +21,7 @@
  */
 
 #include "detector.h"
+#include "angle_estimation.h"
 #include "median_detection.h"
 #include "mic_input.h"
 
@@ -29,6 +30,7 @@
 #include "freertos/semphr.h"
 #include "freertos/task.h"
 
+#include <math.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -82,6 +84,93 @@ static void impulse_detection_task(void *arg) {
 
     if (detectedL || detectedR) {
       ESP_LOGI(TAG, ">>> IMPULSE DETECTED <<<");
+
+      tdoa_estimation tdoa1 =
+          cross_corr(arrL, arrR, MAX_EVENT_SAMPLES, MIC_SAMPLING_FREQUENCY);
+
+      float angle1 = calculate_aoa(tdoa1);
+
+      ESP_LOGI(TAG, "CROSS_CORR");
+      ESP_LOGI(TAG, "Analysis:");
+      ESP_LOGI(TAG,
+               " -> Lag: %d samples "
+               "(%.3f ms)",
+               tdoa1.lag_samples, tdoa1.delay_ms);
+      ESP_LOGI(TAG, " -> ANGLE: %.1f degrees", angle1);
+
+      tdoa_estimation tdoa2 = cross_corr_parabolic(
+          arrL, arrR, MAX_EVENT_SAMPLES, MIC_SAMPLING_FREQUENCY);
+
+      float angle2 = calculate_aoa(tdoa2);
+
+      ESP_LOGI(TAG, "CROSS_CORR_PARBOLIC");
+      ESP_LOGI(TAG, "Analysis:");
+      ESP_LOGI(TAG,
+               " -> Lag: %d samples "
+               "(%.3f ms)",
+               tdoa2.lag_samples, tdoa2.delay_ms);
+      ESP_LOGI(TAG, " -> ANGLE: %.1f degrees", angle2);
+
+      int16_t *arrL_cutted = &arrL[wanted_window_start];
+      int16_t *arrR_cutted = &arrR[wanted_window_start];
+      int cutted_len = wanted_window_length;
+
+      tdoa_estimation tdoa3 = pbde_basic(arrL_cutted, arrR_cutted, cutted_len,
+                                         MIC_SAMPLING_FREQUENCY);
+
+      float angle3 = calculate_aoa(tdoa3);
+
+      ESP_LOGI(TAG, "PBDE_BASIC");
+      ESP_LOGI(TAG, "Analysis:");
+      ESP_LOGI(TAG,
+               " -> Lag: %d samples "
+               "(%.3f ms)",
+               tdoa3.lag_samples, tdoa3.delay_ms);
+      ESP_LOGI(TAG, " -> ANGLE: %.1f degrees", angle3);
+
+      tdoa_estimation tdoa4 = pbde_lin_reg(arrL_cutted, arrR_cutted, cutted_len,
+                                           MIC_SAMPLING_FREQUENCY);
+
+      float angle4 = calculate_aoa(tdoa4);
+
+      ESP_LOGI(TAG, "PBDE_LIN_REG");
+      ESP_LOGI(TAG, "Analysis:");
+      ESP_LOGI(TAG,
+               " -> Lag: %d samples "
+               "(%.3f ms)",
+               tdoa4.lag_samples, tdoa4.delay_ms);
+      ESP_LOGI(TAG, " -> ANGLE: %.1f degrees", angle4);
+
+      if (wanted_window_start < 0 ||
+          (wanted_window_start + cutted_len) > MAX_EVENT_SAMPLES) {
+        ESP_LOGE(TAG, "Window out of bounds! Using full buffer instead.");
+        arrL_cutted = arrL;
+        arrR_cutted = arrR;
+        cutted_len = MAX_EVENT_SAMPLES;
+      }
+
+      // DATA PRINTER
+      printf("\n---DATA_START---\n");
+
+      // LEFT CHANNEL
+      printf("L:");
+      for (int i = 0; i < wanted_window_length; i++) {
+        printf("%d,", arrL_cutted[i]);
+      }
+      printf("\n");
+
+      // RIGHT CHANNEL
+      printf("R:");
+      for (int i = 0; i < wanted_window_length; i++) {
+        printf("%d,", arrR_cutted[i]);
+      }
+      printf("\n");
+
+      printf("---DATA_END---\n\n");
+      // ----------------------------------
+
+      vTaskDelay(pdMS_TO_TICKS(100));
+
       detectedL = false;
       detectedR = false;
 
@@ -89,7 +178,9 @@ static void impulse_detection_task(void *arg) {
       if (!((wanted_window_start >= 0) &&
             (wanted_window_start + wanted_window_length <= arr_len))) {
         ESP_LOGE(TAG,
-                 "Window out of bounds: start=%d, length=%d, array size=%d",
+                 "Window out of bounds: "
+                 "start=%d, length=%d, "
+                 "array size=%d",
                  wanted_window_start, wanted_window_length, arr_len);
       }
     }
@@ -110,12 +201,13 @@ void impulse_detector_start(void) {
     return;
   }
 
-  wanted_window_start = ((cfg->num_taps * cfg->tap_size) / 2) -
-                        (cfg->pre_event_ms * cfg->sampling_freq / 1000);
+  wanted_window_start =
+      ((cfg->num_taps * cfg->tap_size) / 2) -
+      (int)roundf(cfg->pre_event_ms * (float)cfg->sampling_freq / 1000.0f);
   ESP_LOGI(TAG, "wws - %d", wanted_window_start);
 
-  wanted_window_length =
-      (cfg->pre_event_ms + cfg->post_event_ms) * cfg->sampling_freq / 1000;
+  wanted_window_length = (int)roundf((cfg->pre_event_ms + cfg->post_event_ms) *
+                                     (float)cfg->sampling_freq / 1000.0f);
   ESP_LOGI(TAG, "wwl - %d", wanted_window_length);
 
   impulse_detection_init(&detL);
@@ -132,7 +224,7 @@ void impulse_detector_start(void) {
   mic_start();
 
   BaseType_t task_result = xTaskCreatePinnedToCore(
-      impulse_detection_task, "impulse_detection", 8192, NULL, 5, NULL, 0);
+      impulse_detection_task, "impulse_detection", 8192, NULL, 9, NULL, 0);
   if (task_result != pdPASS) {
     ESP_LOGE(TAG, "Failed to create impulse_detection task (error=%d)",
              (int)task_result);
