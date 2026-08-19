@@ -6,14 +6,17 @@ cmake_minimum_required(VERSION 3.21)
 # This file is consumed two different ways:
 #
 # 1. add_subdirectory()'d from fw/bom-stm32node/CMakeLists.txt, under that
-#    project's ARM cross toolchain - produces only the `boomlink_protocol`
-#    static library (generated Nanopb codec + boomlink_codec.c), linked into
-#    the firmware. No tests are built this way: cross-compiled host tooling
-#    makes no sense, and the STM32 target has no way to run pytest.
+#    project's ARM cross toolchain - produces the `boomlink_protocol` static
+#    library (generated Nanopb codec + boomlink_codec.c), which the firmware
+#    links, and `boomlink_linkframe` (the link frame header), which is
+#    cross-compiled but not yet linked by anything - see its own comment below.
+#    No tests are built this way: cross-compiled host tooling makes no sense,
+#    and the STM32 target has no way to run pytest.
 # 2. configured standalone, with the host's native compiler - additionally
-#    builds `boomlink_codec_tool` (a small CLI used by both C and Python
-#    tests) and registers the native/host test suite via CTest. This is what
-#    `cmake --preset Debug` in this directory does (see CMakePresets.json).
+#    builds `boomlink_codec_tool` and `boomlink_linkframe_tool` (small CLIs
+#    used by the Python tests) and registers the native/host test suite via
+#    CTest. This is what `cmake --preset Debug` in this directory does (see
+#    CMakePresets.json).
 #
 # boomlink.md section 4 requires the .proto files to not live only inside the
 # STM32 target; this dual-mode file is how that requirement is met without
@@ -81,15 +84,18 @@ if(BOOMLINK_STANDALONE)
   option(BOOMLINK_WERROR "Treat warnings as errors in this package's own targets" OFF)
 endif()
 
-# Applied via target_compile_options on this package's own targets only (see
-# boomlink_protocol/boomlink_codec_tool below), never add_compile_options:
-# the vendored nanopb runtime is third-party code this package doesn't
-# control the warning-cleanliness of.
+# Applied via target_compile_options on this package's own targets only -
+# boomlink_protocol, boomlink_linkframe and both test tools below - never
+# add_compile_options: the vendored nanopb runtime is third-party code this
+# package doesn't control the warning-cleanliness of.
 set(BOOMLINK_WARNING_FLAGS -Wall -Wextra)
 
 # -Werror is kept SEPARATE from the warning flags above, and is applied only
-# to the two hand-written translation units (boomlink_codec.c, codec_tool.c) -
-# never to the four generated *.pb.c. Same reasoning that keeps every warning
+# to the hand-written translation units - boomlink_codec.c (via a source
+# property, since it shares boomlink_protocol with generated code) plus
+# boomlink_linkframe.c and both tools' sources, whose targets contain nothing
+# generated and so take it target-wide - never to the four generated *.pb.c.
+# Same reasoning that keeps every warning
 # flag off boomlink_nanopb: those files are machine output from the vendored
 # generator, so a submodule bump or a newer compiler on CI's runner image
 # could hard-fail the build over code nobody in this repo wrote or can fix.
@@ -381,6 +387,17 @@ add_library(boomlink_protocol STATIC
   ${CMAKE_CURRENT_SOURCE_DIR}/boomlink_codec.c
 )
 add_dependencies(boomlink_protocol boomlink_proto_gen)
+# Note the second entry is this package's ROOT, not a narrow include directory:
+# boomlink_codec.h sits there, so that is what has to be exported for the
+# firmware to include it. The side effect is that everything else directly under
+# fw/common/boomlink becomes includable by every consumer of boomlink_protocol -
+# which today means <linkframe/boomlink_linkframe.h> is reachable from firmware
+# code that links only the codec. That is one-directional and harmless in this
+# direction (the link frame header is standalone, and its own target is what
+# provides the implementation), but it is NOT the compile-time boundary the
+# linkframe target's comment below describes: that boundary stops the codec's
+# headers reaching link-layer code, not the other way round. Worth keeping in
+# mind before adding anything private to this directory.
 target_include_directories(boomlink_protocol PUBLIC
   ${BOOMLINK_GENERATED_DIR}
   ${CMAKE_CURRENT_SOURCE_DIR}
@@ -461,6 +478,14 @@ if(BOOMLINK_STANDALONE)
   # would add a target for ~90 lines. See tests/tool_support.h for why it is
   # shared at all instead of copied - parse_u32 has a history of subtle bugs
   # that a second hand-maintained copy would eventually reintroduce.
+  #
+  # One consequence of listing the source in two targets: it is compiled twice,
+  # with each target's own include paths and definitions. That is wanted here -
+  # BOOMLINK_SANITIZE_ENABLED is per-target, and tool_support.h's
+  # instrumentation cross-check has to see each tool's value - but it also means
+  # tool_support.c must not depend on anything only one of the two tools puts on
+  # the include path. It includes nothing but its own header and libc, which is
+  # what keeps that true; a shared library target would enforce it instead.
   set(BOOMLINK_TOOL_SUPPORT ${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_support.c)
 
   # The only target that compiles the hand-rolled buffer/argument-parsing
@@ -494,17 +519,44 @@ if(BOOMLINK_STANDALONE)
   # The link frame's own CLI, so the pytest suite can cross-check the C
   # encoder/parser against linkframe/boomlink_linkframe.py on the same wire
   # bytes. Deliberately does NOT link boomlink_protocol: this tool exists to
-  # exercise a layer that must work without a Protobuf decoder, and linking one
-  # in would quietly make the boundary untested.
+  # exercise a layer that must work without a Protobuf decoder, so keeping one
+  # off its link line keeps the tool honest about what it is testing.
+  #
+  # Note this is a convention, not something the symbol check can police:
+  # linking boomlink_protocol here would leave the tool's binary with zero pb_
+  # symbols, because nothing in linkframe_tool.c references the codec and the
+  # linker pulls no members out of an archive it does not need. Verified. The
+  # check only fires once the tool actually calls into the codec.
   add_executable(boomlink_linkframe_tool tests/linkframe_tool.c ${BOOMLINK_TOOL_SUPPORT})
   target_link_libraries(boomlink_linkframe_tool PRIVATE boomlink_linkframe)
-  target_include_directories(boomlink_linkframe_tool PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests)
   target_compile_options(boomlink_linkframe_tool PRIVATE
     ${BOOMLINK_WARNING_FLAGS} ${BOOMLINK_WERROR_FLAGS})
   target_compile_definitions(boomlink_linkframe_tool PRIVATE
     BOOMLINK_SANITIZE_ENABLED=$<IF:$<BOOL:${BOOMLINK_SANITIZE}>,1,0>)
 
   add_test(NAME boomlink_linkframe_selftest COMMAND boomlink_linkframe_tool selftest)
+
+  # The Nanopb-free boundary (boomlink.md section 9), checked as a TEST rather
+  # than only as a CI step, so `task test` runs it and a developer finds out
+  # before pushing. The target structure enforces the common case at compile
+  # time, but two routes get past that: re-adding the link to make something
+  # build (the compile error just disappears), and a RELATIVE include reaching
+  # nanopb's headers with no CMake change at all - which emits no symbol if it
+  # only uses a macro or typedef, so an archive check cannot see it either. The
+  # script checks symbols AND the compiler's own include list; see its header.
+  #
+  # The artefact list is passed from here rather than hardcoded in the workflow,
+  # so a target added by a later phase (the link engine, which must hold the
+  # same property) is one line away from being covered.
+  add_test(NAME boomlink_no_nanopb_dependency
+    COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/tests/check_no_nanopb.sh
+            ${Python3_EXECUTABLE}
+            ${BOOMLINK_NANOPB_DIR}
+            ${CMAKE_CURRENT_BINARY_DIR}/compile_commands.json
+            ${CMAKE_CURRENT_SOURCE_DIR}/linkframe/boomlink_linkframe.c
+            $<TARGET_FILE:boomlink_linkframe>
+            $<TARGET_FILE:boomlink_linkframe_tool>
+  )
 
   # Host-side Python classes for the SAME .proto files, generated straight by
   # protoc (not through the Nanopb generator) so tests/*.py can act as an
