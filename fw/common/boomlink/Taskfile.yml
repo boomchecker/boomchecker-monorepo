@@ -9,7 +9,7 @@ tasks:
       - .venv/bin/pip install --quiet -r requirements.txt
 
   build:
-    desc: Configure and build the host-native protocol library + test tool
+    desc: Configure and build the host-native protocol and link frame libraries + their test tools
     aliases: [b]
     cmds:
       # .venv first on PATH so CMake's find_package(Python3) picks up the

@@ -71,8 +71,10 @@ This directory is a CMake project that builds two different ways:
   by the `proto` CLI command in `Core/Src/cli.c` (see its comment for why that
   matters); `boomlink_linkframe` is cross-compiled but not yet referenced by
   anything, which is deliberate - it proves the header is free of host-isms and
-  warning-clean for the target before the link engine that will use it exists,
-  and the linker simply drops it from the image until then. No tests - a
+  warning-clean for the target before the link engine that will use it exists.
+  The archive is built but never reaches the linker at all (nothing links it),
+  so wiring it into the firmware will need a `target_link_libraries` entry in
+  `fw/bom-stm32node`, not merely a call site. No tests - a
   cross-compiled host tool makes no sense, and pytest cannot run on an
   STM32. Note this makes the host Python packages below a hard requirement
   of building the **firmware**, not just of running these tests: code
@@ -85,7 +87,7 @@ This directory is a CMake project that builds two different ways:
 task setup      # create .venv with protobuf/grpcio-tools/pytest/ruff
 task test       # configure, build, run the full suite via CTest
 task generate   # add any new golden vectors (see generate_vectors.py)
-task lint       # ruff over tests/
+task lint       # ruff over tests/ and linkframe/
 ```
 
 Requires `cmake`, `ninja`, and a host C compiler in addition to the Python

@@ -114,12 +114,40 @@ jobs:
         # violation is normally a compile error - but a future refactor could
         # re-add the link (to make something build) and quietly lose the
         # property, with every test still green. This fails the build instead.
+        #
+        # Each artefact's existence is asserted FIRST. Without that the check
+        # fails OPEN: `if nm <missing file> | grep ...` prints an error to stderr
+        # and takes the else branch, reporting success and exiting 0 (verified
+        # under both `bash -e` and `bash -eo pipefail` - `set -e` does not apply
+        # to a command in an `if` condition). Since a negative assertion is
+        # vacuously true when there is nothing to inspect, the check would
+        # silently disarm on exactly the refactor it exists to guard against -
+        # the target being renamed, folded into a link-engine library, or given a
+        # different output directory.
+        #
+        # The executable is checked too, and it is the stronger property: adding
+        # boomlink_protocol to boomlink_linkframe_tool leaves the archive
+        # byte-identical, so the archive check alone would pass while the tool
+        # exercised the layer with a Protobuf decoder linked in - which is
+        # precisely what the CMake comment claims would "make the boundary
+        # untested".
         run: |
-          if nm build/Debug/libboomlink_linkframe.a | grep -E ' (U|T) pb_'; then
-            echo "❌ libboomlink_linkframe.a references Nanopb symbols"
-            exit 1
-          fi
-          echo "✅ the link frame layer is free of Nanopb symbols"
+          set -euo pipefail
+          status=0
+          for artefact in build/Debug/libboomlink_linkframe.a build/Debug/boomlink_linkframe_tool; do
+            if [ ! -f "$artefact" ]; then
+              echo "❌ $artefact does not exist - this check cannot verify anything"
+              status=1
+              continue
+            fi
+            if nm "$artefact" | grep -E ' (U|T|t) pb_'; then
+              echo "❌ $artefact references Nanopb symbols"
+              status=1
+            else
+              echo "✅ $artefact is free of Nanopb symbols"
+            fi
+          done
+          exit $status
 
       - name: Build summary
         run: |

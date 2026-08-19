@@ -434,8 +434,14 @@ endif()
 # the "compiled but never linked" gap PR 2's review caught: there the ELF was
 # missing a symbol an acceptance criterion required, whereas here cross-
 # compiling it early is what proves it is free of host-isms and warning-clean
-# for the target before any firmware depends on it. The linker drops it from
-# the image until Phase C, which is correct.
+# for the target before any firmware depends on it.
+#
+# Precisely: the archive is BUILT but never reaches the linker at all - it is
+# not on bom-stm32node.elf's link line, because nothing links it. So Phase C
+# needs more than a call site: it must also add boomlink_linkframe to
+# fw/bom-stm32node/CMakeLists.txt's target_link_libraries. Worth stating,
+# because "the linker just drops it for now" would imply the archive is already
+# on the link line and only a reference is missing.
 add_library(boomlink_linkframe STATIC
   ${CMAKE_CURRENT_SOURCE_DIR}/linkframe/boomlink_linkframe.c
 )
