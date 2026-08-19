@@ -183,6 +183,11 @@ commitnuté jsou agregované metriky a důkazní CSV.
 
 ## 7. Důsledky pro camera-ready
 
+**Rozhodnuto 2026-08-19: větev ③ je nový kanonický model pro camera-ready.** Duplicity a
+případné rozšíření datasetu (nové launch/impact nahrávky) se řeší následně — pokud se
+dataset předělá, celá pipeline se přetrénuje a čísla přegenerují. ESP32-S3 validace
+větve ③ zbývá (postup M6).
+
 1. Větev ③ je kandidát na nový kanonický model: poctivá held-out čísla MCC 0.97 → 0.91
    (30 → 5 dB), bez kontaminačních caveatů, stejná architektura a deployment stopa.
    Vyžaduje: HW validaci na ESP32 (postup M6), přepis Robustness Training (waveform
