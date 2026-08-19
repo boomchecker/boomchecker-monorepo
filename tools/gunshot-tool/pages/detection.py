@@ -394,6 +394,12 @@ def _setup_mode():
             st.session_state.det_channels = ch
             st.session_state.det_sr = sr_val
             st.session_state.det_channel_files = paths
+            # Peaks, decisions and the channel choice belong to the previous recording
+            st.session_state.det_impulses = None
+            st.session_state.det_peak_idx = 0
+            st.session_state.det_decisions = {}
+            st.session_state.det_ch_idx = 0
+            st.session_state.pop('s_det_ch', None)
             st.success(f'Loaded {len(ch)} channels, sr={sr_val} Hz, duration: {len(ch[0]) / sr_val:.1f} s')
             for warning in load_warnings:
                 st.warning(warning)
@@ -511,6 +517,10 @@ def _detection_results_preview():
     channels = st.session_state.det_channels
     sr = st.session_state.det_sr
     det_ch = st.session_state.det_ch_idx
+    if det_ch >= len(channels) or any(int(p) >= len(channels[0]) for p in impulses):
+        st.info('These results belong to a different recording — click Detect to refresh them.')
+        return
+
     total = len(impulses)
     decisions = st.session_state.det_decisions
     saved = sum(1 for v in decisions.values() if v == 'saved')
