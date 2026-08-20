@@ -29,7 +29,7 @@ We agree. The title has been changed to *"A Lightweight Noise-Robust Post-Trigge
 
 **Odpověď:**
 
-_(doplnit)_
+Added. The abstract now states explicitly: "The embedded experiment validates only the post-trigger classifier: deployed on ESP32-S3 with TensorFlow Lite Micro, it preserves high performance under the tested conditions, ..."
 
 ### R1.3 Section II (related work)
 
