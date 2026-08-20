@@ -308,8 +308,15 @@ static int run_selftest(void) {
     return 1;
   }
 
-  /* Refused when either end of the addressing is not a real node, so an ACK can
-     never be aimed at the whole network. */
+  /* Refused when either end of the addressing is not a real node (section 7.2
+     makes both the broadcast and unconfigured addresses something no node can
+     BE), so an ACK can never claim one. Such an ACK is also unusable by anyone:
+     a compliant matcher requires an ACK's destination to equal its own node ID,
+     which the broadcast address never does.
+     NOT an airtime defence - that ACK is one 20-byte transmission, the same as a
+     unicast one. The storm vector is a frame addressed TO broadcast with
+     ack_requested set, which this refusal does not touch and which suppressing
+     is the engine's job. See boomlink.md section 9.5. */
   boomlink_linkframe_header_t broadcast_source = decoded;
   broadcast_source.source_id                   = BOOMLINK_ADDR_BROADCAST;
   boomlink_linkframe_header_t refused = {0};
@@ -317,8 +324,8 @@ static int run_selftest(void) {
       boomlink_linkframe_make_ack(&decoded, BOOMLINK_ADDR_BROADCAST, &refused) ||
       boomlink_linkframe_make_ack(&decoded, BOOMLINK_ADDR_INVALID, &refused)) {
     fprintf(stderr,
-            "selftest: make_ack built an ACK with an unusable address - one aimed at the "
-            "broadcast address turns a single frame into a network-wide transmission\n");
+            "selftest: make_ack built an ACK claiming an address no node can have - "
+            "section 7.2 puts real node IDs at 0x00000001..0xFFFFFFFE\n");
     return 1;
   }
 
