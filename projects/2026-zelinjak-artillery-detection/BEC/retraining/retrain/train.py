@@ -68,14 +68,29 @@ def augment(x: np.ndarray, y: np.ndarray, rng: np.random.Generator) -> tuple[np.
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--features", type=Path, default=PROJECT_ROOT / "generated/features_seed42/features_manifest.csv")
-    parser.add_argument("--splits3", type=Path, default=RETRAIN_ROOT / "splits3.csv")
+    parser.add_argument(
+        "--dataset",
+        choices=["old", "new"],
+        default="old",
+        help="'old' = original 854-recording corpus; 'new' = new-campaign launches (BEC/new-dataset) with shared negatives.",
+    )
+    parser.add_argument("--features", type=Path, default=None, help="Override the per-dataset default feature index.")
+    parser.add_argument("--splits3", type=Path, default=None, help="Override the per-dataset default splits file.")
     parser.add_argument("--epochs", type=int, default=50)
     parser.add_argument("--batch-size", type=int, default=8)
     parser.add_argument("--patience", type=int, default=10)
-    parser.add_argument("--output", type=Path, default=None, help="Default: BEC/retrain/models/retrained_seed{seed}.h5")
+    parser.add_argument("--output", type=Path, default=None, help="Default: models/retrained[_new]_seed{seed}.h5")
     args = parser.parse_args()
-    output = args.output or RETRAIN_ROOT / "models" / f"retrained_seed{args.seed}.h5"
+
+    if args.dataset == "new":
+        features = args.features or PROJECT_ROOT / "generated/features_new_seed42/features_manifest.csv"
+        splits3 = args.splits3 or PROJECT_ROOT / "BEC/new-dataset/splits3_new.csv"
+        output = args.output or RETRAIN_ROOT / "models" / f"retrained_new_seed{args.seed}.h5"
+    else:
+        features = args.features or PROJECT_ROOT / "generated/features_seed42/features_manifest.csv"
+        splits3 = args.splits3 or RETRAIN_ROOT / "splits3.csv"
+        output = args.output or RETRAIN_ROOT / "models" / f"retrained_seed{args.seed}.h5"
+    args.features, args.splits3 = features, splits3
 
     random.seed(args.seed)
     np.random.seed(args.seed)

@@ -67,20 +67,40 @@ def mfcc_jitter(x: np.ndarray, y: np.ndarray, rng: np.random.Generator) -> tuple
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--features", type=Path, default=PROJECT_ROOT / "generated/features_seed42/features_manifest.csv")
+    parser.add_argument(
+        "--dataset",
+        choices=["old", "new"],
+        default="old",
+        help="'old' = original 854-recording corpus; 'new' = new-campaign launches (BEC/new-dataset) with shared negatives.",
+    )
+    parser.add_argument("--features", type=Path, default=None, help="Override the per-dataset default feature index.")
     parser.add_argument(
         "--waveform-features",
         type=Path,
-        default=PROJECT_ROOT / "generated/features_trainaug_seed142/features_manifest.csv",
+        default=None,
         help="Feature index holding waveform-noise variants for train-set augmentation (noise seed disjoint from eval).",
     )
-    parser.add_argument("--splits3", type=Path, default=RETRAINING_ROOT / "retrain" / "splits3.csv")
+    parser.add_argument("--splits3", type=Path, default=None, help="Override the per-dataset default splits file.")
     parser.add_argument("--epochs", type=int, default=50)
     parser.add_argument("--batch-size", type=int, default=8)
     parser.add_argument("--patience", type=int, default=10)
-    parser.add_argument("--output", type=Path, default=None, help="Default: models/retrained_wf_seed{seed}.h5")
+    parser.add_argument("--output", type=Path, default=None, help="Default: models/retrained_wf[_new]_seed{seed}.h5")
     args = parser.parse_args()
-    output = args.output or WF_ROOT / "models" / f"retrained_wf_seed{args.seed}.h5"
+
+    if args.dataset == "new":
+        args.features = args.features or PROJECT_ROOT / "generated/features_new_seed42/features_manifest.csv"
+        args.waveform_features = (
+            args.waveform_features or PROJECT_ROOT / "generated/features_new_trainaug_seed142/features_manifest.csv"
+        )
+        args.splits3 = args.splits3 or PROJECT_ROOT / "BEC/new-dataset/splits3_new.csv"
+        output = args.output or WF_ROOT / "models" / f"retrained_wf_new_seed{args.seed}.h5"
+    else:
+        args.features = args.features or PROJECT_ROOT / "generated/features_seed42/features_manifest.csv"
+        args.waveform_features = (
+            args.waveform_features or PROJECT_ROOT / "generated/features_trainaug_seed142/features_manifest.csv"
+        )
+        args.splits3 = args.splits3 or RETRAINING_ROOT / "retrain" / "splits3.csv"
+        output = args.output or WF_ROOT / "models" / f"retrained_wf_seed{args.seed}.h5"
 
     random.seed(args.seed)
     np.random.seed(args.seed)
