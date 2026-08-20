@@ -21,7 +21,7 @@ Podkladové dokumenty: `generated/reports/reviewer_response.md` (M1–M6 důkazy
 
 **Odpověď:**
 
-_(doplnit)_
+We agree. The title has been changed to *"A Lightweight Noise-Robust Post-Trigger Classifier for Embedded Acoustic Artillery Launch Detection"*, which names exactly what the paper evaluates: the post-trigger (second-stage) classifier. The two-stage architecture is still described in Section III.A as the system context, with the trigger stage explicitly referenced as previously validated prior work.
 
 ### R1.2 Abstract
 
@@ -110,7 +110,7 @@ _(doplnit)_
 
 **Odpověď:**
 
-_(doplnit)_
+The title has been revised to *"A Lightweight Noise-Robust Post-Trigger Classifier for Embedded Acoustic Artillery Launch Detection"*. It now states the main contribution directly: a lightweight (72,193 parameters, 81 kB int8) post-trigger classifier with experimentally demonstrated noise robustness (held-out MCC 0.98 at 5 dB SNR, graceful degradation measured down to −5 dB) deployed and validated on an embedded target.
 
 ### R2.1 Contribution and novelty
 
