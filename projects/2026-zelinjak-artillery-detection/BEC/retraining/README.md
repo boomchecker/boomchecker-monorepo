@@ -181,7 +181,107 @@ venv/bin/python ml/reproduce.py --seeds 42 43 44 45 46 \
 Modely a per-sample dumpy jsou gitignored (plně reprodukovatelné, viz `BEC/.gitignore`);
 commitnuté jsou agregované metriky a důkazní CSV.
 
-## 7. Důsledky pro camera-ready
+## 7. Nový dataset a window ablace (2026-08-20)
+
+Po rozhodnutí pro větev ③ proběhla druhá vlna experimentů: nový launch dataset ze
+4-mikrofonní kampaně a změna analytického okna. Chronologie a poznatky:
+
+### 7.1 Nový dataset
+
+50 zipů = 50 výstřelů × 4 synchronně oříznuté mikrofonní kanály (48 kHz mono WAV).
+Konstrukce, event-level split (32×4 train / 8×1 val / 10×1 test launch + negativy
+sdílené se starým datasetem) a zdůvodnění: `BEC/new-dataset/README.md`. Trénink přes
+`--dataset {old,new}` ve všech třech větvích (zpětně kompatibilní), Taskfile
+`DATASET=old|new` + `dataset-new:*` tasky. Staré dana_artillery nahrávky vyřazeny
+(riziko duplicit týchž fyzických výstřelů).
+
+### 7.2 Nález: int8 kalibrace je citlivá na složení representative datasetu
+
+První konverze modelů nového datasetu dala **MCC 0.0 u 3 z 5 seedů** (int8 predikoval
+nesmysly, float32 v pořádku). Příčina: `convert_int8.py` bral prvních 100 *seřazených*
+train vzorků — nové launch recording_id (číselné prefixy) se řadí před negativy, takže
+kalibrace viděla **jen launch třídu**. Oprava: rovnoměrně rozprostřený deterministický
+výběr přes seřazený train (79 negativ / 21 launch) → int8 ≡ float32 (±0.002 MCC).
+**Pro článek (R4-Q2):** měřený příklad, že za int8 anomáliemi bývá pipeline
+(kalibrace), ne kvantizace sama.
+
+### 7.3 Výsledky na novém datasetu, okno 40/60 (archiv: `retrain-waveform2/results-new-window4060/`)
+
+Int8, held-out test (10 launch eventů + 158 negativ), mean ± std přes 5 train × 5 noise
+seedů: clean 0.958, 30 dB 0.959, 20 dB 0.966, 10 dB 0.963, 5 dB 0.955. Extrapolace mimo
+trénovaný rozsah: 0 dB 0.841 (precision 1.0, recall 0.74), −5 dB 0.643 — degraduje
+kontrolovaně (vynechává, nefalešně poplašuje); velká std extrapolace šla skoro celá za
+seedem 46.
+
+### 7.4 Analýza chyb a okna
+
+Confusion matrix: FP prakticky nula (25/19 750 negativních inferencí; jen
+`Engine_Inside_Car` a `Classroom_Ambiance`), **other_gunshot 0 FP** (ruční zbraně model
+nikdy nesplete s dělem). FN koncentrované do `0011_0226s_shot_011` (49/125) — vizualizace
+(`results-new-window4060/fn_window_analysis*.png`) ukázala, že peak-detekce funguje, ale
+tento výstřel má komplexní multi-peak strukturu s onsetem ~40 ms před detekovaným peakem
+→ 40/60 okno mine náběh. Ilustruje citlivost peak-centered okna (souvisí s R4#4).
+
+### 7.5 Změna okna na 30/70 a finální čísla
+
+`ml/utils.py extract_window`: 40 % před / 60 % za peakem → **30 % / 70 %** (delší
+decay část). Featury nového datasetu přegenerovány, 5 seedů přetrénováno, přeevalováno.
+**Int8, test split, mean ± std (aktuální kanonická čísla, `results-new/summary_new_dataset.csv`):**
+
+| SNR | 30/70 MCC | (40/60 bylo) | Prec / Rec (30/70) |
+|---|---|---|---|
+| Clean | **0.990 ± 0.020** | 0.958 | 0.982 / 1.000 |
+| 30 dB | **0.988 ± 0.022** | 0.959 | 0.982 / 0.996 |
+| 20 dB | **0.992 ± 0.020** | 0.966 | 0.996 / 0.988 |
+| 10 dB | **0.977 ± 0.035** | 0.963 | 0.985 / 0.972 |
+| 5 dB | **0.976 ± 0.039** | 0.955 | 1.000 / 0.956 |
+
+FN `shot_011` kleslo 49 → 14/125; per-seed @ 5 dB 0.92–1.00; std poloviční proti 40/60;
+float32 ≈ int8. Poučení: jednosnímková energetická analýza okna nebyla prediktivní —
+rozhodl retrénink na nových oknech.
+
+**Extrapolace mimo trénovaný rozsah (30/70, int8, `results-new/summary_lowsnr.csv`):**
+0 dB MCC 0.947 ± 0.049 (precision 1.000, recall 0.904), −5 dB MCC 0.833 ± 0.107
+(precision 1.000, recall 0.716) — proti 40/60 (0.841 / 0.643) velký skok a žádný
+seed nekolabuje (min 0.67 @ −5 dB vs. 0.00 dřív). Ani při šumu silnějším než signál
+model falešně nepoplaší, jen vynechává. FN při extrémech opět dominuje session 0011.
+
+### 7.6 Souhrnný posun (poctivý held-out test, int8, MCC)
+
+| Krok | Konfigurace | Clean | 5 dB | Seed rozptyl @ 5 dB |
+|---|---|---|---|---|
+| Výchozí stav (recept diplomky, řádný protokol) | větev ① — MFCC jitter, starý dataset | 0.879 | **0.210** | 0.03–0.49 |
+| + waveform augmentace | větev ② | 0.758 | 0.563 | |
+| − MFCC jitter (ablace) | větev ③ | 0.968 | 0.911 | 0.73–0.99 |
+| + nový 4-mic dataset (event-level split) | větev ③, okno 40/60 | 0.958 | 0.955 | |
+| + okno 30/70 | **finální** | **0.990** | **0.976** | 0.92–1.00 |
+
+Hlavní číslo: **MCC @ 5 dB z 0.21 na 0.98**. Pod trénovaným rozsahem navíc 0 dB → 0.947,
+−5 dB → 0.833, vždy s precision 1.000 (model nikdy falešně nepoplaší, jen vynechává).
+
+Kontext: archivní float32 `najlepsi_model.h5` měl MCC ~0.52 už na clean datech (FP
+inflace, precision 0.33) a publikovaná ESP32 čísla 0.99→0.80 byla artefakt (jiný model,
+eval na trénovacích datech, duplicity). Skutečná poctivá startovní čára = větev ①.
+
+Zdroje posunu v pořadí důležitosti: (1) doménově správná augmentace (waveform šum místo
+MFCC jitteru): 0.21 → 0.91 @ 5 dB, největší jednotlivý skok; (2) okno 30/70: 0.955 →
+0.976 @ 5 dB, extrapolace 0.84 → 0.95 @ 0 dB, poloviční std, FN `shot_011` 49 → 14;
+(3) nový dataset: srovnatelná čísla, ale důvěryhodná (bez duplicit, event-level split,
+4-mic diverzita, víc sessions); (4) vedlejší úlovky: kvantizace prokazatelně neutrální,
+int8 kalibrační nález, duplicity odhalené. Vše **beze změny architektury** — 72k
+parametrů, deployment stopa i M6 čísla (Flash/RAM/latence) platí dál. Proti recenzované
+verzi: ta tvrdila 0.80 @ 5 dB na z většiny trénovacích datech; teď 0.98 @ 5 dB na
+datech, která model nikdy neviděl.
+
+### 7.7 Otevřené položky
+- ESP32-S3 HW validace vybraného seedu (kandidáti 44/45: MCC 1.0 @ 5 dB).
+- Přepis článku: mj. „40 %/60 %" → „30 %/70 %" v Sec III; nová Table I (events vs.
+  samples); SNR definice vůči 1s klipu (R4-Q4); kalibrační nález do diskuze.
+- Pozor: featury starého datasetu (`generated/features_seed*`) jsou ze 40/60 éry —
+  `task reproduce:clean && reproduce:pc` by je přegeneroval s 30/70 a bitový
+  cross-check proti referenci z 21. 7. přestane sedět (archivní éra M0–M6).
+
+## 8. Důsledky pro camera-ready
 
 **Rozhodnuto 2026-08-19: větev ③ je nový kanonický model pro camera-ready.** Duplicity a
 případné rozšíření datasetu (nové launch/impact nahrávky) se řeší následně — pokud se
