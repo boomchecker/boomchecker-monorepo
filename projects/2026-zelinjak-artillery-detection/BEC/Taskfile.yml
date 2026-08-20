@@ -123,6 +123,35 @@ tasks:
       - test -f generated/features_new_seed42/features_manifest.csv
       - test -f generated/features_new_trainaug_seed142/features_manifest.csv
 
+  esp32:model:
+    desc: "Write firmware model_data.h from a retrained model (default seed 44). Rebuild+flash afterwards!"
+    dir: ..
+    vars:
+      SEED: '{{.SEED | default "44"}}'
+    cmds:
+      - venv/bin/python BEC/retraining/make_model_header.py --tflite BEC/retraining/retrain-waveform2/models/retrained_wf2_new_seed{{.SEED}}.tflite
+
+  esp32:validate:
+    desc: "Run UART validation on the board over all variants incl. 0/-5 dB (PORT=/dev/ttyACM0 required, NOISE_SEED=42)"
+    dir: ..
+    requires:
+      vars: [PORT]
+    vars:
+      NOISE_SEED: '{{.NOISE_SEED | default "42"}}'
+    cmds:
+      - mkdir -p BEC/retraining/esp32-validation
+      - for v in clean noise_snr30db noise_snr20db noise_snr10db noise_snr5db; do venv/bin/python ml/validate_esp_uart.py --port {{.PORT}} --split test --variant $v --features generated/features_new_seed{{.NOISE_SEED}}/features_manifest.csv --per-sample-csv BEC/retraining/esp32-validation/esp32_${v}_test.csv || exit 1; done
+      - for v in noise_snr0db noise_snr-5db; do venv/bin/python ml/validate_esp_uart.py --port {{.PORT}} --split test --variant $v --features generated/features_new_lowsnr_seed{{.NOISE_SEED}}/features_manifest.csv --per-sample-csv BEC/retraining/esp32-validation/esp32_${v}_test.csv || exit 1; done
+
+  esp32:compare:
+    desc: "Compare ESP32 per-sample scores against PC int8 (TRAIN_SEED=44, NOISE_SEED=42); target <=1 LSB, 0 flips"
+    dir: ..
+    vars:
+      TRAIN_SEED: '{{.TRAIN_SEED | default "44"}}'
+      NOISE_SEED: '{{.NOISE_SEED | default "42"}}'
+    cmds:
+      - venv/bin/python BEC/retraining/esp32_compare.py --train-seed {{.TRAIN_SEED}} --noise-seed {{.NOISE_SEED}}
+
   dataset-new:features:eval:
     desc: Generate multi-seed evaluation features for the new dataset (noise seeds 43-46; seed 42 comes from dataset-new:features)
     dir: ..
