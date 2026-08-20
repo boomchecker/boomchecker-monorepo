@@ -57,7 +57,8 @@ void init_data_link() {
         .stop_bits  = UART_STOP_BITS_1,
         .flow_ctrl  = UART_HW_FLOWCTRL_DISABLE,
         .rx_flow_ctrl_thresh = 0,
-        .source_clk = UART_SCLK_DEFAULT // Vynúti prispôsobenie hodinám procesora
+        .source_clk = UART_SCLK_DEFAULT, // Vynúti prispôsobenie hodinám procesora
+        .flags      = {},
     };
 
     uart_param_config(UART_PORT_NUM, &uart_config);
