@@ -174,12 +174,30 @@ bool boomlink_linkframe_is_for_node(uint32_t destination_id, uint32_t local_node
   return destination_id == local_node_id || destination_id == BOOMLINK_ADDR_BROADCAST;
 }
 
-bool boomlink_linkframe_make_ack(const boomlink_linkframe_header_t *received,
+BOOMLINK_LINKFRAME_MUST_CHECK
+bool boomlink_linkframe_make_ack(const boomlink_linkframe_header_t received[static 1],
                                  uint32_t local_node_id,
                                  boomlink_linkframe_header_t out_ack[static 1]) {
-  /* Zeroed first, so a refusal below leaves nothing partially built and so every
-     field section 9.5 does not name (fragment_index, the flags, reserved bits)
-     is 0 without being listed - an ACK carries none of them. */
+  /* Every value this function needs is copied out of `received` BEFORE `out_ack`
+     is touched, so `make_ack(&h, id, &h)` works. Reading them afterwards would
+     make the in-place form fail in the worst possible way: the memset would zero
+     source_id, the guard below would see address 0, and the caller would get
+     `false` plus a wiped header - indistinguishable from "the peer's source
+     address was unusable", which is the most misleading diagnosis available. An
+     engine on a 20 KB part has an obvious reason to reuse one header, so this is
+     ordered rather than merely documented. */
+  const uint32_t ack_destination = received->source_id;
+  const uint8_t  ack_magic       = received->magic;
+  const uint32_t ack_session     = received->session_id;
+  const uint32_t ack_sequence    = received->sequence;
+
+  /* Zeroed, so a refusal below leaves nothing partially built and so every field
+     section 9.5 does not name is 0 without being listed. That is load-bearing,
+     not tidiness: fragment_index, both known flags and the reserved bits are
+     never assigned on the success path, so this line is the only thing that
+     clears them - which is what makes "an ACK never requests another ACK"
+     satisfied by construction, and what stops an engine reusing one static
+     header from emitting the previous frame's flags. */
   memset(out_ack, 0, sizeof(*out_ack));
 
   /* Both ends of the ACK's addressing have to be real nodes: the destination
@@ -187,21 +205,21 @@ bool boomlink_linkframe_make_ack(const boomlink_linkframe_header_t *received,
      address is not the parser's business), and the source is configuration. See
      the header for why this one check belongs here while "should I ACK at all"
      does not. */
-  if (!is_valid_node_id(received->source_id) || !is_valid_node_id(local_node_id)) {
+  if (!is_valid_node_id(ack_destination) || !is_valid_node_id(local_node_id)) {
     return false;
   }
 
-  out_ack->magic      = received->magic;
+  out_ack->magic      = ack_magic;
   out_ack->version    = BOOMLINK_LINKFRAME_VERSION;
   out_ack->frame_type = BOOMLINK_FRAME_TYPE_ACK;
   /* The swap that section 9.5 is really about: the ACK goes back to whoever
      SENT the frame, not to whoever it was addressed to (which is this node). */
-  out_ack->destination_id = received->source_id;
+  out_ack->destination_id = ack_destination;
   out_ack->source_id      = local_node_id;
   /* Copied unchanged - this pair is what the original sender matches the ACK
      against, so transposing them silently breaks every delivery. */
-  out_ack->session_id = received->session_id;
-  out_ack->sequence   = received->sequence;
+  out_ack->session_id = ack_session;
+  out_ack->sequence   = ack_sequence;
   /* ack_requested stays false: section 9.5's "ACK packets never request another
      ACK", satisfied by construction rather than by the engine remembering to. */
   return true;

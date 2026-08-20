@@ -197,9 +197,14 @@ def make_ack(received: LinkFrameHeader, local_node_id: int) -> LinkFrameHeader:
     An engine that both built and matched ACKs could transpose a pair on both
     sides and pass all of its own delivery tests.
 
-    Raises ValueError if either end of the addressing is not a real node ID.
-    An ACK addressed to broadcast is never a valid ACK, and emitting one turns a
-    single received frame into a network-wide transmission.
+    Raises ValueError if either end of the addressing is not a real node ID:
+    section 7.2 makes the broadcast and unconfigured addresses something no node
+    can BE, so an ACK claiming either end is not a valid ACK. Note this is NOT an
+    ACK-storm guard - a broadcast-addressed ACK is one transmission, the same
+    airtime as a unicast one. The storm vector is a frame addressed TO broadcast
+    with ack_requested set, which every node in range would answer; suppressing
+    that is the engine's job, and make_ack() builds such an ACK without
+    complaint because its source is an ordinary node.
     """
     if not _is_valid_node_id(received.source_id):
         raise ValueError(
@@ -224,8 +229,12 @@ def make_ack(received: LinkFrameHeader, local_node_id: int) -> LinkFrameHeader:
         ack_requested=False,
         more_fragments=False,
         fragment_index=0,
-        # Echoed, not defaulted: the frame was accepted, so its magic is this
-        # network's, and a non-default network must be acknowledged on itself.
+        # Echoed, not defaulted: a non-default network's ACKs would otherwise be
+        # dropped by the sender on the magic check. NOT because "the frame was
+        # accepted so its magic is ours" - parse() takes expected_magic precisely
+        # so a promiscuous mode can accept another network, and echoing there
+        # injects into a deployment this node is not part of. Not acknowledging a
+        # promiscuously-accepted frame is the engine's job; see the C header.
         magic=received.magic,
         version=VERSION,
     )

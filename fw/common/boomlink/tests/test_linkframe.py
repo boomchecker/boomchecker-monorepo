@@ -649,7 +649,7 @@ def ack_with_tool(tmp_path, linkframe_tool_path, frame: bytes, local_node_id=ACK
     return True, out_path.read_bytes()
 
 
-def test_ack_wire_layout_is_byte_exact(tmp_path, linkframe_tool_path):
+def test_ack_mapping_wire_layout_is_byte_exact(tmp_path, linkframe_tool_path):
     """Section 9.5's ACK mapping, pinned to explicit bytes for BOTH implementations.
 
     This is the test the mapping was moved into this phase for. Every field of an
@@ -708,14 +708,14 @@ def test_ack_names_the_right_source_for_every_field(tmp_path, linkframe_tool_pat
         "the ACK must go back to whoever SENT the frame, not to whoever it was "
         "addressed to - that is the swap section 9.5 exists to specify"
     )
-    assert ack.destination_id != SAMPLE["destination_id"], "destination echoed instead of swapped"
     assert ack.source_id == ACKING_NODE, "the ACK's source is the acknowledging node"
+    # session_id and sequence are the pair the original sender matches the ACK
+    # against, so a transposition times out every delivery. SAMPLE gives them
+    # distinct patterns, which is what makes these two equalities catch it - a
+    # separate "not transposed" assertion would be implied by them and could
+    # never fail on its own.
     assert ack.session_id == SAMPLE["session_id"]
     assert ack.sequence == SAMPLE["sequence"]
-    assert (ack.session_id, ack.sequence) != (SAMPLE["sequence"], SAMPLE["session_id"]), (
-        "session_id and sequence are transposed - the pair the original sender "
-        "matches the ACK against, so every delivery would time out"
-    )
     assert ack.frame_type == int(ref.FrameType.ACK)
     assert ack.ack_requested is False, "section 9.5: ACK packets never request another ACK"
     assert ack.more_fragments is False
@@ -734,6 +734,61 @@ def test_ack_names_the_right_source_for_every_field(tmp_path, linkframe_tool_pat
     assert payload == b""
     fields = parse_with_tool(tmp_path, linkframe_tool_path, ref.encode(ack))
     assert fields["result"] == str(int(ref.ParseResult.OK)), fields
+
+
+def test_ack_inherits_no_reserved_bits(tmp_path, linkframe_tool_path):
+    """An ACK must carry none of the flags of the frame it acknowledges.
+
+    Section 9.5 assigns the ACK's frame type, addressing and (session, sequence)
+    and nothing else, so every remaining field has to come out cleared - which is
+    true only because both implementations zero the output before filling it, and
+    nothing tested that line.
+
+    This test acknowledges a frame with ack_requested AND every reserved bit set,
+    forged with encode_raw since the encoder correctly refuses to emit reserved
+    bits. What it can and cannot see is worth being precise about, because two of
+    the four fields are unreachable from here:
+
+    - `ack_requested` echoed instead of cleared IS caught, in both languages: the
+      encoder writes bit 0, so it reaches the wire. That is section 9.5's "ACK
+      packets never request another ACK", checked against an input that would
+      make an echoing implementation break it.
+    - `reserved_flags` echoed is caught on the PYTHON side only. On the wire it
+      is invisible by design - boomlink_linkframe_encode() never emits reserved
+      bits whatever the header says - so the C struct is the only place it shows,
+      and linkframe_tool's selftest is what inspects it.
+    - `fragment_index` echoed, and the output zeroing itself, are unreachable
+      from any test that goes through the tool: parse() rejects a frame with a
+      non-zero fragment_index as fragmented, so no input here can carry one, and
+      the tool always hands make_ack a zeroed output. The selftest covers both
+      with a hand-built header and a deliberately dirty output.
+
+    All four were verified to be uncaught before those two probes existed.
+    """
+    hostile_flags = ref.FLAG_ACK_REQUESTED | ref.FLAGS_RESERVED_MASK
+    data = encode_with_tool(
+        tmp_path, linkframe_tool_path,
+        frame_type=int(ref.FrameType.DATA), flags=hostile_flags, fragment_index=0,
+        raw=True, name="hostile_flags.bin", **SAMPLE,
+    )
+    assert data[2] == hostile_flags, "the forged frame does not carry the bits under test"
+
+    built, c_ack = ack_with_tool(tmp_path, linkframe_tool_path, data)
+    assert built
+    assert c_ack[2] == 0x00, (
+        f"the C ACK's flags byte is {c_ack[2]:#04x}; an ACK inherits no flags - it "
+        f"requests no ACK of its own and carries no reserved bits"
+    )
+
+    received, _ = ref.parse(data)
+    assert received.reserved_flags == ref.FLAGS_RESERVED_MASK, "the parser dropped the bits"
+    python_ack = ref.make_ack(received, ACKING_NODE)
+    assert python_ack.ack_requested is False
+    assert python_ack.more_fragments is False
+    assert python_ack.fragment_index == 0
+    assert python_ack.reserved_flags == 0
+    assert ref.encode(python_ack)[2] == 0x00
+    assert c_ack == ref.encode(python_ack)
 
 
 def test_ack_of_a_non_default_network_stays_on_that_network(tmp_path, linkframe_tool_path):

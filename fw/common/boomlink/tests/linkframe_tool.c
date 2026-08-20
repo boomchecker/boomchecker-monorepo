@@ -232,6 +232,82 @@ static int run_selftest(void) {
     fprintf(stderr, "selftest: the original sender would not accept its own ACK\n");
     return 1;
   }
+  /* Everything section 9.5 does NOT name must come out cleared, and that is only
+     true because make_ack() zeroes the output first. Nothing tested that line:
+     deleting the memset outright, or replacing the clears with copies
+     (fragment_index = received->fragment_index, reserved_flags =
+     received->reserved_flags), left all 6 ctest tests and the whole pytest suite
+     green. Neither the selftest nor the tool could see it, because both hand
+     make_ack() a `= {0}` output and a header that came from parse(), which
+     guarantees those inputs are already zero - so "cleared" and "copied" produce
+     identical results.
+     The failure this protects against is concrete: an engine reusing one static
+     TX header across frames - the obvious thing to do on a 20 KB part - would
+     emit ACKs carrying the previous frame's ack_requested and fragment_index,
+     breaking the one section 9.5 sender rule this layer promises.
+     So: a DIRTY output, and a hand-built input carrying every field an ACK must
+     not inherit. Hand-built deliberately - parse() cannot produce a header with
+     a non-zero fragment_index (it rejects those as fragmented), so this input is
+     unreachable through the tool and can only be constructed here. */
+  boomlink_linkframe_header_t inheritable = {
+      .magic          = BOOMLINK_LINKFRAME_MAGIC_DEFAULT,
+      /* Not this build's version, so the choice to emit ours rather than echo
+         theirs is observable too - the one judgment call in this mapping that no
+         test could previously defend, since parse() rejects every version but
+         ours and the suite can build no other input. */
+      .version        = 9u,
+      .frame_type     = BOOMLINK_FRAME_TYPE_DATA,
+      .ack_requested  = true,
+      .more_fragments = true,
+      .fragment_index = 7u,
+      .reserved_flags = BOOMLINK_LINKFRAME_FLAGS_RESERVED_MASK,
+      .destination_id = 0x00000042u,
+      .source_id      = 0x11112222u,
+      .session_id     = 0x33334444u,
+      .sequence       = 0x55556666u,
+  };
+  boomlink_linkframe_header_t dirty_ack;
+  memset(&dirty_ack, 0xAA, sizeof(dirty_ack));
+  if (!boomlink_linkframe_make_ack(&inheritable, 0x42u, &dirty_ack)) {
+    fprintf(stderr, "selftest: make_ack refused an ordinary hand-built header\n");
+    return 1;
+  }
+  if (dirty_ack.ack_requested || dirty_ack.more_fragments || dirty_ack.fragment_index != 0u ||
+      dirty_ack.reserved_flags != 0u) {
+    fprintf(stderr,
+            "selftest: the ACK inherited a field section 9.5 does not assign "
+            "(ack_requested=%d more_fragments=%d fragment_index=%u reserved_flags=0x%02X); "
+            "all four must be cleared\n",
+            (int)dirty_ack.ack_requested, (int)dirty_ack.more_fragments,
+            (unsigned)dirty_ack.fragment_index, (unsigned)dirty_ack.reserved_flags);
+    return 1;
+  }
+  if (dirty_ack.version != BOOMLINK_LINKFRAME_VERSION) {
+    fprintf(stderr,
+            "selftest: the ACK carries version %u; make_ack must emit this build's "
+            "version (%u), not echo the acknowledged frame's\n",
+            (unsigned)dirty_ack.version, (unsigned)BOOMLINK_LINKFRAME_VERSION);
+    return 1;
+  }
+
+  /* In place: `received` and `out_ack` being the same object must work, because
+     an engine with one header struct to spare will write it that way. Reading
+     the inputs after zeroing the output would make this fail as "the peer's
+     source address was unusable" - a refusal plus a wiped header, and the most
+     misleading diagnosis available. */
+  boomlink_linkframe_header_t in_place = inheritable;
+  if (!boomlink_linkframe_make_ack(&in_place, 0x42u, &in_place)) {
+    fprintf(stderr, "selftest: make_ack refused an in-place call\n");
+    return 1;
+  }
+  if (in_place.destination_id != inheritable.source_id || in_place.source_id != 0x42u ||
+      in_place.session_id != inheritable.session_id ||
+      in_place.sequence != inheritable.sequence ||
+      in_place.frame_type != BOOMLINK_FRAME_TYPE_ACK) {
+    fprintf(stderr, "selftest: an in-place make_ack produced the wrong header\n");
+    return 1;
+  }
+
   /* Refused when either end of the addressing is not a real node, so an ACK can
      never be aimed at the whole network. */
   boomlink_linkframe_header_t broadcast_source = decoded;
@@ -473,6 +549,69 @@ static int run_encode(int argc, char **argv, bool raw_flags) {
   return 0;
 }
 
+/* Read the frame in `path` into a heap block of EXACTLY its length, so that any
+   over-read by the parser lands in an AddressSanitizer redzone.
+ *
+ * That sizing is the whole point and is not an optimisation. Reading into a
+ * fixed 533-byte buffer and handing the parser the logical length means a read
+ * past the end still lands inside a valid, much larger object - intra-object,
+ * where ASan is blind. Verified: a parser that read bytes 12..19 before checking
+ * the length accepted a 0-byte input, over-read 8 bytes, and the whole suite
+ * passed green.
+ *
+ * Shared by every subcommand that reads a frame, so that property cannot hold
+ * for one and not another. It previously did not: `ack` read into a fixed stack
+ * buffer, which made it the one subcommand taking deliberately hostile bytes
+ * where an over-read was invisible. Verified with a one-byte over-read injected
+ * into the parser: `parse` aborted with a heap-buffer-overflow, `ack` exited 0
+ * with no report at all.
+ *
+ * On success *out_block is a malloc'd block the caller must free, and *out_len
+ * its length. Note *out_block is NULL when *out_len is 0: malloc(0) may
+ * legitimately return NULL and a 0-byte input is a real test case (it must be
+ * rejected as too short), so that pair is a success, not an error.
+ *
+ * @return 0 on success, 1 with a message already printed on failure. */
+static int read_frame_exact(const char *subcommand, const char *path, uint8_t **out_block,
+                           size_t *out_len) {
+  *out_block = NULL;
+  *out_len   = 0u;
+
+  FILE *f = fopen(path, "rb");
+  if (f == NULL) {
+    fprintf(stderr, "%s: could not open '%s' for reading\n", subcommand, path);
+    return 1;
+  }
+  /* One byte past the cap, so an oversized input is detected by having read more
+     than allowed rather than by feof() after a read that exactly filled the
+     buffer - fread() does not set EOF in that case. */
+  uint8_t staging[BOOMLINK_LINKFRAME_HEADER_SIZE + LINKFRAME_TOOL_MAX_PAYLOAD + 1u];
+  size_t  len  = fread(staging, 1, sizeof(staging), f);
+  int     ferr = ferror(f);
+  fclose(f);
+  if (ferr) {
+    fprintf(stderr, "%s: read error on '%s'\n", subcommand, path);
+    return 1;
+  }
+  if (len > BOOMLINK_LINKFRAME_HEADER_SIZE + LINKFRAME_TOOL_MAX_PAYLOAD) {
+    fprintf(stderr, "%s: '%s' exceeds the maximum test input size (%u bytes)\n", subcommand,
+            path, (unsigned)(BOOMLINK_LINKFRAME_HEADER_SIZE + LINKFRAME_TOOL_MAX_PAYLOAD));
+    return 1;
+  }
+
+  if (len > 0u) {
+    uint8_t *exact = malloc(len);
+    if (exact == NULL) {
+      fprintf(stderr, "%s: out of memory for a %zu-byte input\n", subcommand, len);
+      return 1;
+    }
+    memcpy(exact, staging, len);
+    *out_block = exact;
+  }
+  *out_len = len;
+  return 0;
+}
+
 static int run_parse(int argc, char **argv) {
   if (argc != 3 && argc != 4) {
     fprintf(stderr, "usage: parse <in_file> [expected_magic]\n");
@@ -485,48 +624,10 @@ static int run_parse(int argc, char **argv) {
     return 2;
   }
 
-  FILE *f = fopen(in_path, "rb");
-  if (f == NULL) {
-    fprintf(stderr, "parse: could not open '%s' for reading\n", in_path);
-    return 1;
-  }
-  /* One byte past the cap, so an oversized input is detected by having read
-     more than allowed rather than by feof() after a read that exactly filled
-     the buffer - fread() does not set EOF in that case. */
-  uint8_t buf[BOOMLINK_LINKFRAME_HEADER_SIZE + LINKFRAME_TOOL_MAX_PAYLOAD + 1u];
-  size_t  len  = fread(buf, 1, sizeof(buf), f);
-  int     ferr = ferror(f);
-  fclose(f);
-  if (ferr) {
-    fprintf(stderr, "parse: read error on '%s'\n", in_path);
-    return 1;
-  }
-  if (len > BOOMLINK_LINKFRAME_HEADER_SIZE + LINKFRAME_TOOL_MAX_PAYLOAD) {
-    fprintf(stderr, "parse: '%s' exceeds the maximum test input size (%u bytes)\n", in_path,
-            (unsigned)(BOOMLINK_LINKFRAME_HEADER_SIZE + LINKFRAME_TOOL_MAX_PAYLOAD));
-    return 1;
-  }
-
-  /* Parse from an EXACTLY len-sized heap block, not from `buf` directly.
-     Reading into a fixed 533-byte stack buffer and handing the parser the
-     logical `len` means any read past `len` still lands inside a valid, much
-     larger object - so it is intra-object, and AddressSanitizer cannot see it.
-     Verified: a parser that read bytes 12..19 before checking the length
-     accepted a 0-byte input, over-read 8 bytes, and the whole suite passed
-     green. A malloc'd block of exactly `len` puts ASan's redzones immediately
-     after the last valid byte, which is what makes the short-buffer tests
-     mean what they claim.
-     malloc(0) may legitimately return NULL, and a 0-byte input is a real test
-     case (it must be rejected as too short), so a NULL block with len 0 is
-     passed through rather than treated as an error. */
   uint8_t *exact = NULL;
-  if (len > 0u) {
-    exact = malloc(len);
-    if (exact == NULL) {
-      fprintf(stderr, "parse: out of memory for a %zu-byte input\n", len);
-      return 1;
-    }
-    memcpy(exact, buf, len);
+  size_t   len   = 0u;
+  if (read_frame_exact("parse", in_path, &exact, &len) != 0) {
+    return 1;
   }
 
   boomlink_linkframe_header_t header      = {0};
@@ -584,25 +685,6 @@ static int run_accepts(int argc, char **argv) {
   return 0;
 }
 
-/* Read a frame from `path` into `buf` (capacity `cap`), returning its length or
-   -1 with a message already printed. Shared by `parse` and `ack`. */
-static long read_frame_file(const char *subcommand, const char *path, uint8_t *buf,
-                           size_t cap) {
-  FILE *f = fopen(path, "rb");
-  if (f == NULL) {
-    fprintf(stderr, "%s: could not open '%s' for reading\n", subcommand, path);
-    return -1;
-  }
-  size_t len  = fread(buf, 1, cap, f);
-  int    ferr = ferror(f);
-  fclose(f);
-  if (ferr) {
-    fprintf(stderr, "%s: read error on '%s'\n", subcommand, path);
-    return -1;
-  }
-  return (long)len;
-}
-
 static int run_ack(int argc, char **argv) {
   if (argc != 5 && argc != 6) {
     fprintf(stderr, "usage: ack <in_file> <local_node_id> <out_file> [expected_magic]\n");
@@ -621,16 +703,21 @@ static int run_ack(int argc, char **argv) {
     return 2;
   }
 
-  uint8_t buf[BOOMLINK_LINKFRAME_HEADER_SIZE + LINKFRAME_TOOL_MAX_PAYLOAD];
-  long    len = read_frame_file("ack", in_path, buf, sizeof(buf));
-  if (len < 0) {
+  /* Through the same exactly-sized-block reader `parse` uses, so this
+     subcommand - the one whose input is by definition hostile - has the same
+     AddressSanitizer visibility rather than parsing out of a large stack
+     buffer where an over-read would be intra-object and invisible. */
+  uint8_t *exact = NULL;
+  size_t   len   = 0u;
+  if (read_frame_exact("ack", in_path, &exact, &len) != 0) {
     return 1;
   }
 
   boomlink_linkframe_header_t received    = {0};
   size_t                      payload_len = 0u;
   boomlink_linkframe_parse_result_t result =
-      boomlink_linkframe_parse(buf, (size_t)len, expected_magic, &received, &payload_len);
+      boomlink_linkframe_parse(exact, len, expected_magic, &received, &payload_len);
+  free(exact);
   if (result != BOOMLINK_LINKFRAME_OK) {
     /* This subcommand acknowledges an ACCEPTED frame, so an unparseable input is
        a harness mistake rather than a result to report - `parse` is where a

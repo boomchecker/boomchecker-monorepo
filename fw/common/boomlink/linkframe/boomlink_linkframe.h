@@ -65,6 +65,19 @@ extern "C" {
 #define BOOMLINK_LINKFRAME_ONE static 1
 #endif
 
+/* For a return value that must not be dropped. Unlike boomlink_linkframe_parse()
+   - whose caller sees a zeroed header either way and so merely gets nothing -
+   ignoring boomlink_linkframe_make_ack()'s answer means encoding a zeroed header
+   and putting 20 bytes of magic 0 / version 0 / type 0 on the air, which costs
+   airtime under section 6.1's duty-cycle budget and cannot be acted on by any
+   receiver. C23 has [[nodiscard]]; this package is C11, so the attribute is
+   used where it exists and disappears elsewhere. */
+#if defined(__GNUC__) || defined(__clang__)
+#define BOOMLINK_LINKFRAME_MUST_CHECK __attribute__((warn_unused_result))
+#else
+#define BOOMLINK_LINKFRAME_MUST_CHECK
+#endif
+
 /* Default magic / network ID. Runtime-configurable per section 7.3 so two
    deployments in radio range can ignore each other's traffic cheaply; the
    parse function takes the expected value as an argument rather than reading
@@ -120,6 +133,12 @@ typedef enum {
        (section 9.1) and of duplicate state, which is the engine's job. A parser
        must also report what actually arrived rather than what a compliant sender
        would have sent, which is why parse() does not enforce them either.
+     * Two more engine responsibilities that section 9.5 does not spell out, both
+       of which this layer structurally cannot take on: do not acknowledge a frame
+       addressed to the broadcast address (that is the actual ACK-storm vector,
+       and make_ack() will happily build the ACK for one), and do not acknowledge
+       a frame accepted in promiscuous mode (see make_ack() on the echoed magic -
+       the ACK would land on a foreign network).
    The one sender rule that IS satisfied here is "ACK packets never request
    another ACK", because make_ack() clears the flag by construction rather than
    by remembering to. Said out loud because nothing else in this phase mentions
@@ -292,6 +311,14 @@ boomlink_linkframe_parse_result_t boomlink_linkframe_parse(
  * @return false, leaving `*out_ack` zeroed, if the ACK could not be addressed:
  *         `received->source_id` or `local_node_id` is not a valid unicast node
  *         ID (section 7.2 puts those at 0x00000001..0xFFFFFFFE). See below.
+ *         The two refusals are not distinguished, which section 9.10's counter
+ *         list does not require - but note a frame that reaches this refusal has
+ *         passed parse() and is_for_node(), so it is counted by neither the
+ *         malformed nor the wrong-destination statistic. An engine that wants it
+ *         counted has to do so at the call site.
+ *
+ * `received` and `out_ack` may be the SAME object: every value needed is read
+ * before `*out_ack` is touched.
  *
  * Lives in this layer, rather than in the engine that will call it, because it
  * is a pure function of one header - and because THIS is the layer whose tests
@@ -310,22 +337,49 @@ boomlink_linkframe_parse_result_t boomlink_linkframe_parse(
  * independent Python reference and the byte-exact vector pinned to section 9.5's
  * text have no such loop to hide in.
  *
- * `magic` is echoed from `received` rather than defaulted: the frame was
- * accepted, so its magic is this network's, and a deployment on a non-default
- * network ID must be acknowledged on that same network. `version` is this
- * build's - necessarily the same value, since parse() rejects any other, but
- * emitted as what this build implements rather than as what it was handed.
+ * `magic` is echoed from `received` rather than defaulted, because defaulting is
+ * worse: a deployment on a non-default network ID would have its ACKs dropped by
+ * the sender on the magic check, producing exactly the ACK-timeout-read-as-RF
+ * failure described above. But echoing is NOT automatically safe, and the
+ * tempting justification - "the frame was accepted, so its magic is ours" - is
+ * false. parse() takes `expected_magic` as a parameter specifically so a
+ * promiscuous mode can accept another network (section 10's
+ * `promiscuous_monitor_enabled`), so a node in that mode echoing the magic back
+ * would inject traffic into a deployment it is not a member of - the one thing
+ * the network ID exists to prevent. Not acknowledging a frame accepted
+ * promiscuously is therefore an engine responsibility, listed with the others
+ * above; this function cannot tell the two cases apart, having no configuration
+ * to compare against.
+ *
+ * `version` is this build's constant rather than the received value. For any
+ * header that came from parse() the two are necessarily equal, since parse()
+ * rejects every other version - but that reasoning covers only that path, and a
+ * caller that fills a header itself (or uses header_init() and then sets the
+ * field) has its version silently replaced. Deliberate: this build emits what it
+ * implements. Worth flagging that no test at this layer can defend the choice,
+ * since no input the suite can construct carries another version.
  *
  * Deliberately does NOT decide WHETHER to send an ACK. "Was one requested",
- * "is this a broadcast", "is this a duplicate whose ACK must be resent" are all
- * engine questions (see the section 9.5 note above). The one check it does make
- * is about the ACK frame itself: an ACK addressed to the broadcast address is
- * never a valid ACK, and building one would let any peer turn a single frame
- * into a network-wide transmission - remote-triggerable airtime amplification,
- * which matters under section 6.1's duty-cycle budget. That is a property of the
- * frame, not a policy decision, so it belongs here.
+ * "is this a broadcast", "is this a duplicate whose ACK must be resent", "was
+ * this frame accepted promiscuously" are all engine questions (see the section
+ * 9.5 note above). The one check it does make is about the ACK frame itself: by
+ * section 7.2 the broadcast and unconfigured addresses are not something a node
+ * can BE, so an ACK claiming either end is not a valid ACK - and a
+ * broadcast-addressed one would additionally reach every node in range, where it
+ * could satisfy an unrelated pending ACK wait that happens to share a
+ * (session_id, sequence). Frame validity, not policy, which is why it is here.
+ *
+ * Note what this is NOT: it is not a defence against an ACK storm. A
+ * broadcast-addressed ACK is one 20-byte transmission, exactly the airtime of a
+ * unicast one, so there is no amplification in it. The N:1 vector is a frame
+ * addressed to the broadcast address WITH ack_requested set, which every node in
+ * range would answer - and this function builds that ACK without complaint,
+ * because its source is an ordinary unicast node. Suppressing it is the engine's
+ * job ("broadcast packets never request ACK", and PR 3's "broadcast causes no ACK
+ * storm"). Said explicitly so this guard is not mistaken for covering it.
  */
-bool boomlink_linkframe_make_ack(const boomlink_linkframe_header_t *received,
+BOOMLINK_LINKFRAME_MUST_CHECK
+bool boomlink_linkframe_make_ack(const boomlink_linkframe_header_t received[BOOMLINK_LINKFRAME_ONE],
                                  uint32_t local_node_id,
                                  boomlink_linkframe_header_t out_ack[BOOMLINK_LINKFRAME_ONE]);
 
