@@ -1,0 +1,35 @@
+syntax = "proto3";
+
+package boomlink;
+
+// Protocol housekeeping and node state (boomlink.md section 8.5). PR 2 only
+// implements the Ping/Pong pair; boot/ready status, protocol error and
+// firmware/hardware version reporting are added by a later PR once something
+// in the firmware actually needs to send them - field numbers 3+ are simply
+// unused until then, not `reserved` (that keyword is for numbers that were
+// used and then removed, which none of these have been).
+message SystemMessage {
+  oneof message {
+    Ping ping = 1;
+    Pong pong = 2;
+  }
+}
+
+// A liveness/round-trip probe. MessageHeader.request_id (see header.proto) is
+// what correlates a Pong back to the Ping that caused it, so the only thing
+// worth carrying here is an optional payload for exercising a specific
+// on-air packet size during bring-up testing.
+message Ping {
+  // Bounded - see nanopb/system.options. Empty when the caller only cares
+  // about liveness, not payload size.
+  bytes payload = 1;
+}
+
+// The Ping counterpart: a distinct message type (rather than replying with
+// another Ping) so the `oneof` discriminant in SystemMessage tells a decoder
+// unambiguously which one was sent, without inspecting link-frame metadata.
+message Pong {
+  // Echoed back verbatim from the triggering Ping so a caller can confirm the
+  // round trip carried the exact bytes it sent.
+  bytes payload = 1;
+}

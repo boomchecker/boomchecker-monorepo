@@ -172,7 +172,12 @@ fw/
 │       │   ├── telemetry.proto
 │       │   └── system.proto
 │       ├── nanopb/
-│       │   └── boomlink.options
+│       │   └── <name>.options      # one per .proto that needs bounds, auto-
+│       │                           # discovered by name (avoids a spurious
+│       │                           # Nanopb warning on every .proto that
+│       │                           # doesn't need one - PR 2 started with a
+│       │                           # single shared boomlink.options and hit
+│       │                           # exactly that warning)
 │       ├── linkframe/
 │       │   ├── linkframe.md        # link frame header spec (section 7.3)
 │       │   └── boomlink_frame.h    # shared C header, mirrored by host parser
@@ -428,6 +433,12 @@ Field semantics:
 - `protocol_version`: BoomProtocol compatibility version, initially `1`;
 - `request_id`: correlates request/response at the application level; zero when unused.
 
+An Envelope with no `header` at all, or with `protocol_version == 0` (proto3's default
+for a field that was never actually set), is malformed and must be dropped rather than
+decoded - `fw/common/boomlink/boomlink_codec.c`'s `boomlink_decode_envelope()` already
+enforces this at the shared codec layer, so no per-PR receiver code needs to repeat the
+check.
+
 Services that need the sender identity (gateway forwarding, response routing) receive
 it as RX metadata passed alongside the decoded Envelope — it is not duplicated inside
 the Protobuf payload.
@@ -482,8 +493,8 @@ Initial layout (little-endian, 20 bytes):
 offset  size  field
 0       1     magic / network ID        (runtime-configurable, default e.g. 0xB0)
 1       1     version (high nibble) | frame type (low nibble)
-2       1     flags                     (bit 0: ack_requested)
-3       1     reserved (0)
+2       1     flags                     (bit 0: ack_requested; bit 1: more_fragments)
+3       1     fragment_index            (0)
 4       4     destination_id
 8       4     source_id
 12      4     session_id
@@ -507,7 +518,37 @@ Rules:
   not treated as duplicates when the sequence counter restarts.
 
 No fragmentation is implemented in the MVP. An oversized frame is rejected before
-transmission.
+transmission. `flags` bit 1 (`more_fragments`) and the `fragment_index` byte are
+reserved wire-format space for a later PR to add fragmentation/reassembly without a
+breaking header change - a sender that never fragments always sends `more_fragments =
+0` and `fragment_index = 0`, indistinguishable from today's unfragmented frame.
+
+`fragment_index` is normatively a **0-based ascending index of the fragment within the
+message** (0, 1, 2, ... in send order) - not a "fragments remaining" countdown. This is
+required, not stylistic: a "remaining" encoding would make the *last* fragment carry
+`fragment_index = 0`, identical to `more_fragments = 0` on an unfragmented frame, which
+is exactly the ambiguity the rule below exists to prevent. Whichever PR implements
+fragmentation must follow this encoding.
+
+Until fragmentation is implemented, every receiver must drop (not attempt partial
+reassembly of) any frame where `more_fragments = 1` **or** `fragment_index != 0` -
+checking `more_fragments` alone is not enough: a fragmented message's *last* fragment
+correctly sets `more_fragments = 0` (no more follow) while `fragment_index` is
+non-zero (per the ascending encoding above), and a receiver that only looks at
+`more_fragments` would accept that fragment as if it were a complete, standalone
+Envelope instead of the tail of one it never reassembled. Checking both fields together
+is what keeps an old (non-fragmenting) receiver from misinterpreting fragmented traffic
+from a newer sender.
+
+`flags` bits 2-7 are likewise reserved and always 0 until a future PR assigns them, but
+follow the opposite receiver rule from `more_fragments`/`fragment_index`: an unrecognized
+bit among 2-7 must be **ignored**, not treated as a reason to drop the frame - ordinary
+forward compatibility, unlike the fragmentation fields above, which are a deliberate
+exception because misreading them risks handing a decoder a fragment instead of a whole
+message. Any future bit that would change how the payload itself must be framed or
+interpreted (i.e. behaves more like `more_fragments` than like an independent, ignorable
+flag) must be gated behind the header's version nibble instead of added as a bare flag
+bit, so an old receiver's default "ignore it" behavior can never be the unsafe choice.
 
 Do not design application messages that depend on filling the radio's theoretical
 maximum payload. Keep normal messages small to preserve airtime and reliability.

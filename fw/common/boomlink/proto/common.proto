@@ -1,0 +1,10 @@
+syntax = "proto3";
+
+// Cross-cutting types shared by more than one BoomProtocol message group (see
+// docs/firmware/bom-stm32node/boomlink.md section 8). Nothing PR 2 adds
+// (header/envelope/system) needs a shared type yet, so this file is
+// intentionally near-empty for now. It exists per the repository layout in
+// section 4 so PR 4's Detection/Config/Command/Telemetry groups have one
+// place to add shared enums/messages instead of each duplicating its own, or
+// retrofitting a shared file into schemas that have already shipped.
+package boomlink;
