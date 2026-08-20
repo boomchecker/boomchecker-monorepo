@@ -132,7 +132,7 @@ _(doplnit)_
 
 **Odpověď:**
 
-_(doplnit)_
+We audited every acronym in the manuscript and fixed the following: CNN and MFCC are now defined at their first use in the main body (Section I), and definitions were added for ASR, MCU, STFT, and DCT at their first occurrences.
 
 ### R2.3 References for techniques
 
