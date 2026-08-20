@@ -899,9 +899,52 @@ the same stateless/stateful line as the rest of section 9:
   to remember.
 
 `make_ack()` deliberately does not decide *whether* to acknowledge — that is an engine
-question. It does refuse to build an ACK it could only address to the broadcast or
-unconfigured address, since such a frame is not a valid ACK at all and emitting one would
-let any peer turn a single received frame into a network-wide transmission.
+question, and there are two more of those than the rule list below spells out. Neither can
+be answered in the frame layer, and both are load-bearing:
+
+- **Do not acknowledge a frame addressed to the broadcast address.** This is the actual
+  ACK-storm vector: one such frame with `ack_requested` set is answered by every node in
+  range. `make_ack()` builds that ACK without complaint, because its *source* is an
+  ordinary unicast node and nothing about the frame is malformed. Covered by the rule
+  "broadcast packets never request ACK" only on the sending side — a receiver cannot
+  assume every peer is compliant, and PR 3's "broadcast causes no ACK storm" acceptance
+  criterion is a receiver-side property.
+- **Do not acknowledge a frame accepted in promiscuous mode.** The ACK echoes the received
+  frame's magic rather than a configured one, which is correct for a deployment on a
+  non-default network ID — defaulting would have its ACKs dropped by the sender on the
+  magic check. But `parse()` takes the expected magic as a parameter precisely so a
+  promiscuous monitor can accept another network (section 10's
+  `promiscuous_monitor_enabled`), and echoing there would inject an ACK into a deployment
+  the node is not a member of, which is the one thing the network ID exists to prevent.
+  The frame layer has no configuration to tell the two cases apart.
+
+`make_ack()` does refuse one thing, on frame-validity grounds rather than policy: an ACK
+whose either end is the broadcast or unconfigured address, since section 7.2 makes both
+something no node can *be*, and a broadcast-addressed ACK would additionally reach every
+node in range where it could satisfy an unrelated pending ACK wait that happens to share a
+`(session_id, sequence)`. Note this is **not** an airtime defence — a broadcast-addressed
+ACK is a single 20-byte transmission, exactly a unicast ACK's airtime. The amplification
+case is the first bullet above, and it is not handled here.
+
+**Open question for the link engine: where the ACK matcher lives.** The builder above is
+pinned to this section's field list by a byte-exact test. Its counterpart — deciding
+whether an arriving ACK acknowledges the frame currently awaiting one, section 9.2's
+"match ACK frames against the pending TX" — does not exist yet, and the argument that put
+the builder in the frame layer applies to it unchanged: an engine that both builds and
+matches can misread the same pair of fields on both sides, cancel the error out, and pass
+every one of its own delivery tests while interoperating with nothing. That failure is
+currently impossible only because the builder is independently pinned. Two options, to be
+decided when the engine is written:
+
+1. `boomlink_linkframe_ack_matches(pending, ack)` in the link frame layer. It is a pure
+   function of two headers, so it sits on the same side of the stateless/stateful line as
+   the builder, and the same spec-pinned-vector technique applies to it.
+2. Keep it in the engine, and accept that its correctness rests on the builder's.
+
+The matching rule itself is not a new decision either way — it is the inverse of the
+mapping above: frame type ACK, `session_id` and `sequence` equal to the awaited frame's,
+`source_id` equal to that frame's `destination_id`, and `destination_id` equal to the local
+node ID.
 
 Rules:
 
@@ -1362,7 +1405,10 @@ Scope:
 - implement runtime `node_id` and destination filtering;
 - implement `session_id` and monotonically increasing `sequence` assigned at dequeue;
 - implement bounded duplicate suppression;
-- implement unicast ACK as a link frame type;
+- implement unicast ACK as a link frame type — the frame's field mapping already exists as
+  `boomlink_linkframe_make_ack()`; what remains here is the delivery logic, the two
+  receiver-side responsibilities the frame layer cannot take on, and a decision on where
+  the ACK matcher lives (all three in section 9.5);
 - implement stop-and-wait delivery (single outstanding ACK-pending frame);
 - implement bounded retry and ACK timeout;
 - implement randomized retry backoff;

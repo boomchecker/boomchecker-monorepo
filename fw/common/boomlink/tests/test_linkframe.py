@@ -816,9 +816,13 @@ def test_ack_of_a_non_default_network_stays_on_that_network(tmp_path, linkframe_
     [
         (ref.ADDR_BROADCAST, ACKING_NODE,
          "a frame claiming the broadcast address as its source cannot be "
-         "acknowledged: the ACK would be addressed to the whole network, letting "
-         "any peer turn one frame into a network-wide transmission - "
-         "remotely-triggered airtime amplification under a duty-cycle budget"),
+         "acknowledged: section 7.2 makes 0xFFFFFFFF something no node can BE, so "
+         "there is nobody to address the ACK to - and a broadcast-addressed ACK "
+         "would reach every node in range, where it could satisfy an unrelated "
+         "pending ACK wait that happens to share a (session_id, sequence). NOT an "
+         "airtime defence: that ACK is one 20-byte transmission, the same as a "
+         "unicast one. The storm vector is a frame addressed TO broadcast with "
+         "ack_requested set, which this guard does not touch"),
         (ref.ADDR_INVALID, ACKING_NODE,
          "nor one from the unconfigured address, which is nobody"),
         (SAMPLE["source_id"], ref.ADDR_BROADCAST,
