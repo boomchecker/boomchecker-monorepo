@@ -196,7 +196,7 @@ _(doplnit)_
 
 **Odpověď:**
 
-_(doplnit)_
+We agree, and the final version acts on this suggestion in three ways. (1) The launch class was re-extracted from the original measurement campaign using all four synchronized microphone channels instead of a single channel: 50 physical launch events, each represented by four synchronously cropped channel recordings. Training uses all four channels of each training event (32 events, 128 launch training samples), which provides natural sensor-position diversity; validation and test use one channel per event so that their samples remain statistically independent, and the split is performed at the level of physical events to prevent leakage between channels of the same shot. (2) Data augmentation is applied — and its design turned out to be the central experimental question of the revised paper: every training sample is augmented with additive-noise variants at four SNR levels (five-fold enlargement, 3,170 training samples in total), and a controlled ablation shows that the domain in which this augmentation is applied is decisive (waveform-domain augmentation versus cepstral-domain jitter: held-out MCC 0.98 versus 0.30 at 5 dB SNR for the same architecture). (3) Class imbalance is further mitigated by class-weighted training, and we report MCC as the headline metric because it is robust to class imbalance. The concern about small-data bias is addressed by reporting all results as mean ± standard deviation over five training seeds and five noise seeds, and the limitations section notes the small number of positive events explicitly.
 
 ### R3.4 Why CNN; anomaly-detection alternatives
 
