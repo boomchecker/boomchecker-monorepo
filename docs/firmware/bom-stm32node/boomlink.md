@@ -187,6 +187,10 @@ sketch:
   level. They exist because no target in either build exercises either bound - every
   library and tool here is C and none passes a short buffer, and the C++ caller does not
   exist yet - so both could be deleted outright with the whole suite green. Verified.
+- Section 9.5's ACK **field mapping** landed here rather than with the link engine, even
+  though the rest of 9.5 did not. Reasoning and the split are recorded in section 9.5
+  itself; PR 3's scope line "implement unicast ACK as a link frame type" is therefore
+  partly done in this phase — the frame, not the delivery logic.
 - The struct grew a `boomlink_linkframe_header_init()`. `boomlink_linkframe_header_t h =
   {0}` is a trap the encoder cannot refuse: magic 0, version 0 and frame type 0 are each
   invalid, so a zeroed header encodes 20 bytes no receiver will accept, and the encoder
@@ -873,6 +877,31 @@ ack_requested   = 0
 ```
 
 Duplicate ACK frames are harmless and need no duplicate suppression.
+
+**Where this section is implemented.** It is split across two layers, deliberately, along
+the same stateless/stateful line as the rest of section 9:
+
+- The **field mapping above** is `boomlink_linkframe_make_ack()`, in the link frame layer
+  (`fw/common/boomlink/linkframe/`). It is a pure function of one received header plus the
+  local node ID, so it belongs with the header codec — and that layer is the only one
+  whose tests can catch how it goes wrong. Every field is copied or moved, four are
+  32-bit, and a transposition produces a structurally perfect ACK addressed to the wrong
+  node or carrying a swapped `(session_id, sequence)`. On air that is an ACK timeout,
+  retries and a TX failure, which gets diagnosed as an RF or timing fault. Crucially, an
+  engine that both **builds** and **matches** ACKs can transpose a pair on both sides and
+  pass every one of its own delivery tests while interoperating with nothing — so this
+  mapping is pinned to a byte-exact vector taken from the field list above, not to a
+  second implementation. Verified: transposing the pair in the C and the Python reference
+  simultaneously still fails.
+- The **rules below** belong to the link engine, because they need TX-pipeline and
+  duplicate state. One exception: "ACK packets never request another ACK" is satisfied by
+  construction in the mapping, since it clears the flag rather than relying on the engine
+  to remember.
+
+`make_ack()` deliberately does not decide *whether* to acknowledge — that is an engine
+question. It does refuse to build an ACK it could only address to the broadcast or
+unconfigured address, since such a frame is not a valid ACK at all and emitting one would
+let any peer turn a single received frame into a network-wide transmission.
 
 Rules:
 

@@ -107,14 +107,23 @@ typedef enum {
   BOOMLINK_FRAME_TYPE_ACK  = 2,
 } boomlink_frame_type_t;
 
-/* Section 9.5's SENDER rules - "ACK packets never request another ACK",
-   "broadcast packets never request ACK" - are deliberately NOT enforced in this
-   module and are not bugs by their absence. They are properties of the TX
-   pipeline (section 9.1), which is the link engine's job: this layer is a
-   stateless codec for one header, and a parser must report what actually
-   arrived rather than what a compliant sender would have sent. Whoever builds
-   the engine owns them. Said out loud because nothing else in this phase
-   mentions them, and their absence here should not read as an oversight. */
+/* Section 9.5 is split between this module and the link engine, along the same
+   line as everything else here: the stateless part is here, the stateful part is
+   not.
+     * The ACK frame's field MAPPING is here - see
+       boomlink_linkframe_make_ack(). It is a pure function of one received
+       header, so it belongs to the header codec, and this is the layer whose
+       tests can catch a transposed field (see that function's comment).
+     * The SENDER rules are NOT, and are not bugs by their absence: "broadcast
+       packets never request ACK" and "receiving a duplicate of an ACK-requested
+       packet causes the ACK to be resent" are properties of the TX pipeline
+       (section 9.1) and of duplicate state, which is the engine's job. A parser
+       must also report what actually arrived rather than what a compliant sender
+       would have sent, which is why parse() does not enforce them either.
+   The one sender rule that IS satisfied here is "ACK packets never request
+   another ACK", because make_ack() clears the flag by construction rather than
+   by remembering to. Said out loud because nothing else in this phase mentions
+   these rules, and their absence should not read as an oversight. */
 
 typedef struct {
   uint8_t  magic;
@@ -269,6 +278,56 @@ boomlink_linkframe_parse_result_t boomlink_linkframe_parse(
     const uint8_t *buf, size_t len, uint8_t expected_magic,
     boomlink_linkframe_header_t out_header[BOOMLINK_LINKFRAME_ONE],
     size_t out_payload_len[BOOMLINK_LINKFRAME_ONE]);
+
+/**
+ * Build the ACK header that acknowledges `received`, as section 9.5 specifies:
+ *
+ *     frame type      = ACK
+ *     destination_id  = the received frame's SOURCE
+ *     source_id       = local_node_id (the acknowledging node)
+ *     session_id      = the received frame's session_id
+ *     sequence        = the received frame's sequence
+ *     ack_requested   = 0
+ *
+ * @return false, leaving `*out_ack` zeroed, if the ACK could not be addressed:
+ *         `received->source_id` or `local_node_id` is not a valid unicast node
+ *         ID (section 7.2 puts those at 0x00000001..0xFFFFFFFE). See below.
+ *
+ * Lives in this layer, rather than in the engine that will call it, because it
+ * is a pure function of one header - and because THIS is the layer whose tests
+ * can catch the way it goes wrong. Every field above is either copied or moved,
+ * four of them are uint32_t, and getting one wrong produces a perfectly
+ * well-formed ACK frame: right magic, right version, right type, parses clean,
+ * addressed to the wrong node or carrying a transposed (session, sequence). On
+ * air that reads as "the link does not work" - ACK timeout, retry, retry, TX
+ * failure - which is diagnosed as an RF or timing problem, not as a field swap.
+ *
+ * The engine's own fake-radio tests cannot be relied on to catch it, and that is
+ * the point: if the engine both BUILDS the ACK and MATCHES it, the same
+ * misreading applied to both sides cancels out. Transpose session and sequence
+ * when building and again when matching, and every delivery test passes while
+ * the frames on the air violate the spec and nothing interoperates. Here, the
+ * independent Python reference and the byte-exact vector pinned to section 9.5's
+ * text have no such loop to hide in.
+ *
+ * `magic` is echoed from `received` rather than defaulted: the frame was
+ * accepted, so its magic is this network's, and a deployment on a non-default
+ * network ID must be acknowledged on that same network. `version` is this
+ * build's - necessarily the same value, since parse() rejects any other, but
+ * emitted as what this build implements rather than as what it was handed.
+ *
+ * Deliberately does NOT decide WHETHER to send an ACK. "Was one requested",
+ * "is this a broadcast", "is this a duplicate whose ACK must be resent" are all
+ * engine questions (see the section 9.5 note above). The one check it does make
+ * is about the ACK frame itself: an ACK addressed to the broadcast address is
+ * never a valid ACK, and building one would let any peer turn a single frame
+ * into a network-wide transmission - remote-triggerable airtime amplification,
+ * which matters under section 6.1's duty-cycle budget. That is a property of the
+ * frame, not a policy decision, so it belongs here.
+ */
+bool boomlink_linkframe_make_ack(const boomlink_linkframe_header_t *received,
+                                 uint32_t local_node_id,
+                                 boomlink_linkframe_header_t out_ack[BOOMLINK_LINKFRAME_ONE]);
 
 /**
  * Whether a node whose address is `local_node_id` should accept a frame

@@ -17,6 +17,8 @@
  *                                      <payload_hex> <out_file>
  *            linkframe_tool encode_raw <same arguments>
  *            linkframe_tool parse <in_file> [expected_magic]
+ *            linkframe_tool ack <in_file> <local_node_id> <out_file> \
+ *                                [expected_magic]
  *            linkframe_tool accepts <destination_id> <local_node_id>
  *
  *          Both encode subcommands take a raw flags byte rather than named
@@ -199,6 +201,48 @@ static int run_selftest(void) {
     fprintf(stderr,
             "selftest: a zero-initialised header encoded to an ACCEPTED frame - the reason "
             "boomlink_linkframe_header_init() exists no longer holds\n");
+    return 1;
+  }
+
+  /* Section 9.5's ACK mapping, checked here as well as from pytest, because the
+     way it goes wrong is a transposition and this is a check that names each
+     field's SOURCE explicitly rather than comparing two implementations. */
+  boomlink_linkframe_header_t ack = {0};
+  if (!boomlink_linkframe_make_ack(&decoded, 0x0BADF00Du, &ack)) {
+    fprintf(stderr, "selftest: make_ack refused a perfectly ordinary frame\n");
+    return 1;
+  }
+  if (ack.destination_id != header.source_id) {
+    fprintf(stderr,
+            "selftest: the ACK is addressed to 0x%08X; section 9.5 requires the "
+            "acknowledged frame's SOURCE (0x%08X), not its destination (0x%08X)\n",
+            (unsigned)ack.destination_id, (unsigned)header.source_id,
+            (unsigned)header.destination_id);
+    return 1;
+  }
+  if (ack.source_id != 0x0BADF00Du || ack.session_id != header.session_id ||
+      ack.sequence != header.sequence || ack.frame_type != BOOMLINK_FRAME_TYPE_ACK ||
+      ack.ack_requested || ack.more_fragments || ack.fragment_index != 0u ||
+      ack.magic != header.magic || ack.version != BOOMLINK_LINKFRAME_VERSION) {
+    fprintf(stderr, "selftest: the ACK header does not match section 9.5's mapping\n");
+    return 1;
+  }
+  /* And the sender must be able to accept it - the whole point of the swap. */
+  if (!boomlink_linkframe_is_for_node(ack.destination_id, header.source_id)) {
+    fprintf(stderr, "selftest: the original sender would not accept its own ACK\n");
+    return 1;
+  }
+  /* Refused when either end of the addressing is not a real node, so an ACK can
+     never be aimed at the whole network. */
+  boomlink_linkframe_header_t broadcast_source = decoded;
+  broadcast_source.source_id                   = BOOMLINK_ADDR_BROADCAST;
+  boomlink_linkframe_header_t refused = {0};
+  if (boomlink_linkframe_make_ack(&broadcast_source, 0x42u, &refused) ||
+      boomlink_linkframe_make_ack(&decoded, BOOMLINK_ADDR_BROADCAST, &refused) ||
+      boomlink_linkframe_make_ack(&decoded, BOOMLINK_ADDR_INVALID, &refused)) {
+    fprintf(stderr,
+            "selftest: make_ack built an ACK with an unusable address - one aimed at the "
+            "broadcast address turns a single frame into a network-wide transmission\n");
     return 1;
   }
 
@@ -540,9 +584,93 @@ static int run_accepts(int argc, char **argv) {
   return 0;
 }
 
+/* Read a frame from `path` into `buf` (capacity `cap`), returning its length or
+   -1 with a message already printed. Shared by `parse` and `ack`. */
+static long read_frame_file(const char *subcommand, const char *path, uint8_t *buf,
+                           size_t cap) {
+  FILE *f = fopen(path, "rb");
+  if (f == NULL) {
+    fprintf(stderr, "%s: could not open '%s' for reading\n", subcommand, path);
+    return -1;
+  }
+  size_t len  = fread(buf, 1, cap, f);
+  int    ferr = ferror(f);
+  fclose(f);
+  if (ferr) {
+    fprintf(stderr, "%s: read error on '%s'\n", subcommand, path);
+    return -1;
+  }
+  return (long)len;
+}
+
+static int run_ack(int argc, char **argv) {
+  if (argc != 5 && argc != 6) {
+    fprintf(stderr, "usage: ack <in_file> <local_node_id> <out_file> [expected_magic]\n");
+    return 2;
+  }
+  const char *in_path  = argv[2];
+  const char *out_path = argv[4];
+  uint32_t    local_node_id;
+  if (!boomlink_tool_parse_u32(argv[3], &local_node_id)) {
+    fprintf(stderr, "ack: '%s' is not a valid uint32 local_node_id\n", argv[3]);
+    return 2;
+  }
+  uint8_t expected_magic = BOOMLINK_LINKFRAME_MAGIC_DEFAULT;
+  if (argc == 6 && !boomlink_tool_parse_u8(argv[5], &expected_magic)) {
+    fprintf(stderr, "ack: '%s' is not a valid uint8 expected_magic\n", argv[5]);
+    return 2;
+  }
+
+  uint8_t buf[BOOMLINK_LINKFRAME_HEADER_SIZE + LINKFRAME_TOOL_MAX_PAYLOAD];
+  long    len = read_frame_file("ack", in_path, buf, sizeof(buf));
+  if (len < 0) {
+    return 1;
+  }
+
+  boomlink_linkframe_header_t received    = {0};
+  size_t                      payload_len = 0u;
+  boomlink_linkframe_parse_result_t result =
+      boomlink_linkframe_parse(buf, (size_t)len, expected_magic, &received, &payload_len);
+  if (result != BOOMLINK_LINKFRAME_OK) {
+    /* This subcommand acknowledges an ACCEPTED frame, so an unparseable input is
+       a harness mistake rather than a result to report - `parse` is where a
+       rejection is the expected output. */
+    fprintf(stderr, "ack: '%s' does not parse (%s); nothing to acknowledge\n", in_path,
+            boomlink_linkframe_parse_result_str(result));
+    return 1;
+  }
+
+  boomlink_linkframe_header_t ack = {0};
+  /* Printed rather than turned into an exit code, the same way `accepts` reports
+     its answer: a refusal is a legitimate result of this function, not an error,
+     and keeping it on stdout means a test cannot confuse it with an I/O failure
+     or a sanitizer abort. */
+  const bool built = boomlink_linkframe_make_ack(&received, local_node_id, &ack);
+  printf("ack_built=%u\n", built ? 1u : 0u);
+  if (!built) {
+    return 0;
+  }
+
+  uint8_t ack_buf[BOOMLINK_LINKFRAME_HEADER_SIZE];
+  boomlink_linkframe_encode(&ack, ack_buf);
+  FILE *out = fopen(out_path, "wb");
+  if (out == NULL) {
+    fprintf(stderr, "ack: could not open '%s' for writing\n", out_path);
+    return 1;
+  }
+  size_t written = fwrite(ack_buf, 1, sizeof(ack_buf), out);
+  fclose(out);
+  if (written != sizeof(ack_buf)) {
+    fprintf(stderr, "ack: short write to '%s'\n", out_path);
+    return 1;
+  }
+  return 0;
+}
+
 int main(int argc, char **argv) {
   if (argc < 2) {
-    fprintf(stderr, "usage: %s <selftest|limits|encode|encode_raw|parse|accepts> [args...]\n",
+    fprintf(stderr,
+            "usage: %s <selftest|limits|encode|encode_raw|parse|ack|accepts> [args...]\n",
             argv[0]);
     return 2;
   }
@@ -560,6 +688,9 @@ int main(int argc, char **argv) {
   }
   if (strcmp(argv[1], "parse") == 0) {
     return run_parse(argc, argv);
+  }
+  if (strcmp(argv[1], "ack") == 0) {
+    return run_ack(argc, argv);
   }
   if (strcmp(argv[1], "accepts") == 0) {
     return run_accepts(argc, argv);

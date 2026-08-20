@@ -178,15 +178,68 @@ def parse(buf: bytes, expected_magic: int = MAGIC_DEFAULT) -> tuple[LinkFrameHea
     return header, payload
 
 
+def _is_valid_node_id(node_id: int) -> bool:
+    """Section 7.2: real node IDs are 0x00000001..0xFFFFFFFE. 0 means
+    unconfigured and 0xFFFFFFFF is reserved for broadcast, so neither is
+    something a node can BE."""
+    return node_id not in (ADDR_INVALID, ADDR_BROADCAST)
+
+
+def make_ack(received: LinkFrameHeader, local_node_id: int) -> LinkFrameHeader:
+    """Section 9.5's ACK header, built from the frame being acknowledged.
+
+    Written from section 9.5's field list, deliberately not by reading
+    boomlink_linkframe.c - that independence is the whole reason this mapping
+    lives in the header layer at all. Every field here is copied or moved, so a
+    transposition produces a valid-looking ACK addressed to the wrong node (or
+    carrying a swapped session/sequence, which the original sender matches
+    against), and the on-air symptom is an ACK timeout that reads as an RF fault.
+    An engine that both built and matched ACKs could transpose a pair on both
+    sides and pass all of its own delivery tests.
+
+    Raises ValueError if either end of the addressing is not a real node ID.
+    An ACK addressed to broadcast is never a valid ACK, and emitting one turns a
+    single received frame into a network-wide transmission.
+    """
+    if not _is_valid_node_id(received.source_id):
+        raise ValueError(
+            f"cannot acknowledge a frame whose source is {received.source_id:#010x}: "
+            f"an ACK must be addressed to a real node (section 7.2)"
+        )
+    if not _is_valid_node_id(local_node_id):
+        raise ValueError(
+            f"a node addressed {local_node_id:#010x} cannot acknowledge anything: "
+            f"it has no valid identity to acknowledge as (section 7.2)"
+        )
+    return LinkFrameHeader(
+        # The swap section 9.5 is really about: back to whoever SENT the frame,
+        # not to whoever it was addressed to.
+        destination_id=received.source_id,
+        source_id=local_node_id,
+        # Copied unchanged - the pair the original sender matches the ACK on.
+        session_id=received.session_id,
+        sequence=received.sequence,
+        frame_type=FrameType.ACK,
+        # "ACK packets never request another ACK" - by construction.
+        ack_requested=False,
+        more_fragments=False,
+        fragment_index=0,
+        # Echoed, not defaulted: the frame was accepted, so its magic is this
+        # network's, and a non-default network must be acknowledged on itself.
+        magic=received.magic,
+        version=VERSION,
+    )
+
+
 def is_for_node(destination_id: int, local_node_id: int) -> bool:
     """Section 7.2's acceptance rule.
 
     A node whose own address is not a valid node ID accepts nothing, broadcast
-    included. Section 7.2 puts real node IDs at 0x00000001..0xFFFFFFFE, so that
-    rules out both ADDR_INVALID (unconfigured - it would otherwise "match" a
-    frame addressed to 0) and ADDR_BROADCAST (a misconfiguration; a node that
-    thinks it IS the broadcast address would answer for the whole network).
+    included - see _is_valid_node_id(). That rules out both ADDR_INVALID
+    (unconfigured - it would otherwise "match" a frame addressed to 0) and
+    ADDR_BROADCAST (a misconfiguration; a node that thinks it IS the broadcast
+    address would answer for the whole network).
     """
-    if local_node_id in (ADDR_INVALID, ADDR_BROADCAST):
+    if not _is_valid_node_id(local_node_id):
         return False
     return destination_id in (local_node_id, ADDR_BROADCAST)

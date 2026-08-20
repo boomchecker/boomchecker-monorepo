@@ -629,6 +629,167 @@ def test_data_frame_with_no_payload_parses(tmp_path, linkframe_tool_path):
     assert payload == b""
 
 
+ACKING_NODE = 0x0BADF00D
+
+
+def ack_with_tool(tmp_path, linkframe_tool_path, frame: bytes, local_node_id=ACKING_NODE,
+                  *, name="to_ack.bin"):
+    """ACK `frame` with the C implementation. Returns (built, ack_bytes)."""
+    in_path = tmp_path / name
+    out_path = tmp_path / f"ack_{name}"
+    in_path.write_bytes(frame)
+    result = run_linkframe_tool(
+        linkframe_tool_path, "ack", str(in_path), str(local_node_id), str(out_path)
+    )
+    assert result.returncode == 0, result.stderr
+    fields = parse_kv(result.stdout)
+    if fields["ack_built"] == "0":
+        assert not out_path.exists(), "the tool wrote an ACK it said it did not build"
+        return False, b""
+    return True, out_path.read_bytes()
+
+
+def test_ack_wire_layout_is_byte_exact(tmp_path, linkframe_tool_path):
+    """Section 9.5's ACK mapping, pinned to explicit bytes for BOTH implementations.
+
+    This is the test the mapping was moved into this phase for. Every field of an
+    ACK is copied or moved from the frame being acknowledged, four of them are
+    32-bit, and a transposition yields a structurally perfect ACK frame -
+    correct magic, version and type, parses clean - that is simply addressed to
+    the wrong node, or carries a swapped (session, sequence) that the original
+    sender matches against. On air the symptom is an ACK timeout, then retries,
+    then a TX failure: read as an RF or timing fault, not as a field swap.
+
+    Pinned to LITERALS from section 9.5's text rather than to the other
+    implementation, because the failure mode this guards against survives any
+    self-consistent check. An engine that both builds and matches ACKs can
+    transpose a pair on both sides and pass all of its own delivery tests while
+    interoperating with nothing.
+    """
+    data = ref.encode(
+        ref.LinkFrameHeader(frame_type=ref.FrameType.DATA, ack_requested=True, **SAMPLE)
+    ) + b"\x01\x02\x03"
+
+    expected = bytes(
+        [
+            0xB0,                    # magic, echoed from the acknowledged frame
+            0x12,                    # version 1 | ACK
+            0x00,                    # flags: an ACK never requests an ACK
+            0x00,                    # fragment_index
+            0x88, 0x77, 0x66, 0x55,  # destination = the frame's SOURCE 0x55667788
+            0x0D, 0xF0, 0xAD, 0x0B,  # source      = this node 0x0BADF00D
+            0xCC, 0xBB, 0xAA, 0x99,  # session_id  copied 0x99AABBCC
+            0x01, 0xFF, 0xEE, 0xDD,  # sequence    copied 0xDDEEFF01
+        ]
+    )
+    assert len(expected) == ref.HEADER_SIZE
+
+    built, c_ack = ack_with_tool(tmp_path, linkframe_tool_path, data)
+    assert built, "the C implementation refused an ordinary ACK-requested frame"
+    assert c_ack == expected
+
+    received, _ = ref.parse(data)
+    python_ack = ref.encode(ref.make_ack(received, ACKING_NODE))
+    assert python_ack == expected
+
+
+def test_ack_names_the_right_source_for_every_field(tmp_path, linkframe_tool_path):
+    """The same mapping, asserted field by field with the confusion each one rules
+    out - so a failure says WHICH transposition happened rather than just that
+    twenty bytes differ. SAMPLE gives every 32-bit field a distinct byte pattern
+    precisely so a swap cannot coincidentally still match."""
+    data = ref.encode(
+        ref.LinkFrameHeader(frame_type=ref.FrameType.DATA, ack_requested=True, **SAMPLE)
+    )
+    received, _ = ref.parse(data)
+    ack = ref.make_ack(received, ACKING_NODE)
+
+    assert ack.destination_id == SAMPLE["source_id"], (
+        "the ACK must go back to whoever SENT the frame, not to whoever it was "
+        "addressed to - that is the swap section 9.5 exists to specify"
+    )
+    assert ack.destination_id != SAMPLE["destination_id"], "destination echoed instead of swapped"
+    assert ack.source_id == ACKING_NODE, "the ACK's source is the acknowledging node"
+    assert ack.session_id == SAMPLE["session_id"]
+    assert ack.sequence == SAMPLE["sequence"]
+    assert (ack.session_id, ack.sequence) != (SAMPLE["sequence"], SAMPLE["session_id"]), (
+        "session_id and sequence are transposed - the pair the original sender "
+        "matches the ACK against, so every delivery would time out"
+    )
+    assert ack.frame_type == int(ref.FrameType.ACK)
+    assert ack.ack_requested is False, "section 9.5: ACK packets never request another ACK"
+    assert ack.more_fragments is False
+    assert ack.fragment_index == 0
+    assert ack.magic == ref.MAGIC_DEFAULT
+    assert ack.version == ref.VERSION
+
+    # The ACK is acceptable to the original sender and to nobody else - the
+    # observable consequence of the swap being right.
+    assert ref.is_for_node(ack.destination_id, SAMPLE["source_id"]) is True
+    assert ref.is_for_node(ack.destination_id, ACKING_NODE) is False
+
+    # And it is a well-formed, payload-free ACK frame in its own right.
+    parsed, payload = ref.parse(ref.encode(ack))
+    assert parsed.frame_type == int(ref.FrameType.ACK)
+    assert payload == b""
+    fields = parse_with_tool(tmp_path, linkframe_tool_path, ref.encode(ack))
+    assert fields["result"] == str(int(ref.ParseResult.OK)), fields
+
+
+def test_ack_of_a_non_default_network_stays_on_that_network(tmp_path, linkframe_tool_path):
+    """The magic is echoed, not defaulted. A deployment on a non-default network ID
+    must be acknowledged on its own network, and this layer has no configuration
+    to read the local one from - so echoing is both correct and the only option
+    that does not add a parameter."""
+    data = ref.encode(ref.LinkFrameHeader(magic=0x5A, ack_requested=True, **SAMPLE))
+
+    received, _ = ref.parse(data, expected_magic=0x5A)
+    assert ref.make_ack(received, ACKING_NODE).magic == 0x5A
+
+    in_path = tmp_path / "foreign.bin"
+    in_path.write_bytes(data)
+    out_path = tmp_path / "foreign_ack.bin"
+    result = run_linkframe_tool(
+        linkframe_tool_path, "ack", str(in_path), str(ACKING_NODE), str(out_path), "90"
+    )
+    assert result.returncode == 0, result.stderr
+    assert out_path.read_bytes()[0] == 0x5A
+
+
+@pytest.mark.parametrize(
+    "source_id,local_node_id,why",
+    [
+        (ref.ADDR_BROADCAST, ACKING_NODE,
+         "a frame claiming the broadcast address as its source cannot be "
+         "acknowledged: the ACK would be addressed to the whole network, letting "
+         "any peer turn one frame into a network-wide transmission - "
+         "remotely-triggered airtime amplification under a duty-cycle budget"),
+        (ref.ADDR_INVALID, ACKING_NODE,
+         "nor one from the unconfigured address, which is nobody"),
+        (SAMPLE["source_id"], ref.ADDR_BROADCAST,
+         "and a node that thinks it IS the broadcast address has no identity to "
+         "acknowledge as"),
+        (SAMPLE["source_id"], ref.ADDR_INVALID,
+         "same for an unconfigured node - section 7.2 puts real node IDs at "
+         "0x00000001..0xFFFFFFFE, and both ends of the ACK's addressing must be one"),
+    ],
+)
+def test_ack_refuses_an_unusable_address(tmp_path, linkframe_tool_path, source_id,
+                                         local_node_id, why):
+    """make_ack() does not decide WHETHER to acknowledge - that is the engine's
+    call - but an ACK it could only address to the broadcast or invalid address is
+    not a valid ACK at all, which is a property of the frame."""
+    fields = dict(SAMPLE, source_id=source_id)
+    data = ref.encode(ref.LinkFrameHeader(ack_requested=True, **fields))
+
+    built, _ = ack_with_tool(tmp_path, linkframe_tool_path, data, local_node_id)
+    assert built is False, f"C: {why}"
+
+    received, _ = ref.parse(data)
+    with pytest.raises(ValueError):
+        ref.make_ack(received, local_node_id)
+
+
 @pytest.mark.parametrize(
     "destination_id,local_node_id,accepted,why",
     [

@@ -153,18 +153,58 @@ boomlink_linkframe_parse_result_t boomlink_linkframe_parse(
   return BOOMLINK_LINKFRAME_OK;
 }
 
+/* Section 7.2's address space, in one place: real node IDs are
+   0x00000001..0xFFFFFFFE, with 0 meaning unconfigured and 0xFFFFFFFF reserved
+   for broadcast. Both ends matter and both have a distinct failure: a
+   factory-fresh node whose id is still 0 would "match" a frame addressed to 0,
+   and a node misconfigured to the broadcast address would match every broadcast
+   frame and answer on behalf of the whole network. Used by both callers below so
+   that range is not written out twice. */
+static bool is_valid_node_id(uint32_t node_id) {
+  return node_id != BOOMLINK_ADDR_INVALID && node_id != BOOMLINK_ADDR_BROADCAST;
+}
+
 bool boomlink_linkframe_is_for_node(uint32_t destination_id, uint32_t local_node_id) {
   /* A node whose own address is not a valid node ID accepts nothing at all,
      broadcast included - see the header's contract. Checked FIRST so the two
-     tests below cannot accidentally let such a node act on traffic: without the
-     INVALID half, destination 0 "matches" a factory-fresh node whose id is still
-     0; without the BROADCAST half, a node misconfigured to 0xFFFFFFFF matches
-     every broadcast twice over and would answer for the whole network. Section
-     7.2 puts real node IDs at 0x00000001..0xFFFFFFFE, so both are out. */
-  if (local_node_id == BOOMLINK_ADDR_INVALID || local_node_id == BOOMLINK_ADDR_BROADCAST) {
+     tests below cannot accidentally let such a node act on traffic. */
+  if (!is_valid_node_id(local_node_id)) {
     return false;
   }
   return destination_id == local_node_id || destination_id == BOOMLINK_ADDR_BROADCAST;
+}
+
+bool boomlink_linkframe_make_ack(const boomlink_linkframe_header_t *received,
+                                 uint32_t local_node_id,
+                                 boomlink_linkframe_header_t out_ack[static 1]) {
+  /* Zeroed first, so a refusal below leaves nothing partially built and so every
+     field section 9.5 does not name (fragment_index, the flags, reserved bits)
+     is 0 without being listed - an ACK carries none of them. */
+  memset(out_ack, 0, sizeof(*out_ack));
+
+  /* Both ends of the ACK's addressing have to be real nodes: the destination
+     comes from the received frame, which this layer never validated (a source
+     address is not the parser's business), and the source is configuration. See
+     the header for why this one check belongs here while "should I ACK at all"
+     does not. */
+  if (!is_valid_node_id(received->source_id) || !is_valid_node_id(local_node_id)) {
+    return false;
+  }
+
+  out_ack->magic      = received->magic;
+  out_ack->version    = BOOMLINK_LINKFRAME_VERSION;
+  out_ack->frame_type = BOOMLINK_FRAME_TYPE_ACK;
+  /* The swap that section 9.5 is really about: the ACK goes back to whoever
+     SENT the frame, not to whoever it was addressed to (which is this node). */
+  out_ack->destination_id = received->source_id;
+  out_ack->source_id      = local_node_id;
+  /* Copied unchanged - this pair is what the original sender matches the ACK
+     against, so transposing them silently breaks every delivery. */
+  out_ack->session_id = received->session_id;
+  out_ack->sequence   = received->sequence;
+  /* ack_requested stays false: section 9.5's "ACK packets never request another
+     ACK", satisfied by construction rather than by the engine remembering to. */
+  return true;
 }
 
 void boomlink_linkframe_header_init(boomlink_linkframe_header_t out_header[static 1]) {
