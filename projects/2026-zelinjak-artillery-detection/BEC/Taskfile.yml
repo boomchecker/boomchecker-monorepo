@@ -8,22 +8,35 @@ vars:
   CNN_FIG: sec3_cnn_architecture
 
 tasks:
-  cnn-figure:
-    desc: Generate PlotNeuralNet CNN architecture figure
+  setup:
+    desc: Install LaTeX packages the article needs (IEEEtran from texlive-publishers, algorithmic from texlive-science)
     cmds:
-      - powershell -NoProfile -Command 'python scripts/generate_cnn_architecture.py; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; Push-Location article/figs; pdflatex -interaction=nonstopmode -halt-on-error {{.CNN_FIG}}.tex; $code = $LASTEXITCODE; Pop-Location; if ($code -ne 0) { exit $code }'
+      - sudo apt-get update
+      - sudo apt-get install -y texlive-publishers texlive-science
+    status:
+      - kpsewhich IEEEtran.cls
+      - kpsewhich algorithmic.sty
+
+  cnn-figure:
+    desc: Regenerate PlotNeuralNet CNN architecture figure (optional; needs scripts/external/PlotNeuralNet checkout)
+    cmds:
+      - python3 scripts/generate_cnn_architecture.py
+      - cd article/figs && pdflatex -interaction=nonstopmode -halt-on-error {{.CNN_FIG}}.tex
 
   build:
-    desc: Compile {{.TEX_DIR}}/{{.TEX}} to {{.TEX_DIR}}/{{.JOB}}.pdf
-    deps:
-      - cnn-figure
+    desc: Compile {{.TEX_DIR}}/{{.TEX}} to {{.TEX_DIR}}/{{.JOB}}.pdf (uses the committed CNN figure; run cnn-figure to regenerate it)
+    deps: [setup]
+    dir: '{{.TEX_DIR}}'
     cmds:
-      - powershell -NoProfile -Command 'Push-Location {{.TEX_DIR}}; pdflatex -interaction=nonstopmode -halt-on-error {{.TEX}}; if ($LASTEXITCODE -ne 0) { Pop-Location; exit $LASTEXITCODE }; bibtex {{.JOB}}; if ($LASTEXITCODE -ne 0) { Pop-Location; exit $LASTEXITCODE }; pdflatex -interaction=nonstopmode -halt-on-error {{.TEX}}; if ($LASTEXITCODE -ne 0) { Pop-Location; exit $LASTEXITCODE }; pdflatex -interaction=nonstopmode -halt-on-error {{.TEX}}; $code = $LASTEXITCODE; Pop-Location; if ($code -ne 0) { exit $code }'
+      - pdflatex -interaction=nonstopmode -halt-on-error {{.TEX}}
+      - bibtex {{.JOB}}
+      - pdflatex -interaction=nonstopmode -halt-on-error {{.TEX}}
+      - pdflatex -interaction=nonstopmode -halt-on-error {{.TEX}}
 
   clean:
     desc: Remove LaTeX auxiliary files
     cmds:
-      - powershell -NoProfile -Command "Remove-Item -ErrorAction SilentlyContinue {{.AUX_PREFIX}}.aux,{{.AUX_PREFIX}}.log,{{.AUX_PREFIX}}.out,{{.AUX_PREFIX}}.bbl,{{.AUX_PREFIX}}.blg,{{.AUX_PREFIX}}.toc,{{.AUX_PREFIX}}.synctex.gz,article/figs/{{.CNN_FIG}}.aux,article/figs/{{.CNN_FIG}}.log"
+      - rm -f {{.AUX_PREFIX}}.aux {{.AUX_PREFIX}}.log {{.AUX_PREFIX}}.out {{.AUX_PREFIX}}.bbl {{.AUX_PREFIX}}.blg {{.AUX_PREFIX}}.toc {{.AUX_PREFIX}}.synctex.gz article/figs/{{.CNN_FIG}}.aux article/figs/{{.CNN_FIG}}.log
 
   rebuild:
     desc: Clean and compile again
