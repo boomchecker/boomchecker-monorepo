@@ -27,7 +27,15 @@ def representative_dataset(feature_index: Path, splits3: Path):
     clean = index[index["variant"] == "clean"]
     splits = pd.read_csv(splits3)
     train_ids = set(splits[splits["split3"] == "train"]["recording_id"])
-    rows = clean[clean["recording_id"].isin(train_ids)].sort_values("recording_id").head(REPRESENTATIVE_SAMPLES)
+    train_rows = clean[clean["recording_id"].isin(train_ids)].sort_values("recording_id").reset_index(drop=True)
+    # Evenly spaced over the sorted train set, NOT head(N): recording ids sort by name, so
+    # head(N) can collapse to a single class (the new-campaign launch ids sort first and
+    # produced a launch-only calibration set, which broke int8 activation ranges for the
+    # negative class). Evenly spaced sampling is deterministic and keeps both classes at
+    # roughly their corpus proportions.
+    picks = np.unique(np.linspace(0, len(train_rows) - 1, num=min(REPRESENTATIVE_SAMPLES, len(train_rows))).astype(int))
+    rows = train_rows.iloc[picks]
+    print(f"representative dataset: {len(rows)} samples, class counts {rows['class_id'].value_counts().to_dict()}")
     for row in rows.itertuples(index=False):
         mfcc = np.load(feature_root / row.feature_path)
         yield [np.expand_dims(mfcc, axis=(0, -1)).astype(np.float32)]
