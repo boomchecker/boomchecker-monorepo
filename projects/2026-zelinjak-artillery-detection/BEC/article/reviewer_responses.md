@@ -37,7 +37,7 @@ Added. The abstract now states explicitly: "The embedded experiment validates on
 
 **Odpověď:**
 
-_(doplnit)_
+Section II was revised at approximately constant length: three tangential sentences (and two references) were removed, and the freed space now carries (1b) key quantitative results of the cited prior work — 97.5 % launch/impact discrimination and 93.6 % variant classification for the classical mortar/artillery line (Desai et al., Hohil et al.), firearm-identification accuracies above 90 % for CNN approaches (Raponi et al.), and 96.3 % accuracy at 187 ms per 2 s segment on a Raspberry Pi 4 for the recent CRNN classifier (Elkarous et al., 2025) — together with a sharper closing statement of the two questions the paper answers. Regarding (2), the experimental part has grown substantially in the final version: the dataset section now describes the extended multi-microphone corpus with an event-level train/validation/test split, and the results section adds a controlled augmentation ablation, held-out multi-seed evaluation, and extended SNR levels. The total reference count decreased.
 
 ### R1.4 Section III.A (trigger stage)
 
@@ -124,7 +124,7 @@ The title has been revised to *"A Lightweight Noise-Robust Post-Trigger Classifi
 
 **Odpověď:**
 
-_(doplnit)_
+We agree that acoustic weapon detection itself is not novel, and the revised Section II no longer implies it; it now closes with the two specific questions the paper answers (whether robustness training requires waveform-level rather than cepstral-level perturbation, and whether the result survives int8 MCU deployment). The suggested reference (Elkarous et al., 2025) is now cited with its key figures (96.3 % accuracy, 187 ms per 2 s segment on a Raspberry Pi 4); it addresses firearm-type identification with rich fused features on application-class hardware, whereas our work targets binary launch-vs-confuser discrimination with a minimal-footprint model on MCU-class hardware. The state-of-the-art gap is now stated as a concrete research question at the end of Section II: where robustness-oriented augmentation must be placed relative to the nonlinear cepstral front end of a constrained post-trigger classifier, and whether the resulting behavior survives int8 deployment. The revised results answer this question through a controlled augmentation-domain ablation (same architecture, same protocol): MFCC-domain jitter alone collapses at low SNR, whereas waveform-domain augmentation preserves performance, consistent with — and extending — comparisons reported for noise-robust ASR (Braun et al., 2017).
 
 ### R2.2 Acronyms
 
@@ -180,7 +180,7 @@ _(doplnit)_
 
 **Odpověď:**
 
-_(doplnit)_
+Section II now discusses this family of methods (one-class SVMs, isolation forests, autoencoders, with a citation to their evaluation on embedded platforms) and explains why we nevertheless use a supervised binary classifier: the classifier operates after an impulsive-event trigger, so it receives a conditional distribution of impulsive candidates in which non-artillery gunfire is a hard negative rather than an outlier — outlierness with respect to the acoustic background is not equivalent to the artillery-launch label. One-class approaches remain relevant alternatives for first-stage novelty detection. Empirically, the supervised formulation is supported by the hard-negative results: the deployed model produces zero false positives on the small-arms gunshot class across all noise levels.
 
 ### R3.2 Dataset details (artillery types, environments)
 
@@ -204,7 +204,7 @@ _(doplnit)_
 
 **Odpověď:**
 
-_(doplnit)_
+Please see the response to the previous point: the task after the trigger stage is not anomaly detection but discrimination among impulsive events, where the most dangerous confusers (non-artillery gunfire) are themselves acoustically anomalous with respect to the background. An anomaly detector trained on the ambient distribution would correctly flag a small-arms gunshot as anomalous, which does not provide the artillery/non-artillery decision we need. This motivation for supervised binary classification — and for a CNN over the MFCC tensor as an established compact choice for local spectro-temporal patterns — is now stated explicitly in Section II. We agree that one-class methods are lightweight and MCU-feasible, and we consider them relevant for the first (novelty-detection) stage rather than the second.
 
 ### R3.5 Missing train/val/test split, eval on training data
 
