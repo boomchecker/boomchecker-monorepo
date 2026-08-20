@@ -6,20 +6,29 @@ cmake_minimum_required(VERSION 3.21)
 # This file is consumed two different ways:
 #
 # 1. add_subdirectory()'d from fw/bom-stm32node/CMakeLists.txt, under that
-#    project's ARM cross toolchain - produces only the `boomlink_protocol`
-#    static library (generated Nanopb codec + boomlink_codec.c), linked into
-#    the firmware. No tests are built this way: cross-compiled host tooling
-#    makes no sense, and the STM32 target has no way to run pytest.
+#    project's ARM cross toolchain - produces the `boomlink_protocol` static
+#    library (generated Nanopb codec + boomlink_codec.c), which the firmware
+#    links, and `boomlink_linkframe` (the link frame header), which is
+#    cross-compiled but not yet linked by anything - see its own comment below.
+#    No tests are built this way: cross-compiled host tooling makes no sense,
+#    and the STM32 target has no way to run pytest.
 # 2. configured standalone, with the host's native compiler - additionally
-#    builds `boomlink_codec_tool` (a small CLI used by both C and Python
-#    tests) and registers the native/host test suite via CTest. This is what
-#    `cmake --preset Debug` in this directory does (see CMakePresets.json).
+#    builds `boomlink_codec_tool` and `boomlink_linkframe_tool` (small CLIs
+#    used by the Python tests) and registers the native/host test suite via
+#    CTest. This is what `cmake --preset Debug` in this directory does (see
+#    CMakePresets.json).
 #
 # boomlink.md section 4 requires the .proto files to not live only inside the
 # STM32 target; this dual-mode file is how that requirement is met without
 # maintaining the Nanopb-generation logic twice.
 if(CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
-  project(boomlink_protocol LANGUAGES C)
+  # CXX is enabled for one reason and builds nothing: it makes
+  # CMAKE_CXX_COMPILER available to the boomlink_linkframe_cxx_bound test below,
+  # which compiles two throwaway C++ translation units to check that
+  # boomlink_linkframe.h's encoder bound still holds for C++ callers. Every
+  # library and tool here is C. Under the firmware's ARM build this branch does
+  # not run, and that project enables CXX for its own reasons anyway.
+  project(boomlink_protocol LANGUAGES C CXX)
   set(CMAKE_C_STANDARD 11)
   set(CMAKE_C_STANDARD_REQUIRED ON)
   set(BOOMLINK_STANDALONE TRUE)
@@ -81,15 +90,18 @@ if(BOOMLINK_STANDALONE)
   option(BOOMLINK_WERROR "Treat warnings as errors in this package's own targets" OFF)
 endif()
 
-# Applied via target_compile_options on this package's own targets only (see
-# boomlink_protocol/boomlink_codec_tool below), never add_compile_options:
-# the vendored nanopb runtime is third-party code this package doesn't
-# control the warning-cleanliness of.
+# Applied via target_compile_options on this package's own targets only -
+# boomlink_protocol, boomlink_linkframe and both test tools below - never
+# add_compile_options: the vendored nanopb runtime is third-party code this
+# package doesn't control the warning-cleanliness of.
 set(BOOMLINK_WARNING_FLAGS -Wall -Wextra)
 
 # -Werror is kept SEPARATE from the warning flags above, and is applied only
-# to the two hand-written translation units (boomlink_codec.c, codec_tool.c) -
-# never to the four generated *.pb.c. Same reasoning that keeps every warning
+# to the hand-written translation units - boomlink_codec.c (via a source
+# property, since it shares boomlink_protocol with generated code) plus
+# boomlink_linkframe.c and both tools' sources, whose targets contain nothing
+# generated and so take it target-wide - never to the four generated *.pb.c.
+# Same reasoning that keeps every warning
 # flag off boomlink_nanopb: those files are machine output from the vendored
 # generator, so a submodule bump or a newer compiler on CI's runner image
 # could hard-fail the build over code nobody in this repo wrote or can fix.
@@ -107,6 +119,33 @@ set(BOOMLINK_WARNING_FLAGS -Wall -Wextra)
 set(BOOMLINK_WERROR_FLAGS "")
 if(BOOMLINK_STANDALONE AND BOOMLINK_WERROR)
   set(BOOMLINK_WERROR_FLAGS -Werror)
+endif()
+
+# One exception to all of the above, and the only warning knob declared in BOTH
+# modes: -Werror for boomlink_linkframe alone, off by default.
+#
+# It exists because three places (this file, README.md and
+# .github/workflows/test-bom-stm32node-build.yaml) justify cross-compiling the
+# link frame layer as proving it is "free of host-isms AND warning-clean for the
+# target". Only the first half was true: nothing put -Werror on the ARM build,
+# and the workflow's check only asserts the archive exists - so adding
+# `static int unused_var = 7;` to boomlink_linkframe.c left the ARM build green
+# with the warning buried in a log (verified), while the same edit is a hard
+# error in the host build. That gap matters more than it sounds, because the
+# interesting warnings here are precisely the ones the host build CANNOT see:
+# int/long/size_t are different widths on the target, so -Wformat and
+# sign-compare diagnostics appear there and nowhere else.
+#
+# Default OFF, ON in CI, for exactly the reason BOOMLINK_WERROR is: a developer's
+# local firmware build must never be blocked by a warning from a compiler newer
+# than CI's, least of all on code they did not touch. Scoped to this ONE
+# small hand-written target, so it cannot spread to the CubeMX-generated sources
+# or the vendored libraries.
+option(BOOMLINK_LINKFRAME_WERROR
+       "Treat warnings as errors when compiling boomlink_linkframe (CI turns this on)" OFF)
+set(BOOMLINK_LINKFRAME_WERROR_FLAGS "")
+if(BOOMLINK_LINKFRAME_WERROR)
+  set(BOOMLINK_LINKFRAME_WERROR_FLAGS -Werror)
 endif()
 
 # Nanopb is vendored once, under bom-stm32node/third_party/ (git submodule
@@ -381,6 +420,17 @@ add_library(boomlink_protocol STATIC
   ${CMAKE_CURRENT_SOURCE_DIR}/boomlink_codec.c
 )
 add_dependencies(boomlink_protocol boomlink_proto_gen)
+# Note the second entry is this package's ROOT, not a narrow include directory:
+# boomlink_codec.h sits there, so that is what has to be exported for the
+# firmware to include it. The side effect is that everything else directly under
+# fw/common/boomlink becomes includable by every consumer of boomlink_protocol -
+# which today means <linkframe/boomlink_linkframe.h> is reachable from firmware
+# code that links only the codec. That is one-directional and harmless in this
+# direction (the link frame header is standalone, and its own target is what
+# provides the implementation), but it is NOT the compile-time boundary the
+# linkframe target's comment below describes: that boundary stops the codec's
+# headers reaching link-layer code, not the other way round. Worth keeping in
+# mind before adding anything private to this directory.
 target_include_directories(boomlink_protocol PUBLIC
   ${BOOMLINK_GENERATED_DIR}
   ${CMAKE_CURRENT_SOURCE_DIR}
@@ -416,14 +466,79 @@ if(BOOMLINK_WERROR_FLAGS)
     APPEND PROPERTY COMPILE_OPTIONS ${BOOMLINK_WERROR_FLAGS})
 endif()
 
+# BoomLink's link frame header (boomlink.md section 7.3), a SEPARATE target
+# from boomlink_protocol on purpose - and the separation is the point, not
+# tidiness. Section 9 requires that "BoomLink never decodes the Protobuf
+# payload and has no Nanopb dependency": the link layer must be able to filter,
+# acknowledge and deduplicate a packet, and reject foreign traffic from a few
+# leading bytes, without invoking a Protobuf decoder. Because this target does
+# not link boomlink::nanopb and does not include the codec's directory, that
+# boundary is enforced by the compiler - unlike boomlink_protocol's own
+# "consumers shouldn't call pb_encode directly" convention, which nothing
+# stops (see its comment above). Do not add a nanopb link here to make
+# something compile; if link-layer code needs to look inside the payload, the
+# layering is wrong.
+#
+# Built in the ARM cross build too, even though nothing in the firmware
+# references it yet - PR 3's later phases wire it in. That is deliberate, not
+# the "compiled but never linked" gap PR 2's review caught: there the ELF was
+# missing a symbol an acceptance criterion required, whereas here cross-
+# compiling it early is what proves it is free of host-isms and warning-clean
+# for the target before any firmware depends on it. The second half of that claim
+# is only true when BOOMLINK_LINKFRAME_WERROR is on, which is why CI turns it on
+# - see that option above.
+#
+# Precisely: the archive is BUILT but never reaches the linker at all - it is
+# not on bom-stm32node.elf's link line, because nothing links it. So Phase C
+# needs more than a call site: it must also add boomlink_linkframe to
+# fw/bom-stm32node/CMakeLists.txt's target_link_libraries. Worth stating,
+# because "the linker just drops it for now" would imply the archive is already
+# on the link line and only a reference is missing.
+add_library(boomlink_linkframe STATIC
+  ${CMAKE_CURRENT_SOURCE_DIR}/linkframe/boomlink_linkframe.c
+)
+target_include_directories(boomlink_linkframe PUBLIC
+  ${CMAKE_CURRENT_SOURCE_DIR}/linkframe
+)
+# _Static_assert (C11), same self-contained reasoning as boomlink_protocol.
+target_compile_features(boomlink_linkframe PUBLIC c_std_11)
+# BOOMLINK_WERROR_FLAGS is the host-build knob (empty outside the standalone
+# branch); BOOMLINK_LINKFRAME_WERROR_FLAGS is the one that also applies under the
+# ARM cross build, which is what makes "warning-clean for the target" a checked
+# claim rather than a stated one. Both are listed so either can enable it.
+target_compile_options(boomlink_linkframe PRIVATE
+  ${BOOMLINK_WARNING_FLAGS} ${BOOMLINK_WERROR_FLAGS} ${BOOMLINK_LINKFRAME_WERROR_FLAGS})
+
 if(BOOMLINK_STANDALONE)
   enable_testing()
+
+  # Argument/hex parsing shared by both CLI test tools. Compiled into each
+  # rather than made its own library: two small executables, and a library
+  # would add a target for ~90 lines. See tests/tool_support.h for why it is
+  # shared at all instead of copied - parse_u32 has a history of subtle bugs
+  # that a second hand-maintained copy would eventually reintroduce.
+  #
+  # One consequence of listing the source in two targets: it is compiled twice,
+  # with each target's own include paths and definitions. That is wanted here -
+  # BOOMLINK_SANITIZE_ENABLED is per-target, and tool_support.h's
+  # instrumentation cross-check has to see each tool's value - but it also means
+  # tool_support.c must not depend on anything only one of the two tools puts on
+  # the include path. It includes nothing but its own header and libc, which is
+  # what keeps that true; a shared library target would enforce it instead.
+  set(BOOMLINK_TOOL_SUPPORT ${CMAKE_CURRENT_SOURCE_DIR}/tests/tool_support.c)
 
   # The only target that compiles the hand-rolled buffer/argument-parsing
   # work in tests/codec_tool.c, and host-only by nature - a cross-compiled
   # host tool makes no sense.
-  add_executable(boomlink_codec_tool tests/codec_tool.c)
-  target_link_libraries(boomlink_codec_tool PRIVATE boomlink_protocol)
+  add_executable(boomlink_codec_tool tests/codec_tool.c ${BOOMLINK_TOOL_SUPPORT})
+  # boomlink_linkframe is linked for its HEADER only: codec_tool carries the
+  # _Static_assert pinning BOOMLINK_LINKFRAME_HEADER_SIZE (the link layer's
+  # own definition) to BOOMLINK_LINK_FRAME_HEADER_SIZE (the codec's copy, used
+  # to compute the on-air Envelope budget). Neither layer may include the
+  # other's header - that is the boundary above - so a test tool that
+  # legitimately sees both is the only place the two numbers can be checked
+  # against each other instead of silently drifting apart.
+  target_link_libraries(boomlink_codec_tool PRIVATE boomlink_protocol boomlink_linkframe)
   # Hand-written, so it gets -Werror too when enabled (unlike the generated
   # *.pb.c - see BOOMLINK_WERROR_FLAGS).
   target_compile_options(boomlink_codec_tool PRIVATE
@@ -439,6 +554,85 @@ if(BOOMLINK_STANDALONE)
     BOOMLINK_SANITIZE_ENABLED=$<IF:$<BOOL:${BOOMLINK_SANITIZE}>,1,0>)
 
   add_test(NAME boomlink_codec_selftest COMMAND boomlink_codec_tool selftest)
+
+  # The link frame's own CLI, so the pytest suite can cross-check the C
+  # encoder/parser against linkframe/boomlink_linkframe.py on the same wire
+  # bytes. Deliberately does NOT link boomlink_protocol: this tool exists to
+  # exercise a layer that must work without a Protobuf decoder, so keeping one
+  # off its link line keeps the tool honest about what it is testing.
+  #
+  # Note this is a convention, not something the symbol check can police:
+  # linking boomlink_protocol here would leave the tool's binary with zero pb_
+  # symbols, because nothing in linkframe_tool.c references the codec and the
+  # linker pulls no members out of an archive it does not need. Verified. The
+  # check only fires once the tool actually calls into the codec.
+  add_executable(boomlink_linkframe_tool tests/linkframe_tool.c ${BOOMLINK_TOOL_SUPPORT})
+  target_link_libraries(boomlink_linkframe_tool PRIVATE boomlink_linkframe)
+  target_compile_options(boomlink_linkframe_tool PRIVATE
+    ${BOOMLINK_WARNING_FLAGS} ${BOOMLINK_WERROR_FLAGS})
+  target_compile_definitions(boomlink_linkframe_tool PRIVATE
+    BOOMLINK_SANITIZE_ENABLED=$<IF:$<BOOL:${BOOMLINK_SANITIZE}>,1,0>)
+
+  add_test(NAME boomlink_linkframe_selftest COMMAND boomlink_linkframe_tool selftest)
+
+  # The Nanopb-free boundary (boomlink.md section 9), checked as a TEST rather
+  # than only as a CI step, so `task test` runs it and a developer finds out
+  # before pushing. The target structure enforces the common case at compile
+  # time, but two routes get past that: re-adding the link to make something
+  # build (the compile error just disappears), and a RELATIVE include reaching
+  # nanopb's headers with no CMake change at all - which emits no symbol if it
+  # only uses a macro or typedef, so an archive check cannot see it either. The
+  # script checks symbols AND the compiler's own include list; see its header.
+  #
+  # The artefact list is passed from here rather than hardcoded in the workflow,
+  # so a target added by a later phase (the link engine, which must hold the
+  # same property) is one line away from being covered.
+  add_test(NAME boomlink_no_nanopb_dependency
+    COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/tests/check_no_nanopb.sh
+            ${Python3_EXECUTABLE}
+            ${BOOMLINK_NANOPB_DIR}
+            ${CMAKE_CURRENT_BINARY_DIR}/compile_commands.json
+            ${CMAKE_CURRENT_SOURCE_DIR}/linkframe/boomlink_linkframe.c
+            $<TARGET_FILE:boomlink_linkframe>
+            $<TARGET_FILE:boomlink_linkframe_tool>
+  )
+
+  # The encoder's compile-time output bound, in BOTH languages (see
+  # tests/check_encoder_bound.sh). Neither bound is exercised by any target in
+  # either build: every library and tool here is C and none of them passes an
+  # undersized buffer, and the C++ caller - the firmware's radio layer - does not
+  # exist yet. Verified that with these two tests absent, BOTH bounds can be
+  # deleted outright with the whole suite, the ARM build and ruff staying green,
+  # while an intra-object overflow (the case AddressSanitizer is blind to) then
+  # compiles clean under -Werror. These tests are the only thing standing between
+  # the package's headline safety construct and silently becoming decoration.
+  #
+  # The std flags are passed explicitly rather than left to each compiler's
+  # default, to match the standards the real callers are built with:
+  # CMAKE_C_STANDARD 11 above, and fw/bom-stm32node/CMakeLists.txt's
+  # CMAKE_CXX_STANDARD 17.
+  #
+  # The last argument is the diagnostic each language's bound is expected to
+  # produce, so a rejection for an unrelated reason (a typo, a missing header, a
+  # wrong -I) cannot masquerade as the bound working.
+  add_test(NAME boomlink_linkframe_c_bound
+    COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/tests/check_encoder_bound.sh
+            ${CMAKE_C_COMPILER}
+            -std=c11
+            ${CMAKE_CURRENT_SOURCE_DIR}/linkframe
+            ${CMAKE_CURRENT_SOURCE_DIR}/tests/encoder_bound_ok.c
+            ${CMAKE_CURRENT_SOURCE_DIR}/tests/encoder_bound_too_small.c
+            "stringop-overflow|array-bounds|array argument is too small"
+  )
+  add_test(NAME boomlink_linkframe_cxx_bound
+    COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/tests/check_encoder_bound.sh
+            ${CMAKE_CXX_COMPILER}
+            -std=c++17
+            ${CMAKE_CURRENT_SOURCE_DIR}/linkframe
+            ${CMAKE_CURRENT_SOURCE_DIR}/tests/encoder_bound_ok.cpp
+            ${CMAKE_CURRENT_SOURCE_DIR}/tests/encoder_bound_too_small.cpp
+            "static assert"
+  )
 
   # Host-side Python classes for the SAME .proto files, generated straight by
   # protoc (not through the Nanopb generator) so tests/*.py can act as an
@@ -466,7 +660,12 @@ if(BOOMLINK_STANDALONE)
   add_test(NAME boomlink_python_tests
     COMMAND ${Python3_EXECUTABLE} -m pytest ${CMAKE_CURRENT_SOURCE_DIR}/tests -v
   )
+  # PYTHONPATH carries both the generated protobuf classes and linkframe/, so
+  # the tests can import boomlink_linkframe - the independent Python reference
+  # implementation of section 7.3's header. It lives next to the C rather than
+  # under tests/ because PR 3's scope calls for a host parser as a deliverable
+  # and PR 5's stm32node-cli will consume it.
   set_tests_properties(boomlink_python_tests PROPERTIES
-    ENVIRONMENT "BOOMLINK_CODEC_TOOL=$<TARGET_FILE:boomlink_codec_tool>;PYTHONPATH=${BOOMLINK_PYTHON_PB_DIR}"
+    ENVIRONMENT "BOOMLINK_CODEC_TOOL=$<TARGET_FILE:boomlink_codec_tool>;BOOMLINK_LINKFRAME_TOOL=$<TARGET_FILE:boomlink_linkframe_tool>;PYTHONPATH=${BOOMLINK_PYTHON_PB_DIR}:${CMAKE_CURRENT_SOURCE_DIR}/linkframe"
   )
 endif()

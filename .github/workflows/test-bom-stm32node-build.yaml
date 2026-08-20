@@ -76,7 +76,18 @@ jobs:
 
       - name: Configure
         working-directory: ./fw/bom-stm32node
-        run: cmake --preset Debug
+        # BOOMLINK_LINKFRAME_WERROR makes the "warning-clean for the target" half
+        # of the reason we cross-compile the link frame layer an actual check.
+        # Without it the ARM build has no -Werror at all, so a warning from that
+        # target was just text in a log: adding `static int unused_var = 7;` to
+        # boomlink_linkframe.c left this job green (verified) while the same edit
+        # is a hard error in the host build. Passed here rather than defaulted ON
+        # in CMake so a developer's local firmware build is never blocked by a
+        # warning from a newer compiler than this runner's - the same split
+        # BOOMLINK_WERROR uses for the host build. Scoped to that one
+        # hand-written target; the CubeMX sources and vendored libraries are
+        # unaffected.
+        run: cmake --preset Debug -DBOOMLINK_LINKFRAME_WERROR=ON
 
       - name: Build
         working-directory: ./fw/bom-stm32node
@@ -93,6 +104,30 @@ jobs:
 
           echo "✅ ELF info:"
           arm-none-eabi-size build/Debug/bom-stm32node.elf
+
+      - name: Verify the link frame layer was cross-compiled
+        working-directory: ./fw/bom-stm32node
+        # The whole stated reason for building boomlink_linkframe in this build
+        # is to prove it is free of host-isms and warning-clean for the target
+        # before any firmware depends on it. Nothing else asserts that: the
+        # archive is on no link line and has no dependents, so moving the target
+        # inside CMake's standalone branch, marking it EXCLUDE_FROM_ALL or
+        # renaming it would leave this workflow green and the host workflow's
+        # check unaffected (it inspects the HOST archive). The justification
+        # would quietly stop being tested - the same failure class as the gap
+        # the next step describes.
+        #
+        # This step covers only "was it built". The warning-clean half is covered
+        # by -DBOOMLINK_LINKFRAME_WERROR=ON in the Configure step above, which
+        # turns a warning from that target into a build failure rather than log
+        # text nobody reads.
+        run: |
+          archive=build/Debug/boomlink/libboomlink_linkframe.a
+          if [ ! -f "$archive" ]; then
+            echo "❌ $archive was not produced - the link frame layer is no longer cross-compiled"
+            exit 1
+          fi
+          echo "✅ the link frame layer cross-compiled for the target"
 
       - name: Verify BoomProtocol is actually linked in, not just compiled
         working-directory: ./fw/bom-stm32node

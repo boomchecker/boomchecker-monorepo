@@ -33,7 +33,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          # No submodules: ruff only reads fw/common/boomlink/tests.
+          # No submodules: ruff only reads fw/common/boomlink/{tests,linkframe}.
           persist-credentials: false
 
       - name: Set up Python
@@ -53,7 +53,7 @@ jobs:
         # for local use, but nothing previously ran it in CI - so it could
         # only ever catch a style issue if a developer remembered to run it
         # by hand. Matches `task lint` exactly.
-        run: ruff check tests
+        run: ruff check tests linkframe
 
   test-build:
     name: Build and test (host, Debug)
@@ -106,12 +106,24 @@ jobs:
         working-directory: ./fw/common/boomlink
         run: ctest --preset Debug --output-on-failure
 
+      # The Nanopb-free boundary (boomlink.md section 9) is verified by the
+      # `boomlink_no_nanopb_dependency` CTest test, which the Test step above
+      # already runs - deliberately not by a bespoke step here. A boundary
+      # checked only in CI gives a developer no signal until after they push,
+      # and an earlier version of exactly that step failed OPEN: `if nm <file> |
+      # grep ...` reports success when nm cannot read the file, because `set -e`
+      # is suspended inside an `if` condition and pipefail returns grep's benign
+      # "no match". See tests/check_no_nanopb.sh.
+
       - name: Build summary
         run: |
           echo "### ✅ Build and tests successful!" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "- Nanopb code generated from fw/common/boomlink/proto/*.proto ✓" >> $GITHUB_STEP_SUMMARY
           echo "- boomlink_protocol (host-native) built ✓" >> $GITHUB_STEP_SUMMARY
+          echo "- boomlink_linkframe built, verified free of Nanopb symbols ✓" >> $GITHUB_STEP_SUMMARY
+          echo "- the encoder's compile-time output bound verified from both C and C++ (an undersized caller buffer must be rejected, for the right reason, at more than one optimization level) ✓" >> $GITHUB_STEP_SUMMARY
+          echo "- the link frame encoder's output bound verified for C++ callers, both directions ✓" >> $GITHUB_STEP_SUMMARY
           echo "- C self-test + Python cross-language/compatibility suite passed ✓" >> $GITHUB_STEP_SUMMARY
           echo "- built with AddressSanitizer + UndefinedBehaviorSanitizer (BOOMLINK_SANITIZE, on by default for the Debug preset) ✓" >> $GITHUB_STEP_SUMMARY
           echo "- warnings are errors in the hand-written sources (BOOMLINK_WERROR, on by default for the Debug preset); the generated *.pb.c build with -Wall -Wextra and surface as annotations ✓" >> $GITHUB_STEP_SUMMARY

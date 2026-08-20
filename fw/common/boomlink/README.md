@@ -1,12 +1,28 @@
-# BoomProtocol / Nanopb foundation
+# BoomProtocol / BoomLink shared code
 
-Shared Protocol Buffers schema and Nanopb code generation for BoomLink
-(`docs/firmware/bom-stm32node/boomlink.md`). This package owns the `.proto`
-source of truth, the generated-code pipeline, and the host-native test suite
-that cross-checks Nanopb (the embedded C runtime) against Python protobuf on
-the same wire bytes. It does not implement radio transport, link framing, or
-any application message beyond `SystemMessage`'s `Ping`/`Pong` pair - see
-"Scope" in the roadmap's PR 2 entry.
+Shared wire-format code for BoomLink (`docs/firmware/bom-stm32node/boomlink.md`),
+in two layers that deliberately do not know about each other:
+
+- **BoomProtocol** - the `.proto` source of truth, the Nanopb code-generation
+  pipeline, and `boomlink_codec.h/.c`'s Envelope encode/decode.
+- **BoomLink's link frame** - `linkframe/`, the fixed 20-byte binary header
+  (section 7.3) that carries addressing, packet identity and ACK signalling.
+
+The separation is enforced, not merely intended: section 9 requires that
+"BoomLink never decodes the Protobuf payload and has no Nanopb dependency", so
+the link layer must be able to filter, acknowledge and deduplicate a packet -
+and reject foreign traffic from a few leading bytes - without a Protobuf
+decoder anywhere near it. `boomlink_linkframe` therefore does not link Nanopb
+and cannot include the codec's headers; the compiler rejects an attempt, rather
+than a comment asking nicely.
+
+Both layers are cross-checked against an independent Python implementation on
+the same wire bytes: Python protobuf for the codec, `boomlink_linkframe.py` for
+the header.
+
+Not here: radio transport, and the link engine itself (addressing state, ACK
+matching, retry, duplicate suppression, TX queue) - those are the later phases
+of the roadmap's PR 3.
 
 ## Layout
 
@@ -24,10 +40,17 @@ nanopb/           <name>.options - bounded-field sizes for Nanopb, one file
                   silently use one and ignore the other
 boomlink_codec.h/.c   Envelope encode/decode + boomlink_envelope_init(),
                       target-agnostic C
-tests/            host-native C CLI tool (codec_tool.c) + pytest suite +
-                  golden vectors (vectors_spec.py is their single source of
-                  truth, sha256-pinned - see "Protocol compatibility rules")
-CMakeLists.txt    generation + library + (standalone only) test targets
+linkframe/        BoomLink's fixed 20-byte link frame header (section 7.3):
+                  boomlink_linkframe.h/.c, plus boomlink_linkframe.py - an
+                  INDEPENDENT host implementation written from the spec, not
+                  a binding to the C, so the two can check each other (and
+                  the parser PR 5's host CLI will use). No Nanopb dependency,
+                  by design and by build config
+tests/            host-native C CLI tools (codec_tool.c, linkframe_tool.c,
+                  sharing tool_support.c) + pytest suite + golden vectors
+                  (vectors_spec.py is their single source of truth,
+                  sha256-pinned - see "Protocol compatibility rules")
+CMakeLists.txt    generation + libraries + (standalone only) test targets
 ```
 
 `*.pb.c`/`*.pb.h` and `*_pb2.py` are never committed - they are generated at
@@ -39,13 +62,22 @@ build/test time (see CMakeLists.txt) and always reproducible from the
 This directory is a CMake project that builds two different ways:
 
 - **Standalone** (this README's "building and testing" - what `task test`
-  does): host-native compiler, builds `boomlink_codec_tool` and runs the
-  full CTest suite (a C self-test plus the Python interop/compatibility
-  tests).
-- **As a subdirectory** of `fw/bom-stm32node`'s ARM cross build: only the
-  `boomlink_protocol` static library is built (the generated codec, linked
-  into the firmware and actually exercised there by the `proto` CLI command
-  in `Core/Src/cli.c` - see its comment for why that matters). No tests - a
+  does): host-native compiler, builds `boomlink_codec_tool` and
+  `boomlink_linkframe_tool` and runs the full CTest suite (two C self-tests
+  plus the Python interop/compatibility tests).
+- **As a subdirectory** of `fw/bom-stm32node`'s ARM cross build: the
+  `boomlink_protocol` and `boomlink_linkframe` static libraries are built.
+  `boomlink_protocol` is linked into the firmware and actually exercised there
+  by the `proto` CLI command in `Core/Src/cli.c` (see its comment for why that
+  matters); `boomlink_linkframe` is cross-compiled but not yet referenced by
+  anything, which is deliberate - it proves the header is free of host-isms and
+  warning-clean for the target before the link engine that will use it exists.
+  The warning-clean half needs `-DBOOMLINK_LINKFRAME_WERROR=ON`, which CI passes
+  and a local firmware build does not (so a warning from a newer compiler than
+  CI's never blocks you); without it a warning there is only log text.
+  The archive is built but never reaches the linker at all (nothing links it),
+  so wiring it into the firmware will need a `target_link_libraries` entry in
+  `fw/bom-stm32node`, not merely a call site. No tests - a
   cross-compiled host tool makes no sense, and pytest cannot run on an
   STM32. Note this makes the host Python packages below a hard requirement
   of building the **firmware**, not just of running these tests: code
@@ -58,7 +90,7 @@ This directory is a CMake project that builds two different ways:
 task setup      # create .venv with protobuf/grpcio-tools/pytest/ruff
 task test       # configure, build, run the full suite via CTest
 task generate   # add any new golden vectors (see generate_vectors.py)
-task lint       # ruff over tests/
+task lint       # ruff over tests/ and linkframe/
 ```
 
 Requires `cmake`, `ninja`, and a host C compiler in addition to the Python
