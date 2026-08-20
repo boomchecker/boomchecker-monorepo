@@ -107,20 +107,24 @@ Each candidate event is represented by a 60~ms waveform segment centered on the 
 \subsection{Field Data Acquisition}
 The source corpus comes from real artillery measurements and includes both launch and impact acoustic events. We collected the recordings with the field station shown in Fig.~\ref{fig:recording_station}. The acquisition chain used PreSonus PRM1 microphones connected through a Roland Rubix 44 audio interface, and the signal processing uses 16-bit audio at 22.05~kHz. We model only binary artillery launch classification (artillery launch vs. non-launch) and leave impact-event modeling for future work. The positive class contains only artillery launch events, whereas the non-launch class contains impulsive false-trigger candidates, including door impacts, human shouts, bell sounds, small-arms gunshots, and other impulsive non-artillery recordings.
 
-The main clean corpus contains 706 labeled events, summarized in Table~\ref{tab:dataset_overview}. We expanded the non-launch class to better reflect operational negatives and to strengthen training under perturbation.
+The clean corpus (Table~\ref{tab:dataset_overview}) combines 50 physical launch events, recorded on four synchronized microphone channels over two measurement days with a single 152~mm self-propelled howitzer, with 706 impulsive-noise events and 85 small-arms gunshots as hard negatives. The recording station stood 1--2~km from the impact area; the guns fired from an estimated 5--10~km from the station. The split is performed at the event level, so channels of one shot never cross partitions: training uses all four channels per launch event, raising the launch share of the training samples to 20~\% (an effective imbalance of 1:4, matched by the class-weighted loss), while validation and test use one channel per event. The small number of launch events remains the dominant source of statistical uncertainty (Section~VI).
 
 \begin{table}[!tbh]
-\caption{Overview of labeled acoustic events}
+\caption{Labeled corpus and event-level split. Training uses all four microphone channels per launch event; validation and test use one.}
 \label{tab:dataset_overview}
 \centering
 \scriptsize
-\begin{tabular}{@{}lcc@{}}
+\begin{tabular}{@{}lcccc@{}}
 \toprule
-Subset & Events & Share \\
+ & & \multicolumn{3}{c}{Samples} \\
+\cmidrule(l){3-5}
+Subset & Events & Train & Val. & Test \\
 \midrule
-Artillery launch & 62 & 8.8~\% \\
-Non-launch & 644 & 91.2~\% \\
-Main clean corpus & 706 & 100~\% \\
+Artillery launch (152~mm howitzer) & 50 & 128 & 8 & 10 \\
+Non-launch: impulsive noise & 706 & 457 & 109 & 140 \\
+Non-launch: small-arms gunshots & 85 & 49 & 18 & 18 \\
+\midrule
+Total corpus & 841 & 634 & 135 & 168 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -215,7 +219,7 @@ ESP32-S3 & 5  & 97.18 & 0.95 & 0.70 & 0.81 & 0.80 \\
 \section{Discussion and Limitations}
 The experiment isolates the second stage of the pipeline: data acquisition and trigger generation provide candidate events, and the post-trigger classifier assigns the launch/non-launch label. Because each classified segment is centered on a trigger-detected peak, the reported figures characterize classifier performance under the assumption of successful impulse localization by the previously validated first stage~\cite{svatos2019smart_acoustic_sensor}. The evaluated SNR range of the classifier deliberately matches the validated operating envelope of that trigger stage, which detects impulses reliably down to an acoustic SNR of 5~dB; stress levels below 5~dB probe classifier margin beyond the envelope in which the full two-stage system is expected to operate. The float32 desktop reference is not a sufficient proxy for embedded performance under waveform-domain additive noise. Quantized inference, first verified on PC and then deployed on ESP32-S3, stays more stable under the tested acoustic SNR levels.
 
-The study has several limits. We do not evaluate continuous-stream trigger performance or false-trigger rates, so the system-level claim is limited to post-trigger classification. Model development used a single stratified event-level split, while the reported waveform-domain robustness results are corpus-level stress tests over all 706 labeled events. These results quantify perturbation stability of the selected model on the available corpus rather than independent repeated-split or session-independent generalization. The noise study uses synthetic additive Gaussian noise in the waveform domain; this is closer to the deployed acoustic front end than MFCC-domain perturbation, but it still omits many field-noise, propagation, and recording-device shifts. The apparent robustness benefit associated with quantization is an empirical observation supported by the PC-side int8 bridge experiment, not an isolated mechanistic proof. One plausible explanation is that int8 quantization suppresses small MFCC-level variations introduced by waveform-domain noise after nonlinear feature extraction; however, preprocessing, scaling, thresholding, and runtime-specific numerical details were not independently ablated. The corpus also remains small in positive artillery-launch events, and the deployment study validates the ESP32-S3 classifier rather than a complete on-device audio-to-decision pipeline.
+The study has several limits. We do not evaluate continuous-stream trigger performance or false-trigger rates, so the system-level claim is limited to post-trigger classification. Model development used a single stratified event-level split, while the reported waveform-domain robustness results are corpus-level stress tests over all 706 labeled events. These results quantify perturbation stability of the selected model on the available corpus rather than independent repeated-split or session-independent generalization. The noise study uses synthetic additive Gaussian noise in the waveform domain; this is closer to the deployed acoustic front end than MFCC-domain perturbation, but it still omits many field-noise, propagation, and recording-device shifts. The apparent robustness benefit associated with quantization is an empirical observation supported by the PC-side int8 bridge experiment, not an isolated mechanistic proof. One plausible explanation is that int8 quantization suppresses small MFCC-level variations introduced by waveform-domain noise after nonlinear feature extraction; however, preprocessing, scaling, thresholding, and runtime-specific numerical details were not independently ablated. The corpus also remains small in positive artillery-launch events and covers a single artillery type, so generalization across calibers is untested. Finally, the deployment study validates the ESP32-S3 classifier rather than a complete on-device audio-to-decision pipeline.
 
 \section{Conclusion}
 We presented a lightweight two-stage acoustic pipeline for embedded artillery launch detection and evaluated its post-trigger classification stage under waveform-domain additive noise applied before MFCC extraction. The classifier uses a compact LeNet-like MFCC-CNN architecture designed to provide a small-footprint second-stage model that is simple enough for MCU deployment while still retaining useful discrimination under controlled acoustic degradation.

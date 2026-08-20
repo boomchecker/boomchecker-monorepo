@@ -53,7 +53,7 @@ The revised title no longer emphasizes a two-stage pipeline (see R1.1), so the t
 
 **Odpověď:**
 
-_(doplnit)_
+The artillery corpus was enlarged and restructured for the final version: launch events were re-extracted from the original measurement-campaign recordings using all four synchronized microphone channels instead of a single channel, giving 50 physical launch events represented by 146 channel samples (training uses all four channels per event; validation and test use one channel per event so their samples remain independent physical events, with the split performed at the event level to prevent leakage between channels of the same shot). Table I was redesigned accordingly — it now distinguishes independent physical events from per-channel samples, shows the event-level train/validation/test split per subset, lists small-arms gunshots as an explicit hard-negative subset, and includes the requested horizontal separator before the total row. The effect of imbalance and the small positive count on generalization is now addressed explicitly: Section III.B describes the class-weighted training and the event-level split, the results are reported as mean ± std over five training seeds and five noise-realization seeds with the imbalance-robust MCC as the headline metric (Section V), and the limitations section notes that the small number of held-out launch events remains the dominant source of statistical uncertainty.
 
 ### R1.6 Section III.C (model size, Flash, RAM, ops)
 
@@ -156,7 +156,7 @@ _(doplnit)_
 
 **Odpověď:**
 
-_(doplnit)_
+We appreciate the suggestion, but data sharing is restricted in this case: owing to the defence-related nature of the measurement campaign, the corpus is not published. The final version nevertheless expands the in-paper documentation of the data along the lines the reviewer suggests: the acquisition setup is specified (four PreSonus PRM1 microphones, Roland Rubix 44 interface, 16-bit audio), the synchronized four-channel recordings of each launch event are now used explicitly (Table I), the measurement geometry is reported (station approximately 1–2 km from the impact area, guns at an estimated 5–10 km standoff), and the corpus composition, labeling, and event-level split are documented in Section III.B.
 
 ### R2.6 PC vs ESP32 int8 discrepancy
 
@@ -188,7 +188,7 @@ Section II now discusses this family of methods (one-class SVMs, isolation fores
 
 **Odpověď:**
 
-_(doplnit)_
+Section III.B now states this explicitly: the launch recordings originate from two separate measurement days with a single artillery type (a 152 mm self-propelled howitzer, named in Table I), with the recording station approximately 1–2 km from the impact area and the guns firing from an estimated 5–10 km standoff. The limitations section acknowledges that the corpus covers a single artillery type, so generalization across calibers is untested and remains future work.
 
 ### R3.3 Data augmentation and dataset size
 
@@ -333,7 +333,7 @@ _(doplnit)_
 
 **Odpověď:**
 
-_(doplnit)_
+The corpus is not published. Section III.B now reports the measurement geometry: the recording station was positioned approximately 1–2 km from the impact area, and the guns fired from an estimated 5–10 km from the station; launch signatures in the corpus were therefore recorded at a multi-kilometre standoff. Behavior across calibers: the corpus covers a single artillery type (152 mm self-propelled howitzer, stated in Table I), and the limitations section now says explicitly that cross-caliber generalization is untested and remains future work.
 
 ### R4.8 Sampling configuration
 
