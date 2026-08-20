@@ -240,6 +240,40 @@ def make_ack(received: LinkFrameHeader, local_node_id: int) -> LinkFrameHeader:
     )
 
 
+def ack_matches(pending: LinkFrameHeader, ack: LinkFrameHeader, local_node_id: int) -> bool:
+    """Whether `ack` acknowledges `pending` at the node addressed `local_node_id`.
+
+    Written from section 9.5's field list read backwards plus section 9.2's
+    "match ACK frames against the pending TX", not from boomlink_linkframe.c.
+
+    All five conditions are load-bearing, and the two address comparisons are the
+    ones worth being stubborn about: a matcher that compares only
+    (session_id, sequence) accepts another node's ACK for its own traffic, and
+    every delivery test still passes, because a correct ACK matches too. Only
+    rejection breaks, and rejection is what delivery tests never exercise.
+
+    magic and version are not checked - parse() has already enforced both on
+    anything that got this far. Whether a frame is pending at all is engine
+    state, not a property of the two headers.
+    """
+    # BOTH ends must be real node IDs, and both guards defend against a forged
+    # ACK rather than tidying up. Without the local one, an ACK addressed to
+    # 0xFFFFFFFF matches at a node that thinks it IS 0xFFFFFFFF. Without the
+    # pending one, a broadcast frame sitting in the ACK-pending slot is matched by
+    # an ACK forged with source_id = 0xFFFFFFFF, which satisfies every field
+    # comparison below - make_ack() cannot build that ACK, which is exactly why
+    # assuming nobody sends it would be wrong.
+    if not _is_valid_node_id(local_node_id) or not _is_valid_node_id(pending.destination_id):
+        return False
+    return (
+        ack.frame_type == FrameType.ACK
+        and ack.session_id == pending.session_id
+        and ack.sequence == pending.sequence
+        and ack.source_id == pending.destination_id
+        and ack.destination_id == local_node_id
+    )
+
+
 def is_for_node(destination_id: int, local_node_id: int) -> bool:
     """Section 7.2's acceptance rule.
 

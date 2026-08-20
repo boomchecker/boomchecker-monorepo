@@ -849,6 +849,204 @@ def test_ack_refuses_an_unusable_address(tmp_path, linkframe_tool_path, source_i
         ref.make_ack(received, local_node_id)
 
 
+PEER = SAMPLE["destination_id"]  # the node a pending unicast frame was sent to
+
+
+def _pending_and_ack(*, ack_session=None, ack_sequence=None, ack_source=None,
+                     ack_destination=None, ack_type=ref.FrameType.ACK):
+    """A pending unicast frame and the ACK for it, with any ACK field overridden.
+
+    The defaults are the correct ACK, so each test names only the single field it
+    perturbs - which is what makes a near-miss vector readable as a near miss.
+    """
+    pending = ref.LinkFrameHeader(
+        destination_id=PEER, source_id=ACKING_NODE,
+        session_id=SAMPLE["session_id"], sequence=SAMPLE["sequence"],
+        frame_type=ref.FrameType.DATA, ack_requested=True,
+    )
+    ack = ref.LinkFrameHeader(
+        destination_id=ACKING_NODE if ack_destination is None else ack_destination,
+        source_id=PEER if ack_source is None else ack_source,
+        session_id=pending.session_id if ack_session is None else ack_session,
+        sequence=pending.sequence if ack_sequence is None else ack_sequence,
+        frame_type=ack_type,
+    )
+    return pending, ack
+
+
+def ack_matches_with_tool(tmp_path, linkframe_tool_path, pending, ack,
+                          local_node_id=ACKING_NODE, *, name=""):
+    """Run the C matcher on the two headers, via their wire bytes."""
+    pending_path = tmp_path / f"pending{name}.bin"
+    ack_path = tmp_path / f"ack{name}.bin"
+    pending_path.write_bytes(ref.encode(pending))
+    ack_path.write_bytes(ref.encode(ack))
+    result = run_linkframe_tool(
+        linkframe_tool_path, "ack_matches", str(pending_path), str(ack_path),
+        str(local_node_id),
+    )
+    assert result.returncode == 0, result.stderr
+    return parse_kv(result.stdout)["ack_matches"] == "1"
+
+
+def test_the_ack_for_a_pending_frame_matches_it(tmp_path, linkframe_tool_path):
+    """The positive case, in both implementations, on the ACK the builder actually
+    produces - so the matcher is checked against make_ack() rather than against a
+    hand-written idea of what an ACK looks like."""
+    pending, _ = _pending_and_ack()
+    # What the peer receives is the frame we sent, i.e. `pending` itself; it
+    # acknowledges as PEER. Going through make_ack() rather than hand-building the
+    # ACK is the point - builder and matcher are checked against each other here,
+    # while the near-miss cases below check the matcher against the spec.
+    built = ref.make_ack(pending, PEER)
+    assert ref.ack_matches(pending, built, ACKING_NODE) is True
+    assert ack_matches_with_tool(tmp_path, linkframe_tool_path, pending, built) is True
+
+
+@pytest.mark.parametrize(
+    "kwargs,why",
+    [
+        pytest.param(
+            dict(ack_source=0x00000099),
+            "an ACK from a node other than the one the frame was sent to. THE case "
+            "this function exists for: a matcher comparing only (session_id, "
+            "sequence) accepts it, and every delivery test still passes, because a "
+            "correct ACK matches too - only rejection breaks, and no delivery test "
+            "exercises rejection",
+            id="ack-from-a-third-party"),
+        pytest.param(
+            dict(ack_destination=ref.ADDR_BROADCAST),
+            "a broadcast-addressed ACK. make_ack() refuses to build one, but a "
+            "non-compliant or hostile peer can put it on the air, and this is the "
+            "clause that makes it harmless - see section 9.5",
+            id="broadcast-addressed-ack"),
+        pytest.param(
+            dict(ack_destination=0x00000099),
+            "an ACK addressed to a different node entirely - someone else's ACK, "
+            "overheard",
+            id="ack-for-another-node"),
+        pytest.param(
+            dict(ack_type=ref.FrameType.DATA),
+            "a DATA frame with ACK-shaped addressing is not an acknowledgement",
+            id="data-frame-not-an-ack"),
+        pytest.param(
+            dict(ack_sequence=SAMPLE["sequence"] ^ 1),
+            "the right peer acknowledging a different frame - one sequence number "
+            "away, which is exactly what an in-flight retry window looks like",
+            id="wrong-sequence"),
+        pytest.param(
+            dict(ack_session=SAMPLE["session_id"] ^ 1),
+            "the right peer and sequence but a different session - what a reboot "
+            "produces (section 9.3), and the reason session_id is in the header",
+            id="wrong-session"),
+        pytest.param(
+            dict(ack_session=SAMPLE["sequence"], ack_sequence=SAMPLE["session_id"]),
+            "session and sequence transposed - would match a matcher that "
+            "transposes them the same way, which is why the builder is pinned "
+            "independently",
+            id="session-and-sequence-transposed"),
+    ],
+)
+def test_a_near_miss_ack_does_not_match(tmp_path, linkframe_tool_path, kwargs, why):
+    """Every rejection case, in both implementations.
+
+    These are the tests that earn the function its place in this layer. The
+    positive case above is satisfied by any matcher that looks at
+    (session_id, sequence); each case here fails for one that looks at nothing
+    else, while a fake-radio delivery test in the engine would pass regardless -
+    a correct ACK still matches, and delivery is all such a test observes.
+    """
+    pending, ack = _pending_and_ack(**kwargs)
+    assert ref.ack_matches(pending, ack, ACKING_NODE) is False, f"Python: {why}"
+    assert ack_matches_with_tool(tmp_path, linkframe_tool_path, pending, ack) is False, (
+        f"C: {why}"
+    )
+
+
+@pytest.mark.parametrize("local_node_id", [ref.ADDR_INVALID, ref.ADDR_BROADCAST])
+def test_a_node_with_no_valid_identity_matches_nothing(tmp_path, linkframe_tool_path,
+                                                       local_node_id):
+    """A node whose own address is not a real node ID has no pending frames of its
+    own, so nothing can acknowledge one - the same guard is_for_node() applies,
+    for the same reason. Checked because the four field comparisons could
+    otherwise hold for such a node: an ACK addressed to 0xFFFFFFFF "matches" a
+    node that thinks it IS 0xFFFFFFFF."""
+    pending = ref.LinkFrameHeader(
+        destination_id=PEER, source_id=local_node_id,
+        session_id=SAMPLE["session_id"], sequence=SAMPLE["sequence"],
+        frame_type=ref.FrameType.DATA, ack_requested=True,
+    )
+    ack = ref.LinkFrameHeader(
+        destination_id=local_node_id, source_id=PEER,
+        session_id=pending.session_id, sequence=pending.sequence,
+        frame_type=ref.FrameType.ACK,
+    )
+    assert ref.ack_matches(pending, ack, local_node_id) is False
+    assert ack_matches_with_tool(
+        tmp_path, linkframe_tool_path, pending, ack, local_node_id
+    ) is False
+
+
+def test_the_matcher_trusts_configuration_not_the_frames_own_source(tmp_path,
+                                                                   linkframe_tool_path):
+    """`destination_id == local_node_id`, never `== pending.source_id`.
+
+    In every other vector here those two are the same value, because we are the
+    sender of our own pending frame - so substituting one for the other is
+    invisible, and a matcher written `ack.destination_id == pending.source_id`
+    passed all of them. Verified.
+
+    They differ when the pending record claims a source that is not this node,
+    which a correct engine never produces but a stale or corrupted slot could.
+    The ACK for such a frame belongs to that other node, and consuming it would
+    complete OUR pending send on someone else's acknowledgement. The rule is that
+    `local_node_id` is configuration and `pending.source_id` is data: when they
+    disagree, configuration decides.
+    """
+    other = 0x00000099
+    assert other != ACKING_NODE
+    pending = ref.LinkFrameHeader(
+        destination_id=PEER, source_id=other,
+        session_id=SAMPLE["session_id"], sequence=SAMPLE["sequence"],
+        frame_type=ref.FrameType.DATA, ack_requested=True,
+    )
+    # The ACK the peer would correctly build for that frame: addressed to `other`.
+    ack = ref.make_ack(pending, PEER)
+    assert ack.destination_id == other
+
+    assert ref.ack_matches(pending, ack, ACKING_NODE) is False
+    assert ack_matches_with_tool(
+        tmp_path, linkframe_tool_path, pending, ack, name="_othersrc"
+    ) is False
+    # And it does match at the node it is actually for, so the case above is a
+    # rejection of the right thing rather than of everything.
+    assert ref.ack_matches(pending, ack, other) is True
+    assert ack_matches_with_tool(
+        tmp_path, linkframe_tool_path, pending, ack, other, name="_othernode"
+    ) is True
+
+
+def test_a_broadcast_pending_frame_is_never_acknowledged(tmp_path, linkframe_tool_path):
+    """Broadcast frames are not acknowledged (section 9.9), and the matcher needs
+    no special case for that: the ACK's source would have to be 0xFFFFFFFF, which
+    make_ack() cannot produce and which no real node can send from."""
+    pending = ref.LinkFrameHeader(
+        destination_id=ref.ADDR_BROADCAST, source_id=ACKING_NODE,
+        session_id=SAMPLE["session_id"], sequence=SAMPLE["sequence"],
+        frame_type=ref.FrameType.DATA,
+    )
+    for source in (ref.ADDR_BROADCAST, PEER, ACKING_NODE):
+        ack = ref.LinkFrameHeader(
+            destination_id=ACKING_NODE, source_id=source,
+            session_id=pending.session_id, sequence=pending.sequence,
+            frame_type=ref.FrameType.ACK,
+        )
+        assert ref.ack_matches(pending, ack, ACKING_NODE) is False, hex(source)
+        assert ack_matches_with_tool(
+            tmp_path, linkframe_tool_path, pending, ack, name=f"_b{source:08x}"
+        ) is False, hex(source)
+
+
 @pytest.mark.parametrize(
     "destination_id,local_node_id,accepted,why",
     [
