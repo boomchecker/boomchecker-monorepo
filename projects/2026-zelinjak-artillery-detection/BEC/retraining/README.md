@@ -273,7 +273,48 @@ parametrů, deployment stopa i M6 čísla (Flash/RAM/latence) platí dál. Proti
 verzi: ta tvrdila 0.80 @ 5 dB na z většiny trénovacích datech; teď 0.98 @ 5 dB na
 datech, která model nikdy neviděl.
 
-### 7.7 Otevřené položky
+### 7.7 ESP32-S3 HW validace (seed 44, 2026-08-20)
+
+Postup: `task esp32:model` (header seedu 44 → `firmware/esp32s3/main/model_data.h`,
+symbol beze změny) → `task firmware:build && task firmware:flash` → `task
+esp32:validate PORT=...` (7 variant × 168 test vzorků = 1176 inferencí, per-sample CSV
+v `esp32-validation/`) → `task esp32:compare`. Praktická poznámka: deska musí být
+připojená přes fyzický UART-to-TTL USB-C port (appka mluví na UART0); nativní
+USB-Serial/JTAG port flashuje, ale data nevrací — stejná lekce jako v M6. Přidán fix
+`-Wmissing-field-initializers` v `main.cpp` (explicitní `.flags = {}`).
+
+**Naměřeno na desce (seed 44, šumový seed 42, held-out test):**
+
+| SNR | Acc (%) | Prec | Rec | MCC | Latence |
+|---|---|---|---|---|---|
+| Clean–5 dB (všech 5) | 100.00 | 1.000 | 1.000 | 1.000 | 32.01 ms |
+| 0 dB (extrap.) | 99.40 | 1.000 | 0.900 | 0.946 | 32.01 ms |
+| −5 dB (extrap.) | 98.21 | 1.000 | 0.700 | 0.829 | 32.01 ms |
+
+**Shoda platforem: 1171/1176 inferencí bit-přesně; 5 rozdílů = vzorky přesně na
+rozhodovací hranici.** Mechanismus (ověřeno z kvantizačních parametrů modelu):
+
+- U všech 5 rozdílných vzorků má PC skóre **přesně 0.5000** (logit raw 0), ESP 0.0000.
+- Příčina: TFLite (PC, referenční/XNNPACK kernely) vs. TFLite Micro + ESP-NN (deska)
+  smí legálně zaokrouhlit int8 akumulaci/requantizaci o ±1 LSB jinak. Na 1171
+  inferencích to sigmoid LUT spolkne.
+- Zesílení: **logit tensor seedu 44 má scale 10.82/LSB** (zero_point 124) — model je
+  extrémně jistý, logity ±stovky, kalibrace roztáhne rozsah a okolí nuly je rozlišené
+  po skocích 10.8. Rozdíl 1 LSB v logitu = sigmoid(0)=0.5 vs. sigmoid(−10.8)≈0.0.
+- Důsledek na metriky je symetrický hod mincí: v trénovaném rozsahu ESP „opravil" 1 FP
+  (hraniční `Engine_Inside_Car`, MCC 1.000 vs. PC 0.950), při extrapolaci minul
+  hraniční launche (−5 dB: 0.829 vs. PC 0.946). **Nesmí se prezentovat jako platformní
+  rozdíl** — to je přesně chyba původní Tabulky III (R2#6/R4-M1).
+
+**Správná prezentace pro camera-ready:** jedna int8 sada čísel (multi-seed PC eval,
+25 běhů) + věta o HW: „ESP32-S3 deployment reproduces PC int8 inference exactly on
+1171/1176 held-out inferences; the 5 disagreements are decision-boundary samples
+(PC-side score exactly 0.5) where coarse logit quantization (scale 10.8/LSB) amplifies
+a legal 1-LSB kernel rounding difference; average latency 32.0 ms per segment."
+Proti M6 (starý model: 0 flipů z 855): tehdy žádný vzorek neseděl přesně na hranici;
+nový model + těžší vzorky (extrapolace) hraniční případy vyrobily.
+
+### 7.8 Otevřené položky
 - ESP32-S3 HW validace vybraného seedu (kandidáti 44/45: MCC 1.0 @ 5 dB).
 - Přepis článku: mj. „40 %/60 %" → „30 %/70 %" v Sec III; nová Table I (events vs.
   samples); SNR definice vůči 1s klipu (R4-Q4); kalibrační nález do diskuze.
