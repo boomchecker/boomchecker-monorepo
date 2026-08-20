@@ -1,0 +1,938 @@
+recording_id,event_id,channel,audio_path,label,class_id,split
+0001_0850s_shot_015_ch1,0001_0850s_shot_015,1,../../BEC/new-dataset/export/0001_0850s_shot_015/gunshot_unknown_15_ch1.wav,dana_artillery,1,train
+0001_0850s_shot_015_ch2,0001_0850s_shot_015,2,../../BEC/new-dataset/export/0001_0850s_shot_015/gunshot_unknown_15_ch2.wav,dana_artillery,1,train
+0001_0850s_shot_015_ch3,0001_0850s_shot_015,3,../../BEC/new-dataset/export/0001_0850s_shot_015/gunshot_unknown_15_ch3.wav,dana_artillery,1,train
+0001_0850s_shot_015_ch4,0001_0850s_shot_015,4,../../BEC/new-dataset/export/0001_0850s_shot_015/gunshot_unknown_15_ch4.wav,dana_artillery,1,train
+0002_0724s_shot_004_ch1,0002_0724s_shot_004,1,../../BEC/new-dataset/export/0002_0724s_shot_004/gunshot_unknown_4_ch1.wav,dana_artillery,1,train
+0002_0724s_shot_004_ch2,0002_0724s_shot_004,2,../../BEC/new-dataset/export/0002_0724s_shot_004/gunshot_unknown_4_ch2.wav,dana_artillery,1,train
+0002_0724s_shot_004_ch3,0002_0724s_shot_004,3,../../BEC/new-dataset/export/0002_0724s_shot_004/gunshot_unknown_4_ch3.wav,dana_artillery,1,train
+0002_0724s_shot_004_ch4,0002_0724s_shot_004,4,../../BEC/new-dataset/export/0002_0724s_shot_004/gunshot_unknown_4_ch4.wav,dana_artillery,1,train
+0002_0726s_shot_006_ch1,0002_0726s_shot_006,1,../../BEC/new-dataset/export/0002_0726s_shot_006/gunshot_unknown_6_ch1.wav,dana_artillery,1,train
+0002_0726s_shot_006_ch2,0002_0726s_shot_006,2,../../BEC/new-dataset/export/0002_0726s_shot_006/gunshot_unknown_6_ch2.wav,dana_artillery,1,train
+0002_0726s_shot_006_ch3,0002_0726s_shot_006,3,../../BEC/new-dataset/export/0002_0726s_shot_006/gunshot_unknown_6_ch3.wav,dana_artillery,1,train
+0002_0726s_shot_006_ch4,0002_0726s_shot_006,4,../../BEC/new-dataset/export/0002_0726s_shot_006/gunshot_unknown_6_ch4.wav,dana_artillery,1,train
+0002_0737s_shot_009_ch1,0002_0737s_shot_009,1,../../BEC/new-dataset/export/0002_0737s_shot_009/gunshot_unknown_9_ch1.wav,dana_artillery,1,train
+0002_0737s_shot_009_ch2,0002_0737s_shot_009,2,../../BEC/new-dataset/export/0002_0737s_shot_009/gunshot_unknown_9_ch2.wav,dana_artillery,1,train
+0002_0737s_shot_009_ch3,0002_0737s_shot_009,3,../../BEC/new-dataset/export/0002_0737s_shot_009/gunshot_unknown_9_ch3.wav,dana_artillery,1,train
+0002_0737s_shot_009_ch4,0002_0737s_shot_009,4,../../BEC/new-dataset/export/0002_0737s_shot_009/gunshot_unknown_9_ch4.wav,dana_artillery,1,train
+0002_0748s_shot_011_ch1,0002_0748s_shot_011,1,../../BEC/new-dataset/export/0002_0748s_shot_011/gunshot_unknown_11_ch1.wav,dana_artillery,1,val
+0002_0750s_shot_012_ch1,0002_0750s_shot_012,1,../../BEC/new-dataset/export/0002_0750s_shot_012/gunshot_unknown_12_ch1.wav,dana_artillery,1,train
+0002_0750s_shot_012_ch2,0002_0750s_shot_012,2,../../BEC/new-dataset/export/0002_0750s_shot_012/gunshot_unknown_12_ch2.wav,dana_artillery,1,train
+0002_0750s_shot_012_ch3,0002_0750s_shot_012,3,../../BEC/new-dataset/export/0002_0750s_shot_012/gunshot_unknown_12_ch3.wav,dana_artillery,1,train
+0002_0750s_shot_012_ch4,0002_0750s_shot_012,4,../../BEC/new-dataset/export/0002_0750s_shot_012/gunshot_unknown_12_ch4.wav,dana_artillery,1,train
+0002_0756s_shot_013_ch1,0002_0756s_shot_013,1,../../BEC/new-dataset/export/0002_0756s_shot_013/gunshot_unknown_13_ch1.wav,dana_artillery,1,train
+0002_0756s_shot_013_ch2,0002_0756s_shot_013,2,../../BEC/new-dataset/export/0002_0756s_shot_013/gunshot_unknown_13_ch2.wav,dana_artillery,1,train
+0002_0756s_shot_013_ch3,0002_0756s_shot_013,3,../../BEC/new-dataset/export/0002_0756s_shot_013/gunshot_unknown_13_ch3.wav,dana_artillery,1,train
+0002_0756s_shot_013_ch4,0002_0756s_shot_013,4,../../BEC/new-dataset/export/0002_0756s_shot_013/gunshot_unknown_13_ch4.wav,dana_artillery,1,train
+0002_0764s_shot_017_ch1,0002_0764s_shot_017,1,../../BEC/new-dataset/export/0002_0764s_shot_017/gunshot_unknown_17_ch1.wav,dana_artillery,1,train
+0002_0764s_shot_017_ch2,0002_0764s_shot_017,2,../../BEC/new-dataset/export/0002_0764s_shot_017/gunshot_unknown_17_ch2.wav,dana_artillery,1,train
+0002_0764s_shot_017_ch3,0002_0764s_shot_017,3,../../BEC/new-dataset/export/0002_0764s_shot_017/gunshot_unknown_17_ch3.wav,dana_artillery,1,train
+0002_0764s_shot_017_ch4,0002_0764s_shot_017,4,../../BEC/new-dataset/export/0002_0764s_shot_017/gunshot_unknown_17_ch4.wav,dana_artillery,1,train
+0002_0780s_shot_019_ch1,0002_0780s_shot_019,1,../../BEC/new-dataset/export/0002_0780s_shot_019/gunshot_unknown_19_ch1.wav,dana_artillery,1,train
+0002_0780s_shot_019_ch2,0002_0780s_shot_019,2,../../BEC/new-dataset/export/0002_0780s_shot_019/gunshot_unknown_19_ch2.wav,dana_artillery,1,train
+0002_0780s_shot_019_ch3,0002_0780s_shot_019,3,../../BEC/new-dataset/export/0002_0780s_shot_019/gunshot_unknown_19_ch3.wav,dana_artillery,1,train
+0002_0780s_shot_019_ch4,0002_0780s_shot_019,4,../../BEC/new-dataset/export/0002_0780s_shot_019/gunshot_unknown_19_ch4.wav,dana_artillery,1,train
+0002_0807s_shot_021_ch1,0002_0807s_shot_021,1,../../BEC/new-dataset/export/0002_0807s_shot_021/gunshot_unknown_21_ch1.wav,dana_artillery,1,train
+0002_0807s_shot_021_ch2,0002_0807s_shot_021,2,../../BEC/new-dataset/export/0002_0807s_shot_021/gunshot_unknown_21_ch2.wav,dana_artillery,1,train
+0002_0807s_shot_021_ch3,0002_0807s_shot_021,3,../../BEC/new-dataset/export/0002_0807s_shot_021/gunshot_unknown_21_ch3.wav,dana_artillery,1,train
+0002_0807s_shot_021_ch4,0002_0807s_shot_021,4,../../BEC/new-dataset/export/0002_0807s_shot_021/gunshot_unknown_21_ch4.wav,dana_artillery,1,train
+0003_0372s_shot_003_ch1,0003_0372s_shot_003,1,../../BEC/new-dataset/export/0003_0372s_shot_003/gunshot_unknown_3_ch1.wav,dana_artillery,1,train
+0003_0372s_shot_003_ch2,0003_0372s_shot_003,2,../../BEC/new-dataset/export/0003_0372s_shot_003/gunshot_unknown_3_ch2.wav,dana_artillery,1,train
+0003_0372s_shot_003_ch3,0003_0372s_shot_003,3,../../BEC/new-dataset/export/0003_0372s_shot_003/gunshot_unknown_3_ch3.wav,dana_artillery,1,train
+0003_0372s_shot_003_ch4,0003_0372s_shot_003,4,../../BEC/new-dataset/export/0003_0372s_shot_003/gunshot_unknown_3_ch4.wav,dana_artillery,1,train
+0003_0373s_shot_005_ch1,0003_0373s_shot_005,1,../../BEC/new-dataset/export/0003_0373s_shot_005/gunshot_unknown_5_ch1.wav,dana_artillery,1,train
+0003_0373s_shot_005_ch2,0003_0373s_shot_005,2,../../BEC/new-dataset/export/0003_0373s_shot_005/gunshot_unknown_5_ch2.wav,dana_artillery,1,train
+0003_0373s_shot_005_ch3,0003_0373s_shot_005,3,../../BEC/new-dataset/export/0003_0373s_shot_005/gunshot_unknown_5_ch3.wav,dana_artillery,1,train
+0003_0373s_shot_005_ch4,0003_0373s_shot_005,4,../../BEC/new-dataset/export/0003_0373s_shot_005/gunshot_unknown_5_ch4.wav,dana_artillery,1,train
+0003_0377s_shot_012_ch1,0003_0377s_shot_012,1,../../BEC/new-dataset/export/0003_0377s_shot_012/gunshot_unknown_12_ch1.wav,dana_artillery,1,val
+0003_0397s_shot_019_ch1,0003_0397s_shot_019,1,../../BEC/new-dataset/export/0003_0397s_shot_019/gunshot_unknown_19_ch1.wav,dana_artillery,1,test
+0003_0400s_shot_023_ch1,0003_0400s_shot_023,1,../../BEC/new-dataset/export/0003_0400s_shot_023/gunshot_unknown_23_ch1.wav,dana_artillery,1,train
+0003_0400s_shot_023_ch2,0003_0400s_shot_023,2,../../BEC/new-dataset/export/0003_0400s_shot_023/gunshot_unknown_23_ch2.wav,dana_artillery,1,train
+0003_0400s_shot_023_ch3,0003_0400s_shot_023,3,../../BEC/new-dataset/export/0003_0400s_shot_023/gunshot_unknown_23_ch3.wav,dana_artillery,1,train
+0003_0400s_shot_023_ch4,0003_0400s_shot_023,4,../../BEC/new-dataset/export/0003_0400s_shot_023/gunshot_unknown_23_ch4.wav,dana_artillery,1,train
+0004_0085s_shot_001_ch1,0004_0085s_shot_001,1,../../BEC/new-dataset/export/0004_0085s_shot_001/gunshot_unknown_1_ch1.wav,dana_artillery,1,train
+0004_0085s_shot_001_ch2,0004_0085s_shot_001,2,../../BEC/new-dataset/export/0004_0085s_shot_001/gunshot_unknown_1_ch2.wav,dana_artillery,1,train
+0004_0085s_shot_001_ch3,0004_0085s_shot_001,3,../../BEC/new-dataset/export/0004_0085s_shot_001/gunshot_unknown_1_ch3.wav,dana_artillery,1,train
+0004_0085s_shot_001_ch4,0004_0085s_shot_001,4,../../BEC/new-dataset/export/0004_0085s_shot_001/gunshot_unknown_1_ch4.wav,dana_artillery,1,train
+0004_0170s_shot_003_ch1,0004_0170s_shot_003,1,../../BEC/new-dataset/export/0004_0170s_shot_003/gunshot_unknown_3_ch1.wav,dana_artillery,1,val
+0005_0580s_shot_006_ch1,0005_0580s_shot_006,1,../../BEC/new-dataset/export/0005_0580s_shot_006/gunshot_unknown_6_ch1.wav,dana_artillery,1,test
+0005_0604s_shot_006_ch1,0005_0604s_shot_006,1,../../BEC/new-dataset/export/0005_0604s_shot_006/gunshot_unknown_6_ch1.wav,dana_artillery,1,val
+0005_0607s_shot_150_ch1,0005_0607s_shot_150,1,../../BEC/new-dataset/export/0005_0607s_shot_150/gunshot_unknown_150_ch1.wav,dana_artillery,1,test
+0005_0609s_shot_156_ch1,0005_0609s_shot_156,1,../../BEC/new-dataset/export/0005_0609s_shot_156/gunshot_unknown_156_ch1.wav,dana_artillery,1,train
+0005_0609s_shot_156_ch2,0005_0609s_shot_156,2,../../BEC/new-dataset/export/0005_0609s_shot_156/gunshot_unknown_156_ch2.wav,dana_artillery,1,train
+0005_0609s_shot_156_ch3,0005_0609s_shot_156,3,../../BEC/new-dataset/export/0005_0609s_shot_156/gunshot_unknown_156_ch3.wav,dana_artillery,1,train
+0005_0609s_shot_156_ch4,0005_0609s_shot_156,4,../../BEC/new-dataset/export/0005_0609s_shot_156/gunshot_unknown_156_ch4.wav,dana_artillery,1,train
+0005_0611s_shot_157_ch1,0005_0611s_shot_157,1,../../BEC/new-dataset/export/0005_0611s_shot_157/gunshot_unknown_157_ch1.wav,dana_artillery,1,train
+0005_0611s_shot_157_ch2,0005_0611s_shot_157,2,../../BEC/new-dataset/export/0005_0611s_shot_157/gunshot_unknown_157_ch2.wav,dana_artillery,1,train
+0005_0611s_shot_157_ch3,0005_0611s_shot_157,3,../../BEC/new-dataset/export/0005_0611s_shot_157/gunshot_unknown_157_ch3.wav,dana_artillery,1,train
+0005_0611s_shot_157_ch4,0005_0611s_shot_157,4,../../BEC/new-dataset/export/0005_0611s_shot_157/gunshot_unknown_157_ch4.wav,dana_artillery,1,train
+0005_0628s_shot_168_ch1,0005_0628s_shot_168,1,../../BEC/new-dataset/export/0005_0628s_shot_168/gunshot_unknown_168_ch1.wav,dana_artillery,1,val
+0005_0629s_shot_170_ch1,0005_0629s_shot_170,1,../../BEC/new-dataset/export/0005_0629s_shot_170/gunshot_unknown_170_ch1.wav,dana_artillery,1,train
+0005_0629s_shot_170_ch2,0005_0629s_shot_170,2,../../BEC/new-dataset/export/0005_0629s_shot_170/gunshot_unknown_170_ch2.wav,dana_artillery,1,train
+0005_0629s_shot_170_ch3,0005_0629s_shot_170,3,../../BEC/new-dataset/export/0005_0629s_shot_170/gunshot_unknown_170_ch3.wav,dana_artillery,1,train
+0005_0629s_shot_170_ch4,0005_0629s_shot_170,4,../../BEC/new-dataset/export/0005_0629s_shot_170/gunshot_unknown_170_ch4.wav,dana_artillery,1,train
+0005_0631s_shot_014_ch1,0005_0631s_shot_014,1,../../BEC/new-dataset/export/0005_0631s_shot_014/gunshot_unknown_14_ch1.wav,dana_artillery,1,train
+0005_0631s_shot_014_ch2,0005_0631s_shot_014,2,../../BEC/new-dataset/export/0005_0631s_shot_014/gunshot_unknown_14_ch2.wav,dana_artillery,1,train
+0005_0631s_shot_014_ch3,0005_0631s_shot_014,3,../../BEC/new-dataset/export/0005_0631s_shot_014/gunshot_unknown_14_ch3.wav,dana_artillery,1,train
+0005_0631s_shot_014_ch4,0005_0631s_shot_014,4,../../BEC/new-dataset/export/0005_0631s_shot_014/gunshot_unknown_14_ch4.wav,dana_artillery,1,train
+0005_0631s_shot_173_ch1,0005_0631s_shot_173,1,../../BEC/new-dataset/export/0005_0631s_shot_173/gunshot_unknown_173_ch1.wav,dana_artillery,1,test
+0005_0632s_shot_176_ch1,0005_0632s_shot_176,1,../../BEC/new-dataset/export/0005_0632s_shot_176/gunshot_unknown_176_ch1.wav,dana_artillery,1,test
+0005_0636s_shot_181_ch1,0005_0636s_shot_181,1,../../BEC/new-dataset/export/0005_0636s_shot_181/gunshot_unknown_181_ch1.wav,dana_artillery,1,train
+0005_0636s_shot_181_ch2,0005_0636s_shot_181,2,../../BEC/new-dataset/export/0005_0636s_shot_181/gunshot_unknown_181_ch2.wav,dana_artillery,1,train
+0005_0636s_shot_181_ch3,0005_0636s_shot_181,3,../../BEC/new-dataset/export/0005_0636s_shot_181/gunshot_unknown_181_ch3.wav,dana_artillery,1,train
+0005_0636s_shot_181_ch4,0005_0636s_shot_181,4,../../BEC/new-dataset/export/0005_0636s_shot_181/gunshot_unknown_181_ch4.wav,dana_artillery,1,train
+0005_0651s_shot_021_ch1,0005_0651s_shot_021,1,../../BEC/new-dataset/export/0005_0651s_shot_021/gunshot_unknown_21_ch1.wav,dana_artillery,1,train
+0005_0651s_shot_021_ch2,0005_0651s_shot_021,2,../../BEC/new-dataset/export/0005_0651s_shot_021/gunshot_unknown_21_ch2.wav,dana_artillery,1,train
+0005_0651s_shot_021_ch3,0005_0651s_shot_021,3,../../BEC/new-dataset/export/0005_0651s_shot_021/gunshot_unknown_21_ch3.wav,dana_artillery,1,train
+0005_0651s_shot_021_ch4,0005_0651s_shot_021,4,../../BEC/new-dataset/export/0005_0651s_shot_021/gunshot_unknown_21_ch4.wav,dana_artillery,1,train
+0005_0655s_shot_022_ch1,0005_0655s_shot_022,1,../../BEC/new-dataset/export/0005_0655s_shot_022/gunshot_unknown_22_ch1.wav,dana_artillery,1,train
+0005_0655s_shot_022_ch2,0005_0655s_shot_022,2,../../BEC/new-dataset/export/0005_0655s_shot_022/gunshot_unknown_22_ch2.wav,dana_artillery,1,train
+0005_0655s_shot_022_ch3,0005_0655s_shot_022,3,../../BEC/new-dataset/export/0005_0655s_shot_022/gunshot_unknown_22_ch3.wav,dana_artillery,1,train
+0005_0655s_shot_022_ch4,0005_0655s_shot_022,4,../../BEC/new-dataset/export/0005_0655s_shot_022/gunshot_unknown_22_ch4.wav,dana_artillery,1,train
+0005_0662s_shot_201_ch1,0005_0662s_shot_201,1,../../BEC/new-dataset/export/0005_0662s_shot_201/gunshot_unknown_201_ch1.wav,dana_artillery,1,test
+0005_0670s_shot_207_ch1,0005_0670s_shot_207,1,../../BEC/new-dataset/export/0005_0670s_shot_207/gunshot_unknown_207_ch1.wav,dana_artillery,1,train
+0005_0670s_shot_207_ch2,0005_0670s_shot_207,2,../../BEC/new-dataset/export/0005_0670s_shot_207/gunshot_unknown_207_ch2.wav,dana_artillery,1,train
+0005_0670s_shot_207_ch3,0005_0670s_shot_207,3,../../BEC/new-dataset/export/0005_0670s_shot_207/gunshot_unknown_207_ch3.wav,dana_artillery,1,train
+0005_0670s_shot_207_ch4,0005_0670s_shot_207,4,../../BEC/new-dataset/export/0005_0670s_shot_207/gunshot_unknown_207_ch4.wav,dana_artillery,1,train
+0005_0685s_shot_220_ch1,0005_0685s_shot_220,1,../../BEC/new-dataset/export/0005_0685s_shot_220/gunshot_unknown_220_ch1.wav,dana_artillery,1,test
+0005_0686s_shot_222_ch1,0005_0686s_shot_222,1,../../BEC/new-dataset/export/0005_0686s_shot_222/gunshot_unknown_222_ch1.wav,dana_artillery,1,val
+0005_0688s_shot_031_ch1,0005_0688s_shot_031,1,../../BEC/new-dataset/export/0005_0688s_shot_031/gunshot_unknown_31_ch1.wav,dana_artillery,1,val
+0005_0688s_shot_224_ch1,0005_0688s_shot_224,1,../../BEC/new-dataset/export/0005_0688s_shot_224/gunshot_unknown_224_ch1.wav,dana_artillery,1,train
+0005_0688s_shot_224_ch2,0005_0688s_shot_224,2,../../BEC/new-dataset/export/0005_0688s_shot_224/gunshot_unknown_224_ch2.wav,dana_artillery,1,train
+0005_0688s_shot_224_ch3,0005_0688s_shot_224,3,../../BEC/new-dataset/export/0005_0688s_shot_224/gunshot_unknown_224_ch3.wav,dana_artillery,1,train
+0005_0688s_shot_224_ch4,0005_0688s_shot_224,4,../../BEC/new-dataset/export/0005_0688s_shot_224/gunshot_unknown_224_ch4.wav,dana_artillery,1,train
+0005_0690s_shot_032_ch1,0005_0690s_shot_032,1,../../BEC/new-dataset/export/0005_0690s_shot_032/gunshot_unknown_32_ch1.wav,dana_artillery,1,train
+0005_0690s_shot_032_ch2,0005_0690s_shot_032,2,../../BEC/new-dataset/export/0005_0690s_shot_032/gunshot_unknown_32_ch2.wav,dana_artillery,1,train
+0005_0690s_shot_032_ch3,0005_0690s_shot_032,3,../../BEC/new-dataset/export/0005_0690s_shot_032/gunshot_unknown_32_ch3.wav,dana_artillery,1,train
+0005_0690s_shot_032_ch4,0005_0690s_shot_032,4,../../BEC/new-dataset/export/0005_0690s_shot_032/gunshot_unknown_32_ch4.wav,dana_artillery,1,train
+0005_0690s_shot_227_ch1,0005_0690s_shot_227,1,../../BEC/new-dataset/export/0005_0690s_shot_227/gunshot_unknown_227_ch1.wav,dana_artillery,1,train
+0005_0690s_shot_227_ch2,0005_0690s_shot_227,2,../../BEC/new-dataset/export/0005_0690s_shot_227/gunshot_unknown_227_ch2.wav,dana_artillery,1,train
+0005_0690s_shot_227_ch3,0005_0690s_shot_227,3,../../BEC/new-dataset/export/0005_0690s_shot_227/gunshot_unknown_227_ch3.wav,dana_artillery,1,train
+0005_0690s_shot_227_ch4,0005_0690s_shot_227,4,../../BEC/new-dataset/export/0005_0690s_shot_227/gunshot_unknown_227_ch4.wav,dana_artillery,1,train
+0005_0697s_shot_036_ch1,0005_0697s_shot_036,1,../../BEC/new-dataset/export/0005_0697s_shot_036/gunshot_unknown_36_ch1.wav,dana_artillery,1,train
+0005_0697s_shot_036_ch2,0005_0697s_shot_036,2,../../BEC/new-dataset/export/0005_0697s_shot_036/gunshot_unknown_36_ch2.wav,dana_artillery,1,train
+0005_0697s_shot_036_ch3,0005_0697s_shot_036,3,../../BEC/new-dataset/export/0005_0697s_shot_036/gunshot_unknown_36_ch3.wav,dana_artillery,1,train
+0005_0697s_shot_036_ch4,0005_0697s_shot_036,4,../../BEC/new-dataset/export/0005_0697s_shot_036/gunshot_unknown_36_ch4.wav,dana_artillery,1,train
+0005_0700s_shot_037_ch1,0005_0700s_shot_037,1,../../BEC/new-dataset/export/0005_0700s_shot_037/gunshot_unknown_37_ch1.wav,dana_artillery,1,test
+0005_0713s_shot_040_ch1,0005_0713s_shot_040,1,../../BEC/new-dataset/export/0005_0713s_shot_040/gunshot_unknown_40_ch1.wav,dana_artillery,1,train
+0005_0713s_shot_040_ch2,0005_0713s_shot_040,2,../../BEC/new-dataset/export/0005_0713s_shot_040/gunshot_unknown_40_ch2.wav,dana_artillery,1,train
+0005_0713s_shot_040_ch3,0005_0713s_shot_040,3,../../BEC/new-dataset/export/0005_0713s_shot_040/gunshot_unknown_40_ch3.wav,dana_artillery,1,train
+0005_0713s_shot_040_ch4,0005_0713s_shot_040,4,../../BEC/new-dataset/export/0005_0713s_shot_040/gunshot_unknown_40_ch4.wav,dana_artillery,1,train
+0005_0735s_shot_042_ch1,0005_0735s_shot_042,1,../../BEC/new-dataset/export/0005_0735s_shot_042/gunshot_unknown_42_ch1.wav,dana_artillery,1,train
+0005_0735s_shot_042_ch2,0005_0735s_shot_042,2,../../BEC/new-dataset/export/0005_0735s_shot_042/gunshot_unknown_42_ch2.wav,dana_artillery,1,train
+0005_0735s_shot_042_ch3,0005_0735s_shot_042,3,../../BEC/new-dataset/export/0005_0735s_shot_042/gunshot_unknown_42_ch3.wav,dana_artillery,1,train
+0005_0735s_shot_042_ch4,0005_0735s_shot_042,4,../../BEC/new-dataset/export/0005_0735s_shot_042/gunshot_unknown_42_ch4.wav,dana_artillery,1,train
+0006_0073s_shot_002_ch1,0006_0073s_shot_002,1,../../BEC/new-dataset/export/0006_0073s_shot_002/gunshot_unknown_2_ch1.wav,dana_artillery,1,train
+0006_0073s_shot_002_ch2,0006_0073s_shot_002,2,../../BEC/new-dataset/export/0006_0073s_shot_002/gunshot_unknown_2_ch2.wav,dana_artillery,1,train
+0006_0073s_shot_002_ch3,0006_0073s_shot_002,3,../../BEC/new-dataset/export/0006_0073s_shot_002/gunshot_unknown_2_ch3.wav,dana_artillery,1,train
+0006_0073s_shot_002_ch4,0006_0073s_shot_002,4,../../BEC/new-dataset/export/0006_0073s_shot_002/gunshot_unknown_2_ch4.wav,dana_artillery,1,train
+0006_0075s_shot_003_ch1,0006_0075s_shot_003,1,../../BEC/new-dataset/export/0006_0075s_shot_003/gunshot_unknown_3_ch1.wav,dana_artillery,1,train
+0006_0075s_shot_003_ch2,0006_0075s_shot_003,2,../../BEC/new-dataset/export/0006_0075s_shot_003/gunshot_unknown_3_ch2.wav,dana_artillery,1,train
+0006_0075s_shot_003_ch3,0006_0075s_shot_003,3,../../BEC/new-dataset/export/0006_0075s_shot_003/gunshot_unknown_3_ch3.wav,dana_artillery,1,train
+0006_0075s_shot_003_ch4,0006_0075s_shot_003,4,../../BEC/new-dataset/export/0006_0075s_shot_003/gunshot_unknown_3_ch4.wav,dana_artillery,1,train
+0011_0191s_shot_009_ch1,0011_0191s_shot_009,1,../../BEC/new-dataset/export/0011_0191s_shot_009/gunshot_unknown_9_ch1.wav,dana_artillery,1,train
+0011_0191s_shot_009_ch2,0011_0191s_shot_009,2,../../BEC/new-dataset/export/0011_0191s_shot_009/gunshot_unknown_9_ch2.wav,dana_artillery,1,train
+0011_0191s_shot_009_ch3,0011_0191s_shot_009,3,../../BEC/new-dataset/export/0011_0191s_shot_009/gunshot_unknown_9_ch3.wav,dana_artillery,1,train
+0011_0191s_shot_009_ch4,0011_0191s_shot_009,4,../../BEC/new-dataset/export/0011_0191s_shot_009/gunshot_unknown_9_ch4.wav,dana_artillery,1,train
+0011_0226s_shot_011_ch1,0011_0226s_shot_011,1,../../BEC/new-dataset/export/0011_0226s_shot_011/gunshot_unknown_11_ch1.wav,dana_artillery,1,test
+0011_0261s_shot_013_ch1,0011_0261s_shot_013,1,../../BEC/new-dataset/export/0011_0261s_shot_013/gunshot_unknown_13_ch1.wav,dana_artillery,1,val
+0011_0296s_shot_016_ch1,0011_0296s_shot_016,1,../../BEC/new-dataset/export/0011_0296s_shot_016/gunshot_unknown_16_ch1.wav,dana_artillery,1,train
+0011_0296s_shot_016_ch2,0011_0296s_shot_016,2,../../BEC/new-dataset/export/0011_0296s_shot_016/gunshot_unknown_16_ch2.wav,dana_artillery,1,train
+0011_0296s_shot_016_ch3,0011_0296s_shot_016,3,../../BEC/new-dataset/export/0011_0296s_shot_016/gunshot_unknown_16_ch3.wav,dana_artillery,1,train
+0011_0296s_shot_016_ch4,0011_0296s_shot_016,4,../../BEC/new-dataset/export/0011_0296s_shot_016/gunshot_unknown_16_ch4.wav,dana_artillery,1,train
+0011_0333s_shot_018_ch1,0011_0333s_shot_018,1,../../BEC/new-dataset/export/0011_0333s_shot_018/gunshot_unknown_18_ch1.wav,dana_artillery,1,test
+0011_0453s_shot_020_ch1,0011_0453s_shot_020,1,../../BEC/new-dataset/export/0011_0453s_shot_020/gunshot_unknown_20_ch1.wav,dana_artillery,1,train
+0011_0453s_shot_020_ch2,0011_0453s_shot_020,2,../../BEC/new-dataset/export/0011_0453s_shot_020/gunshot_unknown_20_ch2.wav,dana_artillery,1,train
+0011_0453s_shot_020_ch3,0011_0453s_shot_020,3,../../BEC/new-dataset/export/0011_0453s_shot_020/gunshot_unknown_20_ch3.wav,dana_artillery,1,train
+0011_0453s_shot_020_ch4,0011_0453s_shot_020,4,../../BEC/new-dataset/export/0011_0453s_shot_020/gunshot_unknown_20_ch4.wav,dana_artillery,1,train
+171236__alukahn__gunshot2_uid-fcn21d,171236__alukahn__gunshot2_uid-fcn21d,1,audio/171236__alukahn__gunshot2_uid-fcn21d.wav,other_gunshot,0,test
+371041__morganpurkis__single-gunshot-3_uid-1k053k,371041__morganpurkis__single-gunshot-3_uid-1k053k,1,audio/371041__morganpurkis__single-gunshot-3_uid-1k053k.wav,other_gunshot,0,test
+384687__morganpurkis__single-gunshot-42_uid-u9d6r1,384687__morganpurkis__single-gunshot-42_uid-u9d6r1,1,audio/384687__morganpurkis__single-gunshot-42_uid-u9d6r1.wav,other_gunshot,0,test
+384689__dobroide__20170318gunshotparadiso_uid-kwsehz,384689__dobroide__20170318gunshotparadiso_uid-kwsehz,1,audio/384689__dobroide__20170318gunshotparadiso_uid-kwsehz.wav,other_gunshot,0,test
+384689__dobroide__20170318gunshotparadiso_uid-pjl13d,384689__dobroide__20170318gunshotparadiso_uid-pjl13d,1,audio/384689__dobroide__20170318gunshotparadiso_uid-pjl13d.wav,other_gunshot,0,test
+402008__eardeer__gunshot__high_3_uid-4j4q67,402008__eardeer__gunshot__high_3_uid-4j4q67,1,audio/402008__eardeer__gunshot__high_3_uid-4j4q67.wav,other_gunshot,0,test
+402791__acidsnowflake__ak47-and-various-other-gunshots-at-indoor-shooting-range_uid-6aezru,402791__acidsnowflake__ak47-and-various-other-gunshots-at-indoor-shooting-range_uid-6aezru,1,audio/402791__acidsnowflake__ak47-and-various-other-gunshots-at-indoor-shooting-range_uid-6aezru.wav,other_gunshot,0,test
+402791__acidsnowflake__ak47-and-various-other-gunshots-at-indoor-shooting-range_uid-byjlki,402791__acidsnowflake__ak47-and-various-other-gunshots-at-indoor-shooting-range_uid-byjlki,1,audio/402791__acidsnowflake__ak47-and-various-other-gunshots-at-indoor-shooting-range_uid-byjlki.wav,other_gunshot,0,test
+402791__acidsnowflake__ak47-and-various-other-gunshots-at-indoor-shooting-range_uid-garl1l,402791__acidsnowflake__ak47-and-various-other-gunshots-at-indoor-shooting-range_uid-garl1l,1,audio/402791__acidsnowflake__ak47-and-various-other-gunshots-at-indoor-shooting-range_uid-garl1l.wav,other_gunshot,0,test
+402791__acidsnowflake__ak47-and-various-other-gunshots-at-indoor-shooting-range_uid-l3ibfo,402791__acidsnowflake__ak47-and-various-other-gunshots-at-indoor-shooting-range_uid-l3ibfo,1,audio/402791__acidsnowflake__ak47-and-various-other-gunshots-at-indoor-shooting-range_uid-l3ibfo.wav,other_gunshot,0,test
+402791__acidsnowflake__ak47-and-various-other-gunshots-at-indoor-shooting-range_uid-qe3eyz,402791__acidsnowflake__ak47-and-various-other-gunshots-at-indoor-shooting-range_uid-qe3eyz,1,audio/402791__acidsnowflake__ak47-and-various-other-gunshots-at-indoor-shooting-range_uid-qe3eyz.wav,other_gunshot,0,test
+405132__fstagi__gunshots_uid-xcyi0z,405132__fstagi__gunshots_uid-xcyi0z,1,audio/405132__fstagi__gunshots_uid-xcyi0z.wav,other_gunshot,0,test
+51470__smcameron__synthetic_gunshot_2_uid-vatpwv,51470__smcameron__synthetic_gunshot_2_uid-vatpwv,1,audio/51470__smcameron__synthetic_gunshot_2_uid-vatpwv.wav,other_gunshot,0,test
+518181__bolkmar__fx-gunshot_uid-al1o0i,518181__bolkmar__fx-gunshot_uid-al1o0i,1,audio/518181__bolkmar__fx-gunshot_uid-al1o0i.wav,other_gunshot,0,test
+518181__bolkmar__fx-gunshot_uid-es96l9,518181__bolkmar__fx-gunshot_uid-es96l9,1,audio/518181__bolkmar__fx-gunshot_uid-es96l9.wav,other_gunshot,0,test
+518181__bolkmar__fx-gunshot_uid-j3vsmz,518181__bolkmar__fx-gunshot_uid-j3vsmz,1,audio/518181__bolkmar__fx-gunshot_uid-j3vsmz.wav,other_gunshot,0,test
+519623__nathanchurchyard__gunshots_uid-kvxx3q,519623__nathanchurchyard__gunshots_uid-kvxx3q,1,audio/519623__nathanchurchyard__gunshots_uid-kvxx3q.wav,other_gunshot,0,test
+683312__pnmcarrierailfan__pistol-gunshot-mix-weapons_uid-tmmoay,683312__pnmcarrierailfan__pistol-gunshot-mix-weapons_uid-tmmoay,1,audio/683312__pnmcarrierailfan__pistol-gunshot-mix-weapons_uid-tmmoay.wav,other_gunshot,0,test
+Amusement_Park Ambiance -SoundBible_uid-2t9w3e,Amusement_Park Ambiance -SoundBible_uid-2t9w3e,1,audio/Amusement_Park Ambiance -SoundBible_uid-2t9w3e.wav,impulse_noise,0,test
+Amusement_Park Ambiance -SoundBible_uid-jwv6lq,Amusement_Park Ambiance -SoundBible_uid-jwv6lq,1,audio/Amusement_Park Ambiance -SoundBible_uid-jwv6lq.wav,impulse_noise,0,test
+Amusement_Park Ambiance -SoundBible_uid-l24o63,Amusement_Park Ambiance -SoundBible_uid-l24o63,1,audio/Amusement_Park Ambiance -SoundBible_uid-l24o63.wav,impulse_noise,0,test
+Background_Noise-SoundBible_uid-m7qaag,Background_Noise-SoundBible_uid-m7qaag,1,audio/Background_Noise-SoundBible_uid-m7qaag.wav,impulse_noise,0,test
+Background_Noise-SoundBible_uid-mnn2bm,Background_Noise-SoundBible_uid-mnn2bm,1,audio/Background_Noise-SoundBible_uid-mnn2bm.wav,impulse_noise,0,test
+Bi_Polar_Uncle-ScanMan-1810098860_uid-b8uks2,Bi_Polar_Uncle-ScanMan-1810098860_uid-b8uks2,1,audio/Bi_Polar_Uncle-ScanMan-1810098860_uid-b8uks2.wav,impulse_noise,0,test
+Bi_Polar_Uncle-ScanMan-1810098860_uid-evaiic,Bi_Polar_Uncle-ScanMan-1810098860_uid-evaiic,1,audio/Bi_Polar_Uncle-ScanMan-1810098860_uid-evaiic.wav,impulse_noise,0,test
+Bi_Polar_Uncle-ScanMan-1810098860_uid-l7n0jt,Bi_Polar_Uncle-ScanMan-1810098860_uid-l7n0jt,1,audio/Bi_Polar_Uncle-ScanMan-1810098860_uid-l7n0jt.wav,impulse_noise,0,test
+Bi_Polar_Uncle-ScanMan-1810098860_uid-omv54z,Bi_Polar_Uncle-ScanMan-1810098860_uid-omv54z,1,audio/Bi_Polar_Uncle-ScanMan-1810098860_uid-omv54z.wav,impulse_noise,0,test
+Bi_Polar_Uncle-ScanMan-1810098860_uid-p90ljg,Bi_Polar_Uncle-ScanMan-1810098860_uid-p90ljg,1,audio/Bi_Polar_Uncle-ScanMan-1810098860_uid-p90ljg.wav,impulse_noise,0,test
+Big_door_closed-Clemens_F-941522533_uid-n02it9,Big_door_closed-Clemens_F-941522533_uid-n02it9,1,audio/Big_door_closed-Clemens_F-941522533_uid-n02it9.wav,impulse_noise,0,test
+Cellar_Door Slam Shut-SoundBible_uid-pg4dq8,Cellar_Door Slam Shut-SoundBible_uid-pg4dq8,1,audio/Cellar_Door Slam Shut-SoundBible_uid-pg4dq8.wav,impulse_noise,0,test
+Citty_Traffic Ambiance-SoundBible_uid-87yimc,Citty_Traffic Ambiance-SoundBible_uid-87yimc,1,audio/Citty_Traffic Ambiance-SoundBible_uid-87yimc.wav,impulse_noise,0,test
+Citty_Traffic Ambiance-SoundBible_uid-8vk0wx,Citty_Traffic Ambiance-SoundBible_uid-8vk0wx,1,audio/Citty_Traffic Ambiance-SoundBible_uid-8vk0wx.wav,impulse_noise,0,test
+Citty_Traffic Ambiance-SoundBible_uid-mxbe2e,Citty_Traffic Ambiance-SoundBible_uid-mxbe2e,1,audio/Citty_Traffic Ambiance-SoundBible_uid-mxbe2e.wav,impulse_noise,0,test
+Citty_Traffic Ambiance-SoundBible_uid-q0srdn,Citty_Traffic Ambiance-SoundBible_uid-q0srdn,1,audio/Citty_Traffic Ambiance-SoundBible_uid-q0srdn.wav,impulse_noise,0,test
+City_Ambiance-SoundBible_uid-8yrqh9,City_Ambiance-SoundBible_uid-8yrqh9,1,audio/City_Ambiance-SoundBible_uid-8yrqh9.wav,impulse_noise,0,test
+City_Ambiance-SoundBible_uid-t8xlgr,City_Ambiance-SoundBible_uid-t8xlgr,1,audio/City_Ambiance-SoundBible_uid-t8xlgr.wav,impulse_noise,0,test
+Classroom_Ambiance-SoundBible_uid-q49pv1,Classroom_Ambiance-SoundBible_uid-q49pv1,1,audio/Classroom_Ambiance-SoundBible_uid-q49pv1.wav,impulse_noise,0,test
+Classroom_Ambiance-SoundBible_uid-qfbdk0,Classroom_Ambiance-SoundBible_uid-qfbdk0,1,audio/Classroom_Ambiance-SoundBible_uid-qfbdk0.wav,impulse_noise,0,test
+Classroom_Ambiance-SoundBible_uid-uu3ewb,Classroom_Ambiance-SoundBible_uid-uu3ewb,1,audio/Classroom_Ambiance-SoundBible_uid-uu3ewb.wav,impulse_noise,0,test
+Classroom_Ambiance-SoundBible_uid-xdl758,Classroom_Ambiance-SoundBible_uid-xdl758,1,audio/Classroom_Ambiance-SoundBible_uid-xdl758.wav,impulse_noise,0,test
+Close_Vault_Or_Jail_Door-SoundBible_uid-lasl2n,Close_Vault_Or_Jail_Door-SoundBible_uid-lasl2n,1,audio/Close_Vault_Or_Jail_Door-SoundBible_uid-lasl2n.wav,impulse_noise,0,test
+Dog_Barking-SoundBible_uid-3uyzqt,Dog_Barking-SoundBible_uid-3uyzqt,1,audio/Dog_Barking-SoundBible_uid-3uyzqt.wav,impulse_noise,0,test
+Dog_Barking-SoundBible_uid-udwefz,Dog_Barking-SoundBible_uid-udwefz,1,audio/Dog_Barking-SoundBible_uid-udwefz.wav,impulse_noise,0,test
+Dogs_Barking-SoundBible_uid-0ftva8,Dogs_Barking-SoundBible_uid-0ftva8,1,audio/Dogs_Barking-SoundBible_uid-0ftva8.wav,impulse_noise,0,test
+Dogs_Barking-SoundBible_uid-itlawo,Dogs_Barking-SoundBible_uid-itlawo,1,audio/Dogs_Barking-SoundBible_uid-itlawo.wav,impulse_noise,0,test
+Dogs_Barking-SoundBible_uid-k8qbi9,Dogs_Barking-SoundBible_uid-k8qbi9,1,audio/Dogs_Barking-SoundBible_uid-k8qbi9.wav,impulse_noise,0,test
+End_of_Game-Mike_Koenig-617089079_uid-0scusn,End_of_Game-Mike_Koenig-617089079_uid-0scusn,1,audio/End_of_Game-Mike_Koenig-617089079_uid-0scusn.wav,impulse_noise,0,test
+Engine_Inside_Car-SoundBible_uid-as3jed,Engine_Inside_Car-SoundBible_uid-as3jed,1,audio/Engine_Inside_Car-SoundBible_uid-as3jed.wav,impulse_noise,0,test
+Fast_Heel_Walk-Kyanna_Johnson-1646343608_uid-8u9yx0,Fast_Heel_Walk-Kyanna_Johnson-1646343608_uid-8u9yx0,1,audio/Fast_Heel_Walk-Kyanna_Johnson-1646343608_uid-8u9yx0.wav,impulse_noise,0,test
+Fast_Heel_Walk-Kyanna_Johnson-1646343608_uid-9pwmgu,Fast_Heel_Walk-Kyanna_Johnson-1646343608_uid-9pwmgu,1,audio/Fast_Heel_Walk-Kyanna_Johnson-1646343608_uid-9pwmgu.wav,impulse_noise,0,test
+Female_Scream_Horror-NeoPhyTe-138499973_uid-w7fb5j,Female_Scream_Horror-NeoPhyTe-138499973_uid-w7fb5j,1,audio/Female_Scream_Horror-NeoPhyTe-138499973_uid-w7fb5j.wav,impulse_noise,0,test
+Footsteps_SoundBible_uid-4v6zy1,Footsteps_SoundBible_uid-4v6zy1,1,audio/Footsteps_SoundBible_uid-4v6zy1.wav,impulse_noise,0,test
+Footsteps_SoundBible_uid-dg95vk,Footsteps_SoundBible_uid-dg95vk,1,audio/Footsteps_SoundBible_uid-dg95vk.wav,impulse_noise,0,test
+Footsteps_SoundBible_uid-hnz36f,Footsteps_SoundBible_uid-hnz36f,1,audio/Footsteps_SoundBible_uid-hnz36f.wav,impulse_noise,0,test
+Frying_Pan_Impact-SoundBible_uid-nbylf3,Frying_Pan_Impact-SoundBible_uid-nbylf3,1,audio/Frying_Pan_Impact-SoundBible_uid-nbylf3.wav,impulse_noise,0,test
+Indian_Bell-SoundBible_uid-t0u6xu,Indian_Bell-SoundBible_uid-t0u6xu,1,audio/Indian_Bell-SoundBible_uid-t0u6xu.wav,impulse_noise,0,test
+Japanese_Temple Bell Small-SoundBible_uid-3fhudh,Japanese_Temple Bell Small-SoundBible_uid-3fhudh,1,audio/Japanese_Temple Bell Small-SoundBible_uid-3fhudh.wav,impulse_noise,0,test
+Japanese_Temple Bell Small-SoundBible_uid-8kpqn1,Japanese_Temple Bell Small-SoundBible_uid-8kpqn1,1,audio/Japanese_Temple Bell Small-SoundBible_uid-8kpqn1.wav,impulse_noise,0,test
+Large_Door_Slam-SoundBible_uid-ljg1k3,Large_Door_Slam-SoundBible_uid-ljg1k3,1,audio/Large_Door_Slam-SoundBible_uid-ljg1k3.wav,impulse_noise,0,test
+Little_Girl_Talking-Mike_Koenig-782373463_uid-bstw5g,Little_Girl_Talking-Mike_Koenig-782373463_uid-bstw5g,1,audio/Little_Girl_Talking-Mike_Koenig-782373463_uid-bstw5g.wav,impulse_noise,0,test
+Metal_Gong-Dianakc-109711828_uid-hlegwg,Metal_Gong-Dianakc-109711828_uid-hlegwg,1,audio/Metal_Gong-Dianakc-109711828_uid-hlegwg.wav,impulse_noise,0,test
+Motorcycle_Engine-SoundBible_uid-bo8n5y,Motorcycle_Engine-SoundBible_uid-bo8n5y,1,audio/Motorcycle_Engine-SoundBible_uid-bo8n5y.wav,impulse_noise,0,test
+Neighborhood_Dogs Barking-SoundBible_uid-6a1kho,Neighborhood_Dogs Barking-SoundBible_uid-6a1kho,1,audio/Neighborhood_Dogs Barking-SoundBible_uid-6a1kho.wav,impulse_noise,0,test
+Neighborhood_Dogs Barking-SoundBible_uid-7mwktq,Neighborhood_Dogs Barking-SoundBible_uid-7mwktq,1,audio/Neighborhood_Dogs Barking-SoundBible_uid-7mwktq.wav,impulse_noise,0,test
+Neighborhood_Dogs Barking-SoundBible_uid-dwmjp4,Neighborhood_Dogs Barking-SoundBible_uid-dwmjp4,1,audio/Neighborhood_Dogs Barking-SoundBible_uid-dwmjp4.wav,impulse_noise,0,test
+Neighborhood_Dogs Barking-SoundBible_uid-kc7h7x,Neighborhood_Dogs Barking-SoundBible_uid-kc7h7x,1,audio/Neighborhood_Dogs Barking-SoundBible_uid-kc7h7x.wav,impulse_noise,0,test
+Neighborhood_Dogs Barking-SoundBible_uid-p7gr4b,Neighborhood_Dogs Barking-SoundBible_uid-p7gr4b,1,audio/Neighborhood_Dogs Barking-SoundBible_uid-p7gr4b.wav,impulse_noise,0,test
+Neighborhood_Dogs Barking-SoundBible_uid-rq1qkq,Neighborhood_Dogs Barking-SoundBible_uid-rq1qkq,1,audio/Neighborhood_Dogs Barking-SoundBible_uid-rq1qkq.wav,impulse_noise,0,test
+Obama_Speech Liar-SoundBible_uid-8mnhtv,Obama_Speech Liar-SoundBible_uid-8mnhtv,1,audio/Obama_Speech Liar-SoundBible_uid-8mnhtv.wav,impulse_noise,0,test
+Old_Door_Creaking-SoundBible_uid-e16ryq,Old_Door_Creaking-SoundBible_uid-e16ryq,1,audio/Old_Door_Creaking-SoundBible_uid-e16ryq.wav,impulse_noise,0,test
+Old_Door_Creaking-SoundBible_uid-f2vs74,Old_Door_Creaking-SoundBible_uid-f2vs74,1,audio/Old_Door_Creaking-SoundBible_uid-f2vs74.wav,impulse_noise,0,test
+Old_Door_Creaking-SoundBible_uid-ozrhlo,Old_Door_Creaking-SoundBible_uid-ozrhlo,1,audio/Old_Door_Creaking-SoundBible_uid-ozrhlo.wav,impulse_noise,0,test
+Old_Door_Creaking-SoundBible_uid-q6uf3u,Old_Door_Creaking-SoundBible_uid-q6uf3u,1,audio/Old_Door_Creaking-SoundBible_uid-q6uf3u.wav,impulse_noise,0,test
+Police Siren 3-SoundBible_uid-nytspf,Police Siren 3-SoundBible_uid-nytspf,1,audio/Police Siren 3-SoundBible_uid-nytspf.wav,impulse_noise,0,test
+Police_Siren-SoundBible_uid-uyk0z0,Police_Siren-SoundBible_uid-uyk0z0,1,audio/Police_Siren-SoundBible_uid-uyk0z0.wav,impulse_noise,0,test
+Psycho_Scream-SoundBible_uid-4qhwlo,Psycho_Scream-SoundBible_uid-4qhwlo,1,audio/Psycho_Scream-SoundBible_uid-4qhwlo.wav,impulse_noise,0,test
+Psycho_Scream-SoundBible_uid-uococi,Psycho_Scream-SoundBible_uid-uococi,1,audio/Psycho_Scream-SoundBible_uid-uococi.wav,impulse_noise,0,test
+Puppy_Dog Barking-SoundBible_uid-130qr7,Puppy_Dog Barking-SoundBible_uid-130qr7,1,audio/Puppy_Dog Barking-SoundBible_uid-130qr7.wav,impulse_noise,0,test
+Puppy_Dog Barking-SoundBible_uid-zrfwba,Puppy_Dog Barking-SoundBible_uid-zrfwba,1,audio/Puppy_Dog Barking-SoundBible_uid-zrfwba.wav,impulse_noise,0,test
+Race_Car Idle-SoundBible_uid-5il88u,Race_Car Idle-SoundBible_uid-5il88u,1,audio/Race_Car Idle-SoundBible_uid-5il88u.wav,impulse_noise,0,test
+Race_Car Idle-SoundBible_uid-bjwy2y,Race_Car Idle-SoundBible_uid-bjwy2y,1,audio/Race_Car Idle-SoundBible_uid-bjwy2y.wav,impulse_noise,0,test
+Race_Car Idle-SoundBible_uid-i7dn0k,Race_Car Idle-SoundBible_uid-i7dn0k,1,audio/Race_Car Idle-SoundBible_uid-i7dn0k.wav,impulse_noise,0,test
+Restaurant Walla Track-SoundBible_uid-19b0uq,Restaurant Walla Track-SoundBible_uid-19b0uq,1,audio/Restaurant Walla Track-SoundBible_uid-19b0uq.wav,impulse_noise,0,test
+Restaurant Walla Track-SoundBible_uid-e11kg8,Restaurant Walla Track-SoundBible_uid-e11kg8,1,audio/Restaurant Walla Track-SoundBible_uid-e11kg8.wav,impulse_noise,0,test
+Restaurant Walla Track-SoundBible_uid-fk59q6,Restaurant Walla Track-SoundBible_uid-fk59q6,1,audio/Restaurant Walla Track-SoundBible_uid-fk59q6.wav,impulse_noise,0,test
+School_Fire_Alarm-Cullen_Card-202875844_uid-rfkm7v,School_Fire_Alarm-Cullen_Card-202875844_uid-rfkm7v,1,audio/School_Fire_Alarm-Cullen_Card-202875844_uid-rfkm7v.wav,impulse_noise,0,test
+Shift_Gears-SoundBible_uid-cvmuj8,Shift_Gears-SoundBible_uid-cvmuj8,1,audio/Shift_Gears-SoundBible_uid-cvmuj8.wav,impulse_noise,0,test
+Ship_Bell-Mike_Koenig-1911209136_uid-e2z0y7,Ship_Bell-Mike_Koenig-1911209136_uid-e2z0y7,1,audio/Ship_Bell-Mike_Koenig-1911209136_uid-e2z0y7.wav,impulse_noise,0,test
+Ship_Brass_Bell-Mike_Koenig-1458750630_uid-oksrz0,Ship_Brass_Bell-Mike_Koenig-1458750630_uid-oksrz0,1,audio/Ship_Brass_Bell-Mike_Koenig-1458750630_uid-oksrz0.wav,impulse_noise,0,test
+Shopping_Mall Ambiance-SoundBible_uid-fa5yaq,Shopping_Mall Ambiance-SoundBible_uid-fa5yaq,1,audio/Shopping_Mall Ambiance-SoundBible_uid-fa5yaq.wav,impulse_noise,0,test
+Sleigh_Bells_Ringing-SoundBible_uid-i52bxo,Sleigh_Bells_Ringing-SoundBible_uid-i52bxo,1,audio/Sleigh_Bells_Ringing-SoundBible_uid-i52bxo.wav,impulse_noise,0,test
+Sleigh_Bells_Ringing-SoundBible_uid-xjtewi,Sleigh_Bells_Ringing-SoundBible_uid-xjtewi,1,audio/Sleigh_Bells_Ringing-SoundBible_uid-xjtewi.wav,impulse_noise,0,test
+Soldiers_Marching-SoundBible_uid-0eax5q,Soldiers_Marching-SoundBible_uid-0eax5q,1,audio/Soldiers_Marching-SoundBible_uid-0eax5q.wav,impulse_noise,0,test
+Soldiers_Marching-SoundBible_uid-4m3auc,Soldiers_Marching-SoundBible_uid-4m3auc,1,audio/Soldiers_Marching-SoundBible_uid-4m3auc.wav,impulse_noise,0,test
+Soldiers_Marching-SoundBible_uid-51ygbj,Soldiers_Marching-SoundBible_uid-51ygbj,1,audio/Soldiers_Marching-SoundBible_uid-51ygbj.wav,impulse_noise,0,test
+Soldiers_Marching-SoundBible_uid-5xkxw1,Soldiers_Marching-SoundBible_uid-5xkxw1,1,audio/Soldiers_Marching-SoundBible_uid-5xkxw1.wav,impulse_noise,0,test
+Soldiers_Marching-SoundBible_uid-bqrx9i,Soldiers_Marching-SoundBible_uid-bqrx9i,1,audio/Soldiers_Marching-SoundBible_uid-bqrx9i.wav,impulse_noise,0,test
+Sports_Bar Patrons Loud-SoundBible_uid-0qx8ca,Sports_Bar Patrons Loud-SoundBible_uid-0qx8ca,1,audio/Sports_Bar Patrons Loud-SoundBible_uid-0qx8ca.wav,impulse_noise,0,test
+Steam_Engine-John-1826274710_uid-1hznao,Steam_Engine-John-1826274710_uid-1hznao,1,audio/Steam_Engine-John-1826274710_uid-1hznao.wav,impulse_noise,0,test
+Steam_Engine-John-1826274710_uid-9qykmv,Steam_Engine-John-1826274710_uid-9qykmv,1,audio/Steam_Engine-John-1826274710_uid-9qykmv.wav,impulse_noise,0,test
+Steam_Engine-John-1826274710_uid-pe5dcl,Steam_Engine-John-1826274710_uid-pe5dcl,1,audio/Steam_Engine-John-1826274710_uid-pe5dcl.wav,impulse_noise,0,test
+Swimming_Pool Ambiance-SoundBible_uid-thd1td,Swimming_Pool Ambiance-SoundBible_uid-thd1td,1,audio/Swimming_Pool Ambiance-SoundBible_uid-thd1td.wav,impulse_noise,0,test
+Temple_Bell Huge-SoundBible_uid-vwd9pv,Temple_Bell Huge-SoundBible_uid-vwd9pv,1,audio/Temple_Bell Huge-SoundBible_uid-vwd9pv.wav,impulse_noise,0,test
+Tornado_Siren_II-Delilah-747233690_uid-9imkus,Tornado_Siren_II-Delilah-747233690_uid-9imkus,1,audio/Tornado_Siren_II-Delilah-747233690_uid-9imkus.wav,impulse_noise,0,test
+Tornado_Siren_II-Delilah-747233690_uid-k23l64,Tornado_Siren_II-Delilah-747233690_uid-k23l64,1,audio/Tornado_Siren_II-Delilah-747233690_uid-k23l64.wav,impulse_noise,0,test
+Tornado_Siren_II-Delilah-747233690_uid-yu5cjs,Tornado_Siren_II-Delilah-747233690_uid-yu5cjs,1,audio/Tornado_Siren_II-Delilah-747233690_uid-yu5cjs.wav,impulse_noise,0,test
+Tornado_Siren_SoundBible_uid-6dnh9z,Tornado_Siren_SoundBible_uid-6dnh9z,1,audio/Tornado_Siren_SoundBible_uid-6dnh9z.wav,impulse_noise,0,test
+Tornado_Siren_SoundBible_uid-g7d17q,Tornado_Siren_SoundBible_uid-g7d17q,1,audio/Tornado_Siren_SoundBible_uid-g7d17q.wav,impulse_noise,0,test
+Walking-SoundBible_uid-62j3do,Walking-SoundBible_uid-62j3do,1,audio/Walking-SoundBible_uid-62j3do.wav,impulse_noise,0,test
+Walking_In_Snow-SoundBible_uid-hoifci,Walking_In_Snow-SoundBible_uid-hoifci,1,audio/Walking_In_Snow-SoundBible_uid-hoifci.wav,impulse_noise,0,test
+Walking_On_Gravel-SoundBible_uid-7duozg,Walking_On_Gravel-SoundBible_uid-7duozg,1,audio/Walking_On_Gravel-SoundBible_uid-7duozg.wav,impulse_noise,0,test
+Walking_On_Gravel-SoundBible_uid-fi611q,Walking_On_Gravel-SoundBible_uid-fi611q,1,audio/Walking_On_Gravel-SoundBible_uid-fi611q.wav,impulse_noise,0,test
+Walking_On_Gravel-SoundBible_uid-jhzvu7,Walking_On_Gravel-SoundBible_uid-jhzvu7,1,audio/Walking_On_Gravel-SoundBible_uid-jhzvu7.wav,impulse_noise,0,test
+Winston_Churchill Nazi Speech-SoundBible_uid-2unyd8,Winston_Churchill Nazi Speech-SoundBible_uid-2unyd8,1,audio/Winston_Churchill Nazi Speech-SoundBible_uid-2unyd8.wav,impulse_noise,0,test
+Winston_Churchill Nazi Speech-SoundBible_uid-761zdn,Winston_Churchill Nazi Speech-SoundBible_uid-761zdn,1,audio/Winston_Churchill Nazi Speech-SoundBible_uid-761zdn.wav,impulse_noise,0,test
+Winston_Churchill Nazi Speech-SoundBible_uid-g4x51s,Winston_Churchill Nazi Speech-SoundBible_uid-g4x51s,1,audio/Winston_Churchill Nazi Speech-SoundBible_uid-g4x51s.wav,impulse_noise,0,test
+Winston_Churchill Nazi Speech-SoundBible_uid-jp39dv,Winston_Churchill Nazi Speech-SoundBible_uid-jp39dv,1,audio/Winston_Churchill Nazi Speech-SoundBible_uid-jp39dv.wav,impulse_noise,0,test
+Winston_Churchill Nazi Speech-SoundBible_uid-rwukdv,Winston_Churchill Nazi Speech-SoundBible_uid-rwukdv,1,audio/Winston_Churchill Nazi Speech-SoundBible_uid-rwukdv.wav,impulse_noise,0,test
+Woman_Screaming 2-SoundBible_uid-c9acqz,Woman_Screaming 2-SoundBible_uid-c9acqz,1,audio/Woman_Screaming 2-SoundBible_uid-c9acqz.wav,impulse_noise,0,test
+church_chime-daniel_simon (1)_uid-zsrdac,church_chime-daniel_simon (1)_uid-zsrdac,1,audio/church_chime-daniel_simon (1)_uid-zsrdac.wav,impulse_noise,0,test
+church_chime-daniel_simon_uid-bbyw01,church_chime-daniel_simon_uid-bbyw01,1,audio/church_chime-daniel_simon_uid-bbyw01.wav,impulse_noise,0,test
+church_chime-daniel_simon_uid-sxzijw,church_chime-daniel_simon_uid-sxzijw,1,audio/church_chime-daniel_simon_uid-sxzijw.wav,impulse_noise,0,test
+doberman_pincher_daniel-simion_uid-348sts,doberman_pincher_daniel-simion_uid-348sts,1,audio/doberman_pincher_daniel-simion_uid-348sts.wav,impulse_noise,0,test
+doberman_pincher_daniel-simion_uid-4gutjw,doberman_pincher_daniel-simion_uid-4gutjw,1,audio/doberman_pincher_daniel-simion_uid-4gutjw.wav,impulse_noise,0,test
+doberman_pincher_daniel-simion_uid-db2xc6,doberman_pincher_daniel-simion_uid-db2xc6,1,audio/doberman_pincher_daniel-simion_uid-db2xc6.wav,impulse_noise,0,test
+doberman_pincher_daniel-simion_uid-m6nbjk,doberman_pincher_daniel-simion_uid-m6nbjk,1,audio/doberman_pincher_daniel-simion_uid-m6nbjk.wav,impulse_noise,0,test
+german_shephard-daniel_simon (1)_uid-x57o4h,german_shephard-daniel_simon (1)_uid-x57o4h,1,audio/german_shephard-daniel_simon (1)_uid-x57o4h.wav,impulse_noise,0,test
+german_shephard-daniel_simon_uid-35by3o,german_shephard-daniel_simon_uid-35by3o,1,audio/german_shephard-daniel_simon_uid-35by3o.wav,impulse_noise,0,test
+hard_shoes_1-daniel_simon_uid-lqfqp3,hard_shoes_1-daniel_simon_uid-lqfqp3,1,audio/hard_shoes_1-daniel_simon_uid-lqfqp3.wav,impulse_noise,0,test
+harley_davidson-daniel_simon_uid-3gnkx0,harley_davidson-daniel_simon_uid-3gnkx0,1,audio/harley_davidson-daniel_simon_uid-3gnkx0.wav,impulse_noise,0,test
+harley_davidson-daniel_simon_uid-5tbvav,harley_davidson-daniel_simon_uid-5tbvav,1,audio/harley_davidson-daniel_simon_uid-5tbvav.wav,impulse_noise,0,test
+labrador_barking-daniel_simon_uid-cpx5m6,labrador_barking-daniel_simon_uid-cpx5m6,1,audio/labrador_barking-daniel_simon_uid-cpx5m6.wav,impulse_noise,0,test
+labrador_barking-daniel_simon_uid-cvf4k1,labrador_barking-daniel_simon_uid-cvf4k1,1,audio/labrador_barking-daniel_simon_uid-cvf4k1.wav,impulse_noise,0,test
+labrador_barking-daniel_simon_uid-j0e09a,labrador_barking-daniel_simon_uid-j0e09a,1,audio/labrador_barking-daniel_simon_uid-j0e09a.wav,impulse_noise,0,test
+labrador_barking-daniel_simon_uid-mwgdoo,labrador_barking-daniel_simon_uid-mwgdoo,1,audio/labrador_barking-daniel_simon_uid-mwgdoo.wav,impulse_noise,0,test
+labrador_barking-daniel_simon_uid-p1nd4y,labrador_barking-daniel_simon_uid-p1nd4y,1,audio/labrador_barking-daniel_simon_uid-p1nd4y.wav,impulse_noise,0,test
+labrador_barking-daniel_simon_uid-px7218,labrador_barking-daniel_simon_uid-px7218,1,audio/labrador_barking-daniel_simon_uid-px7218.wav,impulse_noise,0,test
+muscle_car-daniel_simon (1)_uid-hvisfn,muscle_car-daniel_simon (1)_uid-hvisfn,1,audio/muscle_car-daniel_simon (1)_uid-hvisfn.wav,impulse_noise,0,test
+muscle_car-daniel_simon_uid-jpcsdl,muscle_car-daniel_simon_uid-jpcsdl,1,audio/muscle_car-daniel_simon_uid-jpcsdl.wav,impulse_noise,0,test
+old_car-engine_daniel_simion_uid-2lzarp,old_car-engine_daniel_simion_uid-2lzarp,1,audio/old_car-engine_daniel_simion_uid-2lzarp.wav,impulse_noise,0,test
+old_car-engine_daniel_simion_uid-5xyl64,old_car-engine_daniel_simion_uid-5xyl64,1,audio/old_car-engine_daniel_simion_uid-5xyl64.wav,impulse_noise,0,test
+old_car-engine_daniel_simion_uid-8mfyeb,old_car-engine_daniel_simion_uid-8mfyeb,1,audio/old_car-engine_daniel_simion_uid-8mfyeb.wav,impulse_noise,0,test
+old_car-engine_daniel_simion_uid-9xmt28,old_car-engine_daniel_simion_uid-9xmt28,1,audio/old_car-engine_daniel_simion_uid-9xmt28.wav,impulse_noise,0,test
+old_fashioned-door-bell-daniel_simon_uid-1bqwmt,old_fashioned-door-bell-daniel_simon_uid-1bqwmt,1,audio/old_fashioned-door-bell-daniel_simon_uid-1bqwmt.wav,impulse_noise,0,test
+old_fashioned-door-bell-daniel_simon_uid-8q7aiq,old_fashioned-door-bell-daniel_simon_uid-8q7aiq,1,audio/old_fashioned-door-bell-daniel_simon_uid-8q7aiq.wav,impulse_noise,0,test
+party_crowd-daniel_simon_uid-8pwj7x,party_crowd-daniel_simon_uid-8pwj7x,1,audio/party_crowd-daniel_simon_uid-8pwj7x.wav,impulse_noise,0,test
+party_crowd-daniel_simon_uid-vroqkp,party_crowd-daniel_simon_uid-vroqkp,1,audio/party_crowd-daniel_simon_uid-vroqkp.wav,impulse_noise,0,test
+railroad_crossing_bell-Brylon_Terry-1551570865 (1)_uid-55is8o,railroad_crossing_bell-Brylon_Terry-1551570865 (1)_uid-55is8o,1,audio/railroad_crossing_bell-Brylon_Terry-1551570865 (1)_uid-55is8o.wav,impulse_noise,0,test
+railroad_crossing_bell-Brylon_Terry-1551570865 (1)_uid-6mnkqh,railroad_crossing_bell-Brylon_Terry-1551570865 (1)_uid-6mnkqh,1,audio/railroad_crossing_bell-Brylon_Terry-1551570865 (1)_uid-6mnkqh.wav,impulse_noise,0,test
+railroad_crossing_bell-Brylon_Terry-1551570865 (1)_uid-mi9sxj,railroad_crossing_bell-Brylon_Terry-1551570865 (1)_uid-mi9sxj,1,audio/railroad_crossing_bell-Brylon_Terry-1551570865 (1)_uid-mi9sxj.wav,impulse_noise,0,test
+railroad_crossing_bell-Brylon_Terry-1551570865 (1)_uid-n15yft,railroad_crossing_bell-Brylon_Terry-1551570865 (1)_uid-n15yft,1,audio/railroad_crossing_bell-Brylon_Terry-1551570865 (1)_uid-n15yft.wav,impulse_noise,0,test
+railroad_crossing_bell-Brylon_Terry-1551570865 (1)_uid-vxl8al,railroad_crossing_bell-Brylon_Terry-1551570865 (1)_uid-vxl8al,1,audio/railroad_crossing_bell-Brylon_Terry-1551570865 (1)_uid-vxl8al.wav,impulse_noise,0,test
+railroad_crossing_bell-Brylon_Terry-1551570865 (1)_uid-waev1t,railroad_crossing_bell-Brylon_Terry-1551570865 (1)_uid-waev1t,1,audio/railroad_crossing_bell-Brylon_Terry-1551570865 (1)_uid-waev1t.wav,impulse_noise,0,test
+railroad_crossing_bell-Brylon_Terry-1551570865 (1)_uid-zyz59r,railroad_crossing_bell-Brylon_Terry-1551570865 (1)_uid-zyz59r,1,audio/railroad_crossing_bell-Brylon_Terry-1551570865 (1)_uid-zyz59r.wav,impulse_noise,0,test
+railroad_crossing_bell-Brylon_Terry-1551570865_uid-ejhzbl,railroad_crossing_bell-Brylon_Terry-1551570865_uid-ejhzbl,1,audio/railroad_crossing_bell-Brylon_Terry-1551570865_uid-ejhzbl.wav,impulse_noise,0,test
+railroad_crossing_bell-Brylon_Terry-1551570865_uid-po2yqk,railroad_crossing_bell-Brylon_Terry-1551570865_uid-po2yqk,1,audio/railroad_crossing_bell-Brylon_Terry-1551570865_uid-po2yqk.wav,impulse_noise,0,test
+tolling_bell_daniel-simion_uid-kg3lrg,tolling_bell_daniel-simion_uid-kg3lrg,1,audio/tolling_bell_daniel-simion_uid-kg3lrg.wav,impulse_noise,0,test
+tolling_bell_daniel-simion_uid-witt3h,tolling_bell_daniel-simion_uid-witt3h,1,audio/tolling_bell_daniel-simion_uid-witt3h.wav,impulse_noise,0,test
+128302__xenonn__layered-gunshot-8_uid-lse78m,128302__xenonn__layered-gunshot-8_uid-lse78m,1,audio/128302__xenonn__layered-gunshot-8_uid-lse78m.wav,other_gunshot,0,train
+147901__tcawte__gunshot_uid-ffols3,147901__tcawte__gunshot_uid-ffols3,1,audio/147901__tcawte__gunshot_uid-ffols3.wav,other_gunshot,0,val
+180961__kleeb__gunshots_uid-kz30bp,180961__kleeb__gunshots_uid-kz30bp,1,audio/180961__kleeb__gunshots_uid-kz30bp.wav,other_gunshot,0,train
+20352__cognito-perceptu__gunshot_uid-ejdc8l,20352__cognito-perceptu__gunshot_uid-ejdc8l,1,audio/20352__cognito-perceptu__gunshot_uid-ejdc8l.wav,other_gunshot,0,train
+221640__jakesapp23__gunshot-1_uid-t3t56m,221640__jakesapp23__gunshot-1_uid-t3t56m,1,audio/221640__jakesapp23__gunshot-1_uid-t3t56m.wav,other_gunshot,0,val
+337242__adrilahan__distant-three-round-burst_uid-6au8kr,337242__adrilahan__distant-three-round-burst_uid-6au8kr,1,audio/337242__adrilahan__distant-three-round-burst_uid-6au8kr.wav,other_gunshot,0,train
+337242__adrilahan__distant-three-round-burst_uid-hpid0y,337242__adrilahan__distant-three-round-burst_uid-hpid0y,1,audio/337242__adrilahan__distant-three-round-burst_uid-hpid0y.wav,other_gunshot,0,train
+344524__jeremysykes__gunshot02_uid-8hfr2k,344524__jeremysykes__gunshot02_uid-8hfr2k,1,audio/344524__jeremysykes__gunshot02_uid-8hfr2k.wav,other_gunshot,0,train
+350264__randomx45__gunshot_uid-k88htu,350264__randomx45__gunshot_uid-k88htu,1,audio/350264__randomx45__gunshot_uid-k88htu.wav,other_gunshot,0,train
+370304__morganpurkis__single-gunshot-2_uid-b0dd83,370304__morganpurkis__single-gunshot-2_uid-b0dd83,1,audio/370304__morganpurkis__single-gunshot-2_uid-b0dd83.wav,other_gunshot,0,train
+370332__morganpurkis__single-gunshot-2-v2_uid-2shhwg,370332__morganpurkis__single-gunshot-2-v2_uid-2shhwg,1,audio/370332__morganpurkis__single-gunshot-2-v2_uid-2shhwg.wav,other_gunshot,0,train
+384689__dobroide__20170318gunshotparadiso_uid-49aegw,384689__dobroide__20170318gunshotparadiso_uid-49aegw,1,audio/384689__dobroide__20170318gunshotparadiso_uid-49aegw.wav,other_gunshot,0,train
+384689__dobroide__20170318gunshotparadiso_uid-8mby6q,384689__dobroide__20170318gunshotparadiso_uid-8mby6q,1,audio/384689__dobroide__20170318gunshotparadiso_uid-8mby6q.wav,other_gunshot,0,val
+384689__dobroide__20170318gunshotparadiso_uid-8nfgas,384689__dobroide__20170318gunshotparadiso_uid-8nfgas,1,audio/384689__dobroide__20170318gunshotparadiso_uid-8nfgas.wav,other_gunshot,0,val
+384689__dobroide__20170318gunshotparadiso_uid-uof88q,384689__dobroide__20170318gunshotparadiso_uid-uof88q,1,audio/384689__dobroide__20170318gunshotparadiso_uid-uof88q.wav,other_gunshot,0,val
+384689__dobroide__20170318gunshotparadiso_uid-vwkgqm,384689__dobroide__20170318gunshotparadiso_uid-vwkgqm,1,audio/384689__dobroide__20170318gunshotparadiso_uid-vwkgqm.wav,other_gunshot,0,train
+384689__dobroide__20170318gunshotparadiso_uid-xdxkmb,384689__dobroide__20170318gunshotparadiso_uid-xdxkmb,1,audio/384689__dobroide__20170318gunshotparadiso_uid-xdxkmb.wav,other_gunshot,0,train
+384689__dobroide__20170318gunshotparadiso_uid-zyxakp,384689__dobroide__20170318gunshotparadiso_uid-zyxakp,1,audio/384689__dobroide__20170318gunshotparadiso_uid-zyxakp.wav,other_gunshot,0,train
+385811__morganpurkis__single-pistol-gunshot-3_uid-ndpa6x,385811__morganpurkis__single-pistol-gunshot-3_uid-ndpa6x,1,audio/385811__morganpurkis__single-pistol-gunshot-3_uid-ndpa6x.wav,other_gunshot,0,train
+391847__morganpurkis__single-gunshot-54_uid-ihrkae,391847__morganpurkis__single-gunshot-54_uid-ihrkae,1,audio/391847__morganpurkis__single-gunshot-54_uid-ihrkae.wav,other_gunshot,0,train
+399266__morganpurkis__simple-gunshot-reverb-test_uid-lr1lb6,399266__morganpurkis__simple-gunshot-reverb-test_uid-lr1lb6,1,audio/399266__morganpurkis__simple-gunshot-reverb-test_uid-lr1lb6.wav,other_gunshot,0,val
+402012__eardeer__gunshot__high_5_uid-aaerc6,402012__eardeer__gunshot__high_5_uid-aaerc6,1,audio/402012__eardeer__gunshot__high_5_uid-aaerc6.wav,other_gunshot,0,val
+402013__eardeer__gunshot__high_4_uid-dzkr28,402013__eardeer__gunshot__high_4_uid-dzkr28,1,audio/402013__eardeer__gunshot__high_4_uid-dzkr28.wav,other_gunshot,0,train
+402014__eardeer__gunshot__high_6_uid-dd20sk,402014__eardeer__gunshot__high_6_uid-dd20sk,1,audio/402014__eardeer__gunshot__high_6_uid-dd20sk.wav,other_gunshot,0,train
+402791__acidsnowflake__ak47-and-various-other-gunshots-at-indoor-shooting-range_uid-7aijxv,402791__acidsnowflake__ak47-and-various-other-gunshots-at-indoor-shooting-range_uid-7aijxv,1,audio/402791__acidsnowflake__ak47-and-various-other-gunshots-at-indoor-shooting-range_uid-7aijxv.wav,other_gunshot,0,train
+402791__acidsnowflake__ak47-and-various-other-gunshots-at-indoor-shooting-range_uid-7x2600,402791__acidsnowflake__ak47-and-various-other-gunshots-at-indoor-shooting-range_uid-7x2600,1,audio/402791__acidsnowflake__ak47-and-various-other-gunshots-at-indoor-shooting-range_uid-7x2600.wav,other_gunshot,0,train
+402791__acidsnowflake__ak47-and-various-other-gunshots-at-indoor-shooting-range_uid-9yxqa7,402791__acidsnowflake__ak47-and-various-other-gunshots-at-indoor-shooting-range_uid-9yxqa7,1,audio/402791__acidsnowflake__ak47-and-various-other-gunshots-at-indoor-shooting-range_uid-9yxqa7.wav,other_gunshot,0,train
+402791__acidsnowflake__ak47-and-various-other-gunshots-at-indoor-shooting-range_uid-af9hyb,402791__acidsnowflake__ak47-and-various-other-gunshots-at-indoor-shooting-range_uid-af9hyb,1,audio/402791__acidsnowflake__ak47-and-various-other-gunshots-at-indoor-shooting-range_uid-af9hyb.wav,other_gunshot,0,val
+402791__acidsnowflake__ak47-and-various-other-gunshots-at-indoor-shooting-range_uid-aymttz,402791__acidsnowflake__ak47-and-various-other-gunshots-at-indoor-shooting-range_uid-aymttz,1,audio/402791__acidsnowflake__ak47-and-various-other-gunshots-at-indoor-shooting-range_uid-aymttz.wav,other_gunshot,0,val
+402791__acidsnowflake__ak47-and-various-other-gunshots-at-indoor-shooting-range_uid-btphrk,402791__acidsnowflake__ak47-and-various-other-gunshots-at-indoor-shooting-range_uid-btphrk,1,audio/402791__acidsnowflake__ak47-and-various-other-gunshots-at-indoor-shooting-range_uid-btphrk.wav,other_gunshot,0,train
+402791__acidsnowflake__ak47-and-various-other-gunshots-at-indoor-shooting-range_uid-emyyzn,402791__acidsnowflake__ak47-and-various-other-gunshots-at-indoor-shooting-range_uid-emyyzn,1,audio/402791__acidsnowflake__ak47-and-various-other-gunshots-at-indoor-shooting-range_uid-emyyzn.wav,other_gunshot,0,train
+402791__acidsnowflake__ak47-and-various-other-gunshots-at-indoor-shooting-range_uid-ieochv,402791__acidsnowflake__ak47-and-various-other-gunshots-at-indoor-shooting-range_uid-ieochv,1,audio/402791__acidsnowflake__ak47-and-various-other-gunshots-at-indoor-shooting-range_uid-ieochv.wav,other_gunshot,0,train
+402791__acidsnowflake__ak47-and-various-other-gunshots-at-indoor-shooting-range_uid-n6db0o,402791__acidsnowflake__ak47-and-various-other-gunshots-at-indoor-shooting-range_uid-n6db0o,1,audio/402791__acidsnowflake__ak47-and-various-other-gunshots-at-indoor-shooting-range_uid-n6db0o.wav,other_gunshot,0,val
+402791__acidsnowflake__ak47-and-various-other-gunshots-at-indoor-shooting-range_uid-qwmyny,402791__acidsnowflake__ak47-and-various-other-gunshots-at-indoor-shooting-range_uid-qwmyny,1,audio/402791__acidsnowflake__ak47-and-various-other-gunshots-at-indoor-shooting-range_uid-qwmyny.wav,other_gunshot,0,train
+402791__acidsnowflake__ak47-and-various-other-gunshots-at-indoor-shooting-range_uid-ria7cw,402791__acidsnowflake__ak47-and-various-other-gunshots-at-indoor-shooting-range_uid-ria7cw,1,audio/402791__acidsnowflake__ak47-and-various-other-gunshots-at-indoor-shooting-range_uid-ria7cw.wav,other_gunshot,0,val
+402791__acidsnowflake__ak47-and-various-other-gunshots-at-indoor-shooting-range_uid-t420qo,402791__acidsnowflake__ak47-and-various-other-gunshots-at-indoor-shooting-range_uid-t420qo,1,audio/402791__acidsnowflake__ak47-and-various-other-gunshots-at-indoor-shooting-range_uid-t420qo.wav,other_gunshot,0,val
+402791__acidsnowflake__ak47-and-various-other-gunshots-at-indoor-shooting-range_uid-t4sna7,402791__acidsnowflake__ak47-and-various-other-gunshots-at-indoor-shooting-range_uid-t4sna7,1,audio/402791__acidsnowflake__ak47-and-various-other-gunshots-at-indoor-shooting-range_uid-t4sna7.wav,other_gunshot,0,train
+402791__acidsnowflake__ak47-and-various-other-gunshots-at-indoor-shooting-range_uid-virgye,402791__acidsnowflake__ak47-and-various-other-gunshots-at-indoor-shooting-range_uid-virgye,1,audio/402791__acidsnowflake__ak47-and-various-other-gunshots-at-indoor-shooting-range_uid-virgye.wav,other_gunshot,0,train
+402791__acidsnowflake__ak47-and-various-other-gunshots-at-indoor-shooting-range_uid-wim8gs,402791__acidsnowflake__ak47-and-various-other-gunshots-at-indoor-shooting-range_uid-wim8gs,1,audio/402791__acidsnowflake__ak47-and-various-other-gunshots-at-indoor-shooting-range_uid-wim8gs.wav,other_gunshot,0,train
+404816__straget__gunshot_uid-1lffgk,404816__straget__gunshot_uid-1lffgk,1,audio/404816__straget__gunshot_uid-1lffgk.wav,other_gunshot,0,train
+405132__fstagi__gunshots_uid-ux8qa6,405132__fstagi__gunshots_uid-ux8qa6,1,audio/405132__fstagi__gunshots_uid-ux8qa6.wav,other_gunshot,0,val
+405132__fstagi__gunshots_uid-xyilvk,405132__fstagi__gunshots_uid-xyilvk,1,audio/405132__fstagi__gunshots_uid-xyilvk.wav,other_gunshot,0,train
+516684__supreme1197__gunshot_uid-wvvzr7,516684__supreme1197__gunshot_uid-wvvzr7,1,audio/516684__supreme1197__gunshot_uid-wvvzr7.wav,other_gunshot,0,train
+518181__bolkmar__fx-gunshot_uid-4ei81r,518181__bolkmar__fx-gunshot_uid-4ei81r,1,audio/518181__bolkmar__fx-gunshot_uid-4ei81r.wav,other_gunshot,0,train
+518181__bolkmar__fx-gunshot_uid-86m5v6,518181__bolkmar__fx-gunshot_uid-86m5v6,1,audio/518181__bolkmar__fx-gunshot_uid-86m5v6.wav,other_gunshot,0,train
+518181__bolkmar__fx-gunshot_uid-bhz6v7,518181__bolkmar__fx-gunshot_uid-bhz6v7,1,audio/518181__bolkmar__fx-gunshot_uid-bhz6v7.wav,other_gunshot,0,train
+518181__bolkmar__fx-gunshot_uid-fzl4r4,518181__bolkmar__fx-gunshot_uid-fzl4r4,1,audio/518181__bolkmar__fx-gunshot_uid-fzl4r4.wav,other_gunshot,0,train
+518181__bolkmar__fx-gunshot_uid-mndnub,518181__bolkmar__fx-gunshot_uid-mndnub,1,audio/518181__bolkmar__fx-gunshot_uid-mndnub.wav,other_gunshot,0,val
+518181__bolkmar__fx-gunshot_uid-r0n83p,518181__bolkmar__fx-gunshot_uid-r0n83p,1,audio/518181__bolkmar__fx-gunshot_uid-r0n83p.wav,other_gunshot,0,train
+519623__nathanchurchyard__gunshots_uid-04snto,519623__nathanchurchyard__gunshots_uid-04snto,1,audio/519623__nathanchurchyard__gunshots_uid-04snto.wav,other_gunshot,0,train
+519623__nathanchurchyard__gunshots_uid-0vbgff,519623__nathanchurchyard__gunshots_uid-0vbgff,1,audio/519623__nathanchurchyard__gunshots_uid-0vbgff.wav,other_gunshot,0,train
+519623__nathanchurchyard__gunshots_uid-221io5,519623__nathanchurchyard__gunshots_uid-221io5,1,audio/519623__nathanchurchyard__gunshots_uid-221io5.wav,other_gunshot,0,train
+519623__nathanchurchyard__gunshots_uid-5qaogm,519623__nathanchurchyard__gunshots_uid-5qaogm,1,audio/519623__nathanchurchyard__gunshots_uid-5qaogm.wav,other_gunshot,0,val
+519623__nathanchurchyard__gunshots_uid-68l6r4,519623__nathanchurchyard__gunshots_uid-68l6r4,1,audio/519623__nathanchurchyard__gunshots_uid-68l6r4.wav,other_gunshot,0,train
+519623__nathanchurchyard__gunshots_uid-dx8n5j,519623__nathanchurchyard__gunshots_uid-dx8n5j,1,audio/519623__nathanchurchyard__gunshots_uid-dx8n5j.wav,other_gunshot,0,train
+519623__nathanchurchyard__gunshots_uid-guol0j,519623__nathanchurchyard__gunshots_uid-guol0j,1,audio/519623__nathanchurchyard__gunshots_uid-guol0j.wav,other_gunshot,0,train
+519623__nathanchurchyard__gunshots_uid-hkereq,519623__nathanchurchyard__gunshots_uid-hkereq,1,audio/519623__nathanchurchyard__gunshots_uid-hkereq.wav,other_gunshot,0,train
+519623__nathanchurchyard__gunshots_uid-jyaue7,519623__nathanchurchyard__gunshots_uid-jyaue7,1,audio/519623__nathanchurchyard__gunshots_uid-jyaue7.wav,other_gunshot,0,train
+519623__nathanchurchyard__gunshots_uid-m3daea,519623__nathanchurchyard__gunshots_uid-m3daea,1,audio/519623__nathanchurchyard__gunshots_uid-m3daea.wav,other_gunshot,0,val
+519623__nathanchurchyard__gunshots_uid-ro3jyx,519623__nathanchurchyard__gunshots_uid-ro3jyx,1,audio/519623__nathanchurchyard__gunshots_uid-ro3jyx.wav,other_gunshot,0,train
+519623__nathanchurchyard__gunshots_uid-voqt7j,519623__nathanchurchyard__gunshots_uid-voqt7j,1,audio/519623__nathanchurchyard__gunshots_uid-voqt7j.wav,other_gunshot,0,train
+519623__nathanchurchyard__gunshots_uid-x2v9jo,519623__nathanchurchyard__gunshots_uid-x2v9jo,1,audio/519623__nathanchurchyard__gunshots_uid-x2v9jo.wav,other_gunshot,0,train
+683312__pnmcarrierailfan__pistol-gunshot-mix-weapons_uid-7iyru8,683312__pnmcarrierailfan__pistol-gunshot-mix-weapons_uid-7iyru8,1,audio/683312__pnmcarrierailfan__pistol-gunshot-mix-weapons_uid-7iyru8.wav,other_gunshot,0,val
+683312__pnmcarrierailfan__pistol-gunshot-mix-weapons_uid-lujshy,683312__pnmcarrierailfan__pistol-gunshot-mix-weapons_uid-lujshy,1,audio/683312__pnmcarrierailfan__pistol-gunshot-mix-weapons_uid-lujshy.wav,other_gunshot,0,train
+683312__pnmcarrierailfan__pistol-gunshot-mix-weapons_uid-ouj634,683312__pnmcarrierailfan__pistol-gunshot-mix-weapons_uid-ouj634,1,audio/683312__pnmcarrierailfan__pistol-gunshot-mix-weapons_uid-ouj634.wav,other_gunshot,0,val
+683312__pnmcarrierailfan__pistol-gunshot-mix-weapons_uid-qw3gyl,683312__pnmcarrierailfan__pistol-gunshot-mix-weapons_uid-qw3gyl,1,audio/683312__pnmcarrierailfan__pistol-gunshot-mix-weapons_uid-qw3gyl.wav,other_gunshot,0,train
+686351__rangerrich68__gunshot_uid-lpnv47,686351__rangerrich68__gunshot_uid-lpnv47,1,audio/686351__rangerrich68__gunshot_uid-lpnv47.wav,other_gunshot,0,train
+Amusement_Park Ambiance -SoundBible_uid-1rnz3c,Amusement_Park Ambiance -SoundBible_uid-1rnz3c,1,audio/Amusement_Park Ambiance -SoundBible_uid-1rnz3c.wav,impulse_noise,0,train
+Amusement_Park Ambiance -SoundBible_uid-xga4ah,Amusement_Park Ambiance -SoundBible_uid-xga4ah,1,audio/Amusement_Park Ambiance -SoundBible_uid-xga4ah.wav,impulse_noise,0,train
+Baby_Girl_Speaking-SoundBible_uid-lfp0pl,Baby_Girl_Speaking-SoundBible_uid-lfp0pl,1,audio/Baby_Girl_Speaking-SoundBible_uid-lfp0pl.wav,impulse_noise,0,train
+Baby_Talk-SoundBible_uid-5isz0s,Baby_Talk-SoundBible_uid-5isz0s,1,audio/Baby_Talk-SoundBible_uid-5isz0s.wav,impulse_noise,0,train
+Baby_Talk-SoundBible_uid-tlhzgq,Baby_Talk-SoundBible_uid-tlhzgq,1,audio/Baby_Talk-SoundBible_uid-tlhzgq.wav,impulse_noise,0,val
+Baby_Talk_2-SoundBible_uid-igfidk,Baby_Talk_2-SoundBible_uid-igfidk,1,audio/Baby_Talk_2-SoundBible_uid-igfidk.wav,impulse_noise,0,train
+Baby_Talk_2-SoundBible_uid-th40ni,Baby_Talk_2-SoundBible_uid-th40ni,1,audio/Baby_Talk_2-SoundBible_uid-th40ni.wav,impulse_noise,0,train
+Baby_Talk_30 Sec-SoundBible_uid-8snvch,Baby_Talk_30 Sec-SoundBible_uid-8snvch,1,audio/Baby_Talk_30 Sec-SoundBible_uid-8snvch.wav,impulse_noise,0,train
+Baby_Talk_30 Sec-SoundBible_uid-cszg60,Baby_Talk_30 Sec-SoundBible_uid-cszg60,1,audio/Baby_Talk_30 Sec-SoundBible_uid-cszg60.wav,impulse_noise,0,train
+Baby_Talk_30 Sec-SoundBible_uid-nt49fb,Baby_Talk_30 Sec-SoundBible_uid-nt49fb,1,audio/Baby_Talk_30 Sec-SoundBible_uid-nt49fb.wav,impulse_noise,0,train
+Background_Noise-SoundBible_uid-9tt4fj,Background_Noise-SoundBible_uid-9tt4fj,1,audio/Background_Noise-SoundBible_uid-9tt4fj.wav,impulse_noise,0,train
+Background_Noise-SoundBible_uid-c2rszc,Background_Noise-SoundBible_uid-c2rszc,1,audio/Background_Noise-SoundBible_uid-c2rszc.wav,impulse_noise,0,train
+Background_Noise-SoundBible_uid-grm3tj,Background_Noise-SoundBible_uid-grm3tj,1,audio/Background_Noise-SoundBible_uid-grm3tj.wav,impulse_noise,0,train
+Bi_Polar_Uncle-ScanMan-1810098860_uid-4x1yuf,Bi_Polar_Uncle-ScanMan-1810098860_uid-4x1yuf,1,audio/Bi_Polar_Uncle-ScanMan-1810098860_uid-4x1yuf.wav,impulse_noise,0,val
+Bi_Polar_Uncle-ScanMan-1810098860_uid-7qv96e,Bi_Polar_Uncle-ScanMan-1810098860_uid-7qv96e,1,audio/Bi_Polar_Uncle-ScanMan-1810098860_uid-7qv96e.wav,impulse_noise,0,train
+Bi_Polar_Uncle-ScanMan-1810098860_uid-acr1ir,Bi_Polar_Uncle-ScanMan-1810098860_uid-acr1ir,1,audio/Bi_Polar_Uncle-ScanMan-1810098860_uid-acr1ir.wav,impulse_noise,0,train
+Bi_Polar_Uncle-ScanMan-1810098860_uid-app2oh,Bi_Polar_Uncle-ScanMan-1810098860_uid-app2oh,1,audio/Bi_Polar_Uncle-ScanMan-1810098860_uid-app2oh.wav,impulse_noise,0,train
+Bi_Polar_Uncle-ScanMan-1810098860_uid-iqacxf,Bi_Polar_Uncle-ScanMan-1810098860_uid-iqacxf,1,audio/Bi_Polar_Uncle-ScanMan-1810098860_uid-iqacxf.wav,impulse_noise,0,train
+Bi_Polar_Uncle-ScanMan-1810098860_uid-mj8x2a,Bi_Polar_Uncle-ScanMan-1810098860_uid-mj8x2a,1,audio/Bi_Polar_Uncle-ScanMan-1810098860_uid-mj8x2a.wav,impulse_noise,0,train
+Bi_Polar_Uncle-ScanMan-1810098860_uid-o3irva,Bi_Polar_Uncle-ScanMan-1810098860_uid-o3irva,1,audio/Bi_Polar_Uncle-ScanMan-1810098860_uid-o3irva.wav,impulse_noise,0,train
+Bi_Polar_Uncle-ScanMan-1810098860_uid-opz6ls,Bi_Polar_Uncle-ScanMan-1810098860_uid-opz6ls,1,audio/Bi_Polar_Uncle-ScanMan-1810098860_uid-opz6ls.wav,impulse_noise,0,val
+Bi_Polar_Uncle-ScanMan-1810098860_uid-tl65kg,Bi_Polar_Uncle-ScanMan-1810098860_uid-tl65kg,1,audio/Bi_Polar_Uncle-ScanMan-1810098860_uid-tl65kg.wav,impulse_noise,0,train
+Bi_Polar_Uncle-ScanMan-1810098860_uid-zc1ipd,Bi_Polar_Uncle-ScanMan-1810098860_uid-zc1ipd,1,audio/Bi_Polar_Uncle-ScanMan-1810098860_uid-zc1ipd.wav,impulse_noise,0,train
+Big_door_closed-Clemens_F-941522533 (1)_uid-dn5qo5,Big_door_closed-Clemens_F-941522533 (1)_uid-dn5qo5,1,audio/Big_door_closed-Clemens_F-941522533 (1)_uid-dn5qo5.wav,impulse_noise,0,train
+Car Engine Revving-SoundBible_uid-2l6ct5,Car Engine Revving-SoundBible_uid-2l6ct5,1,audio/Car Engine Revving-SoundBible_uid-2l6ct5.wav,impulse_noise,0,val
+Car Engine Revving-SoundBible_uid-4uzfw6,Car Engine Revving-SoundBible_uid-4uzfw6,1,audio/Car Engine Revving-SoundBible_uid-4uzfw6.wav,impulse_noise,0,train
+Car Engine Revving-SoundBible_uid-fyajld,Car Engine Revving-SoundBible_uid-fyajld,1,audio/Car Engine Revving-SoundBible_uid-fyajld.wav,impulse_noise,0,train
+Car Engine Revving-SoundBible_uid-galjzz,Car Engine Revving-SoundBible_uid-galjzz,1,audio/Car Engine Revving-SoundBible_uid-galjzz.wav,impulse_noise,0,train
+Car Engine Revving-SoundBible_uid-nbreqs,Car Engine Revving-SoundBible_uid-nbreqs,1,audio/Car Engine Revving-SoundBible_uid-nbreqs.wav,impulse_noise,0,val
+Car Engine Revving-SoundBible_uid-pep718,Car Engine Revving-SoundBible_uid-pep718,1,audio/Car Engine Revving-SoundBible_uid-pep718.wav,impulse_noise,0,train
+Car_Door_Close-SoundBible_uid-6bk4y1,Car_Door_Close-SoundBible_uid-6bk4y1,1,audio/Car_Door_Close-SoundBible_uid-6bk4y1.wav,impulse_noise,0,train
+Car_Door_Close-SoundBible_uid-9h2t6o,Car_Door_Close-SoundBible_uid-9h2t6o,1,audio/Car_Door_Close-SoundBible_uid-9h2t6o.wav,impulse_noise,0,val
+Cellar_Door Slam Shut-SoundBible_uid-6z7omr,Cellar_Door Slam Shut-SoundBible_uid-6z7omr,1,audio/Cellar_Door Slam Shut-SoundBible_uid-6z7omr.wav,impulse_noise,0,val
+Child_Scream-SoundBible_uid-bc3l50,Child_Scream-SoundBible_uid-bc3l50,1,audio/Child_Scream-SoundBible_uid-bc3l50.wav,impulse_noise,0,train
+Citty_Traffic Ambiance-SoundBible_uid-oqpbd8,Citty_Traffic Ambiance-SoundBible_uid-oqpbd8,1,audio/Citty_Traffic Ambiance-SoundBible_uid-oqpbd8.wav,impulse_noise,0,train
+City_Ambiance-SoundBible_uid-4yigy2,City_Ambiance-SoundBible_uid-4yigy2,1,audio/City_Ambiance-SoundBible_uid-4yigy2.wav,impulse_noise,0,val
+City_Ambiance-SoundBible_uid-5xpbpm,City_Ambiance-SoundBible_uid-5xpbpm,1,audio/City_Ambiance-SoundBible_uid-5xpbpm.wav,impulse_noise,0,train
+City_Ambiance-SoundBible_uid-68vh9e,City_Ambiance-SoundBible_uid-68vh9e,1,audio/City_Ambiance-SoundBible_uid-68vh9e.wav,impulse_noise,0,train
+City_Ambiance-SoundBible_uid-7sgond,City_Ambiance-SoundBible_uid-7sgond,1,audio/City_Ambiance-SoundBible_uid-7sgond.wav,impulse_noise,0,val
+City_Ambiance-SoundBible_uid-7xt5uu,City_Ambiance-SoundBible_uid-7xt5uu,1,audio/City_Ambiance-SoundBible_uid-7xt5uu.wav,impulse_noise,0,val
+City_Ambiance-SoundBible_uid-ay65s0,City_Ambiance-SoundBible_uid-ay65s0,1,audio/City_Ambiance-SoundBible_uid-ay65s0.wav,impulse_noise,0,train
+City_Ambiance-SoundBible_uid-dla4u8,City_Ambiance-SoundBible_uid-dla4u8,1,audio/City_Ambiance-SoundBible_uid-dla4u8.wav,impulse_noise,0,train
+City_Ambiance-SoundBible_uid-i7015o,City_Ambiance-SoundBible_uid-i7015o,1,audio/City_Ambiance-SoundBible_uid-i7015o.wav,impulse_noise,0,train
+City_Ambiance-SoundBible_uid-i9g0oq,City_Ambiance-SoundBible_uid-i9g0oq,1,audio/City_Ambiance-SoundBible_uid-i9g0oq.wav,impulse_noise,0,train
+City_Ambiance-SoundBible_uid-rl1vl3,City_Ambiance-SoundBible_uid-rl1vl3,1,audio/City_Ambiance-SoundBible_uid-rl1vl3.wav,impulse_noise,0,train
+City_Ambiance-SoundBible_uid-s5wbfi,City_Ambiance-SoundBible_uid-s5wbfi,1,audio/City_Ambiance-SoundBible_uid-s5wbfi.wav,impulse_noise,0,train
+City_Ambiance-SoundBible_uid-tjysm2,City_Ambiance-SoundBible_uid-tjysm2,1,audio/City_Ambiance-SoundBible_uid-tjysm2.wav,impulse_noise,0,train
+Classroom_Ambiance-SoundBible_uid-15mvqy,Classroom_Ambiance-SoundBible_uid-15mvqy,1,audio/Classroom_Ambiance-SoundBible_uid-15mvqy.wav,impulse_noise,0,train
+Classroom_Ambiance-SoundBible_uid-1yjnrb,Classroom_Ambiance-SoundBible_uid-1yjnrb,1,audio/Classroom_Ambiance-SoundBible_uid-1yjnrb.wav,impulse_noise,0,train
+Classroom_Ambiance-SoundBible_uid-24lp47,Classroom_Ambiance-SoundBible_uid-24lp47,1,audio/Classroom_Ambiance-SoundBible_uid-24lp47.wav,impulse_noise,0,train
+Classroom_Ambiance-SoundBible_uid-3ajatf,Classroom_Ambiance-SoundBible_uid-3ajatf,1,audio/Classroom_Ambiance-SoundBible_uid-3ajatf.wav,impulse_noise,0,train
+Classroom_Ambiance-SoundBible_uid-612bhd,Classroom_Ambiance-SoundBible_uid-612bhd,1,audio/Classroom_Ambiance-SoundBible_uid-612bhd.wav,impulse_noise,0,train
+Classroom_Ambiance-SoundBible_uid-6auadw,Classroom_Ambiance-SoundBible_uid-6auadw,1,audio/Classroom_Ambiance-SoundBible_uid-6auadw.wav,impulse_noise,0,train
+Classroom_Ambiance-SoundBible_uid-d5qym1,Classroom_Ambiance-SoundBible_uid-d5qym1,1,audio/Classroom_Ambiance-SoundBible_uid-d5qym1.wav,impulse_noise,0,train
+Classroom_Ambiance-SoundBible_uid-d854bp,Classroom_Ambiance-SoundBible_uid-d854bp,1,audio/Classroom_Ambiance-SoundBible_uid-d854bp.wav,impulse_noise,0,val
+Classroom_Ambiance-SoundBible_uid-ebc6mm,Classroom_Ambiance-SoundBible_uid-ebc6mm,1,audio/Classroom_Ambiance-SoundBible_uid-ebc6mm.wav,impulse_noise,0,train
+Classroom_Ambiance-SoundBible_uid-fvc0b8,Classroom_Ambiance-SoundBible_uid-fvc0b8,1,audio/Classroom_Ambiance-SoundBible_uid-fvc0b8.wav,impulse_noise,0,train
+Classroom_Ambiance-SoundBible_uid-gdn6cv,Classroom_Ambiance-SoundBible_uid-gdn6cv,1,audio/Classroom_Ambiance-SoundBible_uid-gdn6cv.wav,impulse_noise,0,train
+Classroom_Ambiance-SoundBible_uid-iq3l57,Classroom_Ambiance-SoundBible_uid-iq3l57,1,audio/Classroom_Ambiance-SoundBible_uid-iq3l57.wav,impulse_noise,0,train
+Classroom_Ambiance-SoundBible_uid-jqyb9y,Classroom_Ambiance-SoundBible_uid-jqyb9y,1,audio/Classroom_Ambiance-SoundBible_uid-jqyb9y.wav,impulse_noise,0,train
+Classroom_Ambiance-SoundBible_uid-jysh5m,Classroom_Ambiance-SoundBible_uid-jysh5m,1,audio/Classroom_Ambiance-SoundBible_uid-jysh5m.wav,impulse_noise,0,train
+Classroom_Ambiance-SoundBible_uid-ore0tv,Classroom_Ambiance-SoundBible_uid-ore0tv,1,audio/Classroom_Ambiance-SoundBible_uid-ore0tv.wav,impulse_noise,0,val
+Classroom_Ambiance-SoundBible_uid-p82vfx,Classroom_Ambiance-SoundBible_uid-p82vfx,1,audio/Classroom_Ambiance-SoundBible_uid-p82vfx.wav,impulse_noise,0,train
+Classroom_Ambiance-SoundBible_uid-pzelvg,Classroom_Ambiance-SoundBible_uid-pzelvg,1,audio/Classroom_Ambiance-SoundBible_uid-pzelvg.wav,impulse_noise,0,val
+Classroom_Ambiance-SoundBible_uid-su8rm4,Classroom_Ambiance-SoundBible_uid-su8rm4,1,audio/Classroom_Ambiance-SoundBible_uid-su8rm4.wav,impulse_noise,0,train
+Classroom_Ambiance-SoundBible_uid-vqytfv,Classroom_Ambiance-SoundBible_uid-vqytfv,1,audio/Classroom_Ambiance-SoundBible_uid-vqytfv.wav,impulse_noise,0,train
+Classroom_Ambiance-SoundBible_uid-xv302f,Classroom_Ambiance-SoundBible_uid-xv302f,1,audio/Classroom_Ambiance-SoundBible_uid-xv302f.wav,impulse_noise,0,train
+Classroom_Ambiance-SoundBible_uid-y6icwf,Classroom_Ambiance-SoundBible_uid-y6icwf,1,audio/Classroom_Ambiance-SoundBible_uid-y6icwf.wav,impulse_noise,0,val
+Classroom_Ambiance-SoundBible_uid-ykywwj,Classroom_Ambiance-SoundBible_uid-ykywwj,1,audio/Classroom_Ambiance-SoundBible_uid-ykywwj.wav,impulse_noise,0,train
+Close_Door-SoundBible_uid-9hk9y4,Close_Door-SoundBible_uid-9hk9y4,1,audio/Close_Door-SoundBible_uid-9hk9y4.wav,impulse_noise,0,train
+Close_Door-SoundBible_uid-ial4ob,Close_Door-SoundBible_uid-ial4ob,1,audio/Close_Door-SoundBible_uid-ial4ob.wav,impulse_noise,0,train
+Close_Door-SoundBible_uid-lz6pl2,Close_Door-SoundBible_uid-lz6pl2,1,audio/Close_Door-SoundBible_uid-lz6pl2.wav,impulse_noise,0,val
+Close_Door-SoundBible_uid-xdkfqe,Close_Door-SoundBible_uid-xdkfqe,1,audio/Close_Door-SoundBible_uid-xdkfqe.wav,impulse_noise,0,train
+Close_Vault_Or_Jail_Door-SoundBible_uid-1b3a8u,Close_Vault_Or_Jail_Door-SoundBible_uid-1b3a8u,1,audio/Close_Vault_Or_Jail_Door-SoundBible_uid-1b3a8u.wav,impulse_noise,0,train
+Close_Vault_Or_Jail_Door-SoundBible_uid-bnzxyv,Close_Vault_Or_Jail_Door-SoundBible_uid-bnzxyv,1,audio/Close_Vault_Or_Jail_Door-SoundBible_uid-bnzxyv.wav,impulse_noise,0,train
+Close_Vault_Or_Jail_Door-SoundBible_uid-ioohwy,Close_Vault_Or_Jail_Door-SoundBible_uid-ioohwy,1,audio/Close_Vault_Or_Jail_Door-SoundBible_uid-ioohwy.wav,impulse_noise,0,val
+Dog_Barking-SoundBible_uid-77rxso,Dog_Barking-SoundBible_uid-77rxso,1,audio/Dog_Barking-SoundBible_uid-77rxso.wav,impulse_noise,0,train
+Dogs_Barking-SoundBible_uid-06db9u,Dogs_Barking-SoundBible_uid-06db9u,1,audio/Dogs_Barking-SoundBible_uid-06db9u.wav,impulse_noise,0,train
+Dogs_Barking-SoundBible_uid-0zgu9a,Dogs_Barking-SoundBible_uid-0zgu9a,1,audio/Dogs_Barking-SoundBible_uid-0zgu9a.wav,impulse_noise,0,train
+Dogs_Barking-SoundBible_uid-2ug0pz,Dogs_Barking-SoundBible_uid-2ug0pz,1,audio/Dogs_Barking-SoundBible_uid-2ug0pz.wav,impulse_noise,0,train
+Dogs_Barking-SoundBible_uid-360xo6,Dogs_Barking-SoundBible_uid-360xo6,1,audio/Dogs_Barking-SoundBible_uid-360xo6.wav,impulse_noise,0,train
+Dogs_Barking-SoundBible_uid-3elcfr,Dogs_Barking-SoundBible_uid-3elcfr,1,audio/Dogs_Barking-SoundBible_uid-3elcfr.wav,impulse_noise,0,train
+Dogs_Barking-SoundBible_uid-6cuhxo,Dogs_Barking-SoundBible_uid-6cuhxo,1,audio/Dogs_Barking-SoundBible_uid-6cuhxo.wav,impulse_noise,0,train
+Dogs_Barking-SoundBible_uid-79zhgq,Dogs_Barking-SoundBible_uid-79zhgq,1,audio/Dogs_Barking-SoundBible_uid-79zhgq.wav,impulse_noise,0,train
+Dogs_Barking-SoundBible_uid-7p80fn,Dogs_Barking-SoundBible_uid-7p80fn,1,audio/Dogs_Barking-SoundBible_uid-7p80fn.wav,impulse_noise,0,train
+Dogs_Barking-SoundBible_uid-80y6uy,Dogs_Barking-SoundBible_uid-80y6uy,1,audio/Dogs_Barking-SoundBible_uid-80y6uy.wav,impulse_noise,0,train
+Dogs_Barking-SoundBible_uid-89py07,Dogs_Barking-SoundBible_uid-89py07,1,audio/Dogs_Barking-SoundBible_uid-89py07.wav,impulse_noise,0,train
+Dogs_Barking-SoundBible_uid-9ow2fw,Dogs_Barking-SoundBible_uid-9ow2fw,1,audio/Dogs_Barking-SoundBible_uid-9ow2fw.wav,impulse_noise,0,train
+Dogs_Barking-SoundBible_uid-dyx0yh,Dogs_Barking-SoundBible_uid-dyx0yh,1,audio/Dogs_Barking-SoundBible_uid-dyx0yh.wav,impulse_noise,0,train
+Dogs_Barking-SoundBible_uid-ibcp6w,Dogs_Barking-SoundBible_uid-ibcp6w,1,audio/Dogs_Barking-SoundBible_uid-ibcp6w.wav,impulse_noise,0,val
+Dogs_Barking-SoundBible_uid-juqhjz,Dogs_Barking-SoundBible_uid-juqhjz,1,audio/Dogs_Barking-SoundBible_uid-juqhjz.wav,impulse_noise,0,train
+Dogs_Barking-SoundBible_uid-jwx6oc,Dogs_Barking-SoundBible_uid-jwx6oc,1,audio/Dogs_Barking-SoundBible_uid-jwx6oc.wav,impulse_noise,0,train
+Dogs_Barking-SoundBible_uid-jwxi8x,Dogs_Barking-SoundBible_uid-jwxi8x,1,audio/Dogs_Barking-SoundBible_uid-jwxi8x.wav,impulse_noise,0,train
+Dogs_Barking-SoundBible_uid-n7k6p9,Dogs_Barking-SoundBible_uid-n7k6p9,1,audio/Dogs_Barking-SoundBible_uid-n7k6p9.wav,impulse_noise,0,val
+Dogs_Barking-SoundBible_uid-nzoaru,Dogs_Barking-SoundBible_uid-nzoaru,1,audio/Dogs_Barking-SoundBible_uid-nzoaru.wav,impulse_noise,0,val
+Dogs_Barking-SoundBible_uid-o3hpsc,Dogs_Barking-SoundBible_uid-o3hpsc,1,audio/Dogs_Barking-SoundBible_uid-o3hpsc.wav,impulse_noise,0,train
+Dogs_Barking-SoundBible_uid-og7e1q,Dogs_Barking-SoundBible_uid-og7e1q,1,audio/Dogs_Barking-SoundBible_uid-og7e1q.wav,impulse_noise,0,train
+Dogs_Barking-SoundBible_uid-pl29dj,Dogs_Barking-SoundBible_uid-pl29dj,1,audio/Dogs_Barking-SoundBible_uid-pl29dj.wav,impulse_noise,0,train
+Dogs_Barking-SoundBible_uid-prqla1,Dogs_Barking-SoundBible_uid-prqla1,1,audio/Dogs_Barking-SoundBible_uid-prqla1.wav,impulse_noise,0,train
+Dogs_Barking-SoundBible_uid-sats5w,Dogs_Barking-SoundBible_uid-sats5w,1,audio/Dogs_Barking-SoundBible_uid-sats5w.wav,impulse_noise,0,val
+Dogs_Barking-SoundBible_uid-sfd0pk,Dogs_Barking-SoundBible_uid-sfd0pk,1,audio/Dogs_Barking-SoundBible_uid-sfd0pk.wav,impulse_noise,0,train
+Dogs_Barking-SoundBible_uid-spcx7j,Dogs_Barking-SoundBible_uid-spcx7j,1,audio/Dogs_Barking-SoundBible_uid-spcx7j.wav,impulse_noise,0,train
+Dogs_Barking-SoundBible_uid-tctr15,Dogs_Barking-SoundBible_uid-tctr15,1,audio/Dogs_Barking-SoundBible_uid-tctr15.wav,impulse_noise,0,train
+Dogs_Barking-SoundBible_uid-vzwpy8,Dogs_Barking-SoundBible_uid-vzwpy8,1,audio/Dogs_Barking-SoundBible_uid-vzwpy8.wav,impulse_noise,0,val
+Dogs_Barking-SoundBible_uid-xh8zjx,Dogs_Barking-SoundBible_uid-xh8zjx,1,audio/Dogs_Barking-SoundBible_uid-xh8zjx.wav,impulse_noise,0,train
+Dogs_Barking-SoundBible_uid-zowyrl,Dogs_Barking-SoundBible_uid-zowyrl,1,audio/Dogs_Barking-SoundBible_uid-zowyrl.wav,impulse_noise,0,train
+Dogs_Barking-SoundBible_uid-zqh7hs,Dogs_Barking-SoundBible_uid-zqh7hs,1,audio/Dogs_Barking-SoundBible_uid-zqh7hs.wav,impulse_noise,0,train
+Door_Close-SoundBible_uid-bsfxd7,Door_Close-SoundBible_uid-bsfxd7,1,audio/Door_Close-SoundBible_uid-bsfxd7.wav,impulse_noise,0,train
+Doorbell-SoundBible_uid-82zlon,Doorbell-SoundBible_uid-82zlon,1,audio/Doorbell-SoundBible_uid-82zlon.wav,impulse_noise,0,train
+Doorbell-SoundBible_uid-es14aj,Doorbell-SoundBible_uid-es14aj,1,audio/Doorbell-SoundBible_uid-es14aj.wav,impulse_noise,0,train
+Doorbell-SoundBible_uid-hu3smh,Doorbell-SoundBible_uid-hu3smh,1,audio/Doorbell-SoundBible_uid-hu3smh.wav,impulse_noise,0,train
+End_of_Game-Mike_Koenig-617089079_uid-1gc3kq,End_of_Game-Mike_Koenig-617089079_uid-1gc3kq,1,audio/End_of_Game-Mike_Koenig-617089079_uid-1gc3kq.wav,impulse_noise,0,train
+End_of_Game-Mike_Koenig-617089079_uid-21e27w,End_of_Game-Mike_Koenig-617089079_uid-21e27w,1,audio/End_of_Game-Mike_Koenig-617089079_uid-21e27w.wav,impulse_noise,0,train
+End_of_Game-Mike_Koenig-617089079_uid-fksa7e,End_of_Game-Mike_Koenig-617089079_uid-fksa7e,1,audio/End_of_Game-Mike_Koenig-617089079_uid-fksa7e.wav,impulse_noise,0,train
+End_of_Game-Mike_Koenig-617089079_uid-fll93l,End_of_Game-Mike_Koenig-617089079_uid-fll93l,1,audio/End_of_Game-Mike_Koenig-617089079_uid-fll93l.wav,impulse_noise,0,train
+End_of_Game-Mike_Koenig-617089079_uid-foqzbk,End_of_Game-Mike_Koenig-617089079_uid-foqzbk,1,audio/End_of_Game-Mike_Koenig-617089079_uid-foqzbk.wav,impulse_noise,0,train
+End_of_Game-Mike_Koenig-617089079_uid-tow618,End_of_Game-Mike_Koenig-617089079_uid-tow618,1,audio/End_of_Game-Mike_Koenig-617089079_uid-tow618.wav,impulse_noise,0,train
+End_of_Game-Mike_Koenig-617089079_uid-ub93e1,End_of_Game-Mike_Koenig-617089079_uid-ub93e1,1,audio/End_of_Game-Mike_Koenig-617089079_uid-ub93e1.wav,impulse_noise,0,train
+End_of_Game-Mike_Koenig-617089079_uid-v2wwmb,End_of_Game-Mike_Koenig-617089079_uid-v2wwmb,1,audio/End_of_Game-Mike_Koenig-617089079_uid-v2wwmb.wav,impulse_noise,0,train
+End_of_Game-Mike_Koenig-617089079_uid-w07rds,End_of_Game-Mike_Koenig-617089079_uid-w07rds,1,audio/End_of_Game-Mike_Koenig-617089079_uid-w07rds.wav,impulse_noise,0,train
+End_of_Game-Mike_Koenig-617089079_uid-ymc7zy,End_of_Game-Mike_Koenig-617089079_uid-ymc7zy,1,audio/End_of_Game-Mike_Koenig-617089079_uid-ymc7zy.wav,impulse_noise,0,val
+Engine_Inside_Car-SoundBible_uid-5dbezn,Engine_Inside_Car-SoundBible_uid-5dbezn,1,audio/Engine_Inside_Car-SoundBible_uid-5dbezn.wav,impulse_noise,0,train
+Engine_Inside_Car-SoundBible_uid-7ugvm0,Engine_Inside_Car-SoundBible_uid-7ugvm0,1,audio/Engine_Inside_Car-SoundBible_uid-7ugvm0.wav,impulse_noise,0,val
+Engine_Inside_Car-SoundBible_uid-c82nes,Engine_Inside_Car-SoundBible_uid-c82nes,1,audio/Engine_Inside_Car-SoundBible_uid-c82nes.wav,impulse_noise,0,train
+Engine_Inside_Car-SoundBible_uid-k3dkr3,Engine_Inside_Car-SoundBible_uid-k3dkr3,1,audio/Engine_Inside_Car-SoundBible_uid-k3dkr3.wav,impulse_noise,0,val
+Engine_Inside_Car-SoundBible_uid-kphaeb,Engine_Inside_Car-SoundBible_uid-kphaeb,1,audio/Engine_Inside_Car-SoundBible_uid-kphaeb.wav,impulse_noise,0,train
+Engine_Inside_Car-SoundBible_uid-nxs82p,Engine_Inside_Car-SoundBible_uid-nxs82p,1,audio/Engine_Inside_Car-SoundBible_uid-nxs82p.wav,impulse_noise,0,train
+Engine_Inside_Car-SoundBible_uid-omd0h5,Engine_Inside_Car-SoundBible_uid-omd0h5,1,audio/Engine_Inside_Car-SoundBible_uid-omd0h5.wav,impulse_noise,0,train
+Engine_Inside_Car-SoundBible_uid-pzuxz5,Engine_Inside_Car-SoundBible_uid-pzuxz5,1,audio/Engine_Inside_Car-SoundBible_uid-pzuxz5.wav,impulse_noise,0,train
+Fast_Heel_Walk-Kyanna_Johnson-1646343608_uid-0htqu7,Fast_Heel_Walk-Kyanna_Johnson-1646343608_uid-0htqu7,1,audio/Fast_Heel_Walk-Kyanna_Johnson-1646343608_uid-0htqu7.wav,impulse_noise,0,train
+Fast_Heel_Walk-Kyanna_Johnson-1646343608_uid-9q2nn5,Fast_Heel_Walk-Kyanna_Johnson-1646343608_uid-9q2nn5,1,audio/Fast_Heel_Walk-Kyanna_Johnson-1646343608_uid-9q2nn5.wav,impulse_noise,0,train
+Fast_Heel_Walk-Kyanna_Johnson-1646343608_uid-kfy902,Fast_Heel_Walk-Kyanna_Johnson-1646343608_uid-kfy902,1,audio/Fast_Heel_Walk-Kyanna_Johnson-1646343608_uid-kfy902.wav,impulse_noise,0,train
+Female_Scream-SoundBible_uid-o7148x,Female_Scream-SoundBible_uid-o7148x,1,audio/Female_Scream-SoundBible_uid-o7148x.wav,impulse_noise,0,train
+Female_Scream-SoundBible_uid-snslsg,Female_Scream-SoundBible_uid-snslsg,1,audio/Female_Scream-SoundBible_uid-snslsg.wav,impulse_noise,0,val
+Fire_Truck_Siren-SoundBible_uid-c00lnm,Fire_Truck_Siren-SoundBible_uid-c00lnm,1,audio/Fire_Truck_Siren-SoundBible_uid-c00lnm.wav,impulse_noise,0,val
+Footsteps_SoundBible_uid-7fgddj,Footsteps_SoundBible_uid-7fgddj,1,audio/Footsteps_SoundBible_uid-7fgddj.wav,impulse_noise,0,train
+Footsteps_SoundBible_uid-hvf0z6,Footsteps_SoundBible_uid-hvf0z6,1,audio/Footsteps_SoundBible_uid-hvf0z6.wav,impulse_noise,0,train
+Footsteps_SoundBible_uid-jzp69l,Footsteps_SoundBible_uid-jzp69l,1,audio/Footsteps_SoundBible_uid-jzp69l.wav,impulse_noise,0,train
+Footsteps_SoundBible_uid-ouanxu,Footsteps_SoundBible_uid-ouanxu,1,audio/Footsteps_SoundBible_uid-ouanxu.wav,impulse_noise,0,val
+Footsteps_SoundBible_uid-qgm67h,Footsteps_SoundBible_uid-qgm67h,1,audio/Footsteps_SoundBible_uid-qgm67h.wav,impulse_noise,0,val
+Footsteps_SoundBible_uid-t85wos,Footsteps_SoundBible_uid-t85wos,1,audio/Footsteps_SoundBible_uid-t85wos.wav,impulse_noise,0,train
+Footsteps_SoundBible_uid-xbzr9w,Footsteps_SoundBible_uid-xbzr9w,1,audio/Footsteps_SoundBible_uid-xbzr9w.wav,impulse_noise,0,train
+Footsteps_SoundBible_uid-xjk06n,Footsteps_SoundBible_uid-xjk06n,1,audio/Footsteps_SoundBible_uid-xjk06n.wav,impulse_noise,0,train
+Frying_Pan_Impact-SoundBible_uid-4tjysk,Frying_Pan_Impact-SoundBible_uid-4tjysk,1,audio/Frying_Pan_Impact-SoundBible_uid-4tjysk.wav,impulse_noise,0,train
+Frying_Pan_Impact-SoundBible_uid-gy4uv0,Frying_Pan_Impact-SoundBible_uid-gy4uv0,1,audio/Frying_Pan_Impact-SoundBible_uid-gy4uv0.wav,impulse_noise,0,train
+Full_Throttle-SoundBible_uid-13goe3,Full_Throttle-SoundBible_uid-13goe3,1,audio/Full_Throttle-SoundBible_uid-13goe3.wav,impulse_noise,0,train
+Full_Throttle-SoundBible_uid-dywhw9,Full_Throttle-SoundBible_uid-dywhw9,1,audio/Full_Throttle-SoundBible_uid-dywhw9.wav,impulse_noise,0,train
+Hockey_Game Ambiance-SoundBible_uid-mxy25p,Hockey_Game Ambiance-SoundBible_uid-mxy25p,1,audio/Hockey_Game Ambiance-SoundBible_uid-mxy25p.wav,impulse_noise,0,val
+Hockey_Game Ambiance-SoundBible_uid-n2vcjy,Hockey_Game Ambiance-SoundBible_uid-n2vcjy,1,audio/Hockey_Game Ambiance-SoundBible_uid-n2vcjy.wav,impulse_noise,0,train
+Hockey_Game Ambiance-SoundBible_uid-oqjbda,Hockey_Game Ambiance-SoundBible_uid-oqjbda,1,audio/Hockey_Game Ambiance-SoundBible_uid-oqjbda.wav,impulse_noise,0,val
+Hockey_Game Ambiance-SoundBible_uid-xi7z7i,Hockey_Game Ambiance-SoundBible_uid-xi7z7i,1,audio/Hockey_Game Ambiance-SoundBible_uid-xi7z7i.wav,impulse_noise,0,val
+Hockey_Game Ambiance-SoundBible_uid-xlgm26,Hockey_Game Ambiance-SoundBible_uid-xlgm26,1,audio/Hockey_Game Ambiance-SoundBible_uid-xlgm26.wav,impulse_noise,0,train
+Howard_Dean Screaming-SoundBible_uid-houbpy,Howard_Dean Screaming-SoundBible_uid-houbpy,1,audio/Howard_Dean Screaming-SoundBible_uid-houbpy.wav,impulse_noise,0,train
+Howard_Dean Screaming-SoundBible_uid-kng9vm,Howard_Dean Screaming-SoundBible_uid-kng9vm,1,audio/Howard_Dean Screaming-SoundBible_uid-kng9vm.wav,impulse_noise,0,train
+Indian_Bell-SoundBible_uid-05cpjg,Indian_Bell-SoundBible_uid-05cpjg,1,audio/Indian_Bell-SoundBible_uid-05cpjg.wav,impulse_noise,0,train
+Indian_Bell-SoundBible_uid-j1iwfo,Indian_Bell-SoundBible_uid-j1iwfo,1,audio/Indian_Bell-SoundBible_uid-j1iwfo.wav,impulse_noise,0,train
+Indian_Bell-SoundBible_uid-qiywb4,Indian_Bell-SoundBible_uid-qiywb4,1,audio/Indian_Bell-SoundBible_uid-qiywb4.wav,impulse_noise,0,train
+Japanese_Temple Bell Small-SoundBible_uid-lh5wut,Japanese_Temple Bell Small-SoundBible_uid-lh5wut,1,audio/Japanese_Temple Bell Small-SoundBible_uid-lh5wut.wav,impulse_noise,0,train
+Japanese_Temple Bell Small-SoundBible_uid-yzjgir,Japanese_Temple Bell Small-SoundBible_uid-yzjgir,1,audio/Japanese_Temple Bell Small-SoundBible_uid-yzjgir.wav,impulse_noise,0,train
+Large_Door_Slam-SoundBible_uid-13jhqa,Large_Door_Slam-SoundBible_uid-13jhqa,1,audio/Large_Door_Slam-SoundBible_uid-13jhqa.wav,impulse_noise,0,train
+Large_Door_Slam-SoundBible_uid-1psoyj,Large_Door_Slam-SoundBible_uid-1psoyj,1,audio/Large_Door_Slam-SoundBible_uid-1psoyj.wav,impulse_noise,0,train
+Large_Door_Slam-SoundBible_uid-4zllfp,Large_Door_Slam-SoundBible_uid-4zllfp,1,audio/Large_Door_Slam-SoundBible_uid-4zllfp.wav,impulse_noise,0,train
+Large_Door_Slam-SoundBible_uid-am54hr,Large_Door_Slam-SoundBible_uid-am54hr,1,audio/Large_Door_Slam-SoundBible_uid-am54hr.wav,impulse_noise,0,train
+Large_Door_Slam-SoundBible_uid-jt0rph,Large_Door_Slam-SoundBible_uid-jt0rph,1,audio/Large_Door_Slam-SoundBible_uid-jt0rph.wav,impulse_noise,0,val
+Large_Door_Slam-SoundBible_uid-kv2u9m,Large_Door_Slam-SoundBible_uid-kv2u9m,1,audio/Large_Door_Slam-SoundBible_uid-kv2u9m.wav,impulse_noise,0,train
+Large_Door_Slam-SoundBible_uid-u1l5bj,Large_Door_Slam-SoundBible_uid-u1l5bj,1,audio/Large_Door_Slam-SoundBible_uid-u1l5bj.wav,impulse_noise,0,train
+Large_Door_Slam-SoundBible_uid-vtytt2,Large_Door_Slam-SoundBible_uid-vtytt2,1,audio/Large_Door_Slam-SoundBible_uid-vtytt2.wav,impulse_noise,0,train
+Large_Door_Slam-SoundBible_uid-y1fcj2,Large_Door_Slam-SoundBible_uid-y1fcj2,1,audio/Large_Door_Slam-SoundBible_uid-y1fcj2.wav,impulse_noise,0,train
+Large_Metal_Rusty Door-SoundBible_uid-ihz0ur,Large_Metal_Rusty Door-SoundBible_uid-ihz0ur,1,audio/Large_Metal_Rusty Door-SoundBible_uid-ihz0ur.wav,impulse_noise,0,train
+Large_Metal_Rusty Door-SoundBible_uid-xn083m,Large_Metal_Rusty Door-SoundBible_uid-xn083m,1,audio/Large_Metal_Rusty Door-SoundBible_uid-xn083m.wav,impulse_noise,0,val
+Little_Girl_Talking-Mike_Koenig-782373463_uid-embfqd,Little_Girl_Talking-Mike_Koenig-782373463_uid-embfqd,1,audio/Little_Girl_Talking-Mike_Koenig-782373463_uid-embfqd.wav,impulse_noise,0,train
+Little_Girl_Talking-Mike_Koenig-782373463_uid-j15zel,Little_Girl_Talking-Mike_Koenig-782373463_uid-j15zel,1,audio/Little_Girl_Talking-Mike_Koenig-782373463_uid-j15zel.wav,impulse_noise,0,train
+Little_Girl_Talking-Mike_Koenig-782373463_uid-k5273w,Little_Girl_Talking-Mike_Koenig-782373463_uid-k5273w,1,audio/Little_Girl_Talking-Mike_Koenig-782373463_uid-k5273w.wav,impulse_noise,0,train
+Little_Girl_Talking-Mike_Koenig-782373463_uid-smhgf9,Little_Girl_Talking-Mike_Koenig-782373463_uid-smhgf9,1,audio/Little_Girl_Talking-Mike_Koenig-782373463_uid-smhgf9.wav,impulse_noise,0,val
+Little_Girl_Talking-Mike_Koenig-782373463_uid-zkco2a,Little_Girl_Talking-Mike_Koenig-782373463_uid-zkco2a,1,audio/Little_Girl_Talking-Mike_Koenig-782373463_uid-zkco2a.wav,impulse_noise,0,val
+Metal_Gong-Dianakc-109711828_uid-lhnelh,Metal_Gong-Dianakc-109711828_uid-lhnelh,1,audio/Metal_Gong-Dianakc-109711828_uid-lhnelh.wav,impulse_noise,0,train
+Metal_Gong-Dianakc-109711828_uid-rq5l1a,Metal_Gong-Dianakc-109711828_uid-rq5l1a,1,audio/Metal_Gong-Dianakc-109711828_uid-rq5l1a.wav,impulse_noise,0,val
+Metal_Gong-Dianakc-109711828_uid-uc2x01,Metal_Gong-Dianakc-109711828_uid-uc2x01,1,audio/Metal_Gong-Dianakc-109711828_uid-uc2x01.wav,impulse_noise,0,train
+Mother_In_Law-SoundBible_uid-2i8a7l,Mother_In_Law-SoundBible_uid-2i8a7l,1,audio/Mother_In_Law-SoundBible_uid-2i8a7l.wav,impulse_noise,0,train
+Mother_In_Law-SoundBible_uid-4pm43v,Mother_In_Law-SoundBible_uid-4pm43v,1,audio/Mother_In_Law-SoundBible_uid-4pm43v.wav,impulse_noise,0,train
+Mother_In_Law-SoundBible_uid-5qenfz,Mother_In_Law-SoundBible_uid-5qenfz,1,audio/Mother_In_Law-SoundBible_uid-5qenfz.wav,impulse_noise,0,train
+Mother_In_Law-SoundBible_uid-ldj5n1,Mother_In_Law-SoundBible_uid-ldj5n1,1,audio/Mother_In_Law-SoundBible_uid-ldj5n1.wav,impulse_noise,0,train
+Mother_In_Law-SoundBible_uid-r2q9l6,Mother_In_Law-SoundBible_uid-r2q9l6,1,audio/Mother_In_Law-SoundBible_uid-r2q9l6.wav,impulse_noise,0,train
+Mother_In_Law-SoundBible_uid-w06jo6,Mother_In_Law-SoundBible_uid-w06jo6,1,audio/Mother_In_Law-SoundBible_uid-w06jo6.wav,impulse_noise,0,train
+Mother_In_Law-SoundBible_uid-z92smn,Mother_In_Law-SoundBible_uid-z92smn,1,audio/Mother_In_Law-SoundBible_uid-z92smn.wav,impulse_noise,0,val
+Motorcycle_Engine-SoundBible_uid-532kor,Motorcycle_Engine-SoundBible_uid-532kor,1,audio/Motorcycle_Engine-SoundBible_uid-532kor.wav,impulse_noise,0,val
+Motorcycle_Engine-SoundBible_uid-5o451c,Motorcycle_Engine-SoundBible_uid-5o451c,1,audio/Motorcycle_Engine-SoundBible_uid-5o451c.wav,impulse_noise,0,train
+Motorcycle_Engine-SoundBible_uid-ed9qr0,Motorcycle_Engine-SoundBible_uid-ed9qr0,1,audio/Motorcycle_Engine-SoundBible_uid-ed9qr0.wav,impulse_noise,0,train
+Motorcycle_Engine-SoundBible_uid-l2zh6x,Motorcycle_Engine-SoundBible_uid-l2zh6x,1,audio/Motorcycle_Engine-SoundBible_uid-l2zh6x.wav,impulse_noise,0,train
+Motorcycle_Engine-SoundBible_uid-nj61gd,Motorcycle_Engine-SoundBible_uid-nj61gd,1,audio/Motorcycle_Engine-SoundBible_uid-nj61gd.wav,impulse_noise,0,train
+Motorcycle_Engine-SoundBible_uid-nylusr,Motorcycle_Engine-SoundBible_uid-nylusr,1,audio/Motorcycle_Engine-SoundBible_uid-nylusr.wav,impulse_noise,0,train
+Motorcycle_Engine-SoundBible_uid-vcok6o,Motorcycle_Engine-SoundBible_uid-vcok6o,1,audio/Motorcycle_Engine-SoundBible_uid-vcok6o.wav,impulse_noise,0,train
+Neighborhood_Dogs Barking-SoundBible_uid-6psl8n,Neighborhood_Dogs Barking-SoundBible_uid-6psl8n,1,audio/Neighborhood_Dogs Barking-SoundBible_uid-6psl8n.wav,impulse_noise,0,train
+Neighborhood_Dogs Barking-SoundBible_uid-b8m1ha,Neighborhood_Dogs Barking-SoundBible_uid-b8m1ha,1,audio/Neighborhood_Dogs Barking-SoundBible_uid-b8m1ha.wav,impulse_noise,0,train
+Neighborhood_Dogs Barking-SoundBible_uid-i17h1l,Neighborhood_Dogs Barking-SoundBible_uid-i17h1l,1,audio/Neighborhood_Dogs Barking-SoundBible_uid-i17h1l.wav,impulse_noise,0,train
+Neighborhood_Dogs Barking-SoundBible_uid-jq0pvf,Neighborhood_Dogs Barking-SoundBible_uid-jq0pvf,1,audio/Neighborhood_Dogs Barking-SoundBible_uid-jq0pvf.wav,impulse_noise,0,train
+Neighborhood_Dogs Barking-SoundBible_uid-lnpr65,Neighborhood_Dogs Barking-SoundBible_uid-lnpr65,1,audio/Neighborhood_Dogs Barking-SoundBible_uid-lnpr65.wav,impulse_noise,0,train
+Neighborhood_Dogs Barking-SoundBible_uid-u0utjf,Neighborhood_Dogs Barking-SoundBible_uid-u0utjf,1,audio/Neighborhood_Dogs Barking-SoundBible_uid-u0utjf.wav,impulse_noise,0,train
+Obama_Speech Liar-SoundBible_uid-56tkh6,Obama_Speech Liar-SoundBible_uid-56tkh6,1,audio/Obama_Speech Liar-SoundBible_uid-56tkh6.wav,impulse_noise,0,train
+Obama_Speech Liar-SoundBible_uid-it25ex,Obama_Speech Liar-SoundBible_uid-it25ex,1,audio/Obama_Speech Liar-SoundBible_uid-it25ex.wav,impulse_noise,0,train
+Obama_Speech Liar-SoundBible_uid-m55wqm,Obama_Speech Liar-SoundBible_uid-m55wqm,1,audio/Obama_Speech Liar-SoundBible_uid-m55wqm.wav,impulse_noise,0,train
+Obama_Speech Liar-SoundBible_uid-o893eg,Obama_Speech Liar-SoundBible_uid-o893eg,1,audio/Obama_Speech Liar-SoundBible_uid-o893eg.wav,impulse_noise,0,train
+Obama_Speech Liar-SoundBible_uid-vfb2cc,Obama_Speech Liar-SoundBible_uid-vfb2cc,1,audio/Obama_Speech Liar-SoundBible_uid-vfb2cc.wav,impulse_noise,0,val
+Old_Door_Creaking-SoundBible_uid-0cxhr5,Old_Door_Creaking-SoundBible_uid-0cxhr5,1,audio/Old_Door_Creaking-SoundBible_uid-0cxhr5.wav,impulse_noise,0,val
+Old_Door_Creaking-SoundBible_uid-0yquhs,Old_Door_Creaking-SoundBible_uid-0yquhs,1,audio/Old_Door_Creaking-SoundBible_uid-0yquhs.wav,impulse_noise,0,train
+Old_Door_Creaking-SoundBible_uid-12sdup,Old_Door_Creaking-SoundBible_uid-12sdup,1,audio/Old_Door_Creaking-SoundBible_uid-12sdup.wav,impulse_noise,0,train
+Old_Door_Creaking-SoundBible_uid-3nda72,Old_Door_Creaking-SoundBible_uid-3nda72,1,audio/Old_Door_Creaking-SoundBible_uid-3nda72.wav,impulse_noise,0,val
+Old_Door_Creaking-SoundBible_uid-3zq0t3,Old_Door_Creaking-SoundBible_uid-3zq0t3,1,audio/Old_Door_Creaking-SoundBible_uid-3zq0t3.wav,impulse_noise,0,train
+Old_Door_Creaking-SoundBible_uid-6phapn,Old_Door_Creaking-SoundBible_uid-6phapn,1,audio/Old_Door_Creaking-SoundBible_uid-6phapn.wav,impulse_noise,0,train
+Old_Door_Creaking-SoundBible_uid-ltu6v6,Old_Door_Creaking-SoundBible_uid-ltu6v6,1,audio/Old_Door_Creaking-SoundBible_uid-ltu6v6.wav,impulse_noise,0,val
+Old_Door_Creaking-SoundBible_uid-rehqyi,Old_Door_Creaking-SoundBible_uid-rehqyi,1,audio/Old_Door_Creaking-SoundBible_uid-rehqyi.wav,impulse_noise,0,train
+Old_Door_Creaking-SoundBible_uid-ugdlcw,Old_Door_Creaking-SoundBible_uid-ugdlcw,1,audio/Old_Door_Creaking-SoundBible_uid-ugdlcw.wav,impulse_noise,0,train
+Old_Door_Creaking-SoundBible_uid-vmd0mi,Old_Door_Creaking-SoundBible_uid-vmd0mi,1,audio/Old_Door_Creaking-SoundBible_uid-vmd0mi.wav,impulse_noise,0,train
+People_Screaming-SoundBible_uid-3uupv3,People_Screaming-SoundBible_uid-3uupv3,1,audio/People_Screaming-SoundBible_uid-3uupv3.wav,impulse_noise,0,train
+People_Screaming-SoundBible_uid-bp2stl,People_Screaming-SoundBible_uid-bp2stl,1,audio/People_Screaming-SoundBible_uid-bp2stl.wav,impulse_noise,0,train
+People_Screaming-SoundBible_uid-hfkye2,People_Screaming-SoundBible_uid-hfkye2,1,audio/People_Screaming-SoundBible_uid-hfkye2.wav,impulse_noise,0,train
+People_Screaming-SoundBible_uid-izy7pt,People_Screaming-SoundBible_uid-izy7pt,1,audio/People_Screaming-SoundBible_uid-izy7pt.wav,impulse_noise,0,train
+Person_Screaming No-SoundBible_uid-1cr947,Person_Screaming No-SoundBible_uid-1cr947,1,audio/Person_Screaming No-SoundBible_uid-1cr947.wav,impulse_noise,0,train
+Police Siren 3-SoundBible_uid-2pvfa4,Police Siren 3-SoundBible_uid-2pvfa4,1,audio/Police Siren 3-SoundBible_uid-2pvfa4.wav,impulse_noise,0,train
+Police Siren 3-SoundBible_uid-3d5i8j,Police Siren 3-SoundBible_uid-3d5i8j,1,audio/Police Siren 3-SoundBible_uid-3d5i8j.wav,impulse_noise,0,train
+Police Siren 3-SoundBible_uid-cycqe4,Police Siren 3-SoundBible_uid-cycqe4,1,audio/Police Siren 3-SoundBible_uid-cycqe4.wav,impulse_noise,0,train
+Police_Siren-SoundBible_uid-5des6p,Police_Siren-SoundBible_uid-5des6p,1,audio/Police_Siren-SoundBible_uid-5des6p.wav,impulse_noise,0,val
+Police_Siren_2-SoundBible_uid-mvtx9k,Police_Siren_2-SoundBible_uid-mvtx9k,1,audio/Police_Siren_2-SoundBible_uid-mvtx9k.wav,impulse_noise,0,train
+Police_Siren_2-SoundBible_uid-v714xd,Police_Siren_2-SoundBible_uid-v714xd,1,audio/Police_Siren_2-SoundBible_uid-v714xd.wav,impulse_noise,0,train
+Police_TheCristi95-214716303_uid-fqrk8v,Police_TheCristi95-214716303_uid-fqrk8v,1,audio/Police_TheCristi95-214716303_uid-fqrk8v.wav,impulse_noise,0,train
+Psycho_Scream-SoundBible_uid-2utxng,Psycho_Scream-SoundBible_uid-2utxng,1,audio/Psycho_Scream-SoundBible_uid-2utxng.wav,impulse_noise,0,train
+Psycho_Scream-SoundBible_uid-41fmfi,Psycho_Scream-SoundBible_uid-41fmfi,1,audio/Psycho_Scream-SoundBible_uid-41fmfi.wav,impulse_noise,0,train
+Psycho_Scream-SoundBible_uid-42a8md,Psycho_Scream-SoundBible_uid-42a8md,1,audio/Psycho_Scream-SoundBible_uid-42a8md.wav,impulse_noise,0,train
+Psycho_Scream-SoundBible_uid-b3cndq,Psycho_Scream-SoundBible_uid-b3cndq,1,audio/Psycho_Scream-SoundBible_uid-b3cndq.wav,impulse_noise,0,val
+Public_Transit_Bus-SoundBible_uid-3i5t22,Public_Transit_Bus-SoundBible_uid-3i5t22,1,audio/Public_Transit_Bus-SoundBible_uid-3i5t22.wav,impulse_noise,0,train
+Public_Transit_Bus-SoundBible_uid-8f576m,Public_Transit_Bus-SoundBible_uid-8f576m,1,audio/Public_Transit_Bus-SoundBible_uid-8f576m.wav,impulse_noise,0,train
+Public_Transit_Bus-SoundBible_uid-a8fyah,Public_Transit_Bus-SoundBible_uid-a8fyah,1,audio/Public_Transit_Bus-SoundBible_uid-a8fyah.wav,impulse_noise,0,train
+Public_Transit_Bus-SoundBible_uid-cwr0mf,Public_Transit_Bus-SoundBible_uid-cwr0mf,1,audio/Public_Transit_Bus-SoundBible_uid-cwr0mf.wav,impulse_noise,0,train
+Public_Transit_Bus-SoundBible_uid-mysutj,Public_Transit_Bus-SoundBible_uid-mysutj,1,audio/Public_Transit_Bus-SoundBible_uid-mysutj.wav,impulse_noise,0,train
+Public_Transit_Bus-SoundBible_uid-ubrqyj,Public_Transit_Bus-SoundBible_uid-ubrqyj,1,audio/Public_Transit_Bus-SoundBible_uid-ubrqyj.wav,impulse_noise,0,train
+Puppy_Dog Barking-SoundBible_uid-0qy0mv,Puppy_Dog Barking-SoundBible_uid-0qy0mv,1,audio/Puppy_Dog Barking-SoundBible_uid-0qy0mv.wav,impulse_noise,0,train
+Puppy_Dog Barking-SoundBible_uid-2xlf8k,Puppy_Dog Barking-SoundBible_uid-2xlf8k,1,audio/Puppy_Dog Barking-SoundBible_uid-2xlf8k.wav,impulse_noise,0,train
+Puppy_Dog Barking-SoundBible_uid-5q8j8z,Puppy_Dog Barking-SoundBible_uid-5q8j8z,1,audio/Puppy_Dog Barking-SoundBible_uid-5q8j8z.wav,impulse_noise,0,train
+Puppy_Dog Barking-SoundBible_uid-6ig5tz,Puppy_Dog Barking-SoundBible_uid-6ig5tz,1,audio/Puppy_Dog Barking-SoundBible_uid-6ig5tz.wav,impulse_noise,0,train
+Puppy_Dog Barking-SoundBible_uid-6o7irb,Puppy_Dog Barking-SoundBible_uid-6o7irb,1,audio/Puppy_Dog Barking-SoundBible_uid-6o7irb.wav,impulse_noise,0,train
+Puppy_Dog Barking-SoundBible_uid-7qzkxg,Puppy_Dog Barking-SoundBible_uid-7qzkxg,1,audio/Puppy_Dog Barking-SoundBible_uid-7qzkxg.wav,impulse_noise,0,train
+Puppy_Dog Barking-SoundBible_uid-8x7knz,Puppy_Dog Barking-SoundBible_uid-8x7knz,1,audio/Puppy_Dog Barking-SoundBible_uid-8x7knz.wav,impulse_noise,0,val
+Puppy_Dog Barking-SoundBible_uid-fqrqmg,Puppy_Dog Barking-SoundBible_uid-fqrqmg,1,audio/Puppy_Dog Barking-SoundBible_uid-fqrqmg.wav,impulse_noise,0,train
+Puppy_Dog Barking-SoundBible_uid-h2kk2o,Puppy_Dog Barking-SoundBible_uid-h2kk2o,1,audio/Puppy_Dog Barking-SoundBible_uid-h2kk2o.wav,impulse_noise,0,train
+Puppy_Dog Barking-SoundBible_uid-hhl2n0,Puppy_Dog Barking-SoundBible_uid-hhl2n0,1,audio/Puppy_Dog Barking-SoundBible_uid-hhl2n0.wav,impulse_noise,0,train
+Puppy_Dog Barking-SoundBible_uid-hwenxp,Puppy_Dog Barking-SoundBible_uid-hwenxp,1,audio/Puppy_Dog Barking-SoundBible_uid-hwenxp.wav,impulse_noise,0,train
+Puppy_Dog Barking-SoundBible_uid-izcqml,Puppy_Dog Barking-SoundBible_uid-izcqml,1,audio/Puppy_Dog Barking-SoundBible_uid-izcqml.wav,impulse_noise,0,val
+Puppy_Dog Barking-SoundBible_uid-v9bdxr,Puppy_Dog Barking-SoundBible_uid-v9bdxr,1,audio/Puppy_Dog Barking-SoundBible_uid-v9bdxr.wav,impulse_noise,0,train
+Race_Car Idle-SoundBible_uid-5f9xm2,Race_Car Idle-SoundBible_uid-5f9xm2,1,audio/Race_Car Idle-SoundBible_uid-5f9xm2.wav,impulse_noise,0,val
+Race_Car Idle-SoundBible_uid-dkehib,Race_Car Idle-SoundBible_uid-dkehib,1,audio/Race_Car Idle-SoundBible_uid-dkehib.wav,impulse_noise,0,train
+Race_Car Idle-SoundBible_uid-z20zcy,Race_Car Idle-SoundBible_uid-z20zcy,1,audio/Race_Car Idle-SoundBible_uid-z20zcy.wav,impulse_noise,0,train
+Random_Son_Talk-SoundBible_uid-1ym4hc,Random_Son_Talk-SoundBible_uid-1ym4hc,1,audio/Random_Son_Talk-SoundBible_uid-1ym4hc.wav,impulse_noise,0,train
+Random_Son_Talk-SoundBible_uid-8mu830,Random_Son_Talk-SoundBible_uid-8mu830,1,audio/Random_Son_Talk-SoundBible_uid-8mu830.wav,impulse_noise,0,train
+Random_Son_Talk-SoundBible_uid-kqlhrz,Random_Son_Talk-SoundBible_uid-kqlhrz,1,audio/Random_Son_Talk-SoundBible_uid-kqlhrz.wav,impulse_noise,0,train
+Random_Son_Talk-SoundBible_uid-zdgyqp,Random_Son_Talk-SoundBible_uid-zdgyqp,1,audio/Random_Son_Talk-SoundBible_uid-zdgyqp.wav,impulse_noise,0,train
+Restaurant Walla Track-SoundBible_uid-kjeqfn,Restaurant Walla Track-SoundBible_uid-kjeqfn,1,audio/Restaurant Walla Track-SoundBible_uid-kjeqfn.wav,impulse_noise,0,train
+Restaurant Walla Track-SoundBible_uid-l5x040,Restaurant Walla Track-SoundBible_uid-l5x040,1,audio/Restaurant Walla Track-SoundBible_uid-l5x040.wav,impulse_noise,0,train
+Restaurant Walla Track-SoundBible_uid-qhfjn5,Restaurant Walla Track-SoundBible_uid-qhfjn5,1,audio/Restaurant Walla Track-SoundBible_uid-qhfjn5.wav,impulse_noise,0,train
+Restaurant Walla Track-SoundBible_uid-rk74im,Restaurant Walla Track-SoundBible_uid-rk74im,1,audio/Restaurant Walla Track-SoundBible_uid-rk74im.wav,impulse_noise,0,train
+Restaurant Walla Track-SoundBible_uid-w5x690,Restaurant Walla Track-SoundBible_uid-w5x690,1,audio/Restaurant Walla Track-SoundBible_uid-w5x690.wav,impulse_noise,0,train
+Restaurant_Ambiance -SoundBible_uid-bdjnou,Restaurant_Ambiance -SoundBible_uid-bdjnou,1,audio/Restaurant_Ambiance -SoundBible_uid-bdjnou.wav,impulse_noise,0,train
+Restaurant_Ambiance -SoundBible_uid-fmre0f,Restaurant_Ambiance -SoundBible_uid-fmre0f,1,audio/Restaurant_Ambiance -SoundBible_uid-fmre0f.wav,impulse_noise,0,train
+Restaurant_Ambiance -SoundBible_uid-k3gzvh,Restaurant_Ambiance -SoundBible_uid-k3gzvh,1,audio/Restaurant_Ambiance -SoundBible_uid-k3gzvh.wav,impulse_noise,0,train
+Restaurant_Ambiance -SoundBible_uid-lgpjkd,Restaurant_Ambiance -SoundBible_uid-lgpjkd,1,audio/Restaurant_Ambiance -SoundBible_uid-lgpjkd.wav,impulse_noise,0,val
+Restaurant_Ambiance -SoundBible_uid-mbsb9z,Restaurant_Ambiance -SoundBible_uid-mbsb9z,1,audio/Restaurant_Ambiance -SoundBible_uid-mbsb9z.wav,impulse_noise,0,train
+Scary_Scream-SoundBible_uid-wvjpdl,Scary_Scream-SoundBible_uid-wvjpdl,1,audio/Scary_Scream-SoundBible_uid-wvjpdl.wav,impulse_noise,0,train
+Scary_Scream-SoundBible_uid-yzql8f,Scary_Scream-SoundBible_uid-yzql8f,1,audio/Scary_Scream-SoundBible_uid-yzql8f.wav,impulse_noise,0,train
+School_Fire_Alarm-Cullen_Card-202875844_uid-d7y47w,School_Fire_Alarm-Cullen_Card-202875844_uid-d7y47w,1,audio/School_Fire_Alarm-Cullen_Card-202875844_uid-d7y47w.wav,impulse_noise,0,train
+School_Fire_Alarm-Cullen_Card-202875844_uid-f4uoup,School_Fire_Alarm-Cullen_Card-202875844_uid-f4uoup,1,audio/School_Fire_Alarm-Cullen_Card-202875844_uid-f4uoup.wav,impulse_noise,0,train
+School_Fire_Alarm-Cullen_Card-202875844_uid-gjef9e,School_Fire_Alarm-Cullen_Card-202875844_uid-gjef9e,1,audio/School_Fire_Alarm-Cullen_Card-202875844_uid-gjef9e.wav,impulse_noise,0,train
+School_Fire_Alarm-Cullen_Card-202875844_uid-lasqeu,School_Fire_Alarm-Cullen_Card-202875844_uid-lasqeu,1,audio/School_Fire_Alarm-Cullen_Card-202875844_uid-lasqeu.wav,impulse_noise,0,val
+School_Fire_Alarm-Cullen_Card-202875844_uid-rgrj5b,School_Fire_Alarm-Cullen_Card-202875844_uid-rgrj5b,1,audio/School_Fire_Alarm-Cullen_Card-202875844_uid-rgrj5b.wav,impulse_noise,0,train
+School_Fire_Alarm-Cullen_Card-202875844_uid-tahodp,School_Fire_Alarm-Cullen_Card-202875844_uid-tahodp,1,audio/School_Fire_Alarm-Cullen_Card-202875844_uid-tahodp.wav,impulse_noise,0,val
+Shift_Gears-SoundBible_uid-0py99w,Shift_Gears-SoundBible_uid-0py99w,1,audio/Shift_Gears-SoundBible_uid-0py99w.wav,impulse_noise,0,train
+Shift_Gears-SoundBible_uid-26wbsh,Shift_Gears-SoundBible_uid-26wbsh,1,audio/Shift_Gears-SoundBible_uid-26wbsh.wav,impulse_noise,0,train
+Shift_Gears-SoundBible_uid-60h0ny,Shift_Gears-SoundBible_uid-60h0ny,1,audio/Shift_Gears-SoundBible_uid-60h0ny.wav,impulse_noise,0,train
+Shift_Gears-SoundBible_uid-658eb2,Shift_Gears-SoundBible_uid-658eb2,1,audio/Shift_Gears-SoundBible_uid-658eb2.wav,impulse_noise,0,val
+Shift_Gears-SoundBible_uid-82bxd2,Shift_Gears-SoundBible_uid-82bxd2,1,audio/Shift_Gears-SoundBible_uid-82bxd2.wav,impulse_noise,0,train
+Shift_Gears-SoundBible_uid-eezpvg,Shift_Gears-SoundBible_uid-eezpvg,1,audio/Shift_Gears-SoundBible_uid-eezpvg.wav,impulse_noise,0,val
+Shift_Gears-SoundBible_uid-fssn70,Shift_Gears-SoundBible_uid-fssn70,1,audio/Shift_Gears-SoundBible_uid-fssn70.wav,impulse_noise,0,train
+Shift_Gears-SoundBible_uid-h7kcri,Shift_Gears-SoundBible_uid-h7kcri,1,audio/Shift_Gears-SoundBible_uid-h7kcri.wav,impulse_noise,0,train
+Shift_Gears-SoundBible_uid-i8bv3a,Shift_Gears-SoundBible_uid-i8bv3a,1,audio/Shift_Gears-SoundBible_uid-i8bv3a.wav,impulse_noise,0,train
+Shift_Gears-SoundBible_uid-vosmy5,Shift_Gears-SoundBible_uid-vosmy5,1,audio/Shift_Gears-SoundBible_uid-vosmy5.wav,impulse_noise,0,train
+Ship_Bell-Mike_Koenig-1911209136_uid-bc37x2,Ship_Bell-Mike_Koenig-1911209136_uid-bc37x2,1,audio/Ship_Bell-Mike_Koenig-1911209136_uid-bc37x2.wav,impulse_noise,0,train
+Ship_Bell-Mike_Koenig-1911209136_uid-qdaqy8,Ship_Bell-Mike_Koenig-1911209136_uid-qdaqy8,1,audio/Ship_Bell-Mike_Koenig-1911209136_uid-qdaqy8.wav,impulse_noise,0,train
+Ship_Bell-Mike_Koenig-1911209136_uid-vns4ok,Ship_Bell-Mike_Koenig-1911209136_uid-vns4ok,1,audio/Ship_Bell-Mike_Koenig-1911209136_uid-vns4ok.wav,impulse_noise,0,train
+Ship_Brass_Bell-Mike_Koenig-1458750630_uid-30fytv,Ship_Brass_Bell-Mike_Koenig-1458750630_uid-30fytv,1,audio/Ship_Brass_Bell-Mike_Koenig-1458750630_uid-30fytv.wav,impulse_noise,0,train
+Ship_Brass_Bell-Mike_Koenig-1458750630_uid-7umoka,Ship_Brass_Bell-Mike_Koenig-1458750630_uid-7umoka,1,audio/Ship_Brass_Bell-Mike_Koenig-1458750630_uid-7umoka.wav,impulse_noise,0,train
+Ship_Brass_Bell-Mike_Koenig-1458750630_uid-arscjl,Ship_Brass_Bell-Mike_Koenig-1458750630_uid-arscjl,1,audio/Ship_Brass_Bell-Mike_Koenig-1458750630_uid-arscjl.wav,impulse_noise,0,train
+Ship_Brass_Bell-Mike_Koenig-1458750630_uid-hq1ck8,Ship_Brass_Bell-Mike_Koenig-1458750630_uid-hq1ck8,1,audio/Ship_Brass_Bell-Mike_Koenig-1458750630_uid-hq1ck8.wav,impulse_noise,0,train
+Ship_Brass_Bell-Mike_Koenig-1458750630_uid-htec95,Ship_Brass_Bell-Mike_Koenig-1458750630_uid-htec95,1,audio/Ship_Brass_Bell-Mike_Koenig-1458750630_uid-htec95.wav,impulse_noise,0,train
+Ship_Brass_Bell-Mike_Koenig-1458750630_uid-j371as,Ship_Brass_Bell-Mike_Koenig-1458750630_uid-j371as,1,audio/Ship_Brass_Bell-Mike_Koenig-1458750630_uid-j371as.wav,impulse_noise,0,train
+Ship_Brass_Bell-Mike_Koenig-1458750630_uid-l1olrt,Ship_Brass_Bell-Mike_Koenig-1458750630_uid-l1olrt,1,audio/Ship_Brass_Bell-Mike_Koenig-1458750630_uid-l1olrt.wav,impulse_noise,0,train
+Ship_Brass_Bell-Mike_Koenig-1458750630_uid-ocdpn4,Ship_Brass_Bell-Mike_Koenig-1458750630_uid-ocdpn4,1,audio/Ship_Brass_Bell-Mike_Koenig-1458750630_uid-ocdpn4.wav,impulse_noise,0,train
+Ship_Brass_Bell-Mike_Koenig-1458750630_uid-pkj31k,Ship_Brass_Bell-Mike_Koenig-1458750630_uid-pkj31k,1,audio/Ship_Brass_Bell-Mike_Koenig-1458750630_uid-pkj31k.wav,impulse_noise,0,train
+Shopping_Mall Ambiance-SoundBible_uid-2tajd3,Shopping_Mall Ambiance-SoundBible_uid-2tajd3,1,audio/Shopping_Mall Ambiance-SoundBible_uid-2tajd3.wav,impulse_noise,0,train
+Shopping_Mall Ambiance-SoundBible_uid-eyfu5u,Shopping_Mall Ambiance-SoundBible_uid-eyfu5u,1,audio/Shopping_Mall Ambiance-SoundBible_uid-eyfu5u.wav,impulse_noise,0,train
+Shopping_Mall Ambiance-SoundBible_uid-qmgbmp,Shopping_Mall Ambiance-SoundBible_uid-qmgbmp,1,audio/Shopping_Mall Ambiance-SoundBible_uid-qmgbmp.wav,impulse_noise,0,train
+Shopping_Mall Ambiance-SoundBible_uid-uejo76,Shopping_Mall Ambiance-SoundBible_uid-uejo76,1,audio/Shopping_Mall Ambiance-SoundBible_uid-uejo76.wav,impulse_noise,0,train
+Shopping_Mall Ambiance-SoundBible_uid-uf9pqe,Shopping_Mall Ambiance-SoundBible_uid-uf9pqe,1,audio/Shopping_Mall Ambiance-SoundBible_uid-uf9pqe.wav,impulse_noise,0,val
+Siren_SoundBible_uid-5w44d1,Siren_SoundBible_uid-5w44d1,1,audio/Siren_SoundBible_uid-5w44d1.wav,impulse_noise,0,train
+Siren_SoundBible_uid-6dwgja,Siren_SoundBible_uid-6dwgja,1,audio/Siren_SoundBible_uid-6dwgja.wav,impulse_noise,0,train
+Siren_SoundBible_uid-7gohee,Siren_SoundBible_uid-7gohee,1,audio/Siren_SoundBible_uid-7gohee.wav,impulse_noise,0,train
+Siren_SoundBible_uid-8a8erq,Siren_SoundBible_uid-8a8erq,1,audio/Siren_SoundBible_uid-8a8erq.wav,impulse_noise,0,train
+Siren_SoundBible_uid-c9divg,Siren_SoundBible_uid-c9divg,1,audio/Siren_SoundBible_uid-c9divg.wav,impulse_noise,0,train
+Siren_SoundBible_uid-evjc8u,Siren_SoundBible_uid-evjc8u,1,audio/Siren_SoundBible_uid-evjc8u.wav,impulse_noise,0,val
+Siren_SoundBible_uid-j46u1a,Siren_SoundBible_uid-j46u1a,1,audio/Siren_SoundBible_uid-j46u1a.wav,impulse_noise,0,train
+Siren_SoundBible_uid-q0gjbt,Siren_SoundBible_uid-q0gjbt,1,audio/Siren_SoundBible_uid-q0gjbt.wav,impulse_noise,0,train
+Siren_SoundBible_uid-v7fsfu,Siren_SoundBible_uid-v7fsfu,1,audio/Siren_SoundBible_uid-v7fsfu.wav,impulse_noise,0,train
+Slam_Fork_Down-SoundBible_uid-avr992,Slam_Fork_Down-SoundBible_uid-avr992,1,audio/Slam_Fork_Down-SoundBible_uid-avr992.wav,impulse_noise,0,train
+Slam_Fork_Down-SoundBible_uid-ns5cz1,Slam_Fork_Down-SoundBible_uid-ns5cz1,1,audio/Slam_Fork_Down-SoundBible_uid-ns5cz1.wav,impulse_noise,0,train
+Sleigh_Bells_Ringing-SoundBible_uid-5lk6yl,Sleigh_Bells_Ringing-SoundBible_uid-5lk6yl,1,audio/Sleigh_Bells_Ringing-SoundBible_uid-5lk6yl.wav,impulse_noise,0,val
+Sleigh_Bells_Ringing-SoundBible_uid-aaawbg,Sleigh_Bells_Ringing-SoundBible_uid-aaawbg,1,audio/Sleigh_Bells_Ringing-SoundBible_uid-aaawbg.wav,impulse_noise,0,val
+Sleigh_Bells_Ringing-SoundBible_uid-abi0jn,Sleigh_Bells_Ringing-SoundBible_uid-abi0jn,1,audio/Sleigh_Bells_Ringing-SoundBible_uid-abi0jn.wav,impulse_noise,0,train
+Sleigh_Bells_Ringing-SoundBible_uid-bfqkvg,Sleigh_Bells_Ringing-SoundBible_uid-bfqkvg,1,audio/Sleigh_Bells_Ringing-SoundBible_uid-bfqkvg.wav,impulse_noise,0,train
+Sleigh_Bells_Ringing-SoundBible_uid-g3upfg,Sleigh_Bells_Ringing-SoundBible_uid-g3upfg,1,audio/Sleigh_Bells_Ringing-SoundBible_uid-g3upfg.wav,impulse_noise,0,train
+Sleigh_Bells_Ringing-SoundBible_uid-l8tbqi,Sleigh_Bells_Ringing-SoundBible_uid-l8tbqi,1,audio/Sleigh_Bells_Ringing-SoundBible_uid-l8tbqi.wav,impulse_noise,0,train
+Sleigh_Bells_Ringing-SoundBible_uid-ovw0qg,Sleigh_Bells_Ringing-SoundBible_uid-ovw0qg,1,audio/Sleigh_Bells_Ringing-SoundBible_uid-ovw0qg.wav,impulse_noise,0,train
+Sleigh_Bells_Ringing-SoundBible_uid-p7709t,Sleigh_Bells_Ringing-SoundBible_uid-p7709t,1,audio/Sleigh_Bells_Ringing-SoundBible_uid-p7709t.wav,impulse_noise,0,val
+Sleigh_Bells_Ringing-SoundBible_uid-qktlev,Sleigh_Bells_Ringing-SoundBible_uid-qktlev,1,audio/Sleigh_Bells_Ringing-SoundBible_uid-qktlev.wav,impulse_noise,0,train
+Sleigh_Bells_Ringing-SoundBible_uid-r04irn,Sleigh_Bells_Ringing-SoundBible_uid-r04irn,1,audio/Sleigh_Bells_Ringing-SoundBible_uid-r04irn.wav,impulse_noise,0,val
+Sleigh_Bells_Ringing-SoundBible_uid-rgog25,Sleigh_Bells_Ringing-SoundBible_uid-rgog25,1,audio/Sleigh_Bells_Ringing-SoundBible_uid-rgog25.wav,impulse_noise,0,train
+Soldiers_Marching-SoundBible_uid-12z64t,Soldiers_Marching-SoundBible_uid-12z64t,1,audio/Soldiers_Marching-SoundBible_uid-12z64t.wav,impulse_noise,0,val
+Soldiers_Marching-SoundBible_uid-1x466i,Soldiers_Marching-SoundBible_uid-1x466i,1,audio/Soldiers_Marching-SoundBible_uid-1x466i.wav,impulse_noise,0,train
+Soldiers_Marching-SoundBible_uid-2cu62i,Soldiers_Marching-SoundBible_uid-2cu62i,1,audio/Soldiers_Marching-SoundBible_uid-2cu62i.wav,impulse_noise,0,val
+Soldiers_Marching-SoundBible_uid-8k67jd,Soldiers_Marching-SoundBible_uid-8k67jd,1,audio/Soldiers_Marching-SoundBible_uid-8k67jd.wav,impulse_noise,0,val
+Soldiers_Marching-SoundBible_uid-ab2cyl,Soldiers_Marching-SoundBible_uid-ab2cyl,1,audio/Soldiers_Marching-SoundBible_uid-ab2cyl.wav,impulse_noise,0,train
+Soldiers_Marching-SoundBible_uid-dnmjvo,Soldiers_Marching-SoundBible_uid-dnmjvo,1,audio/Soldiers_Marching-SoundBible_uid-dnmjvo.wav,impulse_noise,0,train
+Soldiers_Marching-SoundBible_uid-h3weqb,Soldiers_Marching-SoundBible_uid-h3weqb,1,audio/Soldiers_Marching-SoundBible_uid-h3weqb.wav,impulse_noise,0,train
+Soldiers_Marching-SoundBible_uid-l0p0eu,Soldiers_Marching-SoundBible_uid-l0p0eu,1,audio/Soldiers_Marching-SoundBible_uid-l0p0eu.wav,impulse_noise,0,train
+Soldiers_Marching-SoundBible_uid-lzd3fh,Soldiers_Marching-SoundBible_uid-lzd3fh,1,audio/Soldiers_Marching-SoundBible_uid-lzd3fh.wav,impulse_noise,0,val
+Soldiers_Marching-SoundBible_uid-m3vjjg,Soldiers_Marching-SoundBible_uid-m3vjjg,1,audio/Soldiers_Marching-SoundBible_uid-m3vjjg.wav,impulse_noise,0,train
+Soldiers_Marching-SoundBible_uid-opjr6u,Soldiers_Marching-SoundBible_uid-opjr6u,1,audio/Soldiers_Marching-SoundBible_uid-opjr6u.wav,impulse_noise,0,train
+Soldiers_Marching-SoundBible_uid-pwkjgw,Soldiers_Marching-SoundBible_uid-pwkjgw,1,audio/Soldiers_Marching-SoundBible_uid-pwkjgw.wav,impulse_noise,0,train
+Soldiers_Marching-SoundBible_uid-qjhu5w,Soldiers_Marching-SoundBible_uid-qjhu5w,1,audio/Soldiers_Marching-SoundBible_uid-qjhu5w.wav,impulse_noise,0,val
+Soldiers_Marching-SoundBible_uid-qrqs0t,Soldiers_Marching-SoundBible_uid-qrqs0t,1,audio/Soldiers_Marching-SoundBible_uid-qrqs0t.wav,impulse_noise,0,train
+Soldiers_Marching-SoundBible_uid-rzmitu,Soldiers_Marching-SoundBible_uid-rzmitu,1,audio/Soldiers_Marching-SoundBible_uid-rzmitu.wav,impulse_noise,0,train
+Soldiers_Marching-SoundBible_uid-t5bgmq,Soldiers_Marching-SoundBible_uid-t5bgmq,1,audio/Soldiers_Marching-SoundBible_uid-t5bgmq.wav,impulse_noise,0,train
+Soldiers_Marching-SoundBible_uid-uoo654,Soldiers_Marching-SoundBible_uid-uoo654,1,audio/Soldiers_Marching-SoundBible_uid-uoo654.wav,impulse_noise,0,train
+Soldiers_Marching-SoundBible_uid-w44qsg,Soldiers_Marching-SoundBible_uid-w44qsg,1,audio/Soldiers_Marching-SoundBible_uid-w44qsg.wav,impulse_noise,0,val
+Soldiers_Marching-SoundBible_uid-yq65as,Soldiers_Marching-SoundBible_uid-yq65as,1,audio/Soldiers_Marching-SoundBible_uid-yq65as.wav,impulse_noise,0,train
+Sports_Bar Patrons Loud-SoundBible_uid-6p2s3s,Sports_Bar Patrons Loud-SoundBible_uid-6p2s3s,1,audio/Sports_Bar Patrons Loud-SoundBible_uid-6p2s3s.wav,impulse_noise,0,train
+Sports_Bar Patrons Loud-SoundBible_uid-911pcl,Sports_Bar Patrons Loud-SoundBible_uid-911pcl,1,audio/Sports_Bar Patrons Loud-SoundBible_uid-911pcl.wav,impulse_noise,0,train
+Steam_Engine-John-1826274710_uid-9hoh52,Steam_Engine-John-1826274710_uid-9hoh52,1,audio/Steam_Engine-John-1826274710_uid-9hoh52.wav,impulse_noise,0,train
+Steam_Engine-John-1826274710_uid-o2z5o3,Steam_Engine-John-1826274710_uid-o2z5o3,1,audio/Steam_Engine-John-1826274710_uid-o2z5o3.wav,impulse_noise,0,train
+Steam_Engine-John-1826274710_uid-ys8boz,Steam_Engine-John-1826274710_uid-ys8boz,1,audio/Steam_Engine-John-1826274710_uid-ys8boz.wav,impulse_noise,0,train
+Swimming_Pool Ambiance-SoundBible_uid-7sg0cz,Swimming_Pool Ambiance-SoundBible_uid-7sg0cz,1,audio/Swimming_Pool Ambiance-SoundBible_uid-7sg0cz.wav,impulse_noise,0,val
+Swimming_Pool Ambiance-SoundBible_uid-qgl4q6,Swimming_Pool Ambiance-SoundBible_uid-qgl4q6,1,audio/Swimming_Pool Ambiance-SoundBible_uid-qgl4q6.wav,impulse_noise,0,train
+Swimming_Pool Ambiance-SoundBible_uid-s4lq2v,Swimming_Pool Ambiance-SoundBible_uid-s4lq2v,1,audio/Swimming_Pool Ambiance-SoundBible_uid-s4lq2v.wav,impulse_noise,0,train
+Swimming_Pool Ambiance-SoundBible_uid-veffax,Swimming_Pool Ambiance-SoundBible_uid-veffax,1,audio/Swimming_Pool Ambiance-SoundBible_uid-veffax.wav,impulse_noise,0,train
+Swimming_Pool Ambiance-SoundBible_uid-zihv6a,Swimming_Pool Ambiance-SoundBible_uid-zihv6a,1,audio/Swimming_Pool Ambiance-SoundBible_uid-zihv6a.wav,impulse_noise,0,train
+Temple_Bell Huge-SoundBible_uid-plrytw,Temple_Bell Huge-SoundBible_uid-plrytw,1,audio/Temple_Bell Huge-SoundBible_uid-plrytw.wav,impulse_noise,0,val
+Temple_Bell Huge-SoundBible_uid-torzt8,Temple_Bell Huge-SoundBible_uid-torzt8,1,audio/Temple_Bell Huge-SoundBible_uid-torzt8.wav,impulse_noise,0,train
+Temple_Bell_SoundBible_uid-86lbp7,Temple_Bell_SoundBible_uid-86lbp7,1,audio/Temple_Bell_SoundBible_uid-86lbp7.wav,impulse_noise,0,train
+Temple_Bell_SoundBible_uid-lnyqkj,Temple_Bell_SoundBible_uid-lnyqkj,1,audio/Temple_Bell_SoundBible_uid-lnyqkj.wav,impulse_noise,0,train
+Temple_Bell_SoundBible_uid-zeibnp,Temple_Bell_SoundBible_uid-zeibnp,1,audio/Temple_Bell_SoundBible_uid-zeibnp.wav,impulse_noise,0,train
+Ting_Popup_Pixels-349896185_uid-gndmnx,Ting_Popup_Pixels-349896185_uid-gndmnx,1,audio/Ting_Popup_Pixels-349896185_uid-gndmnx.wav,impulse_noise,0,train
+Ting_Popup_Pixels-349896185_uid-zubyh5,Ting_Popup_Pixels-349896185_uid-zubyh5,1,audio/Ting_Popup_Pixels-349896185_uid-zubyh5.wav,impulse_noise,0,train
+Tornado_Siren_II-Delilah-747233690_uid-3pzksl,Tornado_Siren_II-Delilah-747233690_uid-3pzksl,1,audio/Tornado_Siren_II-Delilah-747233690_uid-3pzksl.wav,impulse_noise,0,train
+Tornado_Siren_SoundBible_uid-a80mf0,Tornado_Siren_SoundBible_uid-a80mf0,1,audio/Tornado_Siren_SoundBible_uid-a80mf0.wav,impulse_noise,0,train
+Tornado_Siren_SoundBible_uid-bf9wu7,Tornado_Siren_SoundBible_uid-bf9wu7,1,audio/Tornado_Siren_SoundBible_uid-bf9wu7.wav,impulse_noise,0,val
+Tornado_Siren_SoundBible_uid-m79scl,Tornado_Siren_SoundBible_uid-m79scl,1,audio/Tornado_Siren_SoundBible_uid-m79scl.wav,impulse_noise,0,train
+Tornado_Siren_SoundBible_uid-skz6k0,Tornado_Siren_SoundBible_uid-skz6k0,1,audio/Tornado_Siren_SoundBible_uid-skz6k0.wav,impulse_noise,0,train
+Two_Tone_Doorbell-SoundBible_uid-fcvwc3,Two_Tone_Doorbell-SoundBible_uid-fcvwc3,1,audio/Two_Tone_Doorbell-SoundBible_uid-fcvwc3.wav,impulse_noise,0,train
+Two_Tone_Doorbell-SoundBible_uid-j06pgn,Two_Tone_Doorbell-SoundBible_uid-j06pgn,1,audio/Two_Tone_Doorbell-SoundBible_uid-j06pgn.wav,impulse_noise,0,train
+Two_Tone_Doorbell-SoundBible_uid-qb31if,Two_Tone_Doorbell-SoundBible_uid-qb31if,1,audio/Two_Tone_Doorbell-SoundBible_uid-qb31if.wav,impulse_noise,0,train
+Walking-SoundBible_uid-1zy41w,Walking-SoundBible_uid-1zy41w,1,audio/Walking-SoundBible_uid-1zy41w.wav,impulse_noise,0,train
+Walking-SoundBible_uid-2e4rgy,Walking-SoundBible_uid-2e4rgy,1,audio/Walking-SoundBible_uid-2e4rgy.wav,impulse_noise,0,train
+Walking-SoundBible_uid-5x1rlw,Walking-SoundBible_uid-5x1rlw,1,audio/Walking-SoundBible_uid-5x1rlw.wav,impulse_noise,0,val
+Walking-SoundBible_uid-i5mmd8,Walking-SoundBible_uid-i5mmd8,1,audio/Walking-SoundBible_uid-i5mmd8.wav,impulse_noise,0,train
+Walking-SoundBible_uid-jon8e1,Walking-SoundBible_uid-jon8e1,1,audio/Walking-SoundBible_uid-jon8e1.wav,impulse_noise,0,train
+Walking-SoundBible_uid-jzho8s,Walking-SoundBible_uid-jzho8s,1,audio/Walking-SoundBible_uid-jzho8s.wav,impulse_noise,0,train
+Walking-SoundBible_uid-s5fn6f,Walking-SoundBible_uid-s5fn6f,1,audio/Walking-SoundBible_uid-s5fn6f.wav,impulse_noise,0,train
+Walking-SoundBible_uid-t2jbe2,Walking-SoundBible_uid-t2jbe2,1,audio/Walking-SoundBible_uid-t2jbe2.wav,impulse_noise,0,train
+Walking-SoundBible_uid-vk5lgr,Walking-SoundBible_uid-vk5lgr,1,audio/Walking-SoundBible_uid-vk5lgr.wav,impulse_noise,0,train
+Walking_Away-SoundBible_uid-003e5q,Walking_Away-SoundBible_uid-003e5q,1,audio/Walking_Away-SoundBible_uid-003e5q.wav,impulse_noise,0,train
+Walking_Away-SoundBible_uid-42umdt,Walking_Away-SoundBible_uid-42umdt,1,audio/Walking_Away-SoundBible_uid-42umdt.wav,impulse_noise,0,train
+Walking_Away-SoundBible_uid-4k4a4k,Walking_Away-SoundBible_uid-4k4a4k,1,audio/Walking_Away-SoundBible_uid-4k4a4k.wav,impulse_noise,0,train
+Walking_Away-SoundBible_uid-6u9e73,Walking_Away-SoundBible_uid-6u9e73,1,audio/Walking_Away-SoundBible_uid-6u9e73.wav,impulse_noise,0,train
+Walking_Away-SoundBible_uid-jy6tib,Walking_Away-SoundBible_uid-jy6tib,1,audio/Walking_Away-SoundBible_uid-jy6tib.wav,impulse_noise,0,train
+Walking_Away-SoundBible_uid-xmyrab,Walking_Away-SoundBible_uid-xmyrab,1,audio/Walking_Away-SoundBible_uid-xmyrab.wav,impulse_noise,0,train
+Walking_In_Snow-SoundBible_uid-21gueq,Walking_In_Snow-SoundBible_uid-21gueq,1,audio/Walking_In_Snow-SoundBible_uid-21gueq.wav,impulse_noise,0,train
+Walking_In_Snow-SoundBible_uid-2l1rzt,Walking_In_Snow-SoundBible_uid-2l1rzt,1,audio/Walking_In_Snow-SoundBible_uid-2l1rzt.wav,impulse_noise,0,train
+Walking_In_Snow-SoundBible_uid-41xzm1,Walking_In_Snow-SoundBible_uid-41xzm1,1,audio/Walking_In_Snow-SoundBible_uid-41xzm1.wav,impulse_noise,0,train
+Walking_In_Snow-SoundBible_uid-heh8am,Walking_In_Snow-SoundBible_uid-heh8am,1,audio/Walking_In_Snow-SoundBible_uid-heh8am.wav,impulse_noise,0,train
+Walking_In_Snow-SoundBible_uid-qt9lwg,Walking_In_Snow-SoundBible_uid-qt9lwg,1,audio/Walking_In_Snow-SoundBible_uid-qt9lwg.wav,impulse_noise,0,train
+Walking_In_Snow-SoundBible_uid-uorhbj,Walking_In_Snow-SoundBible_uid-uorhbj,1,audio/Walking_In_Snow-SoundBible_uid-uorhbj.wav,impulse_noise,0,train
+Walking_In_Snow-SoundBible_uid-zeh37h,Walking_In_Snow-SoundBible_uid-zeh37h,1,audio/Walking_In_Snow-SoundBible_uid-zeh37h.wav,impulse_noise,0,val
+Walking_On_Gravel-SoundBible_uid-7ajmna,Walking_On_Gravel-SoundBible_uid-7ajmna,1,audio/Walking_On_Gravel-SoundBible_uid-7ajmna.wav,impulse_noise,0,val
+Walking_On_Gravel-SoundBible_uid-8jmvir,Walking_On_Gravel-SoundBible_uid-8jmvir,1,audio/Walking_On_Gravel-SoundBible_uid-8jmvir.wav,impulse_noise,0,train
+Walking_On_Gravel-SoundBible_uid-d8gtuv,Walking_On_Gravel-SoundBible_uid-d8gtuv,1,audio/Walking_On_Gravel-SoundBible_uid-d8gtuv.wav,impulse_noise,0,train
+Walking_On_Gravel-SoundBible_uid-eqtihd,Walking_On_Gravel-SoundBible_uid-eqtihd,1,audio/Walking_On_Gravel-SoundBible_uid-eqtihd.wav,impulse_noise,0,val
+Walking_On_Gravel-SoundBible_uid-m6gl7j,Walking_On_Gravel-SoundBible_uid-m6gl7j,1,audio/Walking_On_Gravel-SoundBible_uid-m6gl7j.wav,impulse_noise,0,val
+Walking_On_Gravel-SoundBible_uid-mjwkl5,Walking_On_Gravel-SoundBible_uid-mjwkl5,1,audio/Walking_On_Gravel-SoundBible_uid-mjwkl5.wav,impulse_noise,0,val
+Walking_On_Gravel-SoundBible_uid-n3401t,Walking_On_Gravel-SoundBible_uid-n3401t,1,audio/Walking_On_Gravel-SoundBible_uid-n3401t.wav,impulse_noise,0,val
+Walking_On_Gravel-SoundBible_uid-n611en,Walking_On_Gravel-SoundBible_uid-n611en,1,audio/Walking_On_Gravel-SoundBible_uid-n611en.wav,impulse_noise,0,train
+Walking_On_Gravel-SoundBible_uid-nig1hm,Walking_On_Gravel-SoundBible_uid-nig1hm,1,audio/Walking_On_Gravel-SoundBible_uid-nig1hm.wav,impulse_noise,0,train
+Walking_On_Gravel-SoundBible_uid-qlbvo1,Walking_On_Gravel-SoundBible_uid-qlbvo1,1,audio/Walking_On_Gravel-SoundBible_uid-qlbvo1.wav,impulse_noise,0,train
+Walking_On_Gravel-SoundBible_uid-sx1vdx,Walking_On_Gravel-SoundBible_uid-sx1vdx,1,audio/Walking_On_Gravel-SoundBible_uid-sx1vdx.wav,impulse_noise,0,train
+Walking_On_Gravel-SoundBible_uid-w2j0aq,Walking_On_Gravel-SoundBible_uid-w2j0aq,1,audio/Walking_On_Gravel-SoundBible_uid-w2j0aq.wav,impulse_noise,0,val
+Walking_On_Gravel_Bed-SoundBible_uid-5ihbve,Walking_On_Gravel_Bed-SoundBible_uid-5ihbve,1,audio/Walking_On_Gravel_Bed-SoundBible_uid-5ihbve.wav,impulse_noise,0,train
+Walking_On_Gravel_Bed-SoundBible_uid-6dat0n,Walking_On_Gravel_Bed-SoundBible_uid-6dat0n,1,audio/Walking_On_Gravel_Bed-SoundBible_uid-6dat0n.wav,impulse_noise,0,train
+Walking_On_Gravel_Bed-SoundBible_uid-6mi8l5,Walking_On_Gravel_Bed-SoundBible_uid-6mi8l5,1,audio/Walking_On_Gravel_Bed-SoundBible_uid-6mi8l5.wav,impulse_noise,0,train
+Walking_On_Gravel_Bed-SoundBible_uid-9x8ddo,Walking_On_Gravel_Bed-SoundBible_uid-9x8ddo,1,audio/Walking_On_Gravel_Bed-SoundBible_uid-9x8ddo.wav,impulse_noise,0,train
+Walking_On_Gravel_Bed-SoundBible_uid-bf5jts,Walking_On_Gravel_Bed-SoundBible_uid-bf5jts,1,audio/Walking_On_Gravel_Bed-SoundBible_uid-bf5jts.wav,impulse_noise,0,val
+Walking_On_Gravel_Bed-SoundBible_uid-kbu30i,Walking_On_Gravel_Bed-SoundBible_uid-kbu30i,1,audio/Walking_On_Gravel_Bed-SoundBible_uid-kbu30i.wav,impulse_noise,0,train
+Walking_On_Gravel_Bed-SoundBible_uid-rtx99m,Walking_On_Gravel_Bed-SoundBible_uid-rtx99m,1,audio/Walking_On_Gravel_Bed-SoundBible_uid-rtx99m.wav,impulse_noise,0,train
+Warning_Siren-SoundBible_uid-2u4g3n,Warning_Siren-SoundBible_uid-2u4g3n,1,audio/Warning_Siren-SoundBible_uid-2u4g3n.wav,impulse_noise,0,val
+Warning_Siren-SoundBible_uid-6grhp2,Warning_Siren-SoundBible_uid-6grhp2,1,audio/Warning_Siren-SoundBible_uid-6grhp2.wav,impulse_noise,0,val
+Warning_Siren-SoundBible_uid-dftrca,Warning_Siren-SoundBible_uid-dftrca,1,audio/Warning_Siren-SoundBible_uid-dftrca.wav,impulse_noise,0,val
+Warning_Siren-SoundBible_uid-fozzqu,Warning_Siren-SoundBible_uid-fozzqu,1,audio/Warning_Siren-SoundBible_uid-fozzqu.wav,impulse_noise,0,train
+Warning_Siren-SoundBible_uid-hoaz92,Warning_Siren-SoundBible_uid-hoaz92,1,audio/Warning_Siren-SoundBible_uid-hoaz92.wav,impulse_noise,0,train
+Winston_Churchill Nazi Speech-SoundBible_uid-0cmuel,Winston_Churchill Nazi Speech-SoundBible_uid-0cmuel,1,audio/Winston_Churchill Nazi Speech-SoundBible_uid-0cmuel.wav,impulse_noise,0,train
+Winston_Churchill Nazi Speech-SoundBible_uid-4s48dc,Winston_Churchill Nazi Speech-SoundBible_uid-4s48dc,1,audio/Winston_Churchill Nazi Speech-SoundBible_uid-4s48dc.wav,impulse_noise,0,train
+Winston_Churchill Nazi Speech-SoundBible_uid-5pcc4v,Winston_Churchill Nazi Speech-SoundBible_uid-5pcc4v,1,audio/Winston_Churchill Nazi Speech-SoundBible_uid-5pcc4v.wav,impulse_noise,0,train
+Winston_Churchill Nazi Speech-SoundBible_uid-7bmxdz,Winston_Churchill Nazi Speech-SoundBible_uid-7bmxdz,1,audio/Winston_Churchill Nazi Speech-SoundBible_uid-7bmxdz.wav,impulse_noise,0,train
+Winston_Churchill Nazi Speech-SoundBible_uid-al7l64,Winston_Churchill Nazi Speech-SoundBible_uid-al7l64,1,audio/Winston_Churchill Nazi Speech-SoundBible_uid-al7l64.wav,impulse_noise,0,train
+Winston_Churchill Nazi Speech-SoundBible_uid-bxnadm,Winston_Churchill Nazi Speech-SoundBible_uid-bxnadm,1,audio/Winston_Churchill Nazi Speech-SoundBible_uid-bxnadm.wav,impulse_noise,0,val
+Winston_Churchill Nazi Speech-SoundBible_uid-dmwah1,Winston_Churchill Nazi Speech-SoundBible_uid-dmwah1,1,audio/Winston_Churchill Nazi Speech-SoundBible_uid-dmwah1.wav,impulse_noise,0,train
+Winston_Churchill Nazi Speech-SoundBible_uid-eqo07l,Winston_Churchill Nazi Speech-SoundBible_uid-eqo07l,1,audio/Winston_Churchill Nazi Speech-SoundBible_uid-eqo07l.wav,impulse_noise,0,train
+Winston_Churchill Nazi Speech-SoundBible_uid-er6dw9,Winston_Churchill Nazi Speech-SoundBible_uid-er6dw9,1,audio/Winston_Churchill Nazi Speech-SoundBible_uid-er6dw9.wav,impulse_noise,0,train
+Winston_Churchill Nazi Speech-SoundBible_uid-iy3w2f,Winston_Churchill Nazi Speech-SoundBible_uid-iy3w2f,1,audio/Winston_Churchill Nazi Speech-SoundBible_uid-iy3w2f.wav,impulse_noise,0,train
+Winston_Churchill Nazi Speech-SoundBible_uid-kltsbd,Winston_Churchill Nazi Speech-SoundBible_uid-kltsbd,1,audio/Winston_Churchill Nazi Speech-SoundBible_uid-kltsbd.wav,impulse_noise,0,val
+Winston_Churchill Nazi Speech-SoundBible_uid-kyjgqj,Winston_Churchill Nazi Speech-SoundBible_uid-kyjgqj,1,audio/Winston_Churchill Nazi Speech-SoundBible_uid-kyjgqj.wav,impulse_noise,0,train
+Winston_Churchill Nazi Speech-SoundBible_uid-lbzijr,Winston_Churchill Nazi Speech-SoundBible_uid-lbzijr,1,audio/Winston_Churchill Nazi Speech-SoundBible_uid-lbzijr.wav,impulse_noise,0,val
+Winston_Churchill Nazi Speech-SoundBible_uid-no7qj6,Winston_Churchill Nazi Speech-SoundBible_uid-no7qj6,1,audio/Winston_Churchill Nazi Speech-SoundBible_uid-no7qj6.wav,impulse_noise,0,val
+Winston_Churchill Nazi Speech-SoundBible_uid-o4v9k7,Winston_Churchill Nazi Speech-SoundBible_uid-o4v9k7,1,audio/Winston_Churchill Nazi Speech-SoundBible_uid-o4v9k7.wav,impulse_noise,0,train
+Winston_Churchill Nazi Speech-SoundBible_uid-pad9ga,Winston_Churchill Nazi Speech-SoundBible_uid-pad9ga,1,audio/Winston_Churchill Nazi Speech-SoundBible_uid-pad9ga.wav,impulse_noise,0,train
+Winston_Churchill Nazi Speech-SoundBible_uid-rtjtl9,Winston_Churchill Nazi Speech-SoundBible_uid-rtjtl9,1,audio/Winston_Churchill Nazi Speech-SoundBible_uid-rtjtl9.wav,impulse_noise,0,train
+Winston_Churchill Nazi Speech-SoundBible_uid-tt9xln,Winston_Churchill Nazi Speech-SoundBible_uid-tt9xln,1,audio/Winston_Churchill Nazi Speech-SoundBible_uid-tt9xln.wav,impulse_noise,0,train
+Winston_Churchill Nazi Speech-SoundBible_uid-uo32ie,Winston_Churchill Nazi Speech-SoundBible_uid-uo32ie,1,audio/Winston_Churchill Nazi Speech-SoundBible_uid-uo32ie.wav,impulse_noise,0,train
+Winston_Churchill Nazi Speech-SoundBible_uid-y0ded0,Winston_Churchill Nazi Speech-SoundBible_uid-y0ded0,1,audio/Winston_Churchill Nazi Speech-SoundBible_uid-y0ded0.wav,impulse_noise,0,val
+Winston_Churchill Nazi Speech-SoundBible_uid-y5y8mt,Winston_Churchill Nazi Speech-SoundBible_uid-y5y8mt,1,audio/Winston_Churchill Nazi Speech-SoundBible_uid-y5y8mt.wav,impulse_noise,0,train
+Woman_Screaming 2-SoundBible_uid-fn45oh,Woman_Screaming 2-SoundBible_uid-fn45oh,1,audio/Woman_Screaming 2-SoundBible_uid-fn45oh.wav,impulse_noise,0,train
+Woman_Screaming 2-SoundBible_uid-topncu,Woman_Screaming 2-SoundBible_uid-topncu,1,audio/Woman_Screaming 2-SoundBible_uid-topncu.wav,impulse_noise,0,train
+ambience_casino-stephan_schutze-1391090820_uid-2huic7,ambience_casino-stephan_schutze-1391090820_uid-2huic7,1,audio/ambience_casino-stephan_schutze-1391090820_uid-2huic7.wav,impulse_noise,0,val
+ambience_casino-stephan_schutze-1391090820_uid-4y7nb9,ambience_casino-stephan_schutze-1391090820_uid-4y7nb9,1,audio/ambience_casino-stephan_schutze-1391090820_uid-4y7nb9.wav,impulse_noise,0,train
+ambience_casino-stephan_schutze-1391090820_uid-5nmnl0,ambience_casino-stephan_schutze-1391090820_uid-5nmnl0,1,audio/ambience_casino-stephan_schutze-1391090820_uid-5nmnl0.wav,impulse_noise,0,val
+ambience_casino-stephan_schutze-1391090820_uid-6jx1mx,ambience_casino-stephan_schutze-1391090820_uid-6jx1mx,1,audio/ambience_casino-stephan_schutze-1391090820_uid-6jx1mx.wav,impulse_noise,0,train
+ambience_casino-stephan_schutze-1391090820_uid-aikc3w,ambience_casino-stephan_schutze-1391090820_uid-aikc3w,1,audio/ambience_casino-stephan_schutze-1391090820_uid-aikc3w.wav,impulse_noise,0,train
+ambience_casino-stephan_schutze-1391090820_uid-c8911a,ambience_casino-stephan_schutze-1391090820_uid-c8911a,1,audio/ambience_casino-stephan_schutze-1391090820_uid-c8911a.wav,impulse_noise,0,train
+ambience_casino-stephan_schutze-1391090820_uid-rn7474,ambience_casino-stephan_schutze-1391090820_uid-rn7474,1,audio/ambience_casino-stephan_schutze-1391090820_uid-rn7474.wav,impulse_noise,0,val
+ambience_casino-stephan_schutze-1391090820_uid-x606pf,ambience_casino-stephan_schutze-1391090820_uid-x606pf,1,audio/ambience_casino-stephan_schutze-1391090820_uid-x606pf.wav,impulse_noise,0,train
+ambience_casino-stephan_schutze-1391090820_uid-x9mttt,ambience_casino-stephan_schutze-1391090820_uid-x9mttt,1,audio/ambience_casino-stephan_schutze-1391090820_uid-x9mttt.wav,impulse_noise,0,val
+ambience_casino-stephan_schutze-1391090820_uid-yc1rl4,ambience_casino-stephan_schutze-1391090820_uid-yc1rl4,1,audio/ambience_casino-stephan_schutze-1391090820_uid-yc1rl4.wav,impulse_noise,0,train
+church_chime-daniel_simon (1)_uid-09rb5t,church_chime-daniel_simon (1)_uid-09rb5t,1,audio/church_chime-daniel_simon (1)_uid-09rb5t.wav,impulse_noise,0,train
+church_chime-daniel_simon (1)_uid-9r03mn,church_chime-daniel_simon (1)_uid-9r03mn,1,audio/church_chime-daniel_simon (1)_uid-9r03mn.wav,impulse_noise,0,train
+church_chime-daniel_simon (1)_uid-cvxr9s,church_chime-daniel_simon (1)_uid-cvxr9s,1,audio/church_chime-daniel_simon (1)_uid-cvxr9s.wav,impulse_noise,0,train
+church_chime-daniel_simon (1)_uid-l2d890,church_chime-daniel_simon (1)_uid-l2d890,1,audio/church_chime-daniel_simon (1)_uid-l2d890.wav,impulse_noise,0,train
+church_chime-daniel_simon (1)_uid-mzomav,church_chime-daniel_simon (1)_uid-mzomav,1,audio/church_chime-daniel_simon (1)_uid-mzomav.wav,impulse_noise,0,train
+church_chime-daniel_simon (1)_uid-scdnqq,church_chime-daniel_simon (1)_uid-scdnqq,1,audio/church_chime-daniel_simon (1)_uid-scdnqq.wav,impulse_noise,0,train
+church_chime-daniel_simon (1)_uid-us7n97,church_chime-daniel_simon (1)_uid-us7n97,1,audio/church_chime-daniel_simon (1)_uid-us7n97.wav,impulse_noise,0,train
+church_chime-daniel_simon (1)_uid-vj35r6,church_chime-daniel_simon (1)_uid-vj35r6,1,audio/church_chime-daniel_simon (1)_uid-vj35r6.wav,impulse_noise,0,train
+church_chime-daniel_simon (1)_uid-y1lc3a,church_chime-daniel_simon (1)_uid-y1lc3a,1,audio/church_chime-daniel_simon (1)_uid-y1lc3a.wav,impulse_noise,0,val
+church_chime-daniel_simon_uid-45onex,church_chime-daniel_simon_uid-45onex,1,audio/church_chime-daniel_simon_uid-45onex.wav,impulse_noise,0,train
+church_chime-daniel_simon_uid-dp5ksw,church_chime-daniel_simon_uid-dp5ksw,1,audio/church_chime-daniel_simon_uid-dp5ksw.wav,impulse_noise,0,train
+church_chime-daniel_simon_uid-ep1s6l,church_chime-daniel_simon_uid-ep1s6l,1,audio/church_chime-daniel_simon_uid-ep1s6l.wav,impulse_noise,0,train
+church_chime-daniel_simon_uid-j64p72,church_chime-daniel_simon_uid-j64p72,1,audio/church_chime-daniel_simon_uid-j64p72.wav,impulse_noise,0,train
+church_chime-daniel_simon_uid-ptobjb,church_chime-daniel_simon_uid-ptobjb,1,audio/church_chime-daniel_simon_uid-ptobjb.wav,impulse_noise,0,train
+church_chime-daniel_simon_uid-wpdtaf,church_chime-daniel_simon_uid-wpdtaf,1,audio/church_chime-daniel_simon_uid-wpdtaf.wav,impulse_noise,0,train
+doberman_pincher_daniel-simion (1)_uid-7ys55d,doberman_pincher_daniel-simion (1)_uid-7ys55d,1,audio/doberman_pincher_daniel-simion (1)_uid-7ys55d.wav,impulse_noise,0,val
+doberman_pincher_daniel-simion (1)_uid-9cj8a1,doberman_pincher_daniel-simion (1)_uid-9cj8a1,1,audio/doberman_pincher_daniel-simion (1)_uid-9cj8a1.wav,impulse_noise,0,val
+doberman_pincher_daniel-simion (1)_uid-bpb79l,doberman_pincher_daniel-simion (1)_uid-bpb79l,1,audio/doberman_pincher_daniel-simion (1)_uid-bpb79l.wav,impulse_noise,0,train
+doberman_pincher_daniel-simion (1)_uid-ugwrn3,doberman_pincher_daniel-simion (1)_uid-ugwrn3,1,audio/doberman_pincher_daniel-simion (1)_uid-ugwrn3.wav,impulse_noise,0,train
+doberman_pincher_daniel-simion_uid-ct6peh,doberman_pincher_daniel-simion_uid-ct6peh,1,audio/doberman_pincher_daniel-simion_uid-ct6peh.wav,impulse_noise,0,train
+doberman_pincher_daniel-simion_uid-rd25w7,doberman_pincher_daniel-simion_uid-rd25w7,1,audio/doberman_pincher_daniel-simion_uid-rd25w7.wav,impulse_noise,0,train
+doberman_pincher_daniel-simion_uid-s3o71k,doberman_pincher_daniel-simion_uid-s3o71k,1,audio/doberman_pincher_daniel-simion_uid-s3o71k.wav,impulse_noise,0,train
+doberman_pincher_daniel-simion_uid-wbtgcd,doberman_pincher_daniel-simion_uid-wbtgcd,1,audio/doberman_pincher_daniel-simion_uid-wbtgcd.wav,impulse_noise,0,train
+front_desk_bells-daniel_simon (1)_uid-w4bybb,front_desk_bells-daniel_simon (1)_uid-w4bybb,1,audio/front_desk_bells-daniel_simon (1)_uid-w4bybb.wav,impulse_noise,0,val
+front_desk_bells-daniel_simon (1)_uid-x61vsc,front_desk_bells-daniel_simon (1)_uid-x61vsc,1,audio/front_desk_bells-daniel_simon (1)_uid-x61vsc.wav,impulse_noise,0,train
+front_desk_bells-daniel_simon_uid-j1ij5v,front_desk_bells-daniel_simon_uid-j1ij5v,1,audio/front_desk_bells-daniel_simon_uid-j1ij5v.wav,impulse_noise,0,train
+front_desk_bells-daniel_simon_uid-wr4ti3,front_desk_bells-daniel_simon_uid-wr4ti3,1,audio/front_desk_bells-daniel_simon_uid-wr4ti3.wav,impulse_noise,0,train
+german_shephard-daniel_simon (1)_uid-3k0gm6,german_shephard-daniel_simon (1)_uid-3k0gm6,1,audio/german_shephard-daniel_simon (1)_uid-3k0gm6.wav,impulse_noise,0,train
+german_shephard-daniel_simon (1)_uid-6ujt5j,german_shephard-daniel_simon (1)_uid-6ujt5j,1,audio/german_shephard-daniel_simon (1)_uid-6ujt5j.wav,impulse_noise,0,train
+german_shephard-daniel_simon (1)_uid-9z02eo,german_shephard-daniel_simon (1)_uid-9z02eo,1,audio/german_shephard-daniel_simon (1)_uid-9z02eo.wav,impulse_noise,0,train
+german_shephard-daniel_simon (1)_uid-cohtrk,german_shephard-daniel_simon (1)_uid-cohtrk,1,audio/german_shephard-daniel_simon (1)_uid-cohtrk.wav,impulse_noise,0,train
+german_shephard-daniel_simon (1)_uid-erwt6n,german_shephard-daniel_simon (1)_uid-erwt6n,1,audio/german_shephard-daniel_simon (1)_uid-erwt6n.wav,impulse_noise,0,train
+german_shephard-daniel_simon (1)_uid-glt0t9,german_shephard-daniel_simon (1)_uid-glt0t9,1,audio/german_shephard-daniel_simon (1)_uid-glt0t9.wav,impulse_noise,0,train
+german_shephard-daniel_simon (1)_uid-j5hf6d,german_shephard-daniel_simon (1)_uid-j5hf6d,1,audio/german_shephard-daniel_simon (1)_uid-j5hf6d.wav,impulse_noise,0,train
+german_shephard-daniel_simon (1)_uid-kwuogk,german_shephard-daniel_simon (1)_uid-kwuogk,1,audio/german_shephard-daniel_simon (1)_uid-kwuogk.wav,impulse_noise,0,train
+german_shephard-daniel_simon (1)_uid-l7q44i,german_shephard-daniel_simon (1)_uid-l7q44i,1,audio/german_shephard-daniel_simon (1)_uid-l7q44i.wav,impulse_noise,0,train
+german_shephard-daniel_simon (1)_uid-rakjbq,german_shephard-daniel_simon (1)_uid-rakjbq,1,audio/german_shephard-daniel_simon (1)_uid-rakjbq.wav,impulse_noise,0,train
+german_shephard-daniel_simon (1)_uid-slfadc,german_shephard-daniel_simon (1)_uid-slfadc,1,audio/german_shephard-daniel_simon (1)_uid-slfadc.wav,impulse_noise,0,val
+german_shephard-daniel_simon (1)_uid-v1bq42,german_shephard-daniel_simon (1)_uid-v1bq42,1,audio/german_shephard-daniel_simon (1)_uid-v1bq42.wav,impulse_noise,0,train
+german_shephard-daniel_simon_uid-2radr4,german_shephard-daniel_simon_uid-2radr4,1,audio/german_shephard-daniel_simon_uid-2radr4.wav,impulse_noise,0,val
+german_shephard-daniel_simon_uid-6ciyoq,german_shephard-daniel_simon_uid-6ciyoq,1,audio/german_shephard-daniel_simon_uid-6ciyoq.wav,impulse_noise,0,train
+german_shephard-daniel_simon_uid-9entpt,german_shephard-daniel_simon_uid-9entpt,1,audio/german_shephard-daniel_simon_uid-9entpt.wav,impulse_noise,0,train
+german_shephard-daniel_simon_uid-dcly7h,german_shephard-daniel_simon_uid-dcly7h,1,audio/german_shephard-daniel_simon_uid-dcly7h.wav,impulse_noise,0,train
+german_shephard-daniel_simon_uid-dh4s20,german_shephard-daniel_simon_uid-dh4s20,1,audio/german_shephard-daniel_simon_uid-dh4s20.wav,impulse_noise,0,val
+german_shephard-daniel_simon_uid-f5b9hf,german_shephard-daniel_simon_uid-f5b9hf,1,audio/german_shephard-daniel_simon_uid-f5b9hf.wav,impulse_noise,0,train
+german_shephard-daniel_simon_uid-ku0s9t,german_shephard-daniel_simon_uid-ku0s9t,1,audio/german_shephard-daniel_simon_uid-ku0s9t.wav,impulse_noise,0,train
+german_shephard-daniel_simon_uid-l1qc1k,german_shephard-daniel_simon_uid-l1qc1k,1,audio/german_shephard-daniel_simon_uid-l1qc1k.wav,impulse_noise,0,train
+german_shephard-daniel_simon_uid-m5ql7t,german_shephard-daniel_simon_uid-m5ql7t,1,audio/german_shephard-daniel_simon_uid-m5ql7t.wav,impulse_noise,0,train
+german_shephard-daniel_simon_uid-pvf0s7,german_shephard-daniel_simon_uid-pvf0s7,1,audio/german_shephard-daniel_simon_uid-pvf0s7.wav,impulse_noise,0,val
+german_shephard-daniel_simon_uid-ug65v7,german_shephard-daniel_simon_uid-ug65v7,1,audio/german_shephard-daniel_simon_uid-ug65v7.wav,impulse_noise,0,val
+german_shephard-daniel_simon_uid-v3o4ha,german_shephard-daniel_simon_uid-v3o4ha,1,audio/german_shephard-daniel_simon_uid-v3o4ha.wav,impulse_noise,0,val
+hard_shoes_1-daniel_simon_uid-10x4hj,hard_shoes_1-daniel_simon_uid-10x4hj,1,audio/hard_shoes_1-daniel_simon_uid-10x4hj.wav,impulse_noise,0,train
+hard_shoes_1-daniel_simon_uid-5m2o95,hard_shoes_1-daniel_simon_uid-5m2o95,1,audio/hard_shoes_1-daniel_simon_uid-5m2o95.wav,impulse_noise,0,val
+hard_shoes_1-daniel_simon_uid-63zrp9,hard_shoes_1-daniel_simon_uid-63zrp9,1,audio/hard_shoes_1-daniel_simon_uid-63zrp9.wav,impulse_noise,0,val
+hard_shoes_1-daniel_simon_uid-fnvbmk,hard_shoes_1-daniel_simon_uid-fnvbmk,1,audio/hard_shoes_1-daniel_simon_uid-fnvbmk.wav,impulse_noise,0,val
+hard_shoes_1-daniel_simon_uid-v2ufy8,hard_shoes_1-daniel_simon_uid-v2ufy8,1,audio/hard_shoes_1-daniel_simon_uid-v2ufy8.wav,impulse_noise,0,train
+hard_shoes_1-daniel_simon_uid-xib2zr,hard_shoes_1-daniel_simon_uid-xib2zr,1,audio/hard_shoes_1-daniel_simon_uid-xib2zr.wav,impulse_noise,0,train
+harley_davidson-daniel_simon_uid-rrapxf,harley_davidson-daniel_simon_uid-rrapxf,1,audio/harley_davidson-daniel_simon_uid-rrapxf.wav,impulse_noise,0,train
+harley_davidson-daniel_simon_uid-u50bl2,harley_davidson-daniel_simon_uid-u50bl2,1,audio/harley_davidson-daniel_simon_uid-u50bl2.wav,impulse_noise,0,train
+harley_davidson-daniel_simon_uid-z10dl0,harley_davidson-daniel_simon_uid-z10dl0,1,audio/harley_davidson-daniel_simon_uid-z10dl0.wav,impulse_noise,0,train
+labrador_barking-daniel_simon_uid-12led8,labrador_barking-daniel_simon_uid-12led8,1,audio/labrador_barking-daniel_simon_uid-12led8.wav,impulse_noise,0,train
+labrador_barking-daniel_simon_uid-22rq8x,labrador_barking-daniel_simon_uid-22rq8x,1,audio/labrador_barking-daniel_simon_uid-22rq8x.wav,impulse_noise,0,train
+labrador_barking-daniel_simon_uid-3pf568,labrador_barking-daniel_simon_uid-3pf568,1,audio/labrador_barking-daniel_simon_uid-3pf568.wav,impulse_noise,0,train
+labrador_barking-daniel_simon_uid-5ubsj5,labrador_barking-daniel_simon_uid-5ubsj5,1,audio/labrador_barking-daniel_simon_uid-5ubsj5.wav,impulse_noise,0,train
+labrador_barking-daniel_simon_uid-8xft75,labrador_barking-daniel_simon_uid-8xft75,1,audio/labrador_barking-daniel_simon_uid-8xft75.wav,impulse_noise,0,train
+labrador_barking-daniel_simon_uid-9llf9n,labrador_barking-daniel_simon_uid-9llf9n,1,audio/labrador_barking-daniel_simon_uid-9llf9n.wav,impulse_noise,0,train
+labrador_barking-daniel_simon_uid-ejrzab,labrador_barking-daniel_simon_uid-ejrzab,1,audio/labrador_barking-daniel_simon_uid-ejrzab.wav,impulse_noise,0,train
+labrador_barking-daniel_simon_uid-g9g79x,labrador_barking-daniel_simon_uid-g9g79x,1,audio/labrador_barking-daniel_simon_uid-g9g79x.wav,impulse_noise,0,train
+labrador_barking-daniel_simon_uid-gakl2j,labrador_barking-daniel_simon_uid-gakl2j,1,audio/labrador_barking-daniel_simon_uid-gakl2j.wav,impulse_noise,0,train
+labrador_barking-daniel_simon_uid-glq00f,labrador_barking-daniel_simon_uid-glq00f,1,audio/labrador_barking-daniel_simon_uid-glq00f.wav,impulse_noise,0,train
+labrador_barking-daniel_simon_uid-go8h0o,labrador_barking-daniel_simon_uid-go8h0o,1,audio/labrador_barking-daniel_simon_uid-go8h0o.wav,impulse_noise,0,train
+labrador_barking-daniel_simon_uid-knl4i5,labrador_barking-daniel_simon_uid-knl4i5,1,audio/labrador_barking-daniel_simon_uid-knl4i5.wav,impulse_noise,0,train
+labrador_barking-daniel_simon_uid-lejrc1,labrador_barking-daniel_simon_uid-lejrc1,1,audio/labrador_barking-daniel_simon_uid-lejrc1.wav,impulse_noise,0,train
+labrador_barking-daniel_simon_uid-mdlh3t,labrador_barking-daniel_simon_uid-mdlh3t,1,audio/labrador_barking-daniel_simon_uid-mdlh3t.wav,impulse_noise,0,train
+labrador_barking-daniel_simon_uid-mrurpr,labrador_barking-daniel_simon_uid-mrurpr,1,audio/labrador_barking-daniel_simon_uid-mrurpr.wav,impulse_noise,0,train
+labrador_barking-daniel_simon_uid-qqyt0q,labrador_barking-daniel_simon_uid-qqyt0q,1,audio/labrador_barking-daniel_simon_uid-qqyt0q.wav,impulse_noise,0,train
+labrador_barking-daniel_simon_uid-rzhtt2,labrador_barking-daniel_simon_uid-rzhtt2,1,audio/labrador_barking-daniel_simon_uid-rzhtt2.wav,impulse_noise,0,train
+labrador_barking-daniel_simon_uid-tvn2nw,labrador_barking-daniel_simon_uid-tvn2nw,1,audio/labrador_barking-daniel_simon_uid-tvn2nw.wav,impulse_noise,0,val
+muscle_car-daniel_simon (1)_uid-2xug3x,muscle_car-daniel_simon (1)_uid-2xug3x,1,audio/muscle_car-daniel_simon (1)_uid-2xug3x.wav,impulse_noise,0,train
+muscle_car-daniel_simon (1)_uid-5hcw2i,muscle_car-daniel_simon (1)_uid-5hcw2i,1,audio/muscle_car-daniel_simon (1)_uid-5hcw2i.wav,impulse_noise,0,train
+muscle_car-daniel_simon (1)_uid-aqjdz8,muscle_car-daniel_simon (1)_uid-aqjdz8,1,audio/muscle_car-daniel_simon (1)_uid-aqjdz8.wav,impulse_noise,0,train
+muscle_car-daniel_simon (1)_uid-jfy71h,muscle_car-daniel_simon (1)_uid-jfy71h,1,audio/muscle_car-daniel_simon (1)_uid-jfy71h.wav,impulse_noise,0,val
+muscle_car-daniel_simon (1)_uid-onh7ao,muscle_car-daniel_simon (1)_uid-onh7ao,1,audio/muscle_car-daniel_simon (1)_uid-onh7ao.wav,impulse_noise,0,train
+muscle_car-daniel_simon (1)_uid-qmynaw,muscle_car-daniel_simon (1)_uid-qmynaw,1,audio/muscle_car-daniel_simon (1)_uid-qmynaw.wav,impulse_noise,0,train
+muscle_car-daniel_simon (1)_uid-vli16l,muscle_car-daniel_simon (1)_uid-vli16l,1,audio/muscle_car-daniel_simon (1)_uid-vli16l.wav,impulse_noise,0,train
+muscle_car-daniel_simon_uid-cnf4ve,muscle_car-daniel_simon_uid-cnf4ve,1,audio/muscle_car-daniel_simon_uid-cnf4ve.wav,impulse_noise,0,train
+muscle_car-daniel_simon_uid-cplmio,muscle_car-daniel_simon_uid-cplmio,1,audio/muscle_car-daniel_simon_uid-cplmio.wav,impulse_noise,0,train
+old_car-engine_daniel_simion_uid-234dke,old_car-engine_daniel_simion_uid-234dke,1,audio/old_car-engine_daniel_simion_uid-234dke.wav,impulse_noise,0,train
+old_car-engine_daniel_simion_uid-2yxmfv,old_car-engine_daniel_simion_uid-2yxmfv,1,audio/old_car-engine_daniel_simion_uid-2yxmfv.wav,impulse_noise,0,train
+old_car-engine_daniel_simion_uid-68gbna,old_car-engine_daniel_simion_uid-68gbna,1,audio/old_car-engine_daniel_simion_uid-68gbna.wav,impulse_noise,0,train
+old_car-engine_daniel_simion_uid-ep1lus,old_car-engine_daniel_simion_uid-ep1lus,1,audio/old_car-engine_daniel_simion_uid-ep1lus.wav,impulse_noise,0,train
+old_car-engine_daniel_simion_uid-hhzuzk,old_car-engine_daniel_simion_uid-hhzuzk,1,audio/old_car-engine_daniel_simion_uid-hhzuzk.wav,impulse_noise,0,train
+old_car-engine_daniel_simion_uid-k3nphi,old_car-engine_daniel_simion_uid-k3nphi,1,audio/old_car-engine_daniel_simion_uid-k3nphi.wav,impulse_noise,0,val
+old_car-engine_daniel_simion_uid-mraruj,old_car-engine_daniel_simion_uid-mraruj,1,audio/old_car-engine_daniel_simion_uid-mraruj.wav,impulse_noise,0,train
+old_car-engine_daniel_simion_uid-rgmb57,old_car-engine_daniel_simion_uid-rgmb57,1,audio/old_car-engine_daniel_simion_uid-rgmb57.wav,impulse_noise,0,train
+old_car-engine_daniel_simion_uid-xibx7i,old_car-engine_daniel_simion_uid-xibx7i,1,audio/old_car-engine_daniel_simion_uid-xibx7i.wav,impulse_noise,0,train
+old_fashioned-door-bell-daniel_simon_uid-3zwbmp,old_fashioned-door-bell-daniel_simon_uid-3zwbmp,1,audio/old_fashioned-door-bell-daniel_simon_uid-3zwbmp.wav,impulse_noise,0,train
+old_fashioned-door-bell-daniel_simon_uid-78ipsp,old_fashioned-door-bell-daniel_simon_uid-78ipsp,1,audio/old_fashioned-door-bell-daniel_simon_uid-78ipsp.wav,impulse_noise,0,train
+old_fashioned-door-bell-daniel_simon_uid-fj2u4d,old_fashioned-door-bell-daniel_simon_uid-fj2u4d,1,audio/old_fashioned-door-bell-daniel_simon_uid-fj2u4d.wav,impulse_noise,0,train
+old_fashioned-door-bell-daniel_simon_uid-h7we48,old_fashioned-door-bell-daniel_simon_uid-h7we48,1,audio/old_fashioned-door-bell-daniel_simon_uid-h7we48.wav,impulse_noise,0,train
+party_crowd-daniel_simon_uid-84vohn,party_crowd-daniel_simon_uid-84vohn,1,audio/party_crowd-daniel_simon_uid-84vohn.wav,impulse_noise,0,train
+party_crowd-daniel_simon_uid-8a80c1,party_crowd-daniel_simon_uid-8a80c1,1,audio/party_crowd-daniel_simon_uid-8a80c1.wav,impulse_noise,0,train
+party_crowd-daniel_simon_uid-gld5ul,party_crowd-daniel_simon_uid-gld5ul,1,audio/party_crowd-daniel_simon_uid-gld5ul.wav,impulse_noise,0,val
+party_crowd-daniel_simon_uid-octm7p,party_crowd-daniel_simon_uid-octm7p,1,audio/party_crowd-daniel_simon_uid-octm7p.wav,impulse_noise,0,val
+party_crowd-daniel_simon_uid-whd4fj,party_crowd-daniel_simon_uid-whd4fj,1,audio/party_crowd-daniel_simon_uid-whd4fj.wav,impulse_noise,0,train
+party_crowd-daniel_simon_uid-zjmqhj,party_crowd-daniel_simon_uid-zjmqhj,1,audio/party_crowd-daniel_simon_uid-zjmqhj.wav,impulse_noise,0,val
+railroad_crossing_bell-Brylon_Terry-1551570865 (1)_uid-8u71xp,railroad_crossing_bell-Brylon_Terry-1551570865 (1)_uid-8u71xp,1,audio/railroad_crossing_bell-Brylon_Terry-1551570865 (1)_uid-8u71xp.wav,impulse_noise,0,train
+railroad_crossing_bell-Brylon_Terry-1551570865 (1)_uid-9vd0kq,railroad_crossing_bell-Brylon_Terry-1551570865 (1)_uid-9vd0kq,1,audio/railroad_crossing_bell-Brylon_Terry-1551570865 (1)_uid-9vd0kq.wav,impulse_noise,0,train
+railroad_crossing_bell-Brylon_Terry-1551570865 (1)_uid-grcip2,railroad_crossing_bell-Brylon_Terry-1551570865 (1)_uid-grcip2,1,audio/railroad_crossing_bell-Brylon_Terry-1551570865 (1)_uid-grcip2.wav,impulse_noise,0,train
+railroad_crossing_bell-Brylon_Terry-1551570865 (1)_uid-gvtn9w,railroad_crossing_bell-Brylon_Terry-1551570865 (1)_uid-gvtn9w,1,audio/railroad_crossing_bell-Brylon_Terry-1551570865 (1)_uid-gvtn9w.wav,impulse_noise,0,train
+railroad_crossing_bell-Brylon_Terry-1551570865 (1)_uid-ylhj37,railroad_crossing_bell-Brylon_Terry-1551570865 (1)_uid-ylhj37,1,audio/railroad_crossing_bell-Brylon_Terry-1551570865 (1)_uid-ylhj37.wav,impulse_noise,0,train
+railroad_crossing_bell-Brylon_Terry-1551570865_uid-fh94qe,railroad_crossing_bell-Brylon_Terry-1551570865_uid-fh94qe,1,audio/railroad_crossing_bell-Brylon_Terry-1551570865_uid-fh94qe.wav,impulse_noise,0,train
+railroad_crossing_bell-Brylon_Terry-1551570865_uid-fk1zwm,railroad_crossing_bell-Brylon_Terry-1551570865_uid-fk1zwm,1,audio/railroad_crossing_bell-Brylon_Terry-1551570865_uid-fk1zwm.wav,impulse_noise,0,train
+railroad_crossing_bell-Brylon_Terry-1551570865_uid-iun6ns,railroad_crossing_bell-Brylon_Terry-1551570865_uid-iun6ns,1,audio/railroad_crossing_bell-Brylon_Terry-1551570865_uid-iun6ns.wav,impulse_noise,0,train
+railroad_crossing_bell-Brylon_Terry-1551570865_uid-nbm67d,railroad_crossing_bell-Brylon_Terry-1551570865_uid-nbm67d,1,audio/railroad_crossing_bell-Brylon_Terry-1551570865_uid-nbm67d.wav,impulse_noise,0,train
+railroad_crossing_bell-Brylon_Terry-1551570865_uid-qprwom,railroad_crossing_bell-Brylon_Terry-1551570865_uid-qprwom,1,audio/railroad_crossing_bell-Brylon_Terry-1551570865_uid-qprwom.wav,impulse_noise,0,val
+railroad_crossing_bell-Brylon_Terry-1551570865_uid-zbky8w,railroad_crossing_bell-Brylon_Terry-1551570865_uid-zbky8w,1,audio/railroad_crossing_bell-Brylon_Terry-1551570865_uid-zbky8w.wav,impulse_noise,0,train
+service_bell_daniel_simion_uid-ehss0n,service_bell_daniel_simion_uid-ehss0n,1,audio/service_bell_daniel_simion_uid-ehss0n.wav,impulse_noise,0,train
+service_bell_daniel_simion_uid-h9isqd,service_bell_daniel_simion_uid-h9isqd,1,audio/service_bell_daniel_simion_uid-h9isqd.wav,impulse_noise,0,val
+tolling_bell_daniel-simion_uid-cyg1sz,tolling_bell_daniel-simion_uid-cyg1sz,1,audio/tolling_bell_daniel-simion_uid-cyg1sz.wav,impulse_noise,0,train
+tolling_bell_daniel-simion_uid-cz4xcj,tolling_bell_daniel-simion_uid-cz4xcj,1,audio/tolling_bell_daniel-simion_uid-cz4xcj.wav,impulse_noise,0,train
