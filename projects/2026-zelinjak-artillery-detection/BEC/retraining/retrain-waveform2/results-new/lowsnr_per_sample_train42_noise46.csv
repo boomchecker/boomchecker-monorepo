@@ -1,0 +1,673 @@
+mode,variant,split,recording_id,class_id,score,pred
+PC float32,noise_snr0db,test,0003_0397s_shot_019_ch1,1,0.9844952821731567,1
+PC float32,noise_snr0db,test,0005_0580s_shot_006_ch1,1,0.999379575252533,1
+PC float32,noise_snr0db,test,0005_0607s_shot_150_ch1,1,0.9994834065437317,1
+PC float32,noise_snr0db,test,0005_0631s_shot_173_ch1,1,0.9978939890861511,1
+PC float32,noise_snr0db,test,0005_0632s_shot_176_ch1,1,0.9982025623321533,1
+PC float32,noise_snr0db,test,0005_0662s_shot_201_ch1,1,0.9998883008956909,1
+PC float32,noise_snr0db,test,0005_0685s_shot_220_ch1,1,0.999518632888794,1
+PC float32,noise_snr0db,test,0005_0700s_shot_037_ch1,1,0.9951961636543274,1
+PC float32,noise_snr0db,test,0011_0226s_shot_011_ch1,1,0.3042992651462555,0
+PC float32,noise_snr0db,test,0011_0333s_shot_018_ch1,1,0.31244972348213196,0
+PC float32,noise_snr0db,test,171236__alukahn__gunshot2_uid-fcn21d,0,6.295138854639504e-10,0
+PC float32,noise_snr0db,test,371041__morganpurkis__single-gunshot-3_uid-1k053k,0,6.63095273134573e-11,0
+PC float32,noise_snr0db,test,384687__morganpurkis__single-gunshot-42_uid-u9d6r1,0,1.5667962803903035e-13,0
+PC float32,noise_snr0db,test,384689__dobroide__20170318gunshotparadiso_uid-kwsehz,0,9.647448277781093e-22,0
+PC float32,noise_snr0db,test,384689__dobroide__20170318gunshotparadiso_uid-pjl13d,0,7.364508308738138e-14,0
+PC float32,noise_snr0db,test,402008__eardeer__gunshot__high_3_uid-4j4q67,0,2.948776646309343e-15,0
+PC float32,noise_snr0db,test,402791__acidsnowflake__ak47-and-various-other-gunshots-at-indoor-shooting-range_uid-6aezru,0,1.1525399189153198e-22,0
+PC float32,noise_snr0db,test,402791__acidsnowflake__ak47-and-various-other-gunshots-at-indoor-shooting-range_uid-byjlki,0,2.753964203047326e-25,0
+PC float32,noise_snr0db,test,402791__acidsnowflake__ak47-and-various-other-gunshots-at-indoor-shooting-range_uid-garl1l,0,1.0317073961583216e-24,0
+PC float32,noise_snr0db,test,402791__acidsnowflake__ak47-and-various-other-gunshots-at-indoor-shooting-range_uid-l3ibfo,0,4.954673736492688e-21,0
+PC float32,noise_snr0db,test,402791__acidsnowflake__ak47-and-various-other-gunshots-at-indoor-shooting-range_uid-qe3eyz,0,2.352348460185421e-25,0
+PC float32,noise_snr0db,test,405132__fstagi__gunshots_uid-xcyi0z,0,2.81047890038702e-13,0
+PC float32,noise_snr0db,test,51470__smcameron__synthetic_gunshot_2_uid-vatpwv,0,7.342852437197678e-10,0
+PC float32,noise_snr0db,test,518181__bolkmar__fx-gunshot_uid-al1o0i,0,1.1437018324587933e-14,0
+PC float32,noise_snr0db,test,518181__bolkmar__fx-gunshot_uid-es96l9,0,7.906873179308604e-06,0
+PC float32,noise_snr0db,test,518181__bolkmar__fx-gunshot_uid-j3vsmz,0,6.800105183807359e-13,0
+PC float32,noise_snr0db,test,519623__nathanchurchyard__gunshots_uid-kvxx3q,0,7.632912080168808e-10,0
+PC float32,noise_snr0db,test,683312__pnmcarrierailfan__pistol-gunshot-mix-weapons_uid-tmmoay,0,3.2173763843011335e-14,0
+PC float32,noise_snr0db,test,Amusement_Park Ambiance -SoundBible_uid-2t9w3e,0,8.03871469390316e-10,0
+PC float32,noise_snr0db,test,Amusement_Park Ambiance -SoundBible_uid-jwv6lq,0,6.1164024657502005e-15,0
+PC float32,noise_snr0db,test,Amusement_Park Ambiance -SoundBible_uid-l24o63,0,3.751385035943855e-10,0
+PC float32,noise_snr0db,test,Background_Noise-SoundBible_uid-m7qaag,0,4.2030229123468654e-12,0
+PC float32,noise_snr0db,test,Background_Noise-SoundBible_uid-mnn2bm,0,1.6996802576496606e-10,0
+PC float32,noise_snr0db,test,Bi_Polar_Uncle-ScanMan-1810098860_uid-b8uks2,0,8.864234656921909e-33,0
+PC float32,noise_snr0db,test,Bi_Polar_Uncle-ScanMan-1810098860_uid-evaiic,0,3.591313329156238e-32,0
+PC float32,noise_snr0db,test,Bi_Polar_Uncle-ScanMan-1810098860_uid-l7n0jt,0,1.787033348223082e-34,0
+PC float32,noise_snr0db,test,Bi_Polar_Uncle-ScanMan-1810098860_uid-omv54z,0,3.0030563399643516e-26,0
+PC float32,noise_snr0db,test,Bi_Polar_Uncle-ScanMan-1810098860_uid-p90ljg,0,0.0,0
+PC float32,noise_snr0db,test,Big_door_closed-Clemens_F-941522533_uid-n02it9,0,6.062646912274872e-12,0
+PC float32,noise_snr0db,test,Cellar_Door Slam Shut-SoundBible_uid-pg4dq8,0,7.791930726570786e-16,0
+PC float32,noise_snr0db,test,Citty_Traffic Ambiance-SoundBible_uid-87yimc,0,3.916622343287657e-13,0
+PC float32,noise_snr0db,test,Citty_Traffic Ambiance-SoundBible_uid-8vk0wx,0,1.686284709883891e-19,0
+PC float32,noise_snr0db,test,Citty_Traffic Ambiance-SoundBible_uid-mxbe2e,0,7.2505603951333875e-12,0
+PC float32,noise_snr0db,test,Citty_Traffic Ambiance-SoundBible_uid-q0srdn,0,9.944308678784151e-16,0
+PC float32,noise_snr0db,test,City_Ambiance-SoundBible_uid-8yrqh9,0,9.71016971392175e-16,0
+PC float32,noise_snr0db,test,City_Ambiance-SoundBible_uid-t8xlgr,0,3.862838698811665e-15,0
+PC float32,noise_snr0db,test,Classroom_Ambiance-SoundBible_uid-q49pv1,0,4.331405012436562e-09,0
+PC float32,noise_snr0db,test,Classroom_Ambiance-SoundBible_uid-qfbdk0,0,3.116286961812875e-08,0
+PC float32,noise_snr0db,test,Classroom_Ambiance-SoundBible_uid-uu3ewb,0,1.504189839351966e-08,0
+PC float32,noise_snr0db,test,Classroom_Ambiance-SoundBible_uid-xdl758,0,1.8307241589354817e-07,0
+PC float32,noise_snr0db,test,Close_Vault_Or_Jail_Door-SoundBible_uid-lasl2n,0,1.1575920083606306e-10,0
+PC float32,noise_snr0db,test,Dog_Barking-SoundBible_uid-3uyzqt,0,9.640511106066785e-34,0
+PC float32,noise_snr0db,test,Dog_Barking-SoundBible_uid-udwefz,0,9.092573298923858e-24,0
+PC float32,noise_snr0db,test,Dogs_Barking-SoundBible_uid-0ftva8,0,2.7632446723825286e-33,0
+PC float32,noise_snr0db,test,Dogs_Barking-SoundBible_uid-itlawo,0,1.4554308261146796e-29,0
+PC float32,noise_snr0db,test,Dogs_Barking-SoundBible_uid-k8qbi9,0,5.417788718915132e-34,0
+PC float32,noise_snr0db,test,End_of_Game-Mike_Koenig-617089079_uid-0scusn,0,2.1793672668972068e-21,0
+PC float32,noise_snr0db,test,Engine_Inside_Car-SoundBible_uid-as3jed,0,1.2628075637621805e-05,0
+PC float32,noise_snr0db,test,Fast_Heel_Walk-Kyanna_Johnson-1646343608_uid-8u9yx0,0,2.335565197907811e-25,0
+PC float32,noise_snr0db,test,Fast_Heel_Walk-Kyanna_Johnson-1646343608_uid-9pwmgu,0,2.8485579933065746e-25,0
+PC float32,noise_snr0db,test,Female_Scream_Horror-NeoPhyTe-138499973_uid-w7fb5j,0,0.0,0
+PC float32,noise_snr0db,test,Footsteps_SoundBible_uid-4v6zy1,0,2.755509308140919e-13,0
+PC float32,noise_snr0db,test,Footsteps_SoundBible_uid-dg95vk,0,9.044889126022336e-19,0
+PC float32,noise_snr0db,test,Footsteps_SoundBible_uid-hnz36f,0,1.1162677765241824e-05,0
+PC float32,noise_snr0db,test,Frying_Pan_Impact-SoundBible_uid-nbylf3,0,2.059386169024792e-31,0
+PC float32,noise_snr0db,test,Indian_Bell-SoundBible_uid-t0u6xu,0,6.408556566745899e-18,0
+PC float32,noise_snr0db,test,Japanese_Temple Bell Small-SoundBible_uid-3fhudh,0,5.3886670402349596e-33,0
+PC float32,noise_snr0db,test,Japanese_Temple Bell Small-SoundBible_uid-8kpqn1,0,1.370603640851184e-21,0
+PC float32,noise_snr0db,test,Large_Door_Slam-SoundBible_uid-ljg1k3,0,2.6911150641240056e-08,0
+PC float32,noise_snr0db,test,Little_Girl_Talking-Mike_Koenig-782373463_uid-bstw5g,0,1.317701238278325e-26,0
+PC float32,noise_snr0db,test,Metal_Gong-Dianakc-109711828_uid-hlegwg,0,7.714943267567165e-12,0
+PC float32,noise_snr0db,test,Motorcycle_Engine-SoundBible_uid-bo8n5y,0,0.00013868887617718428,0
+PC float32,noise_snr0db,test,Neighborhood_Dogs Barking-SoundBible_uid-6a1kho,0,1.0837711694760975e-33,0
+PC float32,noise_snr0db,test,Neighborhood_Dogs Barking-SoundBible_uid-7mwktq,0,5.14121849988916e-32,0
+PC float32,noise_snr0db,test,Neighborhood_Dogs Barking-SoundBible_uid-dwmjp4,0,1.3337036653017189e-31,0
+PC float32,noise_snr0db,test,Neighborhood_Dogs Barking-SoundBible_uid-kc7h7x,0,1.0362540791857365e-26,0
+PC float32,noise_snr0db,test,Neighborhood_Dogs Barking-SoundBible_uid-p7gr4b,0,9.985147940915981e-36,0
+PC float32,noise_snr0db,test,Neighborhood_Dogs Barking-SoundBible_uid-rq1qkq,0,1.706757024336024e-31,0
+PC float32,noise_snr0db,test,Obama_Speech Liar-SoundBible_uid-8mnhtv,0,0.0,0
+PC float32,noise_snr0db,test,Old_Door_Creaking-SoundBible_uid-e16ryq,0,1.5127845157114628e-11,0
+PC float32,noise_snr0db,test,Old_Door_Creaking-SoundBible_uid-f2vs74,0,5.2768133173231035e-05,0
+PC float32,noise_snr0db,test,Old_Door_Creaking-SoundBible_uid-ozrhlo,0,1.653537584633824e-10,0
+PC float32,noise_snr0db,test,Old_Door_Creaking-SoundBible_uid-q6uf3u,0,3.1774714415178096e-08,0
+PC float32,noise_snr0db,test,Police Siren 3-SoundBible_uid-nytspf,0,0.0,0
+PC float32,noise_snr0db,test,Police_Siren-SoundBible_uid-uyk0z0,0,2.254268018354962e-28,0
+PC float32,noise_snr0db,test,Psycho_Scream-SoundBible_uid-4qhwlo,0,9.75918758510639e-24,0
+PC float32,noise_snr0db,test,Psycho_Scream-SoundBible_uid-uococi,0,0.0,0
+PC float32,noise_snr0db,test,Puppy_Dog Barking-SoundBible_uid-130qr7,0,0.0,0
+PC float32,noise_snr0db,test,Puppy_Dog Barking-SoundBible_uid-zrfwba,0,0.0,0
+PC float32,noise_snr0db,test,Race_Car Idle-SoundBible_uid-5il88u,0,4.8127148131013364e-17,0
+PC float32,noise_snr0db,test,Race_Car Idle-SoundBible_uid-bjwy2y,0,7.233506686777177e-18,0
+PC float32,noise_snr0db,test,Race_Car Idle-SoundBible_uid-i7dn0k,0,2.6803238854083856e-18,0
+PC float32,noise_snr0db,test,Restaurant Walla Track-SoundBible_uid-19b0uq,0,1.124174975331016e-09,0
+PC float32,noise_snr0db,test,Restaurant Walla Track-SoundBible_uid-e11kg8,0,2.198332773508943e-18,0
+PC float32,noise_snr0db,test,Restaurant Walla Track-SoundBible_uid-fk59q6,0,6.477267366698736e-28,0
+PC float32,noise_snr0db,test,School_Fire_Alarm-Cullen_Card-202875844_uid-rfkm7v,0,8.553351812896732e-32,0
+PC float32,noise_snr0db,test,Shift_Gears-SoundBible_uid-cvmuj8,0,5.859929974917845e-25,0
+PC float32,noise_snr0db,test,Ship_Bell-Mike_Koenig-1911209136_uid-e2z0y7,0,5.74995862005484e-20,0
+PC float32,noise_snr0db,test,Ship_Brass_Bell-Mike_Koenig-1458750630_uid-oksrz0,0,1.0674701284909043e-17,0
+PC float32,noise_snr0db,test,Shopping_Mall Ambiance-SoundBible_uid-fa5yaq,0,1.306900686845816e-15,0
+PC float32,noise_snr0db,test,Sleigh_Bells_Ringing-SoundBible_uid-i52bxo,0,2.704246421989475e-23,0
+PC float32,noise_snr0db,test,Sleigh_Bells_Ringing-SoundBible_uid-xjtewi,0,7.050169548630312e-17,0
+PC float32,noise_snr0db,test,Soldiers_Marching-SoundBible_uid-0eax5q,0,7.22738519422575e-14,0
+PC float32,noise_snr0db,test,Soldiers_Marching-SoundBible_uid-4m3auc,0,4.808384026286254e-17,0
+PC float32,noise_snr0db,test,Soldiers_Marching-SoundBible_uid-51ygbj,0,5.404836344783228e-15,0
+PC float32,noise_snr0db,test,Soldiers_Marching-SoundBible_uid-5xkxw1,0,1.769763012160676e-17,0
+PC float32,noise_snr0db,test,Soldiers_Marching-SoundBible_uid-bqrx9i,0,1.1036011243314298e-13,0
+PC float32,noise_snr0db,test,Sports_Bar Patrons Loud-SoundBible_uid-0qx8ca,0,2.455531549403317e-28,0
+PC float32,noise_snr0db,test,Steam_Engine-John-1826274710_uid-1hznao,0,3.098755264565505e-15,0
+PC float32,noise_snr0db,test,Steam_Engine-John-1826274710_uid-9qykmv,0,1.057650781499739e-21,0
+PC float32,noise_snr0db,test,Steam_Engine-John-1826274710_uid-pe5dcl,0,1.1298598523458536e-22,0
+PC float32,noise_snr0db,test,Swimming_Pool Ambiance-SoundBible_uid-thd1td,0,8.792424555783203e-20,0
+PC float32,noise_snr0db,test,Temple_Bell Huge-SoundBible_uid-vwd9pv,0,7.054914378384902e-14,0
+PC float32,noise_snr0db,test,Tornado_Siren_II-Delilah-747233690_uid-9imkus,0,1.6310724512679924e-17,0
+PC float32,noise_snr0db,test,Tornado_Siren_II-Delilah-747233690_uid-k23l64,0,5.706069396334987e-32,0
+PC float32,noise_snr0db,test,Tornado_Siren_II-Delilah-747233690_uid-yu5cjs,0,9.82799529185424e-33,0
+PC float32,noise_snr0db,test,Tornado_Siren_SoundBible_uid-6dnh9z,0,9.899366195811901e-27,0
+PC float32,noise_snr0db,test,Tornado_Siren_SoundBible_uid-g7d17q,0,2.263957560996144e-18,0
+PC float32,noise_snr0db,test,Walking-SoundBible_uid-62j3do,0,2.799893129845632e-11,0
+PC float32,noise_snr0db,test,Walking_In_Snow-SoundBible_uid-hoifci,0,1.2971130672667641e-05,0
+PC float32,noise_snr0db,test,Walking_On_Gravel-SoundBible_uid-7duozg,0,0.010876031592488289,0
+PC float32,noise_snr0db,test,Walking_On_Gravel-SoundBible_uid-fi611q,0,0.0014993660151958466,0
+PC float32,noise_snr0db,test,Walking_On_Gravel-SoundBible_uid-jhzvu7,0,2.39573968709118e-14,0
+PC float32,noise_snr0db,test,Winston_Churchill Nazi Speech-SoundBible_uid-2unyd8,0,1.148946736362344e-11,0
+PC float32,noise_snr0db,test,Winston_Churchill Nazi Speech-SoundBible_uid-761zdn,0,4.806567366344439e-10,0
+PC float32,noise_snr0db,test,Winston_Churchill Nazi Speech-SoundBible_uid-g4x51s,0,8.156847634622953e-23,0
+PC float32,noise_snr0db,test,Winston_Churchill Nazi Speech-SoundBible_uid-jp39dv,0,2.3018106518057913e-12,0
+PC float32,noise_snr0db,test,Winston_Churchill Nazi Speech-SoundBible_uid-rwukdv,0,7.14718311201068e-08,0
+PC float32,noise_snr0db,test,Woman_Screaming 2-SoundBible_uid-c9acqz,0,3.5311749206187346e-31,0
+PC float32,noise_snr0db,test,church_chime-daniel_simon (1)_uid-zsrdac,0,4.4793949030986605e-32,0
+PC float32,noise_snr0db,test,church_chime-daniel_simon_uid-bbyw01,0,1.557228375089788e-26,0
+PC float32,noise_snr0db,test,church_chime-daniel_simon_uid-sxzijw,0,1.7723263484296935e-29,0
+PC float32,noise_snr0db,test,doberman_pincher_daniel-simion_uid-348sts,0,1.1347367079109157e-29,0
+PC float32,noise_snr0db,test,doberman_pincher_daniel-simion_uid-4gutjw,0,4.0293680159819904e-20,0
+PC float32,noise_snr0db,test,doberman_pincher_daniel-simion_uid-db2xc6,0,2.3480817041149915e-32,0
+PC float32,noise_snr0db,test,doberman_pincher_daniel-simion_uid-m6nbjk,0,1.9997682323059636e-23,0
+PC float32,noise_snr0db,test,german_shephard-daniel_simon (1)_uid-x57o4h,0,1.5091382895644275e-27,0
+PC float32,noise_snr0db,test,german_shephard-daniel_simon_uid-35by3o,0,3.2218190489277457e-20,0
+PC float32,noise_snr0db,test,hard_shoes_1-daniel_simon_uid-lqfqp3,0,2.6977326045030848e-17,0
+PC float32,noise_snr0db,test,harley_davidson-daniel_simon_uid-3gnkx0,0,3.397138120938767e-14,0
+PC float32,noise_snr0db,test,harley_davidson-daniel_simon_uid-5tbvav,0,7.30237674799114e-14,0
+PC float32,noise_snr0db,test,labrador_barking-daniel_simon_uid-cpx5m6,0,6.160642201725721e-36,0
+PC float32,noise_snr0db,test,labrador_barking-daniel_simon_uid-cvf4k1,0,1.5930314652597691e-35,0
+PC float32,noise_snr0db,test,labrador_barking-daniel_simon_uid-j0e09a,0,2.5156757011165765e-25,0
+PC float32,noise_snr0db,test,labrador_barking-daniel_simon_uid-mwgdoo,0,1.9854454321221186e-25,0
+PC float32,noise_snr0db,test,labrador_barking-daniel_simon_uid-p1nd4y,0,0.0,0
+PC float32,noise_snr0db,test,labrador_barking-daniel_simon_uid-px7218,0,0.0,0
+PC float32,noise_snr0db,test,muscle_car-daniel_simon (1)_uid-hvisfn,0,4.2891011922674416e-12,0
+PC float32,noise_snr0db,test,muscle_car-daniel_simon_uid-jpcsdl,0,6.842016536667828e-11,0
+PC float32,noise_snr0db,test,old_car-engine_daniel_simion_uid-2lzarp,0,1.9656812054925653e-22,0
+PC float32,noise_snr0db,test,old_car-engine_daniel_simion_uid-5xyl64,0,1.4718971359346705e-28,0
+PC float32,noise_snr0db,test,old_car-engine_daniel_simion_uid-8mfyeb,0,4.4900941139715116e-29,0
+PC float32,noise_snr0db,test,old_car-engine_daniel_simion_uid-9xmt28,0,7.285428747745831e-26,0
+PC float32,noise_snr0db,test,old_fashioned-door-bell-daniel_simon_uid-1bqwmt,0,4.576623873294013e-23,0
+PC float32,noise_snr0db,test,old_fashioned-door-bell-daniel_simon_uid-8q7aiq,0,1.793392088102743e-18,0
+PC float32,noise_snr0db,test,party_crowd-daniel_simon_uid-8pwj7x,0,6.471318746879507e-27,0
+PC float32,noise_snr0db,test,party_crowd-daniel_simon_uid-vroqkp,0,3.99343341912197e-30,0
+PC float32,noise_snr0db,test,railroad_crossing_bell-Brylon_Terry-1551570865 (1)_uid-55is8o,0,1.652813235928484e-32,0
+PC float32,noise_snr0db,test,railroad_crossing_bell-Brylon_Terry-1551570865 (1)_uid-6mnkqh,0,3.658399462156788e-34,0
+PC float32,noise_snr0db,test,railroad_crossing_bell-Brylon_Terry-1551570865 (1)_uid-mi9sxj,0,0.0,0
+PC float32,noise_snr0db,test,railroad_crossing_bell-Brylon_Terry-1551570865 (1)_uid-n15yft,0,6.790179170632259e-31,0
+PC float32,noise_snr0db,test,railroad_crossing_bell-Brylon_Terry-1551570865 (1)_uid-vxl8al,0,3.024907885340295e-37,0
+PC float32,noise_snr0db,test,railroad_crossing_bell-Brylon_Terry-1551570865 (1)_uid-waev1t,0,2.8751280869405497e-34,0
+PC float32,noise_snr0db,test,railroad_crossing_bell-Brylon_Terry-1551570865 (1)_uid-zyz59r,0,9.210317091535283e-33,0
+PC float32,noise_snr0db,test,railroad_crossing_bell-Brylon_Terry-1551570865_uid-ejhzbl,0,0.0,0
+PC float32,noise_snr0db,test,railroad_crossing_bell-Brylon_Terry-1551570865_uid-po2yqk,0,2.1574844052103765e-32,0
+PC float32,noise_snr0db,test,tolling_bell_daniel-simion_uid-kg3lrg,0,1.1189648281572945e-15,0
+PC float32,noise_snr0db,test,tolling_bell_daniel-simion_uid-witt3h,0,9.591629742305102e-23,0
+PC int8,noise_snr0db,test,0003_0397s_shot_019_ch1,1,0.96875,1
+PC int8,noise_snr0db,test,0005_0580s_shot_006_ch1,1,0.99609375,1
+PC int8,noise_snr0db,test,0005_0607s_shot_150_ch1,1,0.99609375,1
+PC int8,noise_snr0db,test,0005_0631s_shot_173_ch1,1,0.99609375,1
+PC int8,noise_snr0db,test,0005_0632s_shot_176_ch1,1,0.99609375,1
+PC int8,noise_snr0db,test,0005_0662s_shot_201_ch1,1,0.99609375,1
+PC int8,noise_snr0db,test,0005_0685s_shot_220_ch1,1,0.99609375,1
+PC int8,noise_snr0db,test,0005_0700s_shot_037_ch1,1,0.99609375,1
+PC int8,noise_snr0db,test,0011_0226s_shot_011_ch1,1,0.1484375,0
+PC int8,noise_snr0db,test,0011_0333s_shot_018_ch1,1,0.296875,0
+PC int8,noise_snr0db,test,171236__alukahn__gunshot2_uid-fcn21d,0,0.0,0
+PC int8,noise_snr0db,test,371041__morganpurkis__single-gunshot-3_uid-1k053k,0,0.0,0
+PC int8,noise_snr0db,test,384687__morganpurkis__single-gunshot-42_uid-u9d6r1,0,0.0,0
+PC int8,noise_snr0db,test,384689__dobroide__20170318gunshotparadiso_uid-kwsehz,0,0.0,0
+PC int8,noise_snr0db,test,384689__dobroide__20170318gunshotparadiso_uid-pjl13d,0,0.0,0
+PC int8,noise_snr0db,test,402008__eardeer__gunshot__high_3_uid-4j4q67,0,0.0,0
+PC int8,noise_snr0db,test,402791__acidsnowflake__ak47-and-various-other-gunshots-at-indoor-shooting-range_uid-6aezru,0,0.0,0
+PC int8,noise_snr0db,test,402791__acidsnowflake__ak47-and-various-other-gunshots-at-indoor-shooting-range_uid-byjlki,0,0.0,0
+PC int8,noise_snr0db,test,402791__acidsnowflake__ak47-and-various-other-gunshots-at-indoor-shooting-range_uid-garl1l,0,0.0,0
+PC int8,noise_snr0db,test,402791__acidsnowflake__ak47-and-various-other-gunshots-at-indoor-shooting-range_uid-l3ibfo,0,0.0,0
+PC int8,noise_snr0db,test,402791__acidsnowflake__ak47-and-various-other-gunshots-at-indoor-shooting-range_uid-qe3eyz,0,0.0,0
+PC int8,noise_snr0db,test,405132__fstagi__gunshots_uid-xcyi0z,0,0.0,0
+PC int8,noise_snr0db,test,51470__smcameron__synthetic_gunshot_2_uid-vatpwv,0,0.0,0
+PC int8,noise_snr0db,test,518181__bolkmar__fx-gunshot_uid-al1o0i,0,0.0,0
+PC int8,noise_snr0db,test,518181__bolkmar__fx-gunshot_uid-es96l9,0,0.0,0
+PC int8,noise_snr0db,test,518181__bolkmar__fx-gunshot_uid-j3vsmz,0,0.0,0
+PC int8,noise_snr0db,test,519623__nathanchurchyard__gunshots_uid-kvxx3q,0,0.0,0
+PC int8,noise_snr0db,test,683312__pnmcarrierailfan__pistol-gunshot-mix-weapons_uid-tmmoay,0,0.0,0
+PC int8,noise_snr0db,test,Amusement_Park Ambiance -SoundBible_uid-2t9w3e,0,0.0,0
+PC int8,noise_snr0db,test,Amusement_Park Ambiance -SoundBible_uid-jwv6lq,0,0.0,0
+PC int8,noise_snr0db,test,Amusement_Park Ambiance -SoundBible_uid-l24o63,0,0.0,0
+PC int8,noise_snr0db,test,Background_Noise-SoundBible_uid-m7qaag,0,0.0,0
+PC int8,noise_snr0db,test,Background_Noise-SoundBible_uid-mnn2bm,0,0.0,0
+PC int8,noise_snr0db,test,Bi_Polar_Uncle-ScanMan-1810098860_uid-b8uks2,0,0.0,0
+PC int8,noise_snr0db,test,Bi_Polar_Uncle-ScanMan-1810098860_uid-evaiic,0,0.0,0
+PC int8,noise_snr0db,test,Bi_Polar_Uncle-ScanMan-1810098860_uid-l7n0jt,0,0.0,0
+PC int8,noise_snr0db,test,Bi_Polar_Uncle-ScanMan-1810098860_uid-omv54z,0,0.0,0
+PC int8,noise_snr0db,test,Bi_Polar_Uncle-ScanMan-1810098860_uid-p90ljg,0,0.0,0
+PC int8,noise_snr0db,test,Big_door_closed-Clemens_F-941522533_uid-n02it9,0,0.0,0
+PC int8,noise_snr0db,test,Cellar_Door Slam Shut-SoundBible_uid-pg4dq8,0,0.0,0
+PC int8,noise_snr0db,test,Citty_Traffic Ambiance-SoundBible_uid-87yimc,0,0.0,0
+PC int8,noise_snr0db,test,Citty_Traffic Ambiance-SoundBible_uid-8vk0wx,0,0.0,0
+PC int8,noise_snr0db,test,Citty_Traffic Ambiance-SoundBible_uid-mxbe2e,0,0.0,0
+PC int8,noise_snr0db,test,Citty_Traffic Ambiance-SoundBible_uid-q0srdn,0,0.0,0
+PC int8,noise_snr0db,test,City_Ambiance-SoundBible_uid-8yrqh9,0,0.0,0
+PC int8,noise_snr0db,test,City_Ambiance-SoundBible_uid-t8xlgr,0,0.0,0
+PC int8,noise_snr0db,test,Classroom_Ambiance-SoundBible_uid-q49pv1,0,0.0,0
+PC int8,noise_snr0db,test,Classroom_Ambiance-SoundBible_uid-qfbdk0,0,0.0,0
+PC int8,noise_snr0db,test,Classroom_Ambiance-SoundBible_uid-uu3ewb,0,0.0,0
+PC int8,noise_snr0db,test,Classroom_Ambiance-SoundBible_uid-xdl758,0,0.0,0
+PC int8,noise_snr0db,test,Close_Vault_Or_Jail_Door-SoundBible_uid-lasl2n,0,0.0,0
+PC int8,noise_snr0db,test,Dog_Barking-SoundBible_uid-3uyzqt,0,0.0,0
+PC int8,noise_snr0db,test,Dog_Barking-SoundBible_uid-udwefz,0,0.0,0
+PC int8,noise_snr0db,test,Dogs_Barking-SoundBible_uid-0ftva8,0,0.0,0
+PC int8,noise_snr0db,test,Dogs_Barking-SoundBible_uid-itlawo,0,0.0,0
+PC int8,noise_snr0db,test,Dogs_Barking-SoundBible_uid-k8qbi9,0,0.0,0
+PC int8,noise_snr0db,test,End_of_Game-Mike_Koenig-617089079_uid-0scusn,0,0.0,0
+PC int8,noise_snr0db,test,Engine_Inside_Car-SoundBible_uid-as3jed,0,0.0,0
+PC int8,noise_snr0db,test,Fast_Heel_Walk-Kyanna_Johnson-1646343608_uid-8u9yx0,0,0.0,0
+PC int8,noise_snr0db,test,Fast_Heel_Walk-Kyanna_Johnson-1646343608_uid-9pwmgu,0,0.0,0
+PC int8,noise_snr0db,test,Female_Scream_Horror-NeoPhyTe-138499973_uid-w7fb5j,0,0.0,0
+PC int8,noise_snr0db,test,Footsteps_SoundBible_uid-4v6zy1,0,0.0,0
+PC int8,noise_snr0db,test,Footsteps_SoundBible_uid-dg95vk,0,0.0,0
+PC int8,noise_snr0db,test,Footsteps_SoundBible_uid-hnz36f,0,0.0,0
+PC int8,noise_snr0db,test,Frying_Pan_Impact-SoundBible_uid-nbylf3,0,0.0,0
+PC int8,noise_snr0db,test,Indian_Bell-SoundBible_uid-t0u6xu,0,0.0,0
+PC int8,noise_snr0db,test,Japanese_Temple Bell Small-SoundBible_uid-3fhudh,0,0.0,0
+PC int8,noise_snr0db,test,Japanese_Temple Bell Small-SoundBible_uid-8kpqn1,0,0.0,0
+PC int8,noise_snr0db,test,Large_Door_Slam-SoundBible_uid-ljg1k3,0,0.0,0
+PC int8,noise_snr0db,test,Little_Girl_Talking-Mike_Koenig-782373463_uid-bstw5g,0,0.0,0
+PC int8,noise_snr0db,test,Metal_Gong-Dianakc-109711828_uid-hlegwg,0,0.0,0
+PC int8,noise_snr0db,test,Motorcycle_Engine-SoundBible_uid-bo8n5y,0,0.0,0
+PC int8,noise_snr0db,test,Neighborhood_Dogs Barking-SoundBible_uid-6a1kho,0,0.0,0
+PC int8,noise_snr0db,test,Neighborhood_Dogs Barking-SoundBible_uid-7mwktq,0,0.0,0
+PC int8,noise_snr0db,test,Neighborhood_Dogs Barking-SoundBible_uid-dwmjp4,0,0.0,0
+PC int8,noise_snr0db,test,Neighborhood_Dogs Barking-SoundBible_uid-kc7h7x,0,0.0,0
+PC int8,noise_snr0db,test,Neighborhood_Dogs Barking-SoundBible_uid-p7gr4b,0,0.0,0
+PC int8,noise_snr0db,test,Neighborhood_Dogs Barking-SoundBible_uid-rq1qkq,0,0.0,0
+PC int8,noise_snr0db,test,Obama_Speech Liar-SoundBible_uid-8mnhtv,0,0.0,0
+PC int8,noise_snr0db,test,Old_Door_Creaking-SoundBible_uid-e16ryq,0,0.0,0
+PC int8,noise_snr0db,test,Old_Door_Creaking-SoundBible_uid-f2vs74,0,0.0,0
+PC int8,noise_snr0db,test,Old_Door_Creaking-SoundBible_uid-ozrhlo,0,0.0,0
+PC int8,noise_snr0db,test,Old_Door_Creaking-SoundBible_uid-q6uf3u,0,0.0,0
+PC int8,noise_snr0db,test,Police Siren 3-SoundBible_uid-nytspf,0,0.0,0
+PC int8,noise_snr0db,test,Police_Siren-SoundBible_uid-uyk0z0,0,0.0,0
+PC int8,noise_snr0db,test,Psycho_Scream-SoundBible_uid-4qhwlo,0,0.0,0
+PC int8,noise_snr0db,test,Psycho_Scream-SoundBible_uid-uococi,0,0.0,0
+PC int8,noise_snr0db,test,Puppy_Dog Barking-SoundBible_uid-130qr7,0,0.0,0
+PC int8,noise_snr0db,test,Puppy_Dog Barking-SoundBible_uid-zrfwba,0,0.0,0
+PC int8,noise_snr0db,test,Race_Car Idle-SoundBible_uid-5il88u,0,0.0,0
+PC int8,noise_snr0db,test,Race_Car Idle-SoundBible_uid-bjwy2y,0,0.0,0
+PC int8,noise_snr0db,test,Race_Car Idle-SoundBible_uid-i7dn0k,0,0.0,0
+PC int8,noise_snr0db,test,Restaurant Walla Track-SoundBible_uid-19b0uq,0,0.0,0
+PC int8,noise_snr0db,test,Restaurant Walla Track-SoundBible_uid-e11kg8,0,0.0,0
+PC int8,noise_snr0db,test,Restaurant Walla Track-SoundBible_uid-fk59q6,0,0.0,0
+PC int8,noise_snr0db,test,School_Fire_Alarm-Cullen_Card-202875844_uid-rfkm7v,0,0.0,0
+PC int8,noise_snr0db,test,Shift_Gears-SoundBible_uid-cvmuj8,0,0.0,0
+PC int8,noise_snr0db,test,Ship_Bell-Mike_Koenig-1911209136_uid-e2z0y7,0,0.0,0
+PC int8,noise_snr0db,test,Ship_Brass_Bell-Mike_Koenig-1458750630_uid-oksrz0,0,0.0,0
+PC int8,noise_snr0db,test,Shopping_Mall Ambiance-SoundBible_uid-fa5yaq,0,0.0,0
+PC int8,noise_snr0db,test,Sleigh_Bells_Ringing-SoundBible_uid-i52bxo,0,0.0,0
+PC int8,noise_snr0db,test,Sleigh_Bells_Ringing-SoundBible_uid-xjtewi,0,0.0,0
+PC int8,noise_snr0db,test,Soldiers_Marching-SoundBible_uid-0eax5q,0,0.0,0
+PC int8,noise_snr0db,test,Soldiers_Marching-SoundBible_uid-4m3auc,0,0.0,0
+PC int8,noise_snr0db,test,Soldiers_Marching-SoundBible_uid-51ygbj,0,0.0,0
+PC int8,noise_snr0db,test,Soldiers_Marching-SoundBible_uid-5xkxw1,0,0.0,0
+PC int8,noise_snr0db,test,Soldiers_Marching-SoundBible_uid-bqrx9i,0,0.0,0
+PC int8,noise_snr0db,test,Sports_Bar Patrons Loud-SoundBible_uid-0qx8ca,0,0.0,0
+PC int8,noise_snr0db,test,Steam_Engine-John-1826274710_uid-1hznao,0,0.0,0
+PC int8,noise_snr0db,test,Steam_Engine-John-1826274710_uid-9qykmv,0,0.0,0
+PC int8,noise_snr0db,test,Steam_Engine-John-1826274710_uid-pe5dcl,0,0.0,0
+PC int8,noise_snr0db,test,Swimming_Pool Ambiance-SoundBible_uid-thd1td,0,0.0,0
+PC int8,noise_snr0db,test,Temple_Bell Huge-SoundBible_uid-vwd9pv,0,0.0,0
+PC int8,noise_snr0db,test,Tornado_Siren_II-Delilah-747233690_uid-9imkus,0,0.0,0
+PC int8,noise_snr0db,test,Tornado_Siren_II-Delilah-747233690_uid-k23l64,0,0.0,0
+PC int8,noise_snr0db,test,Tornado_Siren_II-Delilah-747233690_uid-yu5cjs,0,0.0,0
+PC int8,noise_snr0db,test,Tornado_Siren_SoundBible_uid-6dnh9z,0,0.0,0
+PC int8,noise_snr0db,test,Tornado_Siren_SoundBible_uid-g7d17q,0,0.0,0
+PC int8,noise_snr0db,test,Walking-SoundBible_uid-62j3do,0,0.0,0
+PC int8,noise_snr0db,test,Walking_In_Snow-SoundBible_uid-hoifci,0,0.0,0
+PC int8,noise_snr0db,test,Walking_On_Gravel-SoundBible_uid-7duozg,0,0.00390625,0
+PC int8,noise_snr0db,test,Walking_On_Gravel-SoundBible_uid-fi611q,0,0.00390625,0
+PC int8,noise_snr0db,test,Walking_On_Gravel-SoundBible_uid-jhzvu7,0,0.0,0
+PC int8,noise_snr0db,test,Winston_Churchill Nazi Speech-SoundBible_uid-2unyd8,0,0.0,0
+PC int8,noise_snr0db,test,Winston_Churchill Nazi Speech-SoundBible_uid-761zdn,0,0.0,0
+PC int8,noise_snr0db,test,Winston_Churchill Nazi Speech-SoundBible_uid-g4x51s,0,0.0,0
+PC int8,noise_snr0db,test,Winston_Churchill Nazi Speech-SoundBible_uid-jp39dv,0,0.0,0
+PC int8,noise_snr0db,test,Winston_Churchill Nazi Speech-SoundBible_uid-rwukdv,0,0.0,0
+PC int8,noise_snr0db,test,Woman_Screaming 2-SoundBible_uid-c9acqz,0,0.0,0
+PC int8,noise_snr0db,test,church_chime-daniel_simon (1)_uid-zsrdac,0,0.0,0
+PC int8,noise_snr0db,test,church_chime-daniel_simon_uid-bbyw01,0,0.0,0
+PC int8,noise_snr0db,test,church_chime-daniel_simon_uid-sxzijw,0,0.0,0
+PC int8,noise_snr0db,test,doberman_pincher_daniel-simion_uid-348sts,0,0.0,0
+PC int8,noise_snr0db,test,doberman_pincher_daniel-simion_uid-4gutjw,0,0.0,0
+PC int8,noise_snr0db,test,doberman_pincher_daniel-simion_uid-db2xc6,0,0.0,0
+PC int8,noise_snr0db,test,doberman_pincher_daniel-simion_uid-m6nbjk,0,0.0,0
+PC int8,noise_snr0db,test,german_shephard-daniel_simon (1)_uid-x57o4h,0,0.0,0
+PC int8,noise_snr0db,test,german_shephard-daniel_simon_uid-35by3o,0,0.0,0
+PC int8,noise_snr0db,test,hard_shoes_1-daniel_simon_uid-lqfqp3,0,0.0,0
+PC int8,noise_snr0db,test,harley_davidson-daniel_simon_uid-3gnkx0,0,0.0,0
+PC int8,noise_snr0db,test,harley_davidson-daniel_simon_uid-5tbvav,0,0.0,0
+PC int8,noise_snr0db,test,labrador_barking-daniel_simon_uid-cpx5m6,0,0.0,0
+PC int8,noise_snr0db,test,labrador_barking-daniel_simon_uid-cvf4k1,0,0.0,0
+PC int8,noise_snr0db,test,labrador_barking-daniel_simon_uid-j0e09a,0,0.0,0
+PC int8,noise_snr0db,test,labrador_barking-daniel_simon_uid-mwgdoo,0,0.0,0
+PC int8,noise_snr0db,test,labrador_barking-daniel_simon_uid-p1nd4y,0,0.0,0
+PC int8,noise_snr0db,test,labrador_barking-daniel_simon_uid-px7218,0,0.0,0
+PC int8,noise_snr0db,test,muscle_car-daniel_simon (1)_uid-hvisfn,0,0.0,0
+PC int8,noise_snr0db,test,muscle_car-daniel_simon_uid-jpcsdl,0,0.0,0
+PC int8,noise_snr0db,test,old_car-engine_daniel_simion_uid-2lzarp,0,0.0,0
+PC int8,noise_snr0db,test,old_car-engine_daniel_simion_uid-5xyl64,0,0.0,0
+PC int8,noise_snr0db,test,old_car-engine_daniel_simion_uid-8mfyeb,0,0.0,0
+PC int8,noise_snr0db,test,old_car-engine_daniel_simion_uid-9xmt28,0,0.0,0
+PC int8,noise_snr0db,test,old_fashioned-door-bell-daniel_simon_uid-1bqwmt,0,0.0,0
+PC int8,noise_snr0db,test,old_fashioned-door-bell-daniel_simon_uid-8q7aiq,0,0.0,0
+PC int8,noise_snr0db,test,party_crowd-daniel_simon_uid-8pwj7x,0,0.0,0
+PC int8,noise_snr0db,test,party_crowd-daniel_simon_uid-vroqkp,0,0.0,0
+PC int8,noise_snr0db,test,railroad_crossing_bell-Brylon_Terry-1551570865 (1)_uid-55is8o,0,0.0,0
+PC int8,noise_snr0db,test,railroad_crossing_bell-Brylon_Terry-1551570865 (1)_uid-6mnkqh,0,0.0,0
+PC int8,noise_snr0db,test,railroad_crossing_bell-Brylon_Terry-1551570865 (1)_uid-mi9sxj,0,0.0,0
+PC int8,noise_snr0db,test,railroad_crossing_bell-Brylon_Terry-1551570865 (1)_uid-n15yft,0,0.0,0
+PC int8,noise_snr0db,test,railroad_crossing_bell-Brylon_Terry-1551570865 (1)_uid-vxl8al,0,0.0,0
+PC int8,noise_snr0db,test,railroad_crossing_bell-Brylon_Terry-1551570865 (1)_uid-waev1t,0,0.0,0
+PC int8,noise_snr0db,test,railroad_crossing_bell-Brylon_Terry-1551570865 (1)_uid-zyz59r,0,0.0,0
+PC int8,noise_snr0db,test,railroad_crossing_bell-Brylon_Terry-1551570865_uid-ejhzbl,0,0.0,0
+PC int8,noise_snr0db,test,railroad_crossing_bell-Brylon_Terry-1551570865_uid-po2yqk,0,0.0,0
+PC int8,noise_snr0db,test,tolling_bell_daniel-simion_uid-kg3lrg,0,0.0,0
+PC int8,noise_snr0db,test,tolling_bell_daniel-simion_uid-witt3h,0,0.0,0
+PC float32,noise_snr-5db,test,0003_0397s_shot_019_ch1,1,0.6251463890075684,1
+PC float32,noise_snr-5db,test,0005_0580s_shot_006_ch1,1,0.9970414042472839,1
+PC float32,noise_snr-5db,test,0005_0607s_shot_150_ch1,1,0.8579495549201965,1
+PC float32,noise_snr-5db,test,0005_0631s_shot_173_ch1,1,0.8897890448570251,1
+PC float32,noise_snr-5db,test,0005_0632s_shot_176_ch1,1,0.6956057548522949,1
+PC float32,noise_snr-5db,test,0005_0662s_shot_201_ch1,1,0.9931201934814453,1
+PC float32,noise_snr-5db,test,0005_0685s_shot_220_ch1,1,0.9465984106063843,1
+PC float32,noise_snr-5db,test,0005_0700s_shot_037_ch1,1,0.9419897198677063,1
+PC float32,noise_snr-5db,test,0011_0226s_shot_011_ch1,1,0.003547386033460498,0
+PC float32,noise_snr-5db,test,0011_0333s_shot_018_ch1,1,0.0024385927245020866,0
+PC float32,noise_snr-5db,test,171236__alukahn__gunshot2_uid-fcn21d,0,2.8060676883229912e-15,0
+PC float32,noise_snr-5db,test,371041__morganpurkis__single-gunshot-3_uid-1k053k,0,2.398611128782372e-14,0
+PC float32,noise_snr-5db,test,384687__morganpurkis__single-gunshot-42_uid-u9d6r1,0,9.252993510289187e-11,0
+PC float32,noise_snr-5db,test,384689__dobroide__20170318gunshotparadiso_uid-kwsehz,0,8.683799333600364e-26,0
+PC float32,noise_snr-5db,test,384689__dobroide__20170318gunshotparadiso_uid-pjl13d,0,1.7066609356210932e-14,0
+PC float32,noise_snr-5db,test,402008__eardeer__gunshot__high_3_uid-4j4q67,0,2.0055428055733624e-16,0
+PC float32,noise_snr-5db,test,402791__acidsnowflake__ak47-and-various-other-gunshots-at-indoor-shooting-range_uid-6aezru,0,6.627502940074662e-22,0
+PC float32,noise_snr-5db,test,402791__acidsnowflake__ak47-and-various-other-gunshots-at-indoor-shooting-range_uid-byjlki,0,5.685969875060442e-25,0
+PC float32,noise_snr-5db,test,402791__acidsnowflake__ak47-and-various-other-gunshots-at-indoor-shooting-range_uid-garl1l,0,1.1509856332157388e-20,0
+PC float32,noise_snr-5db,test,402791__acidsnowflake__ak47-and-various-other-gunshots-at-indoor-shooting-range_uid-l3ibfo,0,1.8773472750074304e-23,0
+PC float32,noise_snr-5db,test,402791__acidsnowflake__ak47-and-various-other-gunshots-at-indoor-shooting-range_uid-qe3eyz,0,2.4592402115106696e-31,0
+PC float32,noise_snr-5db,test,405132__fstagi__gunshots_uid-xcyi0z,0,2.725612899102752e-15,0
+PC float32,noise_snr-5db,test,51470__smcameron__synthetic_gunshot_2_uid-vatpwv,0,5.803100648670359e-15,0
+PC float32,noise_snr-5db,test,518181__bolkmar__fx-gunshot_uid-al1o0i,0,5.899663082283707e-14,0
+PC float32,noise_snr-5db,test,518181__bolkmar__fx-gunshot_uid-es96l9,0,5.197319463690064e-09,0
+PC float32,noise_snr-5db,test,518181__bolkmar__fx-gunshot_uid-j3vsmz,0,4.2239741075492923e-16,0
+PC float32,noise_snr-5db,test,519623__nathanchurchyard__gunshots_uid-kvxx3q,0,2.2532919355369157e-17,0
+PC float32,noise_snr-5db,test,683312__pnmcarrierailfan__pistol-gunshot-mix-weapons_uid-tmmoay,0,6.263912999404653e-14,0
+PC float32,noise_snr-5db,test,Amusement_Park Ambiance -SoundBible_uid-2t9w3e,0,3.5308936865627565e-15,0
+PC float32,noise_snr-5db,test,Amusement_Park Ambiance -SoundBible_uid-jwv6lq,0,6.00313094670559e-17,0
+PC float32,noise_snr-5db,test,Amusement_Park Ambiance -SoundBible_uid-l24o63,0,2.1581677146342154e-13,0
+PC float32,noise_snr-5db,test,Background_Noise-SoundBible_uid-m7qaag,0,1.2183841344951419e-14,0
+PC float32,noise_snr-5db,test,Background_Noise-SoundBible_uid-mnn2bm,0,1.9945401938132462e-13,0
+PC float32,noise_snr-5db,test,Bi_Polar_Uncle-ScanMan-1810098860_uid-b8uks2,0,3.6314601522890806e-30,0
+PC float32,noise_snr-5db,test,Bi_Polar_Uncle-ScanMan-1810098860_uid-evaiic,0,2.011448752748532e-25,0
+PC float32,noise_snr-5db,test,Bi_Polar_Uncle-ScanMan-1810098860_uid-l7n0jt,0,2.860680230974677e-31,0
+PC float32,noise_snr-5db,test,Bi_Polar_Uncle-ScanMan-1810098860_uid-omv54z,0,1.2812496398515341e-25,0
+PC float32,noise_snr-5db,test,Bi_Polar_Uncle-ScanMan-1810098860_uid-p90ljg,0,0.0,0
+PC float32,noise_snr-5db,test,Big_door_closed-Clemens_F-941522533_uid-n02it9,0,7.721259720483431e-08,0
+PC float32,noise_snr-5db,test,Cellar_Door Slam Shut-SoundBible_uid-pg4dq8,0,6.651831625668663e-18,0
+PC float32,noise_snr-5db,test,Citty_Traffic Ambiance-SoundBible_uid-87yimc,0,3.1219314969657124e-20,0
+PC float32,noise_snr-5db,test,Citty_Traffic Ambiance-SoundBible_uid-8vk0wx,0,3.170959317604777e-14,0
+PC float32,noise_snr-5db,test,Citty_Traffic Ambiance-SoundBible_uid-mxbe2e,0,1.3665068955815766e-19,0
+PC float32,noise_snr-5db,test,Citty_Traffic Ambiance-SoundBible_uid-q0srdn,0,9.021959582507138e-22,0
+PC float32,noise_snr-5db,test,City_Ambiance-SoundBible_uid-8yrqh9,0,4.663158001846668e-21,0
+PC float32,noise_snr-5db,test,City_Ambiance-SoundBible_uid-t8xlgr,0,2.081135921463709e-23,0
+PC float32,noise_snr-5db,test,Classroom_Ambiance-SoundBible_uid-q49pv1,0,3.994812466934228e-11,0
+PC float32,noise_snr-5db,test,Classroom_Ambiance-SoundBible_uid-qfbdk0,0,3.32695049287679e-09,0
+PC float32,noise_snr-5db,test,Classroom_Ambiance-SoundBible_uid-uu3ewb,0,1.0470631028880462e-09,0
+PC float32,noise_snr-5db,test,Classroom_Ambiance-SoundBible_uid-xdl758,0,6.179482481272203e-10,0
+PC float32,noise_snr-5db,test,Close_Vault_Or_Jail_Door-SoundBible_uid-lasl2n,0,5.0108556193251275e-11,0
+PC float32,noise_snr-5db,test,Dog_Barking-SoundBible_uid-3uyzqt,0,5.5254652770557805e-27,0
+PC float32,noise_snr-5db,test,Dog_Barking-SoundBible_uid-udwefz,0,2.0847336475851605e-32,0
+PC float32,noise_snr-5db,test,Dogs_Barking-SoundBible_uid-0ftva8,0,1.465523153645709e-33,0
+PC float32,noise_snr-5db,test,Dogs_Barking-SoundBible_uid-itlawo,0,8.682540853937504e-26,0
+PC float32,noise_snr-5db,test,Dogs_Barking-SoundBible_uid-k8qbi9,0,4.5877047762592735e-31,0
+PC float32,noise_snr-5db,test,End_of_Game-Mike_Koenig-617089079_uid-0scusn,0,8.727346477024634e-24,0
+PC float32,noise_snr-5db,test,Engine_Inside_Car-SoundBible_uid-as3jed,0,4.795062409357342e-07,0
+PC float32,noise_snr-5db,test,Fast_Heel_Walk-Kyanna_Johnson-1646343608_uid-8u9yx0,0,4.959761681897923e-28,0
+PC float32,noise_snr-5db,test,Fast_Heel_Walk-Kyanna_Johnson-1646343608_uid-9pwmgu,0,7.184096310418958e-24,0
+PC float32,noise_snr-5db,test,Female_Scream_Horror-NeoPhyTe-138499973_uid-w7fb5j,0,6.234858770959876e-35,0
+PC float32,noise_snr-5db,test,Footsteps_SoundBible_uid-4v6zy1,0,6.582892739057269e-18,0
+PC float32,noise_snr-5db,test,Footsteps_SoundBible_uid-dg95vk,0,3.859117443812385e-20,0
+PC float32,noise_snr-5db,test,Footsteps_SoundBible_uid-hnz36f,0,4.952263044089023e-10,0
+PC float32,noise_snr-5db,test,Frying_Pan_Impact-SoundBible_uid-nbylf3,0,9.32387072744548e-31,0
+PC float32,noise_snr-5db,test,Indian_Bell-SoundBible_uid-t0u6xu,0,8.50762704636302e-18,0
+PC float32,noise_snr-5db,test,Japanese_Temple Bell Small-SoundBible_uid-3fhudh,0,2.4199788801801456e-22,0
+PC float32,noise_snr-5db,test,Japanese_Temple Bell Small-SoundBible_uid-8kpqn1,0,2.137377551442162e-21,0
+PC float32,noise_snr-5db,test,Large_Door_Slam-SoundBible_uid-ljg1k3,0,2.533448173469566e-10,0
+PC float32,noise_snr-5db,test,Little_Girl_Talking-Mike_Koenig-782373463_uid-bstw5g,0,1.57643079476333e-20,0
+PC float32,noise_snr-5db,test,Metal_Gong-Dianakc-109711828_uid-hlegwg,0,2.1338860583045016e-14,0
+PC float32,noise_snr-5db,test,Motorcycle_Engine-SoundBible_uid-bo8n5y,0,4.072381898367894e-08,0
+PC float32,noise_snr-5db,test,Neighborhood_Dogs Barking-SoundBible_uid-6a1kho,0,0.0,0
+PC float32,noise_snr-5db,test,Neighborhood_Dogs Barking-SoundBible_uid-7mwktq,0,2.227467567181073e-30,0
+PC float32,noise_snr-5db,test,Neighborhood_Dogs Barking-SoundBible_uid-dwmjp4,0,8.656685407047292e-32,0
+PC float32,noise_snr-5db,test,Neighborhood_Dogs Barking-SoundBible_uid-kc7h7x,0,8.487668244858095e-31,0
+PC float32,noise_snr-5db,test,Neighborhood_Dogs Barking-SoundBible_uid-p7gr4b,0,3.3311158913601983e-32,0
+PC float32,noise_snr-5db,test,Neighborhood_Dogs Barking-SoundBible_uid-rq1qkq,0,1.4059982135693807e-31,0
+PC float32,noise_snr-5db,test,Obama_Speech Liar-SoundBible_uid-8mnhtv,0,0.0,0
+PC float32,noise_snr-5db,test,Old_Door_Creaking-SoundBible_uid-e16ryq,0,5.236406794284498e-12,0
+PC float32,noise_snr-5db,test,Old_Door_Creaking-SoundBible_uid-f2vs74,0,1.225378241542785e-06,0
+PC float32,noise_snr-5db,test,Old_Door_Creaking-SoundBible_uid-ozrhlo,0,1.0768685249074039e-10,0
+PC float32,noise_snr-5db,test,Old_Door_Creaking-SoundBible_uid-q6uf3u,0,3.0094353675735874e-09,0
+PC float32,noise_snr-5db,test,Police Siren 3-SoundBible_uid-nytspf,0,3.5979421891823926e-36,0
+PC float32,noise_snr-5db,test,Police_Siren-SoundBible_uid-uyk0z0,0,9.129598863763047e-29,0
+PC float32,noise_snr-5db,test,Psycho_Scream-SoundBible_uid-4qhwlo,0,6.671779396252645e-26,0
+PC float32,noise_snr-5db,test,Psycho_Scream-SoundBible_uid-uococi,0,1.2171121321024159e-28,0
+PC float32,noise_snr-5db,test,Puppy_Dog Barking-SoundBible_uid-130qr7,0,0.0,0
+PC float32,noise_snr-5db,test,Puppy_Dog Barking-SoundBible_uid-zrfwba,0,0.0,0
+PC float32,noise_snr-5db,test,Race_Car Idle-SoundBible_uid-5il88u,0,6.173068999700015e-19,0
+PC float32,noise_snr-5db,test,Race_Car Idle-SoundBible_uid-bjwy2y,0,2.0865774415787613e-19,0
+PC float32,noise_snr-5db,test,Race_Car Idle-SoundBible_uid-i7dn0k,0,2.8901167410865347e-18,0
+PC float32,noise_snr-5db,test,Restaurant Walla Track-SoundBible_uid-19b0uq,0,3.9559731358773664e-12,0
+PC float32,noise_snr-5db,test,Restaurant Walla Track-SoundBible_uid-e11kg8,0,4.543264161692602e-14,0
+PC float32,noise_snr-5db,test,Restaurant Walla Track-SoundBible_uid-fk59q6,0,4.0224664423161673e-23,0
+PC float32,noise_snr-5db,test,School_Fire_Alarm-Cullen_Card-202875844_uid-rfkm7v,0,6.635526808018868e-28,0
+PC float32,noise_snr-5db,test,Shift_Gears-SoundBible_uid-cvmuj8,0,4.958833469465678e-21,0
+PC float32,noise_snr-5db,test,Ship_Bell-Mike_Koenig-1911209136_uid-e2z0y7,0,1.2798650982438672e-21,0
+PC float32,noise_snr-5db,test,Ship_Brass_Bell-Mike_Koenig-1458750630_uid-oksrz0,0,1.87056636550567e-20,0
+PC float32,noise_snr-5db,test,Shopping_Mall Ambiance-SoundBible_uid-fa5yaq,0,1.4388027739438793e-23,0
+PC float32,noise_snr-5db,test,Sleigh_Bells_Ringing-SoundBible_uid-i52bxo,0,1.3253623459136277e-13,0
+PC float32,noise_snr-5db,test,Sleigh_Bells_Ringing-SoundBible_uid-xjtewi,0,1.226138546157876e-21,0
+PC float32,noise_snr-5db,test,Soldiers_Marching-SoundBible_uid-0eax5q,0,1.919515783639831e-15,0
+PC float32,noise_snr-5db,test,Soldiers_Marching-SoundBible_uid-4m3auc,0,6.5777899911054e-20,0
+PC float32,noise_snr-5db,test,Soldiers_Marching-SoundBible_uid-51ygbj,0,1.2708724845414892e-16,0
+PC float32,noise_snr-5db,test,Soldiers_Marching-SoundBible_uid-5xkxw1,0,9.076936584494478e-18,0
+PC float32,noise_snr-5db,test,Soldiers_Marching-SoundBible_uid-bqrx9i,0,8.672548085491422e-14,0
+PC float32,noise_snr-5db,test,Sports_Bar Patrons Loud-SoundBible_uid-0qx8ca,0,1.1002740272080844e-28,0
+PC float32,noise_snr-5db,test,Steam_Engine-John-1826274710_uid-1hznao,0,5.5433753595702465e-17,0
+PC float32,noise_snr-5db,test,Steam_Engine-John-1826274710_uid-9qykmv,0,1.2638814865165094e-24,0
+PC float32,noise_snr-5db,test,Steam_Engine-John-1826274710_uid-pe5dcl,0,1.0595199653265548e-22,0
+PC float32,noise_snr-5db,test,Swimming_Pool Ambiance-SoundBible_uid-thd1td,0,4.393613191992532e-23,0
+PC float32,noise_snr-5db,test,Temple_Bell Huge-SoundBible_uid-vwd9pv,0,2.526076407511485e-13,0
+PC float32,noise_snr-5db,test,Tornado_Siren_II-Delilah-747233690_uid-9imkus,0,6.845882820699622e-18,0
+PC float32,noise_snr-5db,test,Tornado_Siren_II-Delilah-747233690_uid-k23l64,0,1.7599432207403912e-29,0
+PC float32,noise_snr-5db,test,Tornado_Siren_II-Delilah-747233690_uid-yu5cjs,0,3.1208373560853307e-27,0
+PC float32,noise_snr-5db,test,Tornado_Siren_SoundBible_uid-6dnh9z,0,3.920662049231223e-23,0
+PC float32,noise_snr-5db,test,Tornado_Siren_SoundBible_uid-g7d17q,0,1.0626580110934907e-20,0
+PC float32,noise_snr-5db,test,Walking-SoundBible_uid-62j3do,0,4.1848846610292867e-10,0
+PC float32,noise_snr-5db,test,Walking_In_Snow-SoundBible_uid-hoifci,0,2.0966986369330698e-07,0
+PC float32,noise_snr-5db,test,Walking_On_Gravel-SoundBible_uid-7duozg,0,0.02260732464492321,0
+PC float32,noise_snr-5db,test,Walking_On_Gravel-SoundBible_uid-fi611q,0,0.000321169791277498,0
+PC float32,noise_snr-5db,test,Walking_On_Gravel-SoundBible_uid-jhzvu7,0,7.080237871687212e-12,0
+PC float32,noise_snr-5db,test,Winston_Churchill Nazi Speech-SoundBible_uid-2unyd8,0,3.7914432010621724e-11,0
+PC float32,noise_snr-5db,test,Winston_Churchill Nazi Speech-SoundBible_uid-761zdn,0,2.6822275412015373e-13,0
+PC float32,noise_snr-5db,test,Winston_Churchill Nazi Speech-SoundBible_uid-g4x51s,0,1.6389449897518642e-23,0
+PC float32,noise_snr-5db,test,Winston_Churchill Nazi Speech-SoundBible_uid-jp39dv,0,2.362902373764797e-10,0
+PC float32,noise_snr-5db,test,Winston_Churchill Nazi Speech-SoundBible_uid-rwukdv,0,4.103364315000135e-09,0
+PC float32,noise_snr-5db,test,Woman_Screaming 2-SoundBible_uid-c9acqz,0,3.25261077402374e-24,0
+PC float32,noise_snr-5db,test,church_chime-daniel_simon (1)_uid-zsrdac,0,1.7805151461638042e-26,0
+PC float32,noise_snr-5db,test,church_chime-daniel_simon_uid-bbyw01,0,1.5135032942275845e-26,0
+PC float32,noise_snr-5db,test,church_chime-daniel_simon_uid-sxzijw,0,9.976393186158685e-28,0
+PC float32,noise_snr-5db,test,doberman_pincher_daniel-simion_uid-348sts,0,4.145829867016811e-32,0
+PC float32,noise_snr-5db,test,doberman_pincher_daniel-simion_uid-4gutjw,0,1.9164608985177834e-19,0
+PC float32,noise_snr-5db,test,doberman_pincher_daniel-simion_uid-db2xc6,0,6.067456914332862e-32,0
+PC float32,noise_snr-5db,test,doberman_pincher_daniel-simion_uid-m6nbjk,0,2.7508467233575055e-24,0
+PC float32,noise_snr-5db,test,german_shephard-daniel_simon (1)_uid-x57o4h,0,5.121876642373724e-25,0
+PC float32,noise_snr-5db,test,german_shephard-daniel_simon_uid-35by3o,0,1.4304919009019675e-20,0
+PC float32,noise_snr-5db,test,hard_shoes_1-daniel_simon_uid-lqfqp3,0,4.5091567336511164e-17,0
+PC float32,noise_snr-5db,test,harley_davidson-daniel_simon_uid-3gnkx0,0,4.1140140881641696e-13,0
+PC float32,noise_snr-5db,test,harley_davidson-daniel_simon_uid-5tbvav,0,6.144171961988358e-19,0
+PC float32,noise_snr-5db,test,labrador_barking-daniel_simon_uid-cpx5m6,0,7.167742682003833e-35,0
+PC float32,noise_snr-5db,test,labrador_barking-daniel_simon_uid-cvf4k1,0,2.5369557663767856e-24,0
+PC float32,noise_snr-5db,test,labrador_barking-daniel_simon_uid-j0e09a,0,0.0,0
+PC float32,noise_snr-5db,test,labrador_barking-daniel_simon_uid-mwgdoo,0,1.0514621495544793e-24,0
+PC float32,noise_snr-5db,test,labrador_barking-daniel_simon_uid-p1nd4y,0,0.0,0
+PC float32,noise_snr-5db,test,labrador_barking-daniel_simon_uid-px7218,0,0.0,0
+PC float32,noise_snr-5db,test,muscle_car-daniel_simon (1)_uid-hvisfn,0,3.5499689125806366e-12,0
+PC float32,noise_snr-5db,test,muscle_car-daniel_simon_uid-jpcsdl,0,4.44847516096092e-15,0
+PC float32,noise_snr-5db,test,old_car-engine_daniel_simion_uid-2lzarp,0,1.455945352503056e-24,0
+PC float32,noise_snr-5db,test,old_car-engine_daniel_simion_uid-5xyl64,0,9.054173380461518e-27,0
+PC float32,noise_snr-5db,test,old_car-engine_daniel_simion_uid-8mfyeb,0,5.073180274101871e-27,0
+PC float32,noise_snr-5db,test,old_car-engine_daniel_simion_uid-9xmt28,0,4.909670169974356e-28,0
+PC float32,noise_snr-5db,test,old_fashioned-door-bell-daniel_simon_uid-1bqwmt,0,1.714667558717412e-22,0
+PC float32,noise_snr-5db,test,old_fashioned-door-bell-daniel_simon_uid-8q7aiq,0,2.9387050338076605e-22,0
+PC float32,noise_snr-5db,test,party_crowd-daniel_simon_uid-8pwj7x,0,1.0715594973531655e-22,0
+PC float32,noise_snr-5db,test,party_crowd-daniel_simon_uid-vroqkp,0,5.473354620178517e-27,0
+PC float32,noise_snr-5db,test,railroad_crossing_bell-Brylon_Terry-1551570865 (1)_uid-55is8o,0,1.1135548982520136e-26,0
+PC float32,noise_snr-5db,test,railroad_crossing_bell-Brylon_Terry-1551570865 (1)_uid-6mnkqh,0,2.759919175970181e-23,0
+PC float32,noise_snr-5db,test,railroad_crossing_bell-Brylon_Terry-1551570865 (1)_uid-mi9sxj,0,9.74246492028855e-28,0
+PC float32,noise_snr-5db,test,railroad_crossing_bell-Brylon_Terry-1551570865 (1)_uid-n15yft,0,2.257875333289048e-27,0
+PC float32,noise_snr-5db,test,railroad_crossing_bell-Brylon_Terry-1551570865 (1)_uid-vxl8al,0,9.609491367579388e-25,0
+PC float32,noise_snr-5db,test,railroad_crossing_bell-Brylon_Terry-1551570865 (1)_uid-waev1t,0,9.886652592988616e-26,0
+PC float32,noise_snr-5db,test,railroad_crossing_bell-Brylon_Terry-1551570865 (1)_uid-zyz59r,0,1.4469300590259398e-26,0
+PC float32,noise_snr-5db,test,railroad_crossing_bell-Brylon_Terry-1551570865_uid-ejhzbl,0,9.932388190638364e-27,0
+PC float32,noise_snr-5db,test,railroad_crossing_bell-Brylon_Terry-1551570865_uid-po2yqk,0,4.6411245921713435e-25,0
+PC float32,noise_snr-5db,test,tolling_bell_daniel-simion_uid-kg3lrg,0,4.302261604155304e-15,0
+PC float32,noise_snr-5db,test,tolling_bell_daniel-simion_uid-witt3h,0,4.3173858782653876e-23,0
+PC int8,noise_snr-5db,test,0003_0397s_shot_019_ch1,1,0.5,1
+PC int8,noise_snr-5db,test,0005_0580s_shot_006_ch1,1,0.98828125,1
+PC int8,noise_snr-5db,test,0005_0607s_shot_150_ch1,1,0.703125,1
+PC int8,noise_snr-5db,test,0005_0631s_shot_173_ch1,1,0.8515625,1
+PC int8,noise_snr-5db,test,0005_0632s_shot_176_ch1,1,0.5,1
+PC int8,noise_snr-5db,test,0005_0662s_shot_201_ch1,1,0.99609375,1
+PC int8,noise_snr-5db,test,0005_0685s_shot_220_ch1,1,0.9296875,1
+PC int8,noise_snr-5db,test,0005_0700s_shot_037_ch1,1,0.8515625,1
+PC int8,noise_snr-5db,test,0011_0226s_shot_011_ch1,1,0.00390625,0
+PC int8,noise_snr-5db,test,0011_0333s_shot_018_ch1,1,0.00390625,0
+PC int8,noise_snr-5db,test,171236__alukahn__gunshot2_uid-fcn21d,0,0.0,0
+PC int8,noise_snr-5db,test,371041__morganpurkis__single-gunshot-3_uid-1k053k,0,0.0,0
+PC int8,noise_snr-5db,test,384687__morganpurkis__single-gunshot-42_uid-u9d6r1,0,0.0,0
+PC int8,noise_snr-5db,test,384689__dobroide__20170318gunshotparadiso_uid-kwsehz,0,0.0,0
+PC int8,noise_snr-5db,test,384689__dobroide__20170318gunshotparadiso_uid-pjl13d,0,0.0,0
+PC int8,noise_snr-5db,test,402008__eardeer__gunshot__high_3_uid-4j4q67,0,0.0,0
+PC int8,noise_snr-5db,test,402791__acidsnowflake__ak47-and-various-other-gunshots-at-indoor-shooting-range_uid-6aezru,0,0.0,0
+PC int8,noise_snr-5db,test,402791__acidsnowflake__ak47-and-various-other-gunshots-at-indoor-shooting-range_uid-byjlki,0,0.0,0
+PC int8,noise_snr-5db,test,402791__acidsnowflake__ak47-and-various-other-gunshots-at-indoor-shooting-range_uid-garl1l,0,0.0,0
+PC int8,noise_snr-5db,test,402791__acidsnowflake__ak47-and-various-other-gunshots-at-indoor-shooting-range_uid-l3ibfo,0,0.0,0
+PC int8,noise_snr-5db,test,402791__acidsnowflake__ak47-and-various-other-gunshots-at-indoor-shooting-range_uid-qe3eyz,0,0.0,0
+PC int8,noise_snr-5db,test,405132__fstagi__gunshots_uid-xcyi0z,0,0.0,0
+PC int8,noise_snr-5db,test,51470__smcameron__synthetic_gunshot_2_uid-vatpwv,0,0.0,0
+PC int8,noise_snr-5db,test,518181__bolkmar__fx-gunshot_uid-al1o0i,0,0.0,0
+PC int8,noise_snr-5db,test,518181__bolkmar__fx-gunshot_uid-es96l9,0,0.0,0
+PC int8,noise_snr-5db,test,518181__bolkmar__fx-gunshot_uid-j3vsmz,0,0.0,0
+PC int8,noise_snr-5db,test,519623__nathanchurchyard__gunshots_uid-kvxx3q,0,0.0,0
+PC int8,noise_snr-5db,test,683312__pnmcarrierailfan__pistol-gunshot-mix-weapons_uid-tmmoay,0,0.0,0
+PC int8,noise_snr-5db,test,Amusement_Park Ambiance -SoundBible_uid-2t9w3e,0,0.0,0
+PC int8,noise_snr-5db,test,Amusement_Park Ambiance -SoundBible_uid-jwv6lq,0,0.0,0
+PC int8,noise_snr-5db,test,Amusement_Park Ambiance -SoundBible_uid-l24o63,0,0.0,0
+PC int8,noise_snr-5db,test,Background_Noise-SoundBible_uid-m7qaag,0,0.0,0
+PC int8,noise_snr-5db,test,Background_Noise-SoundBible_uid-mnn2bm,0,0.0,0
+PC int8,noise_snr-5db,test,Bi_Polar_Uncle-ScanMan-1810098860_uid-b8uks2,0,0.0,0
+PC int8,noise_snr-5db,test,Bi_Polar_Uncle-ScanMan-1810098860_uid-evaiic,0,0.0,0
+PC int8,noise_snr-5db,test,Bi_Polar_Uncle-ScanMan-1810098860_uid-l7n0jt,0,0.0,0
+PC int8,noise_snr-5db,test,Bi_Polar_Uncle-ScanMan-1810098860_uid-omv54z,0,0.0,0
+PC int8,noise_snr-5db,test,Bi_Polar_Uncle-ScanMan-1810098860_uid-p90ljg,0,0.0,0
+PC int8,noise_snr-5db,test,Big_door_closed-Clemens_F-941522533_uid-n02it9,0,0.0,0
+PC int8,noise_snr-5db,test,Cellar_Door Slam Shut-SoundBible_uid-pg4dq8,0,0.0,0
+PC int8,noise_snr-5db,test,Citty_Traffic Ambiance-SoundBible_uid-87yimc,0,0.0,0
+PC int8,noise_snr-5db,test,Citty_Traffic Ambiance-SoundBible_uid-8vk0wx,0,0.0,0
+PC int8,noise_snr-5db,test,Citty_Traffic Ambiance-SoundBible_uid-mxbe2e,0,0.0,0
+PC int8,noise_snr-5db,test,Citty_Traffic Ambiance-SoundBible_uid-q0srdn,0,0.0,0
+PC int8,noise_snr-5db,test,City_Ambiance-SoundBible_uid-8yrqh9,0,0.0,0
+PC int8,noise_snr-5db,test,City_Ambiance-SoundBible_uid-t8xlgr,0,0.0,0
+PC int8,noise_snr-5db,test,Classroom_Ambiance-SoundBible_uid-q49pv1,0,0.0,0
+PC int8,noise_snr-5db,test,Classroom_Ambiance-SoundBible_uid-qfbdk0,0,0.0,0
+PC int8,noise_snr-5db,test,Classroom_Ambiance-SoundBible_uid-uu3ewb,0,0.0,0
+PC int8,noise_snr-5db,test,Classroom_Ambiance-SoundBible_uid-xdl758,0,0.0,0
+PC int8,noise_snr-5db,test,Close_Vault_Or_Jail_Door-SoundBible_uid-lasl2n,0,0.0,0
+PC int8,noise_snr-5db,test,Dog_Barking-SoundBible_uid-3uyzqt,0,0.0,0
+PC int8,noise_snr-5db,test,Dog_Barking-SoundBible_uid-udwefz,0,0.0,0
+PC int8,noise_snr-5db,test,Dogs_Barking-SoundBible_uid-0ftva8,0,0.0,0
+PC int8,noise_snr-5db,test,Dogs_Barking-SoundBible_uid-itlawo,0,0.0,0
+PC int8,noise_snr-5db,test,Dogs_Barking-SoundBible_uid-k8qbi9,0,0.0,0
+PC int8,noise_snr-5db,test,End_of_Game-Mike_Koenig-617089079_uid-0scusn,0,0.0,0
+PC int8,noise_snr-5db,test,Engine_Inside_Car-SoundBible_uid-as3jed,0,0.0,0
+PC int8,noise_snr-5db,test,Fast_Heel_Walk-Kyanna_Johnson-1646343608_uid-8u9yx0,0,0.0,0
+PC int8,noise_snr-5db,test,Fast_Heel_Walk-Kyanna_Johnson-1646343608_uid-9pwmgu,0,0.0,0
+PC int8,noise_snr-5db,test,Female_Scream_Horror-NeoPhyTe-138499973_uid-w7fb5j,0,0.0,0
+PC int8,noise_snr-5db,test,Footsteps_SoundBible_uid-4v6zy1,0,0.0,0
+PC int8,noise_snr-5db,test,Footsteps_SoundBible_uid-dg95vk,0,0.0,0
+PC int8,noise_snr-5db,test,Footsteps_SoundBible_uid-hnz36f,0,0.0,0
+PC int8,noise_snr-5db,test,Frying_Pan_Impact-SoundBible_uid-nbylf3,0,0.0,0
+PC int8,noise_snr-5db,test,Indian_Bell-SoundBible_uid-t0u6xu,0,0.0,0
+PC int8,noise_snr-5db,test,Japanese_Temple Bell Small-SoundBible_uid-3fhudh,0,0.0,0
+PC int8,noise_snr-5db,test,Japanese_Temple Bell Small-SoundBible_uid-8kpqn1,0,0.0,0
+PC int8,noise_snr-5db,test,Large_Door_Slam-SoundBible_uid-ljg1k3,0,0.0,0
+PC int8,noise_snr-5db,test,Little_Girl_Talking-Mike_Koenig-782373463_uid-bstw5g,0,0.0,0
+PC int8,noise_snr-5db,test,Metal_Gong-Dianakc-109711828_uid-hlegwg,0,0.0,0
+PC int8,noise_snr-5db,test,Motorcycle_Engine-SoundBible_uid-bo8n5y,0,0.0,0
+PC int8,noise_snr-5db,test,Neighborhood_Dogs Barking-SoundBible_uid-6a1kho,0,0.0,0
+PC int8,noise_snr-5db,test,Neighborhood_Dogs Barking-SoundBible_uid-7mwktq,0,0.0,0
+PC int8,noise_snr-5db,test,Neighborhood_Dogs Barking-SoundBible_uid-dwmjp4,0,0.0,0
+PC int8,noise_snr-5db,test,Neighborhood_Dogs Barking-SoundBible_uid-kc7h7x,0,0.0,0
+PC int8,noise_snr-5db,test,Neighborhood_Dogs Barking-SoundBible_uid-p7gr4b,0,0.0,0
+PC int8,noise_snr-5db,test,Neighborhood_Dogs Barking-SoundBible_uid-rq1qkq,0,0.0,0
+PC int8,noise_snr-5db,test,Obama_Speech Liar-SoundBible_uid-8mnhtv,0,0.0,0
+PC int8,noise_snr-5db,test,Old_Door_Creaking-SoundBible_uid-e16ryq,0,0.0,0
+PC int8,noise_snr-5db,test,Old_Door_Creaking-SoundBible_uid-f2vs74,0,0.0,0
+PC int8,noise_snr-5db,test,Old_Door_Creaking-SoundBible_uid-ozrhlo,0,0.0,0
+PC int8,noise_snr-5db,test,Old_Door_Creaking-SoundBible_uid-q6uf3u,0,0.0,0
+PC int8,noise_snr-5db,test,Police Siren 3-SoundBible_uid-nytspf,0,0.0,0
+PC int8,noise_snr-5db,test,Police_Siren-SoundBible_uid-uyk0z0,0,0.0,0
+PC int8,noise_snr-5db,test,Psycho_Scream-SoundBible_uid-4qhwlo,0,0.0,0
+PC int8,noise_snr-5db,test,Psycho_Scream-SoundBible_uid-uococi,0,0.0,0
+PC int8,noise_snr-5db,test,Puppy_Dog Barking-SoundBible_uid-130qr7,0,0.0,0
+PC int8,noise_snr-5db,test,Puppy_Dog Barking-SoundBible_uid-zrfwba,0,0.0,0
+PC int8,noise_snr-5db,test,Race_Car Idle-SoundBible_uid-5il88u,0,0.0,0
+PC int8,noise_snr-5db,test,Race_Car Idle-SoundBible_uid-bjwy2y,0,0.0,0
+PC int8,noise_snr-5db,test,Race_Car Idle-SoundBible_uid-i7dn0k,0,0.0,0
+PC int8,noise_snr-5db,test,Restaurant Walla Track-SoundBible_uid-19b0uq,0,0.0,0
+PC int8,noise_snr-5db,test,Restaurant Walla Track-SoundBible_uid-e11kg8,0,0.0,0
+PC int8,noise_snr-5db,test,Restaurant Walla Track-SoundBible_uid-fk59q6,0,0.0,0
+PC int8,noise_snr-5db,test,School_Fire_Alarm-Cullen_Card-202875844_uid-rfkm7v,0,0.0,0
+PC int8,noise_snr-5db,test,Shift_Gears-SoundBible_uid-cvmuj8,0,0.0,0
+PC int8,noise_snr-5db,test,Ship_Bell-Mike_Koenig-1911209136_uid-e2z0y7,0,0.0,0
+PC int8,noise_snr-5db,test,Ship_Brass_Bell-Mike_Koenig-1458750630_uid-oksrz0,0,0.0,0
+PC int8,noise_snr-5db,test,Shopping_Mall Ambiance-SoundBible_uid-fa5yaq,0,0.0,0
+PC int8,noise_snr-5db,test,Sleigh_Bells_Ringing-SoundBible_uid-i52bxo,0,0.0,0
+PC int8,noise_snr-5db,test,Sleigh_Bells_Ringing-SoundBible_uid-xjtewi,0,0.0,0
+PC int8,noise_snr-5db,test,Soldiers_Marching-SoundBible_uid-0eax5q,0,0.0,0
+PC int8,noise_snr-5db,test,Soldiers_Marching-SoundBible_uid-4m3auc,0,0.0,0
+PC int8,noise_snr-5db,test,Soldiers_Marching-SoundBible_uid-51ygbj,0,0.0,0
+PC int8,noise_snr-5db,test,Soldiers_Marching-SoundBible_uid-5xkxw1,0,0.0,0
+PC int8,noise_snr-5db,test,Soldiers_Marching-SoundBible_uid-bqrx9i,0,0.0,0
+PC int8,noise_snr-5db,test,Sports_Bar Patrons Loud-SoundBible_uid-0qx8ca,0,0.0,0
+PC int8,noise_snr-5db,test,Steam_Engine-John-1826274710_uid-1hznao,0,0.0,0
+PC int8,noise_snr-5db,test,Steam_Engine-John-1826274710_uid-9qykmv,0,0.0,0
+PC int8,noise_snr-5db,test,Steam_Engine-John-1826274710_uid-pe5dcl,0,0.0,0
+PC int8,noise_snr-5db,test,Swimming_Pool Ambiance-SoundBible_uid-thd1td,0,0.0,0
+PC int8,noise_snr-5db,test,Temple_Bell Huge-SoundBible_uid-vwd9pv,0,0.0,0
+PC int8,noise_snr-5db,test,Tornado_Siren_II-Delilah-747233690_uid-9imkus,0,0.0,0
+PC int8,noise_snr-5db,test,Tornado_Siren_II-Delilah-747233690_uid-k23l64,0,0.0,0
+PC int8,noise_snr-5db,test,Tornado_Siren_II-Delilah-747233690_uid-yu5cjs,0,0.0,0
+PC int8,noise_snr-5db,test,Tornado_Siren_SoundBible_uid-6dnh9z,0,0.0,0
+PC int8,noise_snr-5db,test,Tornado_Siren_SoundBible_uid-g7d17q,0,0.0,0
+PC int8,noise_snr-5db,test,Walking-SoundBible_uid-62j3do,0,0.0,0
+PC int8,noise_snr-5db,test,Walking_In_Snow-SoundBible_uid-hoifci,0,0.0,0
+PC int8,noise_snr-5db,test,Walking_On_Gravel-SoundBible_uid-7duozg,0,0.01171875,0
+PC int8,noise_snr-5db,test,Walking_On_Gravel-SoundBible_uid-fi611q,0,0.0,0
+PC int8,noise_snr-5db,test,Walking_On_Gravel-SoundBible_uid-jhzvu7,0,0.0,0
+PC int8,noise_snr-5db,test,Winston_Churchill Nazi Speech-SoundBible_uid-2unyd8,0,0.0,0
+PC int8,noise_snr-5db,test,Winston_Churchill Nazi Speech-SoundBible_uid-761zdn,0,0.0,0
+PC int8,noise_snr-5db,test,Winston_Churchill Nazi Speech-SoundBible_uid-g4x51s,0,0.0,0
+PC int8,noise_snr-5db,test,Winston_Churchill Nazi Speech-SoundBible_uid-jp39dv,0,0.0,0
+PC int8,noise_snr-5db,test,Winston_Churchill Nazi Speech-SoundBible_uid-rwukdv,0,0.0,0
+PC int8,noise_snr-5db,test,Woman_Screaming 2-SoundBible_uid-c9acqz,0,0.0,0
+PC int8,noise_snr-5db,test,church_chime-daniel_simon (1)_uid-zsrdac,0,0.0,0
+PC int8,noise_snr-5db,test,church_chime-daniel_simon_uid-bbyw01,0,0.0,0
+PC int8,noise_snr-5db,test,church_chime-daniel_simon_uid-sxzijw,0,0.0,0
+PC int8,noise_snr-5db,test,doberman_pincher_daniel-simion_uid-348sts,0,0.0,0
+PC int8,noise_snr-5db,test,doberman_pincher_daniel-simion_uid-4gutjw,0,0.0,0
+PC int8,noise_snr-5db,test,doberman_pincher_daniel-simion_uid-db2xc6,0,0.0,0
+PC int8,noise_snr-5db,test,doberman_pincher_daniel-simion_uid-m6nbjk,0,0.0,0
+PC int8,noise_snr-5db,test,german_shephard-daniel_simon (1)_uid-x57o4h,0,0.0,0
+PC int8,noise_snr-5db,test,german_shephard-daniel_simon_uid-35by3o,0,0.0,0
+PC int8,noise_snr-5db,test,hard_shoes_1-daniel_simon_uid-lqfqp3,0,0.0,0
+PC int8,noise_snr-5db,test,harley_davidson-daniel_simon_uid-3gnkx0,0,0.0,0
+PC int8,noise_snr-5db,test,harley_davidson-daniel_simon_uid-5tbvav,0,0.0,0
+PC int8,noise_snr-5db,test,labrador_barking-daniel_simon_uid-cpx5m6,0,0.0,0
+PC int8,noise_snr-5db,test,labrador_barking-daniel_simon_uid-cvf4k1,0,0.0,0
+PC int8,noise_snr-5db,test,labrador_barking-daniel_simon_uid-j0e09a,0,0.0,0
+PC int8,noise_snr-5db,test,labrador_barking-daniel_simon_uid-mwgdoo,0,0.0,0
+PC int8,noise_snr-5db,test,labrador_barking-daniel_simon_uid-p1nd4y,0,0.0,0
+PC int8,noise_snr-5db,test,labrador_barking-daniel_simon_uid-px7218,0,0.0,0
+PC int8,noise_snr-5db,test,muscle_car-daniel_simon (1)_uid-hvisfn,0,0.0,0
+PC int8,noise_snr-5db,test,muscle_car-daniel_simon_uid-jpcsdl,0,0.0,0
+PC int8,noise_snr-5db,test,old_car-engine_daniel_simion_uid-2lzarp,0,0.0,0
+PC int8,noise_snr-5db,test,old_car-engine_daniel_simion_uid-5xyl64,0,0.0,0
+PC int8,noise_snr-5db,test,old_car-engine_daniel_simion_uid-8mfyeb,0,0.0,0
+PC int8,noise_snr-5db,test,old_car-engine_daniel_simion_uid-9xmt28,0,0.0,0
+PC int8,noise_snr-5db,test,old_fashioned-door-bell-daniel_simon_uid-1bqwmt,0,0.0,0
+PC int8,noise_snr-5db,test,old_fashioned-door-bell-daniel_simon_uid-8q7aiq,0,0.0,0
+PC int8,noise_snr-5db,test,party_crowd-daniel_simon_uid-8pwj7x,0,0.0,0
+PC int8,noise_snr-5db,test,party_crowd-daniel_simon_uid-vroqkp,0,0.0,0
+PC int8,noise_snr-5db,test,railroad_crossing_bell-Brylon_Terry-1551570865 (1)_uid-55is8o,0,0.0,0
+PC int8,noise_snr-5db,test,railroad_crossing_bell-Brylon_Terry-1551570865 (1)_uid-6mnkqh,0,0.0,0
+PC int8,noise_snr-5db,test,railroad_crossing_bell-Brylon_Terry-1551570865 (1)_uid-mi9sxj,0,0.0,0
+PC int8,noise_snr-5db,test,railroad_crossing_bell-Brylon_Terry-1551570865 (1)_uid-n15yft,0,0.0,0
+PC int8,noise_snr-5db,test,railroad_crossing_bell-Brylon_Terry-1551570865 (1)_uid-vxl8al,0,0.0,0
+PC int8,noise_snr-5db,test,railroad_crossing_bell-Brylon_Terry-1551570865 (1)_uid-waev1t,0,0.0,0
+PC int8,noise_snr-5db,test,railroad_crossing_bell-Brylon_Terry-1551570865 (1)_uid-zyz59r,0,0.0,0
+PC int8,noise_snr-5db,test,railroad_crossing_bell-Brylon_Terry-1551570865_uid-ejhzbl,0,0.0,0
+PC int8,noise_snr-5db,test,railroad_crossing_bell-Brylon_Terry-1551570865_uid-po2yqk,0,0.0,0
+PC int8,noise_snr-5db,test,tolling_bell_daniel-simion_uid-kg3lrg,0,0.0,0
+PC int8,noise_snr-5db,test,tolling_bell_daniel-simion_uid-witt3h,0,0.0,0
