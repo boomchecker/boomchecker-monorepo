@@ -364,10 +364,17 @@ boomlink_linkframe_parse_result_t boomlink_linkframe_parse(
  * this frame accepted promiscuously" are all engine questions (see the section
  * 9.5 note above). The one check it does make is about the ACK frame itself: by
  * section 7.2 the broadcast and unconfigured addresses are not something a node
- * can BE, so an ACK claiming either end is not a valid ACK - and a
- * broadcast-addressed one would additionally reach every node in range, where it
- * could satisfy an unrelated pending ACK wait that happens to share a
- * (session_id, sequence). Frame validity, not policy, which is why it is here.
+ * can BE, so an ACK claiming either end is not a valid ACK. Such an ACK is also
+ * unusable by anyone - section 9.5's matching rule requires an ACK's destination
+ * to equal the receiving node's own ID, which the broadcast address never does,
+ * so a compliant matcher discards it. Frame validity, not policy, which is why
+ * the check is here.
+ *   An earlier version of this comment claimed a broadcast-addressed ACK could
+ *   instead SATISFY an unrelated pending ACK wait sharing a (session_id,
+ *   sequence). That is wrong for the reason just given, and only an
+ *   over-permissive matcher - one ignoring the addressing entirely - could be
+ *   fooled that way. Noted because the claim reached five separate places before
+ *   it was caught.
  *
  * Note what this is NOT: it is not a defence against an ACK storm. A
  * broadcast-addressed ACK is one 20-byte transmission, exactly the airtime of a
