@@ -19,12 +19,26 @@
  *            codec_tool decode <in_file>
  ******************************************************************************
  */
-#include <errno.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 
 #include "boomlink_codec.h"
+#include "boomlink_linkframe.h"
+#include "tool_support.h"
+
+/* The one place the two layers' copies of the link frame header size can be
+   checked against each other. boomlink_codec.h defines
+   BOOMLINK_LINK_FRAME_HEADER_SIZE to compute the on-air Envelope budget;
+   linkframe/boomlink_linkframe.h defines BOOMLINK_LINKFRAME_HEADER_SIZE as the
+   actual wire layout. Neither header may include the other - the link layer
+   must not depend on Nanopb (boomlink.md section 9) and the codec must not
+   depend on the link layer - so without a third translation unit that
+   legitimately sees both, the two numbers could drift apart and the budget
+   assert would be validating a header size the wire no longer uses. This test
+   tool is that third place. */
+_Static_assert(BOOMLINK_LINK_FRAME_HEADER_SIZE == BOOMLINK_LINKFRAME_HEADER_SIZE,
+               "the codec's assumed link frame header size no longer matches the link "
+               "layer's actual wire layout - one of the two was changed alone");
 
 /* The real compiled payload bound per message, read from the generated
    struct layout itself rather than a hand-maintained copy of
@@ -36,37 +50,8 @@
   (BOOMLINK_PING_PAYLOAD_CAP > BOOMLINK_PONG_PAYLOAD_CAP ? BOOMLINK_PING_PAYLOAD_CAP \
                                                           : BOOMLINK_PONG_PAYLOAD_CAP)
 
-/* Normally set by CMake (from the BOOMLINK_SANITIZE option) - defaulted here
-   so this file still compiles standalone, e.g. in a hand-rolled reproduction
-   build. Reported by `limits` as sanitizers=, see run_limits().
-   The default is 0, which UNDER-reports a hand-rolled build that passed
-   -fsanitize=... without also passing this -D. That direction is merely
-   conservative; the dangerous direction is claiming instrumentation that
-   isn't there, which would make a negative-path test's "clean rejection"
-   verdict meaningless. GCC/Clang define __SANITIZE_ADDRESS__ under
-   -fsanitize=address, so at least the ASan half of the claim can be
-   cross-checked rather than trusted - there is no equivalent macro for UBSan,
-   which is why the value has to come from the build system at all. */
-#ifndef BOOMLINK_SANITIZE_ENABLED
-#define BOOMLINK_SANITIZE_ENABLED 0
-#endif
-
-/* GCC advertises ASan via __SANITIZE_ADDRESS__; Clang (verified on 18.1) does
-   NOT define it at all and answers __has_feature(address_sanitizer) instead. So
-   detect both rather than exempting Clang - exempting it would silently disable
-   this cross-check for a whole compiler family, and a Clang build that lost its
-   -fsanitize flags would still claim sanitizers=1. */
-#if defined(__SANITIZE_ADDRESS__)
-#define BOOMLINK_ASAN_ACTIVE 1
-#elif defined(__has_feature)
-#if __has_feature(address_sanitizer)
-#define BOOMLINK_ASAN_ACTIVE 1
-#endif
-#endif
-
-#if BOOMLINK_SANITIZE_ENABLED && !defined(BOOMLINK_ASAN_ACTIVE)
-#error "BOOMLINK_SANITIZE_ENABLED=1 but this file is not compiled with -fsanitize=address"
-#endif
+/* BOOMLINK_SANITIZE_ENABLED and its ASan cross-check now live in
+   tool_support.h, shared with linkframe_tool.c. */
 
 /* `decode`'s read cap - see its own comment for why this is not simply
    boomlink_Envelope_size. */
@@ -89,104 +74,14 @@ _Static_assert(BOOMLINK_DECODE_READ_CAP + BOOMLINK_LINK_FRAME_HEADER_SIZE >=
                "decode's read cap must clear the real on-air Envelope budget, not just "
                "boomlink_Envelope_size - see the comment above");
 
-/* Parses `s` as a base-10 uint32_t. Rejects empty input, any leading
-   character that isn't a digit (whitespace, '+', '-'), trailing junk, and
-   anything out of uint32_t range.
-
-   `strtoul`/`strtoull` alone accept far more than that: leading whitespace
-   ("  5"), a leading '+' ("+5"), and - the sharpest edge - a leading '-'
-   does NOT get rejected by the standard library. `strtoul("-1", ...)`
-   successfully parses the entire string as a negated-then-wrapped
-   unsigned value (`ULONG_MAX`), with `errno` left untouched, so a
-   range-only check does not catch it either; the previous version of this
-   function only rejected "-1" by accident, because wrapping happened to
-   land above 0xFFFFFFFF on this build's 64-bit `unsigned long` - the exact
-   same input would have been silently ACCEPTED as a large-but-in-range
-   value on a platform where `unsigned long` is 32 bits. Requiring the
-   first character to be '0'-'9' rejects all of the above in one check,
-   portably.
-
-   Uses `strtoull`/`unsigned long long` (guaranteed >= 64 bits by the C
-   standard) rather than `strtoul`/`unsigned long` for the same portability
-   reason: the `> 0xFFFFFFFFULL` range check needs a type wider than
-   uint32_t to mean anything, and plain `unsigned long` is only 32 bits on
-   some real platforms (e.g. Windows LLP64). */
-static bool parse_u32(const char *s, uint32_t *out) {
-  if (s == NULL || s[0] < '0' || s[0] > '9') {
-    return false;
-  }
-  errno                    = 0;
-  char              *end   = NULL;
-  unsigned long long value = strtoull(s, &end, 10);
-  if (*end != '\0' || errno == ERANGE || value > 0xFFFFFFFFULL) {
-    return false;
-  }
-  *out = (uint32_t)value;
-  return true;
-}
-
-static int hex_nibble(char c) {
-  if (c >= '0' && c <= '9') return c - '0';
-  if (c >= 'a' && c <= 'f') return c - 'a' + 10;
-  if (c >= 'A' && c <= 'F') return c - 'A' + 10;
-  return -1;
-}
-
-/* Decodes `hex` (even-length, no separators) into `out` (capacity
-   `out_cap`). Returns the decoded length, or -1 on a malformed/oversized
-   input. An empty string decodes to a zero-length payload. */
-static int hex_decode(const char *hex, uint8_t *out, size_t out_cap) {
-  size_t hex_len = strlen(hex);
-  if (hex_len % 2 != 0) return -1;
-  size_t out_len = hex_len / 2;
-  if (out_len > out_cap) return -1;
-  for (size_t i = 0; i < out_len; i++) {
-    int hi = hex_nibble(hex[2 * i]);
-    int lo = hex_nibble(hex[2 * i + 1]);
-    if (hi < 0 || lo < 0) return -1;
-    out[i] = (uint8_t)((hi << 4) | lo);
-  }
-  return (int)out_len;
-}
-
-/* `out` must have capacity >= 2*len+1. */
-static void hex_encode(const uint8_t *data, size_t len, char *out, size_t out_cap) {
-  static const char digits[] = "0123456789abcdef";
-  if (out_cap < 2 * len + 1) {
-    /* Should be unreachable: callers size `out` from BOOMLINK_MAX_PAYLOAD_CAP
-       and `len` comes from a decoded payload, which boomlink_codec.c's
-       BOOMLINK_ASSERT_BOUNDED_BYTES guarantees cannot exceed that cap. It is a
-       real guard rather than a formality, though - it once WAS reachable, when
-       an odd max_size let Nanopb accept one byte more than the declared array
-       (see that assert), and getting the failure MODE right here turned out to
-       matter more than the message.
-       abort(), not exit(): assert_clean_rejection() used to treat any POSITIVE
-       exit code as a clean, intentional rejection, so exiting 70 here made an
-       internal fault indistinguishable from one - and measurably so. With a
-       deliberately odd bound, `exit(70)` made
-       test_field_size_one_over_bound_is_rejected pass green over a real
-       intra-object overflow, where both abort() and even the old silent
-       `return` left it red. That is the ONE test that can reach this window:
-       only a payload of exactly max_size + 1 gets past Nanopb's padded-capacity
-       check, so the suite's other over-bound cases are cleanly rejected either
-       way and never exercised the fault. SIGABRT is already this suite's
-       canonical internal-fault signal (see _support.py's forced
-       abort_on_error=1), so it lands as a negative returncode and is reported
-       as the fault it is - and the allow-list added alongside it now catches an
-       unexpected positive code independently. */
-    fprintf(stderr,
-            "hex_encode: output buffer too small for a %zu-byte payload (capacity %zu) - "
-            "this is a bug in codec_tool's buffer sizing, not a bad input\n",
-            len, out_cap);
-    fflush(stderr);
-    abort();
-  }
-  for (size_t i = 0; i < len; i++) {
-    out[2 * i]     = digits[(data[i] >> 4) & 0xF];
-    out[2 * i + 1] = digits[data[i] & 0xF];
-  }
-  out[2 * len] = '\0';
-}
+/* parse_u32 / hex_decode / hex_encode live in tool_support.h, shared with
+   linkframe_tool.c - see that header for why they are shared rather than
+   copied into each tool. The hex_encode buffer-sizing guard in particular
+   carries real history: it was once reachable from THIS tool, when an odd
+   max_size let Nanopb accept one byte more than the declared array held (the
+   bug BOOMLINK_ASSERT_BOUNDED_BYTES in boomlink_codec.c now rejects at build
+   time), and only test_field_size_one_over_bound_is_rejected could reach that
+   window. */
 
 /* Internal round-trip regression check, independent of any file I/O: builds
    a Ping-carrying Envelope, encodes it, decodes the bytes back, and checks
@@ -296,11 +191,11 @@ static int run_encode(int argc, char **argv) {
   const char *kind        = argv[2];
   uint32_t    protocol_version;
   uint32_t    request_id;
-  if (!parse_u32(argv[3], &protocol_version)) {
+  if (!boomlink_tool_parse_u32(argv[3], &protocol_version)) {
     fprintf(stderr, "encode: '%s' is not a valid uint32 protocol_version\n", argv[3]);
     return 2;
   }
-  if (!parse_u32(argv[4], &request_id)) {
+  if (!boomlink_tool_parse_u32(argv[4], &request_id)) {
     fprintf(stderr, "encode: '%s' is not a valid uint32 request_id\n", argv[4]);
     return 2;
   }
@@ -331,7 +226,7 @@ static int run_encode(int argc, char **argv) {
     return 2;
   }
 
-  int decoded_len = hex_decode(payload_hex, payload_bytes, payload_cap);
+  int decoded_len = boomlink_tool_hex_decode(payload_hex, payload_bytes, payload_cap);
   if (decoded_len < 0) {
     fprintf(stderr, "encode: malformed or oversized payload_hex\n");
     return 2;
@@ -421,12 +316,12 @@ static int run_decode(int argc, char **argv) {
   const boomlink_SystemMessage *system = &envelope.payload.system;
   char                          hex[2 * BOOMLINK_MAX_PAYLOAD_CAP + 1];
   if (system->which_message == boomlink_SystemMessage_ping_tag) {
-    hex_encode(system->message.ping.payload.bytes, system->message.ping.payload.size, hex,
+    boomlink_tool_hex_encode(system->message.ping.payload.bytes, system->message.ping.payload.size, hex,
                sizeof(hex));
     printf("kind=ping\n");
     printf("payload=%s\n", hex);
   } else if (system->which_message == boomlink_SystemMessage_pong_tag) {
-    hex_encode(system->message.pong.payload.bytes, system->message.pong.payload.size, hex,
+    boomlink_tool_hex_encode(system->message.pong.payload.bytes, system->message.pong.payload.size, hex,
                sizeof(hex));
     printf("kind=pong\n");
     printf("payload=%s\n", hex);

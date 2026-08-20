@@ -15,7 +15,7 @@ from _support import (
     BOOMLINK_PROTOCOL_VERSION,
     assert_clean_rejection,
     parse_kv,
-    query_codec_tool_limits,
+    query_tool_limits,
     run_codec_tool,
 )
 
@@ -30,7 +30,7 @@ def pytest_generate_tests(metafunc):
     conftest.py's pytest_configure() has already verified BOOMLINK_CODEC_TOOL
     is set (or exited the session), so it's safe to read directly here."""
     if metafunc.function.__name__ == "test_python_encode_nanopb_decode_ping":
-        limits = query_codec_tool_limits(os.environ["BOOMLINK_CODEC_TOOL"])
+        limits = query_tool_limits(os.environ["BOOMLINK_CODEC_TOOL"])
         metafunc.parametrize(
             "payload", [b"", b"\xde\xad\xbe\xef", b"\x00" * limits["ping_payload_max"]]
         )

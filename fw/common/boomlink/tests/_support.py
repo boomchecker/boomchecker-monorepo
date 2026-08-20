@@ -49,9 +49,9 @@ _SANITIZER_STDERR_PATTERNS = (
     re.compile(r"^.+:\d+:\d+: runtime error:", re.MULTILINE),
 )
 
-# The only exit codes codec_tool.c uses to reject an input: 2 for a usage/parse
-# error, 1 for a rejected payload or an I/O failure. Anything else positive is
-# not a rejection - see assert_clean_rejection().
+# The only exit codes this package's CLI tools use to reject an input: 2 for a
+# usage/parse error, 1 for a rejected payload or an I/O failure. Anything else
+# positive is not a rejection - see assert_clean_rejection().
 _REJECTION_EXIT_CODES = frozenset({1, 2})
 
 
@@ -131,7 +131,7 @@ def parse_kv(stdout):
     return fields
 
 
-def query_codec_tool_limits(codec_tool_path):
+def query_tool_limits(tool_path):
     """Every compiled bound the tool can report (its `limits` subcommand) -
     the one place tests should read these from, instead of each hardcoding
     its own copy of a number that lives in nanopb/system.options or
@@ -163,9 +163,9 @@ def query_codec_tool_limits(codec_tool_path):
           BOOMLINK_SANITIZE), else 0. See conftest.py's
           pytest_report_header() for why the suite surfaces this.
     """
-    result = run_codec_tool(codec_tool_path, "limits")
+    result = run_codec_tool(tool_path, "limits")
     if result.returncode != 0:
-        raise RuntimeError(f"codec_tool limits failed: {result.stderr}")
+        raise RuntimeError(f"{tool_path} limits failed: {result.stderr}")
     limits = {}
     for key, value in parse_kv(result.stdout).items():
         try:

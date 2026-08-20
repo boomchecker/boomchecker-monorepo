@@ -125,9 +125,12 @@ target_link_libraries(radio_layer PRIVATE RadioLib stm32cubemx)
 # .proto schema, generated Nanopb codec and boomlink_codec.h/.c live in
 # fw/common/boomlink so the host-native test build (fw/common/boomlink's own
 # CMakePresets.json) and this ARM cross build share one copy instead of
-# duplicating the generation logic. Produces only the `boomlink_protocol`
-# static library here - see fw/common/boomlink/CMakeLists.txt for why no
-# test targets are built under add_subdirectory().
+# duplicating the generation logic. Produces `boomlink_protocol` (linked below)
+# and `boomlink_linkframe` (BoomLink's link frame header, cross-compiled here to
+# prove it is target-clean but not yet linked by anything - the link engine that
+# will use it is a later PR, and wiring it in needs an entry in the
+# target_link_libraries below, not just a call site). No test targets are built
+# under add_subdirectory() - see fw/common/boomlink/CMakeLists.txt for why.
 add_subdirectory(${CMAKE_SOURCE_DIR}/../common/boomlink boomlink)
 
 # Link directories setup
