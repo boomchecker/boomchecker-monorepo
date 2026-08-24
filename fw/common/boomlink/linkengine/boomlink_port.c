@@ -21,6 +21,13 @@ bool boomlink_port_is_valid(const boomlink_port_t *port) {
   if (port->max_packet < BOOMLINK_LINKFRAME_HEADER_SIZE) {
     return false;
   }
+  /* And the ceiling. The engine stages received packets in a statically sized
+     buffer (agent rule 6) dimensioned from BOOMLINK_PORT_MAX_PACKET, so a port
+     claiming more is promising a capacity nothing can hold - and the symptom
+     would be a silently truncated receive, far from the cause. */
+  if (port->max_packet > BOOMLINK_PORT_MAX_PACKET) {
+    return false;
+  }
   return true;
 }
 

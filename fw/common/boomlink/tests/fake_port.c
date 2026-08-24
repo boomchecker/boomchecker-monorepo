@@ -93,9 +93,6 @@ static bool fake_poll_rx(void *ctx_v, uint8_t *buf, size_t cap, size_t *out_len,
     if (tx->sender == ctx->node) {
       continue;
     }
-    if (ctx->node < FAKE_PORT_MAX_NODES) {
-      tx->delivered_to[ctx->node] = true;
-    }
     size_t copied = tx->len < cap ? tx->len : cap;
     memcpy(buf, tx->bytes, copied);
     /* The TRUE length, not what fitted - the engine must be able to tell that a

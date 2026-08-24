@@ -99,15 +99,21 @@ typedef struct {
  *   ack_unmatched     - an ACK arrived addressed to this node that acknowledges
  *                       nothing it is waiting for. Late (the frame already timed
  *                       out and was retried), or forged. Distinct from
- *                       ack_received, which counts the useful ones.
- *   ack_unaddressable - a DATA frame that asked for an ACK, passed validation and
- *                       was for us, but whose ACK could not be addressed
- *                       (boomlink_linkframe_make_ack() refused). Recorded in
- *                       boomlink.md section 9.10 as a gap: such a frame is
- *                       counted by neither the malformed nor the
- *                       wrong-destination statistic.
- *   rx_oversize       - a packet longer than the radio's own limit, which cannot
- *                       be a frame this network produced.
+ *                       ack_received, which counts the useful ones. An ACK
+ *                       addressed to somebody else is NOT counted here - that is
+ *                       ordinary overheard traffic and lands in
+ *                       rx_other_destination like any other frame not for us.
+ *   rx_invalid_source - a frame whose source address cannot be a distinct peer:
+ *                       the unconfigured address, the broadcast address, or this
+ *                       node's OWN ID. The last is the interesting one - it is a
+ *                       reflection, a misconfigured twin, or a spoof, and
+ *                       delivering it would have this node acknowledge itself and
+ *                       feed its own duplicate cache under its own key.
+ *   rx_oversize       - a packet longer than the port declared it can carry
+ *                       (max_packet), so only a prefix was staged and the rest is
+ *                       unknowable. Not "longer than the radio's ceiling": with a
+ *                       reduced radio profile the limit is that profile's, which
+ *                       is exactly the case a fixed 255-byte check would miss.
  */
 typedef struct {
   uint32_t tx_envelopes;
@@ -121,7 +127,7 @@ typedef struct {
   uint32_t ack_sent;
   uint32_t ack_received;
   uint32_t ack_unmatched;
-  uint32_t ack_unaddressable;
+  uint32_t rx_invalid_source;
   uint32_t rx_oversize;
   /* Section 9.10: "cumulative TX airtime (for duty-cycle verification, section
      6.1)". Microseconds, from the port's estimate, accumulated over every
@@ -144,9 +150,11 @@ typedef struct {
   uint32_t session_id;
   uint32_t next_sequence;
 
-  /* One RX staging buffer, sized to the largest packet the radio can deliver.
-     Reused across packets; nothing outlives boomlink_link_poll(). */
-  uint8_t rx_buffer[255];
+  /* One RX staging buffer, sized to the largest packet ANY port may declare, so
+     that the port's own max_packet is always the binding limit and the engine
+     never has to take the smaller of two ceilings. Reused across packets;
+     nothing outlives boomlink_link_poll(). */
+  uint8_t rx_buffer[BOOMLINK_PORT_MAX_PACKET];
 } boomlink_link_t;
 
 /**
@@ -162,6 +170,16 @@ typedef struct {
  * to this node until its own cache evicted the entry. Making it a parameter puts
  * that requirement in front of whoever brings up the firmware instead of hiding
  * it in here.
+ *
+ * `session_id` 0 is refused, which is the one value that requirement fails at
+ * most often: an unseeded PRNG, a zeroed struct, a field nobody filled in. It
+ * cannot be detected in general - a caller that passes 7 every boot is equally
+ * broken and equally invisible - but 0 is the value that arrives by ACCIDENT,
+ * and refusing it turns the most likely instance of that mistake into a
+ * bring-up failure. Received frames carrying session 0 are NOT rejected: what a
+ * peer chooses for its own session is not this node's business to police, and
+ * dropping such traffic would break interoperability over a hygiene rule that
+ * the wire format (section 7.3) does not impose.
  */
 bool boomlink_link_init(boomlink_link_t *link, const boomlink_link_config_t *config,
                         const boomlink_port_t *port, uint32_t session_id);
@@ -196,13 +214,24 @@ boomlink_txqueue_result_t boomlink_link_send(boomlink_link_t *link, uint32_t des
  */
 void boomlink_link_poll(boomlink_link_t *link);
 
-/** Copy out the statistics (section 9.10). */
+/**
+ * Copy out the statistics (section 9.10). A NULL argument is ignored rather than
+ * dereferenced: on the target these are called from diagnostics and CLI paths,
+ * where a hard fault is a worse outcome than a missing reading.
+ */
 void boomlink_link_get_stats(const boomlink_link_t *link, boomlink_link_stats_t *out);
 
-/** Zero every counter. */
+/**
+ * Zero every counter, and NOTHING else. Not a reset of the link: the session,
+ * the sequence, the duplicate cache and any frame awaiting an ACK all survive.
+ * Zeroing those would be far worse than losing the counters - a fresh sequence
+ * inside a live session is a replay of numbers the peer's duplicate window has
+ * already seen, and it would go deaf to this node until the entry aged out.
+ */
 void boomlink_link_reset_stats(boomlink_link_t *link);
 
-/** This node's session ID (section 9.3), for diagnostics. */
+/** This node's session ID (section 9.3), for diagnostics. 0 for a NULL link,
+ *  which is the "never assigned" value boomlink_link_init() refuses. */
 uint32_t boomlink_link_session_id(const boomlink_link_t *link);
 
 #ifdef __cplusplus

@@ -24,17 +24,22 @@
 #include <stdint.h>
 
 #include "boomlink_linkframe.h"
+#include "boomlink_port.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-/* Largest payload a queued frame can carry: the target radio's packet ceiling
-   (RADIO_MAX_PAYLOAD, 255) minus the link frame header. Compile-time because the
-   slots are statically allocated (agent rule 6); a port whose max_packet is
-   SMALLER than this is not an error here - the engine checks the real limit when
-   it sends, since only then is the port known. */
-#define BOOMLINK_TX_MAX_PAYLOAD (255u - BOOMLINK_LINKFRAME_HEADER_SIZE)
+/* Largest payload a queued frame can carry: the packet ceiling every port is
+   bounded by (BOOMLINK_PORT_MAX_PACKET) minus the link frame header.
+   Compile-time because the slots are statically allocated (agent rule 6).
+
+   Derived from that one constant rather than spelling 255 out again - three
+   independent copies of the radio's packet ceiling is three chances for a
+   smaller radio profile to be honoured in two places and not the third. A port
+   whose max_packet is SMALLER than this is not an error here: the engine checks
+   the real limit in boomlink_link_send(), since only there is the port known. */
+#define BOOMLINK_TX_MAX_PAYLOAD (BOOMLINK_PORT_MAX_PACKET - BOOMLINK_LINKFRAME_HEADER_SIZE)
 
 /* Slot count. Sized for section 1.1's deployment (5-10 nodes, event-driven low
    rate), not for generality: at ~235 bytes of payload per slot this is already

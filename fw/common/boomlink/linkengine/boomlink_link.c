@@ -7,8 +7,17 @@
 
 #include <string.h>
 
-_Static_assert(sizeof(((boomlink_link_t *)0)->rx_buffer) >= BOOMLINK_LINKFRAME_HEADER_SIZE,
-               "the RX buffer cannot hold a bare header");
+/* The RX buffer must be able to hold the largest packet any port may declare, so
+   that port.max_packet - which boomlink_port_is_valid() bounds by this same
+   constant - is always the binding limit. That is what lets the RX path compare
+   an incoming length against the PORT's ceiling and not against a second,
+   independently chosen buffer size: with two ceilings the code has to take the
+   smaller of them, and the version that forgets to is the one that stages a
+   200-byte packet on a radio profile that tops out at 64. */
+_Static_assert(sizeof(((boomlink_link_t *)0)->rx_buffer) >= BOOMLINK_PORT_MAX_PACKET,
+               "the RX buffer must cover the largest packet any port may declare");
+_Static_assert(BOOMLINK_PORT_MAX_PACKET >= BOOMLINK_LINKFRAME_HEADER_SIZE,
+               "no port could carry even a bare header");
 
 /* Section 7.2's address space, as in the frame layer. Duplicated rather than
    exported from there because it is two comparisons, and exporting it would put
@@ -35,6 +44,12 @@ bool boomlink_link_init(boomlink_link_t *link, const boomlink_link_config_t *con
     return false;
   }
   if (config->backoff_max_ms < config->backoff_min_ms) {
+    return false;
+  }
+  /* Section 9.3's "fresh session_id on reboot" only means anything if one was
+     actually supplied - see the header for why 0 specifically is refused and why
+     received frames carrying it are not. */
+  if (session_id == 0u) {
     return false;
   }
 
@@ -82,11 +97,16 @@ static bool transmit(boomlink_link_t *link, const uint8_t *frame, size_t len) {
 static void send_ack(boomlink_link_t *link, const boomlink_linkframe_header_t *received) {
   boomlink_linkframe_header_t ack;
   if (!boomlink_linkframe_make_ack(received, link->config.node_id, &ack)) {
-    /* The frame asked for an ACK, was valid, and was for us - but its source
-       address cannot be acknowledged (section 7.2). Counted separately because
-       neither the malformed nor the wrong-destination counter covers it; see the
-       gap recorded in section 9.10. */
-    link->stats.ack_unaddressable++;
+    /* Unreachable, and deliberately not counted. make_ack() refuses only when an
+       endpoint address is not a real node ID (section 7.2), and both were already
+       checked: the source by source_is_usable() below, this node's own ID by
+       boomlink_link_init(). The branch stays because make_ack() is
+       warn_unused_result and ignoring its answer would put 20 bytes of zeroed
+       header on the air, under section 6.1's duty-cycle budget, for no receiver.
+       An earlier version counted it in a statistic of its own; that counter was
+       removed because no test could ever move it, and a counter nobody can reach
+       reads as covered ground when it is the opposite. If this ever fires, the
+       source check and this call have drifted apart. */
     return;
   }
   uint8_t bytes[BOOMLINK_LINKFRAME_HEADER_SIZE];
@@ -96,16 +116,35 @@ static void send_ack(boomlink_link_t *link, const boomlink_linkframe_header_t *r
   }
 }
 
+/**
+ * Whether a frame claiming to come from `source_id` can be acted on at all.
+ *
+ * Three rejections, and the third is the one worth spelling out. The
+ * unconfigured and broadcast addresses are not something a node can BE (section
+ * 7.2), so a frame from either is not from a peer. Our OWN node ID is the same
+ * problem arrived at differently: a reflection off a repeater, a second board
+ * flashed with the same ID, or a spoof. Accepting it would have this node
+ * acknowledge itself, and file the frame in its duplicate cache under its own
+ * key - so its own later traffic could be suppressed as a duplicate of it.
+ */
+static bool source_is_usable(const boomlink_link_t *link, uint32_t source_id) {
+  return is_valid_node_id(source_id) && source_id != link->config.node_id;
+}
+
 /** One received packet, through section 9.2's pipeline. */
 static void handle_packet(boomlink_link_t *link, size_t len, float rssi, float snr) {
   link->stats.last_rssi_dbm = rssi;
   link->stats.last_snr_db   = snr;
 
-  if (len > sizeof(link->rx_buffer)) {
-    /* Longer than the radio's own ceiling, so only part of it was copied and the
-       rest is unknowable. Cannot be a frame this network produced; counted
-       separately from malformed so a flood of these is recognisable as a foreign
-       transmitter or a driver fault rather than as corrupt traffic. */
+  if (len > link->port.max_packet) {
+    /* Longer than the PORT said it can carry, so only a prefix was staged and the
+       rest is unknowable. Compared against max_packet rather than against the RX
+       buffer's own size on purpose: those are the same number only for a radio at
+       full capacity, and on a reduced profile - a smaller max_packet - a
+       buffer-sized check would happily stage and parse a packet the radio could
+       not have produced. Counted separately from malformed so a flood of these is
+       recognisable as a foreign transmitter or a driver fault rather than as
+       corrupt traffic. */
     link->stats.rx_oversize++;
     return;
   }
@@ -137,10 +176,25 @@ static void handle_packet(boomlink_link_t *link, size_t len, float rssi, float s
   }
 
   if (header.frame_type == BOOMLINK_FRAME_TYPE_ACK) {
-    /* Section 9.2 matches ACKs before validating the destination, which is safe
-       because the matcher requires the ACK to be addressed to this node anyway.
-       Nothing is pending yet in this build - the stop-and-wait state arrives with
-       the TX pipeline - so every ACK is currently unmatched. */
+    /* Section 9.2 lists ACK matching before destination validation, and the
+       matcher itself requires the ACK to be addressed to this node - but an ACK
+       for SOMEBODY ELSE still has to be classified, and "unmatched" is the wrong
+       answer for it. ack_unmatched means "an ACK meant for me that acknowledges
+       nothing I am waiting for", which is a late or forged ACK and worth looking
+       at; an ACK between two other nodes is ordinary overheard traffic on a
+       shared medium, arrives constantly, and belongs in rx_other_destination
+       with every other frame not for us. Counting it as unmatched would bury the
+       first in the second.
+       Note the comparison is exact equality, not is_for_node(): a
+       broadcast-addressed ACK is not "for everyone", it is malformed by section
+       9.5's own matching rule, which requires an ACK's destination to equal the
+       receiving node's ID. */
+    if (header.destination_id != link->config.node_id) {
+      link->stats.rx_other_destination++;
+      return;
+    }
+    /* Nothing is pending yet in this build - the stop-and-wait state arrives with
+       the TX pipeline - so every ACK addressed to us is currently unmatched. */
     link->stats.ack_unmatched++;
     return;
   }
@@ -149,6 +203,14 @@ static void handle_packet(boomlink_link_t *link, size_t len, float rssi, float s
      drift from it. */
   if (!boomlink_linkframe_is_for_node(header.destination_id, link->config.node_id)) {
     link->stats.rx_other_destination++;
+    return;
+  }
+
+  /* Checked AFTER the destination, so that a frame not for us is counted as
+     somebody else's rather than as an addressing fault - most traffic on a shared
+     medium is not for us, and it is not this node's job to audit it. */
+  if (!source_is_usable(link, header.source_id)) {
+    link->stats.rx_invalid_source++;
     return;
   }
 
@@ -217,8 +279,11 @@ void boomlink_link_poll(boomlink_link_t *link) {
   /* Drain, not one-per-poll: the radio's own model is single-slot (see
      radio.h), so a second packet arriving before this returns is lost either
      way - but a caller that polls once per superloop iteration must not fall
-     permanently behind a burst it could have caught. */
-  while (link->port.poll_rx(link->port.ctx, link->rx_buffer, sizeof(link->rx_buffer), &len,
+     permanently behind a burst it could have caught.
+     The cap offered is the PORT's, not the buffer's: they differ on a reduced
+     radio profile, and offering more than the radio can produce would leave the
+     oversize check comparing against a limit no real packet can exceed. */
+  while (link->port.poll_rx(link->port.ctx, link->rx_buffer, link->port.max_packet, &len,
                             &rssi, &snr)) {
     handle_packet(link, len, rssi, snr);
   }
@@ -238,14 +303,33 @@ boomlink_txqueue_result_t boomlink_link_send(boomlink_link_t *link, uint32_t des
                                payload_len);
 }
 
+/* These three are the engine's diagnostics surface, and the only functions here
+   that tolerate a NULL link. Everything else is called from the superloop with a
+   link the caller just brought up; these are called from a CLI or a telemetry
+   builder, where a wrong pointer should cost a missing reading rather than a hard
+   fault in the field - the same policy radio.h states for itself. */
 void boomlink_link_get_stats(const boomlink_link_t *link, boomlink_link_stats_t *out) {
+  if (out == NULL) {
+    return;
+  }
+  if (link == NULL) {
+    memset(out, 0, sizeof(*out));
+    return;
+  }
   *out = link->stats;
 }
 
 void boomlink_link_reset_stats(boomlink_link_t *link) {
+  if (link == NULL) {
+    return;
+  }
+  /* Only the counters. Not memset(link, 0, sizeof(*link)) - see the header: that
+     would zero the session and sequence inside a live conversation, and the peer
+     would suppress everything this node then sent as a replay of sequences its
+     duplicate window had already accepted. */
   memset(&link->stats, 0, sizeof(link->stats));
 }
 
 uint32_t boomlink_link_session_id(const boomlink_link_t *link) {
-  return link->session_id;
+  return link != NULL ? link->session_id : 0u;
 }

@@ -37,15 +37,17 @@
 
 #include "boomlink_port.h"
 
-/* Statically bounded, like everything else in this package (agent rule 6). The
-   caps are sized for the scenarios, not for generality: 8 nodes is well past
-   the 5-10 node deployment in section 1.1, and 64 transmissions covers the
-   longest retry sequence with room to spare. Exceeding either is a hard failure
+/* Statically bounded, like everything else in this package (agent rule 6). 64
+   transmissions is sized for the scenarios, not for generality: it covers the
+   longest retry sequence with room to spare. Exceeding it is a hard failure
    rather than a silent wrap - a scenario that overflows the log is a scenario
-   whose assertions would be meaningless. */
-#define FAKE_PORT_MAX_NODES        8u
+   whose assertions would be meaningless.
+
+   The packet cap is the port seam's own ceiling, not a second copy of 255: this
+   fake has to be able to present exactly the packet a real radio at full
+   capacity could, and one byte more than the engine will accept. */
 #define FAKE_PORT_MAX_TRANSMISSIONS 64u
-#define FAKE_PORT_MAX_PACKET       255u /* RADIO_MAX_PAYLOAD on the target */
+#define FAKE_PORT_MAX_PACKET        BOOMLINK_PORT_MAX_PACKET
 
 typedef struct {
   uint8_t bytes[FAKE_PORT_MAX_PACKET];
@@ -55,7 +57,6 @@ typedef struct {
      malformed rather than trust the truncated copy. */
   size_t  wire_len;
   uint8_t sender;
-  bool    delivered_to[FAKE_PORT_MAX_NODES];
 } fake_transmission_t;
 
 /** The air. One per scenario; every node's port points at it. */

@@ -39,6 +39,22 @@ extern "C" {
 #endif
 
 /**
+ * The largest packet any port may declare, and the single place this number is
+ * written down: RADIO_MAX_PAYLOAD on the target.
+ *
+ * It is a CEILING, not just a default, because the engine's buffers are
+ * statically sized from it (agent rule 6): the RX staging buffer and the TX
+ * queue's payload slots. A port claiming more would be promising a capacity the
+ * engine has nowhere to put, and the failure would surface later as a truncated
+ * receive rather than as a misconfiguration - which is why
+ * boomlink_port_is_valid() refuses it, turning it into a bring-up failure.
+ *
+ * A port may of course declare LESS. That is an ordinary radio profile, not an
+ * error, and the engine checks the real limit when it queues and sends.
+ */
+#define BOOMLINK_PORT_MAX_PACKET 255u
+
+/**
  * Everything the engine needs from below it. Every function pointer receives
  * the same `ctx`: on the target that is unused (the callbacks forward to
  * radio.h's singleton and to the HAL tick), while a test's ctx is one object
@@ -118,11 +134,17 @@ typedef struct {
   uint32_t (*random_u32)(void *ctx);
 
   /**
-   * Largest packet the radio can move, RADIO_MAX_PAYLOAD (255) on the target.
+   * Largest packet the radio can move, BOOMLINK_PORT_MAX_PACKET on the target.
    * A frame longer than this is rejected before transmission per section 7.3
    * ("An oversized frame is rejected before transmission"), which is the check
    * the frame layer deliberately does not make - it has no radio dependency and
    * so cannot know this number.
+   *
+   * Bounded at BOTH ends by boomlink_port_is_valid(): at least a bare header,
+   * at most BOOMLINK_PORT_MAX_PACKET. A smaller radio profile is legal and the
+   * engine honours it - it is the ceiling for both queueing and receiving, so a
+   * payload that would not fit is refused at boomlink_link_send() rather than
+   * accepted and dropped later.
    */
   size_t max_packet;
 
@@ -131,8 +153,8 @@ typedef struct {
 
 /**
  * Whether `port` is usable: non-NULL, every callback present, and a `max_packet`
- * large enough to hold a link frame header (a port that cannot carry an empty
- * frame can carry nothing).
+ * between BOOMLINK_LINKFRAME_HEADER_SIZE (a port that cannot carry an empty
+ * frame can carry nothing) and BOOMLINK_PORT_MAX_PACKET (see that constant).
  *
  * Checked once at init rather than defended against on every call, so the engine
  * body stays free of NULL tests. Returns false rather than aborting: on the

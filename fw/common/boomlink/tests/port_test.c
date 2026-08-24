@@ -70,6 +70,19 @@ static void test_port_validation_rejects_every_missing_piece(void) {
   CHECK(boomlink_port_is_valid(&exact),
         "a radio that can carry exactly a header is usable - an empty DATA frame "
         "and every ACK are exactly that size");
+
+  /* And the ceiling, which is not symmetry for its own sake: the engine stages
+     received packets in a buffer sized from BOOMLINK_PORT_MAX_PACKET and offers
+     poll_rx exactly max_packet bytes of it, so a port claiming more would have
+     the engine hand out a capacity past the end of its own buffer. */
+  boomlink_port_t at_ceiling = good;
+  at_ceiling.max_packet      = BOOMLINK_PORT_MAX_PACKET;
+  CHECK(boomlink_port_is_valid(&at_ceiling), "exactly the ceiling is usable");
+  boomlink_port_t over_ceiling = good;
+  over_ceiling.max_packet      = BOOMLINK_PORT_MAX_PACKET + 1u;
+  CHECK(!boomlink_port_is_valid(&over_ceiling),
+        "max_packet %zu is past the %u the engine can stage and must be rejected",
+        over_ceiling.max_packet, (unsigned)BOOMLINK_PORT_MAX_PACKET);
 }
 
 static void test_elapsed_ms_survives_the_wrap(void) {
@@ -184,9 +197,21 @@ static void test_the_clock_only_moves_when_moved(void) {
         "this would then be measuring the machine rather than the engine",
         (unsigned)first, (unsigned)port.now_ms(port.ctx));
 
-  fake_port_advance_ms(&ctx, 250u);
-  CHECK(boomlink_elapsed_ms(first, port.now_ms(port.ctx)) == 250u,
-        "advancing by 250 ms must be observable as exactly 250 ms");
+  /* Several different steps, and they accumulate. A single advance cannot tell
+     "adds delta" from "sets the clock to delta" or from "adds a constant": with
+     one 250 ms step from zero, all three give 250. The retry tests are built on
+     repeated advances of different sizes, so that distinction is exactly the one
+     that has to hold. */
+  const uint32_t steps[] = {250u, 1u, 0u, 60000u};
+  uint32_t       expected = 0u;
+  for (size_t i = 0; i < sizeof(steps) / sizeof(steps[0]); i++) {
+    fake_port_advance_ms(&ctx, steps[i]);
+    expected += steps[i];
+    CHECK(boomlink_elapsed_ms(first, port.now_ms(port.ctx)) == expected,
+          "after advancing by %u the total elapsed must be %u, got %u",
+          (unsigned)steps[i], (unsigned)expected,
+          (unsigned)boomlink_elapsed_ms(first, port.now_ms(port.ctx)));
+  }
 }
 
 static void test_airtime_scales_with_length(void) {
@@ -260,16 +285,33 @@ static void test_an_oversize_packet_reports_its_true_length(void) {
      perfectly ordinary truncated frame. */
   uint8_t big[FAKE_PORT_MAX_PACKET];
   memset(big, 0xAB, sizeof(big));
-  fake_air_inject(&air, 0u, big, sizeof(big));
+  /* Longer than the log record itself can hold, which is the case that actually
+     pins this. At exactly FAKE_PORT_MAX_PACKET the record's stored length and the
+     transmitted length are the SAME number, so a fake reporting the stored length
+     instead of the transmitted one would pass - verified. One byte more separates
+     them: the record keeps 255, the wire carried 256, and only the second is a
+     length the engine can recognise as impossible. */
+  const size_t wire = sizeof(big) + 1u;
+  fake_air_inject(&air, 0u, big, wire);
 
   uint8_t small_buf[BOOMLINK_LINKFRAME_HEADER_SIZE];
   size_t  len  = 0u;
   float   rssi = 0.0f, snr = 0.0f;
   REQUIRE(b.poll_rx(b.ctx, small_buf, sizeof(small_buf), &len, &rssi, &snr),
           "the injected packet should be received");
-  CHECK(len == sizeof(big), "reported length %zu, transmitted %zu - the engine cannot "
-                             "detect an oversize packet if the length is clamped",
-        len, sizeof(big));
+  CHECK(len == wire, "reported length %zu, transmitted %zu - the engine cannot "
+                     "detect an oversize packet if the length is clamped",
+        len, wire);
+
+  /* The truncation is real too: the buffer offered was 20 bytes, and nothing may
+     have been written past it. A fake that copied the whole packet would make
+     every oversize test in the engine pass against a genuine overrun. */
+  const fake_transmission_t *record = fake_air_transmission(&air, 0u);
+  REQUIRE(record != NULL, "the oversize packet was logged");
+  CHECK(record->len == FAKE_PORT_MAX_PACKET,
+        "the record keeps what fits (%zu), not what was sent", record->len);
+  CHECK(record->wire_len == wire, "and remembers the true length (%zu)",
+        record->wire_len);
 }
 
 static void test_the_air_reports_its_own_overflow(void) {
@@ -305,5 +347,5 @@ int main(void) {
   test_nodes_seeded_differently_do_not_march_in_lockstep();
   test_an_oversize_packet_reports_its_true_length();
   test_the_air_reports_its_own_overflow();
-  BOOMLINK_TEST_REPORT("port_test", 60);
+  BOOMLINK_TEST_REPORT("port_test", 68);
 }
