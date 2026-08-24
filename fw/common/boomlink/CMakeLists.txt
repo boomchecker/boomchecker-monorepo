@@ -527,6 +527,7 @@ target_compile_options(boomlink_linkframe PRIVATE
 # adds it to fw/bom-stm32node's target_link_libraries.
 add_library(boomlink_linkengine STATIC
   ${CMAKE_CURRENT_SOURCE_DIR}/linkengine/boomlink_port.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/linkengine/boomlink_dupcache.c
 )
 target_include_directories(boomlink_linkengine PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}/linkengine
@@ -627,6 +628,18 @@ if(BOOMLINK_STANDALONE)
   target_compile_options(boomlink_port_test PRIVATE
     ${BOOMLINK_WARNING_FLAGS} ${BOOMLINK_WERROR_FLAGS})
   add_test(NAME boomlink_port_test COMMAND boomlink_port_test)
+
+  # Duplicate suppression (section 9.4) as a pure data structure, so the cases
+  # that actually break it can be reached directly: a sequence wrap, both edges
+  # of the reordering window, a peer rebooting mid-conversation, and LRU
+  # eviction. Driving those through a radio would need thousands of frames and
+  # would still not reach the wrap.
+  add_executable(boomlink_dupcache_test tests/dupcache_test.c)
+  target_link_libraries(boomlink_dupcache_test PRIVATE boomlink_linkengine)
+  target_include_directories(boomlink_dupcache_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests)
+  target_compile_options(boomlink_dupcache_test PRIVATE
+    ${BOOMLINK_WARNING_FLAGS} ${BOOMLINK_WERROR_FLAGS})
+  add_test(NAME boomlink_dupcache_test COMMAND boomlink_dupcache_test)
 
   # The Nanopb-free boundary (boomlink.md section 9), checked as a TEST rather
   # than only as a CI step, so `task test` runs it and a developer finds out
