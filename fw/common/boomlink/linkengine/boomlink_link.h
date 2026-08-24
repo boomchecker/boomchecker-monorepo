@@ -78,6 +78,16 @@ extern "C" {
  * is NOT: this pointer is into the one staging buffer the next packet would be
  * read into, so a re-entrant poll would replace the payload underneath a handler
  * that is still reading it.
+ *
+ * This signature has grown a parameter in two separate review rounds
+ * (`destination_id`, then `rssi_dbm`/`snr_db`) and costs nothing to grow again
+ * today, since no firmware code implements it yet - only this package's own
+ * test doubles do. That stops being true the moment Phase C wires a real
+ * dispatcher against it: a third addition then breaks every real
+ * implementation instead of two test files. If another field turns out to be
+ * needed after that point, collecting these into one `boomlink_rx_info_t`
+ * parameter is the change to make then, not something worth doing pre-emptively
+ * now against a need that has not materialized.
  */
 typedef void (*boomlink_link_rx_fn)(void *user, uint32_t source_id, uint32_t destination_id,
                                     const uint8_t *payload, size_t payload_len,
@@ -443,12 +453,30 @@ bool boomlink_link_init(boomlink_link_t *link, const boomlink_link_config_t *con
  * mutator rather than leaving a caller to choose between two wrong options.
  *
  * `node_id`, `magic`, and the RX/TX-done callbacks are NOT reconfigurable here
- * on purpose. They are identity and wiring, not policy: section 7.2 makes a
- * node's own address something bring-up decides once, not something a live
- * link should discover it now has a different opinion about, and the
- * callbacks are a superloop wiring concern with no config-message analogue in
- * section 8.2 at all. A caller needing to change either genuinely needs a
- * fresh boomlink_link_init() and everything that implies.
+ * on purpose, for three DIFFERENT reasons rather than one shared one:
+ *
+ *   `node_id`  - section 7.2 makes a node's own address something bring-up
+ *              decides once, not something a live link should discover it now
+ *              has a different opinion about.
+ *   `magic`    - section 8.2 never actually assigns this field to a config
+ *              group (it is absent from every GeneralConfig/LinkConfig example
+ *              the spec gives), but section 7.3 does call it
+ *              "runtime-configurable", so the omission looks like an oversight
+ *              rather than a decision. What DOES apply, by the same reasoning
+ *              section 8.2 gives for RadioConfig, is the hazard: changing this
+ *              node's own magic live means every peer's magic check now
+ *              rejects it and its own now rejects every peer - "a working
+ *              radio with a silent link" is exactly the failure mode section
+ *              8.2's revert-on-timeout ceremony exists to prevent for radio
+ *              profile changes, and nothing currently extends that ceremony to
+ *              this field. Excluded here for the same reason a radio profile
+ *              change gets special apply semantics, not because section 7.2's
+ *              node-identity argument extends to it - it does not.
+ *   callbacks  - a superloop wiring concern with no config-message analogue in
+ *              section 8.2 at all.
+ *
+ * A caller needing to change any of the three genuinely needs a fresh
+ * boomlink_link_init() and everything that implies.
  *
  * Validated exactly as boomlink_link_init() validates the same fields - see
  * retry_policy_is_valid() in the .c file, the one place both functions share
@@ -458,6 +486,25 @@ bool boomlink_link_init(boomlink_link_t *link, const boomlink_link_config_t *con
  * @return false, leaving the link's current policy untouched, if `link` is
  *         NULL or the new policy fails validation (section 9.6's "do not
  *         retry forever" - max_attempts 0 - or an inverted backoff range).
+ *
+ * Safe to call from boomlink_link_rx_fn or boomlink_link_tx_done_fn, unlike
+ * boomlink_link_poll() - this touches only five scalar fields of `link->config`
+ * and nothing that either callback's own call chain is still using when it
+ * runs, so there is no re-entrancy hazard to avoid.
+ *
+ * Five scalar parameters rather than a `boomlink_link_retry_policy_t` struct,
+ * which was considered: a struct would remove the same-typed-adjacent-argument
+ * risk four `uint32_t` parameters in a row carries (a transposed pair compiles
+ * silently - see the tests, which pin exactly this with distinct min/max and a
+ * nonzero jitter so a transposition cannot hide behind three parameters that
+ * all happened to share one value). It was not taken because it would either
+ * duplicate `boomlink_link_config_t`'s five fields in a second type this
+ * function alone uses, or restructure that struct to nest them - and every
+ * existing config literal in this package (see the tests) initializes those
+ * five fields flat, by name, so restructuring reaches every call site for a
+ * safety property the field NAMES here already provide once a caller reads the
+ * signature against boomlink_link_config_t's matching field list. If a sixth
+ * policy field is ever added, that trade is worth revisiting.
  */
 bool boomlink_link_reconfigure(boomlink_link_t *link, uint32_t ack_timeout_margin_ms,
                                uint8_t max_attempts, uint32_t backoff_min_ms,

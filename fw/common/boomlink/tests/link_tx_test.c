@@ -348,6 +348,12 @@ static void test_an_unanswered_frame_is_retried_with_the_same_sequence(void) {
   CHECK(a.tx.last_attempts == 3u, "after three attempts, got %u",
         (unsigned)a.tx.last_attempts);
   CHECK(a.tx.last_destination == NODE_B, "for the destination that never answered");
+  /* Nothing was ever received for this outcome, so there is nothing to report a
+     reading for - 0.0f is this codebase's sentinel for that, matching the
+     BOOMLINK_TX_SENT case asserted elsewhere, not a fabricated measurement. */
+  CHECK(a.tx.last_rssi_dbm == 0.0f, "no signal quality is reported for NO_ACK, got %f",
+        (double)a.tx.last_rssi_dbm);
+  CHECK(a.tx.last_snr_db == 0.0f, "same for SNR");
 
   /* Nothing more happens, ever. */
   fake_port_advance_ms(&a.ctx, 100000u);
@@ -904,6 +910,94 @@ static void test_reconfigure_applies_live_without_disturbing_a_pending_frame(voi
   scenario_end(&air);
 }
 
+/**
+ * The reconfigure test above uses backoff_min_ms == backoff_max_ms and
+ * tx_jitter_max_ms == 0 throughout - every call in the whole file does - which
+ * leaves two of boomlink_link_reconfigure()'s five parameters untested in the
+ * one way that matters: a fixed value cannot distinguish "the field this
+ * argument writes to" from "some other field with the same value", and 0
+ * cannot distinguish "jitter was applied" from "jitter was silently dropped".
+ * Verified: transposing backoff_min_ms/backoff_max_ms inside the
+ * implementation, and separately dropping the tx_jitter_max_ms assignment
+ * entirely, both left the whole suite green before this test existed.
+ */
+static void test_reconfigure_changes_backoff_range_and_jitter_take_real_effect(void) {
+  fake_air_t air;
+  fake_air_init(&air);
+  node_t a;
+  REQUIRE(node_up_full(&a, &air, 0u, NODE_A, 8u, 0u), "A came up with eight attempts");
+
+  /* An ASYMMETRIC range distinct from BACKOFF_MIN_MS/BACKOFF_MAX_MS, and far
+     enough from them that a stray old-range draw cannot be mistaken for a
+     new-range one. */
+  const uint32_t NEW_MIN_MS    = 200u;
+  const uint32_t NEW_MAX_MS    = 260u;
+  const uint32_t NEW_JITTER_MS = 40u;
+  REQUIRE(boomlink_link_reconfigure(&a.link, MARGIN_MS, 8u, NEW_MIN_MS, NEW_MAX_MS,
+                                    NEW_JITTER_MS),
+          "the new policy is accepted");
+
+  /* Jitter first, on a plain queued frame with no ACK requested - proof a
+     reconfigure changes what happens to the NEXT frame queued, not only frames
+     already in flight when it was called. */
+  const uint8_t jittered_payload[] = {0x11u};
+  REQUIRE(boomlink_link_send(&a.link, NODE_B, BOOMLINK_TXPRIO_NORMAL, false,
+                             jittered_payload,
+                             sizeof(jittered_payload)) == BOOMLINK_LINK_SEND_OK,
+          "queued");
+  boomlink_link_poll(&a.link);
+  REQUIRE(boomlink_link_tx_state(&a.link) == BOOMLINK_TX_STATE_JITTER,
+          "with tx_jitter_max_ms reconfigured away from 0, the pipeline must jitter "
+          "before transmitting - a dropped assignment here would leave it at "
+          "READY/transmitting immediately, which is exactly what a lost "
+          "tx_jitter_max_ms write looks like");
+  const uint32_t jitter_drawn = ms_until_state_leaves(&a, BOOMLINK_TX_STATE_JITTER);
+  CHECK(jitter_drawn > 0u && jitter_drawn <= NEW_JITTER_MS,
+        "the jitter draw (%u ms) must fall within the RECONFIGURED [0, %u], not the "
+        "original 0 (disabled) or any other range",
+        (unsigned)jitter_drawn, (unsigned)NEW_JITTER_MS);
+
+  /* Now the backoff range, over several retries of an unanswered frame so
+     there are several independent draws to check - one draw could coincide
+     with the old range by chance, several all doing so would not. */
+  const uint8_t retried_payload[] = {0x22u};
+  REQUIRE(boomlink_link_send(&a.link, NODE_C, BOOMLINK_TXPRIO_NORMAL, true,
+                             retried_payload,
+                             sizeof(retried_payload)) == BOOMLINK_LINK_SEND_OK,
+          "an ACK-requesting frame queued to a peer that will never answer");
+  boomlink_link_poll(&a.link);
+  const uint32_t queue_wait = ms_until_state_leaves(&a, BOOMLINK_TX_STATE_JITTER);
+  CHECK(queue_wait > 0u, "this frame is jittered too before its first transmission");
+  REQUIRE(boomlink_link_tx_state(&a.link) == BOOMLINK_TX_STATE_WAIT_ACK,
+          "and now on the air, waiting");
+
+  uint32_t draws[3];
+  for (size_t i = 0; i < 3u; i++) {
+    const uint32_t window = ms_until_state_leaves(&a, BOOMLINK_TX_STATE_WAIT_ACK);
+    REQUIRE(window > MARGIN_MS, "draw %zu: the ACK window expired", i);
+    REQUIRE(boomlink_link_tx_state(&a.link) == BOOMLINK_TX_STATE_BACKOFF,
+            "draw %zu: and backoff began", i);
+    draws[i] = ms_until_state_leaves(&a, BOOMLINK_TX_STATE_BACKOFF);
+    REQUIRE(draws[i] > 0u, "draw %zu: the backoff expired", i);
+    CHECK(draws[i] >= NEW_MIN_MS && draws[i] <= NEW_MAX_MS,
+          "draw %zu was %u ms, outside the RECONFIGURED [%u, %u] - a transposed "
+          "min/max would put every draw outside this exact range, in the "
+          "opposite direction, and this is the assertion that would catch it",
+          i, (unsigned)draws[i], (unsigned)NEW_MIN_MS, (unsigned)NEW_MAX_MS);
+    CHECK(!(draws[i] >= BACKOFF_MIN_MS && draws[i] <= BACKOFF_MAX_MS),
+          "draw %zu (%u ms) must not also land in the OLD range [%u, %u] - the "
+          "two ranges were chosen disjoint precisely so a stuck-on-the-old-policy "
+          "bug cannot hide by coincidence",
+          i, (unsigned)draws[i], (unsigned)BACKOFF_MIN_MS, (unsigned)BACKOFF_MAX_MS);
+  }
+  CHECK(draws[0] != draws[1] || draws[1] != draws[2],
+        "all three draws were identical (%u ms) - a fixed value in the new range "
+        "would pass every check above while still not being RANDOMIZED, which "
+        "section 9.7 requires",
+        (unsigned)draws[0]);
+  scenario_end(&air);
+}
+
 static void test_send_refuses_what_can_never_be_transmitted(void) {
   fake_air_t air;
   fake_air_init(&air);
@@ -1071,8 +1165,9 @@ int main(void) {
   test_the_ack_window_is_derived_from_the_frame_not_fixed();
   test_a_broadcast_is_sent_once_and_never_awaits_an_ack();
   test_reconfigure_applies_live_without_disturbing_a_pending_frame();
+  test_reconfigure_changes_backoff_range_and_jitter_take_real_effect();
   test_send_refuses_what_can_never_be_transmitted();
   test_queue_pressure_is_visible_in_the_statistics();
   test_two_engines_exchange_traffic_in_both_directions();
-  BOOMLINK_TEST_REPORT("link_tx_test", 271);
+  BOOMLINK_TEST_REPORT("link_tx_test", 298);
 }

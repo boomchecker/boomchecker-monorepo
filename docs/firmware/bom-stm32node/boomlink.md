@@ -698,6 +698,20 @@ This prevents stranding a remote node on a profile nobody else uses.
 A later implementation may add scheduled activation for coordinated network-wide radio
 profile changes.
 
+**Two fields need the same hazard treatment and are not currently assigned a home.**
+`magic` (section 7.3's network ID byte) is called "runtime-configurable" where it is
+defined, but is absent from every `GeneralConfig`/`LinkConfig` field list this section and
+section 10 give - an omission, not a decision to keep it fixed. Changing this node's own
+`magic` live is exactly the hazard this paragraph describes for a radio profile: every
+peer's magic check now rejects this node and this node's now rejects every peer, "a
+working radio with a silent link." The same applies to `node_id`, though for the opposite
+addressing failure - a node that changes its own ID live can no longer be reached at the
+old one, and it is only ever safe to leave the previous ID answering until the new one is
+confirmed. Neither field currently has anywhere in this document saying it needs
+revert-on-timeout (or an equivalent confirm-before-committing exchange); when PR 4
+implements ConfigSet handling, both belong in this paragraph's scope, not treated as
+ordinary `GeneralConfig` writes applied immediately.
+
 ### 8.3 Commands
 
 Initial command set:
@@ -1366,13 +1380,21 @@ BoomProtocol payload while preserving the layering above.
 **"Protect the payload" is necessary but not sufficient, and PR 6 must scope itself
 accordingly rather than inherit only this sentence.** Section 14.1's duplicate-window
 poisoning, session reset, and forged-ACK risks are enacted entirely through the **link
-frame header** — `source_id`, `session_id`, `sequence` — and an ACK frame carries no
-payload at all (section 7.3), so all three remain fully open no matter how strong
-payload-level authentication is. Closing them requires authenticating the header fields
-the link layer itself trusts for session/sequence/ACK matching, which is a materially
-different (and larger) task than authenticating the Envelope, and cuts against section
-9's goal of keeping the link frame layer simple and Nanopb-free — a tension PR 6 has to
-resolve, not one this paragraph resolves by asserting "protect the payload" covers it.
+frame header** — precisely the fields section 9.2's ACK matcher itself trusts:
+`frame_type`, `source_id`, `destination_id`, `session_id`, `sequence` (see
+`boomlink_linkframe_ack_matches()`) — and an ACK frame carries no payload at all
+(section 7.3), so all three remain fully open no matter how strong payload-level
+authentication is. Closing them requires authenticating those header fields, not just
+the Envelope, and that is a genuinely larger task for a concrete reason: an ACK has
+nowhere to put an authentication tag today. `BOOMLINK_LINKFRAME_HEADER_SIZE` (20 bytes,
+section 7.3) is currently hardcoded as an ACK's entire on-air length in more than one
+place in the engine (the buffer `send_ack()` builds, the ACK-airtime term
+`ack_window_ms()` computes for section 9.6's timeout) - so a MAC or signature on an ACK
+needs new wire-format space that today's frames do not have, which ripples into every
+place that size is assumed rather than being purely a matter of choosing an algorithm.
+DATA frames have a payload to fold a tag into; ACKs, being pure header, do not - which is
+exactly why PR 6 cannot get away with authenticating "the Envelope" and calling section
+14.1's first three risks closed.
 
 Security is intentionally a separate implementation PR so it does not block the first
 radio bring-up, but it is a deployment requirement, not an optional polish item.

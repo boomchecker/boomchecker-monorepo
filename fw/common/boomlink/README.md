@@ -66,8 +66,11 @@ This directory is a CMake project that builds two different ways:
   `boomlink_linkframe_tool` and runs the full CTest suite - the codec and
   link frame CLI self-tests, the link engine's C scenario binaries (port,
   duplicate cache, TX queue, RX pipeline, TX pipeline - see `CMakeLists.txt`
-  for the current list, not restated here since it only grows), the
-  Nanopb-free boundary and encoder-bound checks, and the Python
+  for the current list, not restated here since it only grows), the C
+  harness's own self-check (`tests/c_test.h`'s failure path is the only way
+  any of those scenario binaries can fail at all, and this is what proves
+  that path still works - see that header's comment for why it once did not),
+  the Nanopb-free boundary and encoder-bound checks, and the Python
   interop/compatibility suite. Run `ctest --preset Debug` for the exact count
   and names.
 - **As a subdirectory** of `fw/bom-stm32node`'s ARM cross build: the
