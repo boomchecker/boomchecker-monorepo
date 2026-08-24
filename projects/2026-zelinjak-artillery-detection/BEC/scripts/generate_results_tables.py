@@ -99,7 +99,7 @@ SNR (dB) & Accuracy (\\%) & Precision & Recall & F1-score & MCC & MCC (float32) 
             cells.append(f"{sel.mean():.2f} $\\pm$ {sel.std():.2f}")
         arows.append(f"{name} & " + " & ".join(cells) + " \\\\")
     ablation = HEADER + """\\begin{table}[!tbh]
-\\caption{Augmentation-domain ablation: held-out int8 MCC (mean $\\pm$ std) for the same architecture trained with different augmentation.}
+\\caption{Held-out int8 MCC (mean $\\pm$ std) for the same architecture trained with three augmentation strategies.}
 \\label{tab:ablation_augmentation}
 \\centering
 \\resizebox{\\linewidth}{!}{%

@@ -78,7 +78,7 @@ This motivates compact CNN topologies that preserve local time-frequency structu
 \subsection{Robustness and Domain-Shift Handling}
 Recent studies report strong performance under uncontrolled recording conditions, but many results remain tied to dataset-specific priors, acquisition pipelines, and label granularity~\cite{khan2010embedding,raponi2022sound_of_guns,svatos2024fcc}. In practice, model performance can degrade under perturbation, recording-device mismatch, or changes in background scenes, and overlapping sound sources further disrupt classification~\cite{ye2019multi_sound}. Clean-set accuracy alone is therefore insufficient. Recent embedded-oriented firearm classification fuses mel-spectrogram, MFCC, and linear frequency cepstral coefficient (LFCC) inputs in a convolutional recurrent network, reporting 96.3~\% accuracy at 187~ms inference per 2~s segment on application-class hardware (Raspberry Pi~4)~\cite{elkarous2025firearm}; a systematic robustness characterization across controlled SNR levels and microcontroller unit (MCU)-class deployment remain open. Augmentation strategy, perturbation tolerance, and operating-point calibration become central requirements~\cite{salamon2017esc_aug}. For embedded artillery-launch sensing, the relevant test is whether class separability survives waveform-domain additive noise before feature extraction, because this more closely follows the acoustic front-end encountered by a deployed system.
 
-Feature-domain augmentation provides a relevant methodological precedent. SpecAugment, for example, applies warping and masking directly to log-mel feature inputs rather than to raw audio~\cite{park2019specaugment}. In noise-robust automatic speech recognition (ASR), feature-level Gaussian injection has been compared directly with waveform-level noise mixing, and the waveform-level variant transferred robustness better~\cite{braun2017accan}. Moreover, waveform-level additive noise and cepstral-domain perturbations are not equivalent: additive noise before feature extraction produces nonlinear, signal-dependent distortions in cepstral space~\cite{delatorre2002nonlinear_feature_space}. Whether cepstral-domain perturbations can substitute for physically placed waveform corruption in short impulsive-event classification is therefore an open question, which we answer empirically through a controlled augmentation-domain ablation.
+Feature-domain augmentation provides a relevant methodological precedent. SpecAugment, for example, applies warping and masking directly to log-mel feature inputs rather than to raw audio~\cite{park2019specaugment}. In noise-robust automatic speech recognition (ASR), feature-level Gaussian injection has been compared directly with waveform-level noise mixing, and the waveform-level variant transferred robustness better~\cite{braun2017accan}. Moreover, waveform-level additive noise and cepstral-domain perturbations are not equivalent: additive noise before feature extraction produces nonlinear, signal-dependent distortions in cepstral space~\cite{delatorre2002nonlinear_feature_space}. Whether cepstral-domain perturbations can substitute for physically placed waveform corruption in short impulsive-event classification is therefore an open question, which we answer empirically by training the same network with different augmentation strategies.
 
 \subsection{Embedded Deployment and Runtime Constraints}
 Edge deployment requires detection quality to be evaluated together with memory footprint, latency, and energy use. Tiny machine learning (TinyML) comparisons show that front-end feature extraction can dominate runtime, so the highest-accuracy model is not always the most deployable one~\cite{muthumala2024tinyml_ae}. MCU-focused TinyML systems also show that memory, latency, energy, and runtime overhead can dominate architecture and deployment choices on commodity microcontrollers~\cite{lin2020mcunet,banbury2021micronets}. Together with TensorFlow Lite deployment practice~\cite{tflite,david2021tflm} and integer or fixed-point quantization methods for efficient on-device inference~\cite{jacob2018quantization,benkhalifa2024stm32_quantization}, these findings motivate validation that separates desktop float32 behavior, quantized desktop verification, and embedded execution.
@@ -157,39 +157,18 @@ Model development used a stratified event-level 80/20 split, and train-time MFCC
 \end{enumerate}
 
 \section{Results}
-\subsection{Desktop Float32 Reference Under Waveform-Domain Noise}
-Table~\ref{tab:robustness_heldout} summarizes the desktop float32 reference for the corpus-level waveform-domain robustness stress test. The model retains high recall across all tested SNR levels, but precision is low and degrades further under heavier corruption. As a result, MCC remains moderate and declines from 0.54 at 30~dB to 0.46 at 5~dB. The float32 reference therefore fails mainly through false-positive inflation rather than missed artillery launches.
+\subsection{Comparison of Training Augmentation Strategies}
+To answer the first question from Section~II, we trained the same network three times and changed only how the training data were augmented: (i) Gaussian jitter added directly to the MFCC features, (ii) the same jitter combined with additive waveform noise, and (iii) additive waveform noise alone. Table~\ref{tab:ablation_augmentation} compares the three variants on the held-out test set. Jitter in the feature space fails at low SNR (int8 MCC $0.30 \pm 0.21$ at 5~dB, individual training seeds between 0.05 and 0.48), whereas waveform noise alone maintains performance across the entire tested range ($0.98 \pm 0.04$ at 5~dB). Adding jitter on top of waveform noise makes the results slightly worse at every SNR level, so perturbing the cepstral features is not only insufficient but counterproductive; this contrasts with noise-robust ASR, where feature-level injection complemented waveform-level mixing~\cite{braun2017accan}. The jitter-trained models also lose more when quantized (float32 MCC 0.37 versus int8 0.30 at 5~dB), whereas the waveform-trained models quantize without loss.
+
+\input{tables/table_ablation}
+
+\subsection{Held-Out Robustness of the Deployed Classifier}
+Table~\ref{tab:robustness_heldout} reports the deployed waveform-augmented classifier on the held-out test set. Performance is nearly flat across the trained range, with int8 MCC between $0.976$ and $0.992$ from clean conditions down to 5~dB. Beyond the validated trigger envelope, the classifier degrades gracefully ($0.947$ at 0~dB and $0.833$ at $-5$~dB). The failure mode is operationally benign: precision stays at $1.000$ from 5~dB downward while recall decreases, so under extreme noise the classifier misses launches rather than raising false alarms; across all noise levels, no small-arms gunshot in the test set was ever classified as an artillery launch. The float32 column shows the same models before quantization: the differences stay within $\pm 0.02$ MCC without a consistent direction, so int8 quantization is performance-neutral for this classifier.
 
 \input{tables/table_robustness}
 
-\subsection{PC-Side int8 Verification}
-To separate hardware effects from quantization effects, we evaluate the quantized model on PC before moving to the embedded target. The PC-side int8 results in Table~\ref{tab:quantized_compare} are consistently stronger than the float32 reference under the same waveform-domain stress-test protocol, with MCC values of 0.92 at 30~dB and 0.65 at 5~dB. This intermediate step supports the interpretation that int8 quantization is associated with the robustness improvement observed later on the embedded target, although we do not isolate the exact mechanism from all preprocessing and deployment-related factors.
-
 \subsection{ESP32-S3 Deployment Results}
-Table~\ref{tab:quantized_compare} also reports the embedded ESP32-S3 results for the same quantized classifier under the waveform-domain stress-test protocol. In this setup, the embedded target attains MCC values from 0.99 at 30~dB to 0.80 at 5~dB. The classifier inference latency per MFCC segment is 32.0~ms with sub-0.1~ms variation across 1,176 on-device inferences (range 31.99--32.09~ms), independent of the noise level; the deployed implementation uses an 80~KiB \texttt{tensor\_arena}. These results indicate that the quantized post-trigger classifier remains deployable on the target platform under the tested host-device validation protocol.
-
-\begin{table}[!tbh]
-\caption{Quantized inference comparison under waveform-domain additive noise.}
-\label{tab:quantized_compare}
-\centering
-\resizebox{\linewidth}{!}{%
-\begin{tabular}{@{}ccccccc@{}}
-\toprule
-Mode & SNR (dB) & Accuracy (\%) & Precision & Recall & F1-score & MCC \\
-\midrule
-PC int8 & 30 & 98.66 & 0.86 & 1.00 & 0.93 & 0.92 \\
-PC int8 & 20 & 96.77 & 0.72 & 1.00 & 0.84 & 0.83 \\
-PC int8 & 10 & 92.74 & 0.54 & 0.97 & 0.69 & 0.69 \\
-PC int8 & 5  & 92.41 & 0.53 & 0.90 & 0.66 & 0.65 \\
-\midrule
-ESP32-S3 & 30 & 99.86 & 1.00 & 0.98 & 0.99 & 0.99 \\
-ESP32-S3 & 20 & 99.73 & 0.98 & 0.98 & 0.98 & 0.98 \\
-ESP32-S3 & 10 & 97.78 & 0.86 & 0.87 & 0.87 & 0.86 \\
-ESP32-S3 & 5  & 97.18 & 0.95 & 0.70 & 0.81 & 0.80 \\
-\bottomrule
-\end{tabular}
-}
-\end{table}
+The deployed model was verified on the target hardware by transmitting all held-out MFCC tensors to the ESP32-S3 and comparing its predictions with PC-side int8 inference. Of 1,176 on-device inferences across all seven noise levels, 1,171 were bit-exact; the five disagreements are decision-boundary samples whose PC-side score equals exactly 0.5, where the coarse logit quantization of this confident model (one least-significant bit spans 10.8 in logit units) amplifies a legal one-bit rounding difference between the TFLite and TFLite Micro kernels. Platform behavior is therefore equivalent up to rounding at the decision boundary. The classifier inference latency per MFCC segment is 32.0~ms with sub-0.1~ms variation across the 1,176 inferences (range 31.99--32.09~ms), independent of the noise level; the deployed implementation uses an 80~KiB \texttt{tensor\_arena}. The quantized post-trigger classifier therefore remains deployable on the target platform under the host-device validation protocol.
 
 \section{Discussion and Limitations}
 Because each classified segment is centered on a trigger-detected peak, the reported figures characterize classifier performance under the assumption of successful impulse localization by the previously validated first stage~\cite{svatos2019smart_acoustic_sensor}. The evaluated SNR range of the classifier deliberately matches the validated operating envelope of that trigger stage, which detects impulses reliably down to an acoustic SNR of 5~dB; stress levels below 5~dB probe classifier margin beyond the envelope in which the full two-stage system is expected to operate. The float32 desktop reference is not a sufficient proxy for embedded performance under waveform-domain additive noise. Quantized inference, first verified on PC and then deployed on ESP32-S3, stays more stable under the tested acoustic SNR levels.
