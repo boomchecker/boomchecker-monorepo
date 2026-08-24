@@ -509,6 +509,33 @@ target_compile_features(boomlink_linkframe PUBLIC c_std_11)
 target_compile_options(boomlink_linkframe PRIVATE
   ${BOOMLINK_WARNING_FLAGS} ${BOOMLINK_WERROR_FLAGS} ${BOOMLINK_LINKFRAME_WERROR_FLAGS})
 
+# BoomLink's link engine (boomlink.md section 9): the stateful half of the link
+# layer - addressing, ACK/retry, duplicate suppression, TX queue - as opposed to
+# boomlink_linkframe's stateless header codec.
+#
+# A SEPARATE target from boomlink_linkframe, and the separation is the same one
+# section 9 draws: this depends on the frame layer, never the reverse. It also
+# inherits the frame layer's Nanopb-free property transitively (it links only
+# boomlink_linkframe, so the check registered below covers it too) - section 9's
+# "BoomLink never decodes the Protobuf payload" applies to the engine at least as
+# much as to the header codec, since the engine is what would be tempted to look
+# inside a payload to make a routing or retry decision.
+#
+# Built in the ARM cross build for the same reason boomlink_linkframe is: to
+# prove it is free of host-isms and (with BOOMLINK_LINKFRAME_WERROR) warning-clean
+# for the target before any firmware depends on it. Nothing links it yet; Phase C
+# adds it to fw/bom-stm32node's target_link_libraries.
+add_library(boomlink_linkengine STATIC
+  ${CMAKE_CURRENT_SOURCE_DIR}/linkengine/boomlink_port.c
+)
+target_include_directories(boomlink_linkengine PUBLIC
+  ${CMAKE_CURRENT_SOURCE_DIR}/linkengine
+)
+target_link_libraries(boomlink_linkengine PUBLIC boomlink_linkframe)
+target_compile_features(boomlink_linkengine PUBLIC c_std_11)
+target_compile_options(boomlink_linkengine PRIVATE
+  ${BOOMLINK_WARNING_FLAGS} ${BOOMLINK_WERROR_FLAGS} ${BOOMLINK_LINKFRAME_WERROR_FLAGS})
+
 if(BOOMLINK_STANDALONE)
   enable_testing()
 
@@ -574,6 +601,32 @@ if(BOOMLINK_STANDALONE)
     BOOMLINK_SANITIZE_ENABLED=$<IF:$<BOOL:${BOOMLINK_SANITIZE}>,1,0>)
 
   add_test(NAME boomlink_linkframe_selftest COMMAND boomlink_linkframe_tool selftest)
+
+  # The link engine's tests are C scenarios, not pytest, and that is a departure
+  # from how the frame layer is tested - so the reason matters. The frame layer's
+  # subject is a WIRE FORMAT, where an independent Python implementation is worth
+  # its weight: it catches a misreading of the spec that a single implementation
+  # would happily agree with itself about. The engine's subject is a stateful
+  # SEQUENCE (send, no ACK, advance the clock, expect a retry with the same
+  # sequence number, advance again, expect final failure). Driving that through a
+  # subprocess needs either a scenario language or one subcommand per scenario,
+  # and reimplementing a retry state machine in Python would double the work
+  # while cross-checking behaviour rather than bytes.
+  #
+  # What keeps the cross-language check where it earns its keep: the engine's
+  # emitted BYTES are still compared against the Python reference, because the
+  # frames it produces are frame-layer frames - see the pytest tests that build
+  # the expected ACK with boomlink_linkframe.py's make_ack() and compare.
+  #
+  # fake_port.c is compiled into the test binary rather than shipped in the
+  # library: it is a test double, and a target that could link it is a target
+  # that could accidentally ship it.
+  add_executable(boomlink_port_test tests/port_test.c tests/fake_port.c)
+  target_link_libraries(boomlink_port_test PRIVATE boomlink_linkengine)
+  target_include_directories(boomlink_port_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests)
+  target_compile_options(boomlink_port_test PRIVATE
+    ${BOOMLINK_WARNING_FLAGS} ${BOOMLINK_WERROR_FLAGS})
+  add_test(NAME boomlink_port_test COMMAND boomlink_port_test)
 
   # The Nanopb-free boundary (boomlink.md section 9), checked as a TEST rather
   # than only as a CI step, so `task test` runs it and a developer finds out
