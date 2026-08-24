@@ -94,7 +94,7 @@ Adopted. The scope statements now appear early in the paper: the abstract states
 
 **Odpověď:**
 
-_(doplnit)_
+A full grammar and wording pass was performed on the final text. It fixed a subject-verb agreement error and a comma splice, removed a duplicate acronym definition, added the missing in-body definition of MCC, unified terminology (e.g. "front end" as a noun, "limitations"), and reworded several awkward formulations; a separate deduplication pass also removed statements that were repeated in slightly different wording across sections. The reference count was reduced from 29 to 27, even though one new reference (Elkarous et al., 2025, requested by Reviewer 2) was added.
 
 ---
 
