@@ -1,8 +1,8 @@
-# Odpovědi recenzentům — BEC2026 Paper 53 (camera-ready)
+# Odpovědi recenzentům: BEC2026 Paper 53 (camera-ready)
 
 Znění připomínek je vykopírováno **verbatim** z recenzí (zdroj:
 `BEC/.agents/memories/2026-07-21_bec2026_reviews_camera_ready.md`). U nestrukturovaných
-recenzí (R3) je text pouze rozdělen na odrážky po větách — beze změny znění. Odpovědi
+recenzí (R3) je text pouze rozdělen na odrážky po větách, beze změny znění. Odpovědi
 se píší do bloků **Odpověď:**.
 
 Podkladové dokumenty: `generated/reports/reviewer_response.md` (M1–M6 důkazy),
@@ -11,7 +11,7 @@ Podkladové dokumenty: `generated/reports/reviewer_response.md` (M1–M6 důkazy
 
 ---
 
-## REVIEW 1 — SCORE: 2 (accept)
+## REVIEW 1: SCORE: 2 (accept)
 
 > The paper is timely and relevant for BEC2026. The proposed approach is interesting and its potential is illustrated by experimental results.
 
@@ -37,7 +37,7 @@ Added. The abstract now states explicitly: "The embedded experiment validates on
 
 **Odpověď:**
 
-Section II was revised at approximately constant length: three tangential sentences (and two references) were removed, and the freed space now carries (1b) key quantitative results of the cited prior work — 97.5 % launch/impact discrimination and 93.6 % variant classification for the classical mortar/artillery line (Desai et al., Hohil et al.), firearm-identification accuracies above 90 % for CNN approaches (Raponi et al.), and 96.3 % accuracy at 187 ms per 2 s segment on a Raspberry Pi 4 for the recent CRNN classifier (Elkarous et al., 2025) — together with a sharper closing statement of the two questions the paper answers. Regarding (2), the experimental part has grown substantially in the final version: the dataset section now describes the extended multi-microphone corpus with an event-level train/validation/test split, and the results section adds a controlled augmentation ablation, held-out multi-seed evaluation, and extended SNR levels. In addition, a deduplication pass across the whole manuscript removed repeated statements. The total reference count decreased.
+Section II was revised at approximately constant length: three tangential sentences (and two references) were removed, and the freed space now carries (1b) key quantitative results of the cited prior work: 97.5 % launch/impact discrimination and 93.6 % variant classification for the classical mortar/artillery line (Desai et al., Hohil et al.), firearm-identification accuracies above 90 % for CNN approaches (Raponi et al.), and 96.3 % accuracy at 187 ms per 2 s segment on a Raspberry Pi 4 for the recent CRNN classifier (Elkarous et al., 2025), together with a sharper closing statement of the two questions the paper answers. Regarding (2), the experimental part has grown substantially in the final version: the dataset section now describes the extended multi-microphone corpus with an event-level train/validation/test split, and the results section adds a controlled augmentation ablation, held-out multi-seed evaluation, and extended SNR levels. In addition, a deduplication pass across the whole manuscript removed repeated statements. The total reference count decreased.
 
 ### R1.4 Section III.A (trigger stage)
 
@@ -53,7 +53,7 @@ The revised title no longer emphasizes a two-stage pipeline (see R1.1), so the t
 
 **Odpověď:**
 
-The artillery corpus was enlarged and restructured for the final version: launch events were re-extracted from the original measurement-campaign recordings using all four synchronized microphone channels instead of a single channel, giving 50 physical launch events represented by 146 channel samples (training uses all four channels per event; validation and test use one channel per event so their samples remain independent physical events, with the split performed at the event level to prevent leakage between channels of the same shot). Table I was redesigned accordingly — it now distinguishes independent physical events from per-channel samples, shows the event-level train/validation/test split per subset, lists small-arms gunshots as an explicit hard-negative subset, and includes the requested horizontal separator before the total row. The effect of imbalance and the small positive count on generalization is now addressed explicitly: Section III.B describes the class-weighted training and the event-level split, the results are reported as mean ± std over five training seeds and five noise-realization seeds with the imbalance-robust MCC as the headline metric (Section V), and the limitations section notes that the small number of held-out launch events remains the dominant source of statistical uncertainty.
+The artillery corpus was enlarged and restructured for the final version: launch events were re-extracted from the original measurement-campaign recordings using all four synchronized microphone channels instead of a single channel, giving 50 physical launch events represented by 146 channel samples (training uses all four channels per event; validation and test use one channel per event so their samples remain independent physical events, with the split performed at the event level to prevent leakage between channels of the same shot). Table I was redesigned accordingly: it now distinguishes independent physical events from per-channel samples, shows the event-level train/validation/test split per subset, lists small-arms gunshots as an explicit hard-negative subset, and includes the requested horizontal separator before the total row. The effect of imbalance and the small positive count on generalization is now addressed explicitly: Section III.B describes the class-weighted training and the event-level split, the results are reported as mean ± std over five training seeds and five noise-realization seeds with the imbalance-robust MCC as the headline metric (Section V), and the limitations section notes that the small number of held-out launch events remains the dominant source of statistical uncertainty.
 
 ### R1.6 Section III.C (model size, Flash, RAM, ops)
 
@@ -98,7 +98,7 @@ _(doplnit)_
 
 ---
 
-## REVIEW 2 — SCORE: 1 (weak accept)
+## REVIEW 2: SCORE: 1 (weak accept)
 
 > The paper is timely and relevant for BEC2026
 > This work aims to validate the practical performance of an embedded platform-deployed lightweight MFCC-CNN second-stage classifier for acoustic artillery launch detection under controlled waveform-domain perturbations. This work covers the practical acquisition of acoustic artillery launch & impact data, mixed with various non-artillery (false positive) samples for the classification model training. The performance of the targeted embedded system-deployed int8 quantized classifier was then evaluated and compared to the desktop deployment of the same quantized int8 inference, as well as the desktop-deployed float32 inference. Results have confirmed the reliable performance of the prepared classifier for acoustic artillery launch detection on the embedded ESP32 platform.
@@ -124,7 +124,7 @@ The title has been revised to *"A Lightweight Noise-Robust Post-Trigger Classifi
 
 **Odpověď:**
 
-We agree that acoustic weapon detection itself is not novel, and the revised Section II no longer implies it; it now closes with the two specific questions the paper answers (whether robustness training requires waveform-level rather than cepstral-level perturbation, and whether the result survives int8 MCU deployment). The suggested reference (Elkarous et al., 2025) is now cited with its key figures (96.3 % accuracy, 187 ms per 2 s segment on a Raspberry Pi 4); it addresses firearm-type identification with rich fused features on application-class hardware, whereas our work targets binary launch-vs-confuser discrimination with a minimal-footprint model on MCU-class hardware. The state-of-the-art gap is now stated as a concrete research question at the end of Section II: where robustness-oriented augmentation must be placed relative to the nonlinear cepstral front end of a constrained post-trigger classifier, and whether the resulting behavior survives int8 deployment. The revised results answer this question through a controlled augmentation-domain ablation (same architecture, same protocol): MFCC-domain jitter alone collapses at low SNR, whereas waveform-domain augmentation preserves performance, consistent with — and extending — comparisons reported for noise-robust ASR (Braun et al., 2017).
+We agree that acoustic weapon detection itself is not novel, and the revised Section II no longer implies it; it now closes with the two specific questions the paper answers (whether robustness training requires waveform-level rather than cepstral-level perturbation, and whether the result survives int8 MCU deployment). The suggested reference (Elkarous et al., 2025) is now cited with its key figures (96.3 % accuracy, 187 ms per 2 s segment on a Raspberry Pi 4); it addresses firearm-type identification with rich fused features on application-class hardware, whereas our work targets binary launch-vs-confuser discrimination with a minimal-footprint model on MCU-class hardware. The state-of-the-art gap is now stated as a concrete research question at the end of Section II: where robustness-oriented augmentation must be placed relative to the nonlinear cepstral front end of a constrained post-trigger classifier, and whether the resulting behavior survives int8 deployment. The revised results answer this question through a controlled augmentation-domain ablation (same architecture, same protocol): MFCC-domain jitter alone collapses at low SNR, whereas waveform-domain augmentation preserves performance, consistent with, and extending, comparisons reported for noise-robust ASR (Braun et al., 2017).
 
 ### R2.2 Acronyms
 
@@ -140,7 +140,7 @@ We audited every acronym in the manuscript and fixed the following: CNN and MFCC
 
 **Odpověď:**
 
-_(doplnit)_
+We verified that every technique used in the paper carries a reference at its first use: MFCC features (Davis and Mermelstein, 1980), the compact CNN design (LeCun et al., 1998), input-noise regularization (Bishop, 1995), feature-versus waveform-level noise augmentation (Braun et al., EUSIPCO 2017), the TensorFlow Lite Micro runtime (David et al., MLSys 2021), and integer-only int8 quantized inference (Jacob et al., CVPR 2018). In the final version we also improved their placement: the int8 quantization reference is now cited directly in the sentence that introduces int8 inference, and the Braun et al. citation now states its feature-level versus waveform-level comparison explicitly.
 
 ### R2.4 Figures 1 & 2 units
 
@@ -168,9 +168,9 @@ _(doplnit)_
 
 ---
 
-## REVIEW 3 — SCORE: 2 (accept)
+## REVIEW 3: SCORE: 2 (accept)
 
-*(Souvislý text rozdělen po větách na samostatné body — znění beze změny.)*
+*(Souvislý text rozdělen po větách na samostatné body, znění beze změny.)*
 
 > This paper presents research aimed at detecting artillery fire using a passive, low-cost system.
 
@@ -180,7 +180,7 @@ _(doplnit)_
 
 **Odpověď:**
 
-Section II now discusses this family of methods (one-class SVMs, isolation forests, autoencoders, with a citation to their evaluation on embedded platforms) and explains why we nevertheless use a supervised binary classifier: the classifier operates after an impulsive-event trigger, so it receives a conditional distribution of impulsive candidates in which non-artillery gunfire is a hard negative rather than an outlier — outlierness with respect to the acoustic background is not equivalent to the artillery-launch label. One-class approaches remain relevant alternatives for first-stage novelty detection. Empirically, the supervised formulation is supported by the hard-negative results: the deployed model produces zero false positives on the small-arms gunshot class across all noise levels.
+Section II now discusses this family of methods (one-class SVMs, isolation forests, autoencoders, with a citation to their evaluation on embedded platforms) and explains why we nevertheless use a supervised binary classifier: the classifier operates after an impulsive-event trigger, so it receives a conditional distribution of impulsive candidates in which non-artillery gunfire is a hard negative rather than an outlier; outlierness with respect to the acoustic background is not equivalent to the artillery-launch label. One-class approaches remain relevant alternatives for first-stage novelty detection. Empirically, the supervised formulation is supported by the hard-negative results: the deployed model produces zero false positives on the small-arms gunshot class across all noise levels.
 
 ### R3.2 Dataset details (artillery types, environments)
 
@@ -196,7 +196,7 @@ Section III.B now states this explicitly: the launch recordings originate from t
 
 **Odpověď:**
 
-We agree, and the final version acts on this suggestion in three ways. (1) The launch class was re-extracted from the original measurement campaign using all four synchronized microphone channels instead of a single channel: 50 physical launch events, each represented by four synchronously cropped channel recordings. Training uses all four channels of each training event (32 events, 128 launch training samples), which provides natural sensor-position diversity; validation and test use one channel per event so that their samples remain statistically independent, and the split is performed at the level of physical events to prevent leakage between channels of the same shot. (2) Data augmentation is applied — and its design turned out to be the central experimental question of the revised paper: every training sample is augmented with additive-noise variants at four SNR levels (five-fold enlargement, 3,170 training samples in total), and a controlled ablation shows that the domain in which this augmentation is applied is decisive (waveform-domain augmentation versus cepstral-domain jitter: held-out MCC 0.98 versus 0.30 at 5 dB SNR for the same architecture). (3) Class imbalance is further mitigated by class-weighted training, and we report MCC as the headline metric because it is robust to class imbalance. The concern about small-data bias is addressed by reporting all results as mean ± standard deviation over five training seeds and five noise seeds, and the limitations section notes the small number of positive events explicitly.
+We agree, and the final version acts on this suggestion in three ways. (1) The launch class was re-extracted from the original measurement campaign using all four synchronized microphone channels instead of a single channel: 50 physical launch events, each represented by four synchronously cropped channel recordings. Training uses all four channels of each training event (32 events, 128 launch training samples), which provides natural sensor-position diversity; validation and test use one channel per event so that their samples remain statistically independent, and the split is performed at the level of physical events to prevent leakage between channels of the same shot. (2) Data augmentation is applied, and its design turned out to be the central experimental question of the revised paper: every training sample is augmented with additive-noise variants at four SNR levels (five-fold enlargement, 3,170 training samples in total), and a controlled ablation shows that the domain in which this augmentation is applied is decisive (waveform-domain augmentation versus cepstral-domain jitter: held-out MCC 0.98 versus 0.30 at 5 dB SNR for the same architecture). (3) Class imbalance is further mitigated by class-weighted training, and we report MCC as the headline metric because it is robust to class imbalance. The concern about small-data bias is addressed by reporting all results as mean ± standard deviation over five training seeds and five noise seeds, and the limitations section notes the small number of positive events explicitly.
 
 ### R3.4 Why CNN; anomaly-detection alternatives
 
@@ -204,7 +204,7 @@ We agree, and the final version acts on this suggestion in three ways. (1) The l
 
 **Odpověď:**
 
-Please see the response to the previous point: the task after the trigger stage is not anomaly detection but discrimination among impulsive events, where the most dangerous confusers (non-artillery gunfire) are themselves acoustically anomalous with respect to the background. An anomaly detector trained on the ambient distribution would correctly flag a small-arms gunshot as anomalous, which does not provide the artillery/non-artillery decision we need. This motivation for supervised binary classification — and for a CNN over the MFCC tensor as an established compact choice for local spectro-temporal patterns — is now stated explicitly in Section II. We agree that one-class methods are lightweight and MCU-feasible, and we consider them relevant for the first (novelty-detection) stage rather than the second.
+Please see the response to the previous point: the task after the trigger stage is not anomaly detection but discrimination among impulsive events, where the most dangerous confusers (non-artillery gunfire) are themselves acoustically anomalous with respect to the background. An anomaly detector trained on the ambient distribution would correctly flag a small-arms gunshot as anomalous, which does not provide the artillery/non-artillery decision we need. This motivation for supervised binary classification, and for a CNN over the MFCC tensor as an established compact choice for local spectro-temporal patterns, is now stated explicitly in Section II. We agree that one-class methods are lightweight and MCU-feasible, and we consider them relevant for the first (novelty-detection) stage rather than the second.
 
 ### R3.5 Missing train/val/test split, eval on training data
 
@@ -235,7 +235,7 @@ _(doplnit)_
 
 ---
 
-## REVIEW 4 — SCORE: 1 (weak accept), doporučuje major revision
+## REVIEW 4: SCORE: 1 (weak accept), doporučuje major revision
 
 > SUMMARY
 > -------
@@ -350,7 +350,7 @@ _(doplnit)_
 
 **Odpověď:**
 
-The definition is now given explicitly in the experimental setup: the acoustic SNR is set per event — zero-mean Gaussian noise with variance σ² = P·10^(−SNR/10) is added to the entire 1 s event clip, where P is the mean power of the clean clip. The text also states the two consequences of this choice: the SNR is referenced to the whole event clip rather than to the 60 ms analysis window (for impulsive events, the effective in-window SNR is therefore higher than the nominal value), and peak detection with window extraction is re-run on the noisy waveform, so the evaluation includes noise-induced window-placement errors as well.
+The definition is now given explicitly in the experimental setup: the acoustic SNR is set per event: zero-mean Gaussian noise with variance σ² = P·10^(−SNR/10) is added to the entire 1 s event clip, where P is the mean power of the clean clip. The text also states the two consequences of this choice: the SNR is referenced to the whole event clip rather than to the 60 ms analysis window (for impulsive events, the effective in-window SNR is therefore higher than the nominal value), and peak detection with window extraction is re-run on the noisy waveform, so the evaluation includes noise-induced window-placement errors as well.
 
 ### R4-minor: Power/energy measurement
 
@@ -382,7 +382,7 @@ Consolidated. The two waveform figures are now a single two-panel figure: (a) an
 > 7. Why ESP32-S3 specifically, and where does MFCC extraction run in the intended
 >    deployment?
 
-**Odpověď (Q1–Q7, průřezově — většina otázek se kryje s body výše):**
+**Odpověď (Q1–Q7, průřezově; většina otázek se kryje s body výše):**
 
 _(doplnit)_
 
