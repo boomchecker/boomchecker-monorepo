@@ -52,32 +52,37 @@ def main() -> None:
     window_samples = int(sr * WINDOW_MS / 1000)
     window_start = max(0, peak_index - (window_samples - int(window_samples * (1 - BEFORE_FRAC))))
 
-    plt.rcParams.update({"font.size": 28})
-    fig, axes = plt.subplots(1, 2, figsize=(20, 7))
+    plt.rcParams.update({
+        "font.size": 22,
+        "font.family": "serif",
+        "font.serif": ["Nimbus Roman", "Liberation Serif", "Times New Roman", "STIXGeneral"],
+        "mathtext.fontset": "stix",
+    })
+    fig, axes = plt.subplots(2, 1, figsize=(10, 8), constrained_layout=True)
+    fig.supylabel("Normalized amplitude", fontsize=28, fontweight="bold")
 
     time_full = np.arange(len(signal)) / sr
     ax = axes[0]
     ax.plot(time_full, signal, color="blue", alpha=0.7, linewidth=2)
-    ax.set_xlabel("Time (s)", fontsize=32, fontweight="bold")
-    ax.set_ylabel("Normalized Amplitude", fontsize=32, fontweight="bold")
+    ax.set_xlabel("Time (s)", fontsize=24, fontweight="bold")
     ax.set_xlim(0, time_full[-1])
     ax.set_ylim(-1, 1)
     ax.xaxis.set_major_locator(mticker.MultipleLocator(0.2))
     ax.xaxis.set_major_formatter(mticker.FormatStrFormatter("%.1f"))
-    ax.set_title("(a)", fontsize=32, loc="left")
+    ax.set_title("(a)", fontsize=24, loc="left")
 
     time_win = np.arange(len(window)) / sr * 1000  # ms
     ax = axes[1]
     ax.plot(time_win, window / (np.max(np.abs(window)) or 1), color="blue", alpha=0.7, linewidth=2.5)
-    ax.set_xlabel("Time (ms)", fontsize=32, fontweight="bold")
+    ax.set_xlabel("Time (ms)", fontsize=24, fontweight="bold")
     ax.set_xlim(0, WINDOW_MS)
     ax.set_ylim(-1, 1)
     ax.xaxis.set_major_locator(mticker.MultipleLocator(10))
     ax.xaxis.set_major_formatter(mticker.FormatStrFormatter("%.0f"))
-    ax.set_title("(b)", fontsize=32, loc="left")
+    ax.set_title("(b)", fontsize=24, loc="left")
 
     for ax in axes:
-        ax.tick_params(axis="both", which="major", labelsize=28, pad=10)
+        ax.tick_params(axis="both", which="major", labelsize=22, pad=6)
         ax.yaxis.set_major_locator(mticker.MultipleLocator(0.5))
         ax.yaxis.set_major_formatter(mticker.FormatStrFormatter("%.1f"))
         ax.yaxis.set_minor_locator(mticker.MultipleLocator(0.25))
@@ -87,7 +92,6 @@ def main() -> None:
     axes[0].xaxis.set_minor_locator(mticker.MultipleLocator(0.1))
     axes[1].xaxis.set_minor_locator(mticker.MultipleLocator(5))
 
-    fig.tight_layout()
     OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(OUTPUT_PATH, dpi=300)
     print(f"Peak at {peak_index / sr * 1000:.1f} ms, window {window_start / sr * 1000:.0f}"
