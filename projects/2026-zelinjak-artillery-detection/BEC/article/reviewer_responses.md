@@ -21,7 +21,7 @@ Podkladové dokumenty: `generated/reports/reviewer_response.md` (M1–M6 důkazy
 
 **Odpověď:**
 
-We agree. The title has been changed to *"A Lightweight Noise-Robust Post-Trigger Classifier for Embedded Acoustic Artillery Launch Detection"*, which names exactly what the paper evaluates: the post-trigger (second-stage) classifier. The two-stage architecture is still described in Section III.A as the system context, with the trigger stage explicitly referenced as previously validated prior work.
+We agree. The title has been changed to *"A Lightweight Noise-Robust Post-Trigger Classifier for Embedded Acoustic Artillery Launch Detection"*, which names exactly what the paper evaluates: the post-trigger (second-stage) classifier. The two-stage architecture is still described in Section III.A as the system context, with the trigger stage referenced as previously validated prior work.
 
 ### R1.2 Abstract
 
@@ -37,7 +37,7 @@ Added. The abstract now states explicitly: "The embedded experiment validates on
 
 **Odpověď:**
 
-Section II was revised at approximately constant length: three tangential sentences (and two references) were removed, and the freed space now carries (1b) key quantitative results of the cited prior work: 97.5 % launch/impact discrimination and 93.6 % variant classification for the classical mortar/artillery line (Desai et al., Hohil et al.), firearm-identification accuracies above 90 % for CNN approaches (Raponi et al.), and 96.3 % accuracy at 187 ms per 2 s segment on a Raspberry Pi 4 for the recent CRNN classifier (Elkarous et al., 2025), together with a sharper closing statement of the two questions the paper answers. Regarding (2), the experimental part has grown substantially in the final version: the dataset section now describes the extended multi-microphone corpus with an event-level train/validation/test split, and the results section adds a controlled augmentation ablation, held-out multi-seed evaluation, and extended SNR levels. In addition, a deduplication pass across the whole manuscript removed repeated statements. The total reference count decreased.
+Section II was revised at approximately constant length: three tangential sentences (and two references) were removed, and the freed space now carries (1b) key quantitative results of the cited prior work: 97.5 % launch/impact discrimination and 93.6 % variant classification for the classical mortar/artillery line (Desai et al., Hohil et al.), firearm-identification accuracies above 90 % for CNN approaches (Raponi et al.), and 96.3 % accuracy at 187 ms per 2 s segment on a Raspberry Pi 4 for the recent CRNN classifier (Elkarous et al., 2025), together with a sharper closing statement of the two questions the paper answers. Regarding (2), the experimental part has grown substantially in the final version: the dataset section now describes the extended multi-microphone corpus with an event-level train/validation/test split, and the results section adds a controlled augmentation ablation, held-out multi-seed evaluation, and extended SNR levels. A deduplication pass across the manuscript removed repeated statements, and the total reference count decreased.
 
 ### R1.4 Section III.A (trigger stage)
 
@@ -45,7 +45,7 @@ Section II was revised at approximately constant length: three tangential senten
 
 **Odpověď:**
 
-The revised title no longer emphasizes a two-stage pipeline (see R1.1), so the trigger stage now appears only as system context. We followed both options suggested by the reviewer: Section III.A now briefly summarizes the trigger's validated performance (detection of all tested small-arms gunshots in shooting-range measurements, reliable operation down to an acoustic SNR of 5 dB) with a direct citation to the prior work where it was validated. The discussion additionally notes that the classifier's evaluated SNR range deliberately matches this validated operating envelope of the trigger stage. In addition, the discussion (Section VI) now reminds the reader that each classified segment is centered on a trigger-detected peak, so the reported figures characterize classifier performance under the assumption of successful impulse localization by the previously validated first stage (this also addresses Reviewer 4, point 4). We phrase this as a scope statement rather than a limitation, since the trigger stage is intentionally out of scope.
+The revised title no longer emphasizes a two-stage pipeline (see R1.1), so the trigger stage now appears only as system context. We followed both options suggested by the reviewer: Section III.A now briefly summarizes the trigger's validated performance (detection of all tested small-arms gunshots in shooting-range measurements, reliable operation down to an acoustic SNR of 5 dB) with a direct citation to the prior work where it was validated. The discussion (Section VI) further notes that the classifier's evaluated SNR range deliberately matches this validated operating envelope, and reminds the reader that each classified segment is centered on a trigger-detected peak, so the reported figures assume successful impulse localization by the previously validated first stage (this also addresses Reviewer 4, point 4). We phrase this as a scope statement rather than a limitation, since the trigger stage is intentionally out of scope.
 
 ### R1.5 Section III.B (dataset)
 
@@ -53,7 +53,7 @@ The revised title no longer emphasizes a two-stage pipeline (see R1.1), so the t
 
 **Odpověď:**
 
-The artillery corpus was enlarged and restructured for the final version: launch events were re-extracted from the original measurement-campaign recordings using all four synchronized microphone channels instead of a single channel, giving 50 physical launch events represented by 146 channel samples (training uses all four channels per event; validation and test use one channel per event so their samples remain independent physical events, with the split performed at the event level to prevent leakage between channels of the same shot). Table I was redesigned accordingly: it now distinguishes independent physical events from per-channel samples, shows the event-level train/validation/test split per subset, lists small-arms gunshots as an explicit hard-negative subset, and includes the requested horizontal separator before the total row. The effect of imbalance and the small positive count on generalization is now addressed explicitly: Section III.B describes the class-weighted training and the event-level split, the results are reported as mean ± std over five training seeds and five noise-realization seeds with the imbalance-robust MCC as the headline metric (Section V), Section III.B states that the small number of launch events remains the dominant source of statistical uncertainty, and the limitations section adds that the corpus remains small in positive launch events and covers a single artillery type.
+We enlarged and restructured the artillery corpus for the final version: we re-extracted the launch events from the original measurement-campaign recordings using all four synchronized microphone channels instead of a single channel, giving 50 physical launch events represented by 146 channel samples (training uses all four channels per event; validation and test use one channel per event so their samples remain independent physical events, with the split performed at the event level to prevent leakage between channels of the same shot). Table I was redesigned accordingly: it now distinguishes independent physical events from per-channel samples, shows the event-level train/validation/test split per subset, lists small-arms gunshots as an explicit hard-negative subset, and includes the requested horizontal separator before the total row. The effect of imbalance and the small positive count on generalization is now addressed directly: Section III.B describes the class-weighted training and the event-level split, the results are reported as mean ± std over five training seeds and five noise-realization seeds with the imbalance-robust MCC as the headline metric (Section V), Section III.B states that the small number of launch events remains the dominant source of statistical uncertainty, and the limitations section adds that the corpus remains small in positive launch events and covers a single artillery type.
 
 ### R1.6 Section III.C (model size, Flash, RAM, ops)
 
@@ -69,7 +69,7 @@ All four items are now reported in the embedded-inference subsection (Section II
 
 **Odpověď:**
 
-The reviewer's understanding is correct: in the validation protocol, the host computes the MFCC tensors from the (noise-corrupted) waveforms and transmits them to the ESP32-S3 over a serial link. The reported latency is measured on-device by the microsecond system timer placed immediately around the TFLite Micro interpreter invocation and is returned with each prediction; it therefore covers classifier inference only and excludes audio acquisition, triggering, feature extraction, and link transfer. The embedded-inference subsection (Section III.E in the renumbered final version) now states both facts explicitly, and on-device MFCC extraction with end-to-end latency remains listed as future work.
+The reviewer's understanding is correct: in the validation protocol, the host computes the MFCC tensors from the (noise-corrupted) waveforms and transmits them to the ESP32-S3 over a serial link. The reported latency is measured on-device by the microsecond system timer placed immediately around the TFLite Micro interpreter invocation and is returned with each prediction; it therefore covers classifier inference only and excludes audio acquisition, triggering, feature extraction, and link transfer. The embedded-inference subsection (Section III.E in the renumbered final version) now states both facts, and on-device MFCC extraction with end-to-end latency remains listed as future work.
 
 ### R1.8 Section V (float32 FP inflation)
 
@@ -85,7 +85,7 @@ This sentence no longer appears in the paper: it described the previous corpus-l
 
 **Odpověď:**
 
-Adopted. The scope statements now appear early in the paper: the abstract states that the embedded experiment validates only the post-trigger classifier, the introduction declares the first stage as previously validated prior work outside the paper's scope, Section III.A details the trigger, acquisition chain, and online buffering logic as out-of-scope prior work with a direct citation, and the embedded-inference subsection states explicitly that MFCC extraction runs on the host and that the reported latency covers classifier inference on one MFCC segment only, not the end-to-end pipeline. Section VI keeps the consolidated discussion of limitations, including continuous-stream false-trigger rates, and was trimmed of the statements that now appear earlier in the paper.
+Adopted. The scope statements now appear early in the paper: the abstract states that the embedded experiment validates only the post-trigger classifier, the introduction declares the first stage as previously validated prior work outside the paper's scope, Section III.A details the trigger, acquisition chain, and online buffering logic as out-of-scope prior work with a direct citation, and the embedded-inference subsection states that MFCC extraction runs on the host and that the reported latency covers classifier inference on one MFCC segment only, not the end-to-end pipeline. Section VI keeps the consolidated discussion of limitations, including continuous-stream false-trigger rates, and was trimmed of the statements that now appear earlier in the paper.
 
 ### R1.10 Other comments
 
@@ -124,7 +124,7 @@ The title has been revised to *"A Lightweight Noise-Robust Post-Trigger Classifi
 
 **Odpověď:**
 
-We agree that acoustic weapon detection itself is not novel, and the revised Section II no longer implies it; it now closes with the two specific questions the paper answers (whether robustness training requires waveform-level rather than cepstral-level perturbation, and whether the result survives int8 MCU deployment). The suggested reference (Elkarous et al., 2025) is now cited with its key figures (96.3 % accuracy, 187 ms per 2 s segment on a Raspberry Pi 4); it addresses firearm-type identification with rich fused features on application-class hardware, whereas our work targets binary launch-vs-confuser discrimination with a minimal-footprint model on MCU-class hardware. The state-of-the-art gap is now stated as a concrete research question at the end of Section II: where robustness-oriented augmentation must be placed relative to the nonlinear cepstral front end of a constrained post-trigger classifier, and whether the resulting behavior survives int8 deployment. The revised results answer this question through a controlled augmentation-domain ablation (same architecture, same protocol): MFCC-domain jitter alone collapses at low SNR, whereas waveform-domain augmentation preserves performance, consistent with, and extending, comparisons reported for noise-robust ASR (Braun et al., 2017).
+We agree that acoustic weapon detection itself is not novel, and the revised Section II no longer implies it; it now closes with the two specific questions the paper answers (whether robustness training requires waveform-level rather than cepstral-level perturbation, and whether the result survives int8 MCU deployment); these two questions are the stated state-of-the-art gap. The suggested reference (Elkarous et al., 2025) is now cited with its key figures (96.3 % accuracy, 187 ms per 2 s segment on a Raspberry Pi 4); it addresses firearm-type identification with rich fused features on application-class hardware, whereas our work targets binary launch-vs-confuser discrimination with a minimal-footprint model on MCU-class hardware. The revised results answer both questions through a controlled augmentation-domain comparison (same architecture, same protocol): MFCC-domain jitter alone collapses at low SNR, whereas waveform-domain augmentation preserves performance; the waveform-level advantage matches what noise-robust ASR reported (Braun et al., 2017), though unlike in ASR, combining the two brings no further gain here.
 
 ### R2.2 Acronyms
 
@@ -140,7 +140,7 @@ We audited every acronym in the manuscript and fixed the following: CNN and MFCC
 
 **Odpověď:**
 
-We verified that every technique used in the paper carries a reference at its first use: MFCC features (Davis and Mermelstein, 1980), the compact CNN design (LeCun et al., 1998), input-noise regularization (Bishop, 1995), feature-versus waveform-level noise augmentation (Braun et al., EUSIPCO 2017), the TensorFlow Lite Micro runtime (David et al., MLSys 2021), and integer-only int8 quantized inference (Jacob et al., CVPR 2018). In the final version we also improved their placement: the int8 quantization reference is now cited directly in the sentence that introduces int8 inference, and the Braun et al. citation now states its feature-level versus waveform-level comparison explicitly.
+We verified that every technique used in the paper carries a reference at its first use: MFCC features (Davis and Mermelstein, 1980), the compact CNN design (LeCun et al., 1998), input-noise regularization (Bishop, 1995), feature-versus waveform-level noise augmentation (Braun et al., EUSIPCO 2017), the TensorFlow Lite Micro runtime (David et al., MLSys 2021), and integer-only int8 quantized inference (Jacob et al., CVPR 2018). In the final version we also improved their placement: the int8 quantization reference is now cited directly in the sentence that introduces int8 inference, and the Braun et al. citation now names its feature-level versus waveform-level comparison.
 
 ### R2.4 Figures 1 & 2 units
 
@@ -156,7 +156,7 @@ Fixed. The two waveform figures were consolidated into a single two-panel figure
 
 **Odpověď:**
 
-We appreciate the suggestion, but data sharing is restricted in this case: owing to the defence-related nature of the measurement campaign, the corpus is not published. The final version nevertheless expands the in-paper documentation of the data along the lines the reviewer suggests: the acquisition setup is specified (four PreSonus PRM1 microphones, Roland Rubix 44 interface, 16-bit audio), the synchronized four-channel recordings of each launch event are now used explicitly (Table I), the measurement geometry is reported (station approximately 1–2 km from the impact area, guns at an estimated 5–10 km standoff), and the corpus composition, labeling, and event-level split are documented in Section III.B.
+We appreciate the suggestion, but the measurement campaign is defence-related and the corpus is therefore not published. The final version nevertheless expands the in-paper documentation of the data along the lines the reviewer suggests: the acquisition setup is specified (four PreSonus PRM1 microphones, Roland Rubix 44 interface, 16-bit audio), the synchronized four-channel recordings of each launch event are now used (Table I), the measurement geometry is reported (station approximately 1–2 km from the impact area, guns at an estimated 5–10 km standoff), and the corpus composition, labeling, and event-level split are documented in Section III.B.
 
 ### R2.6 PC vs ESP32 int8 discrepancy
 
@@ -180,7 +180,7 @@ A full reproduction audit traced the root cause: the compared numbers in the sub
 
 **Odpověď:**
 
-Section II now discusses this family of methods (one-class SVMs, isolation forests, autoencoders) and explains why we nevertheless use a supervised binary classifier: the classifier operates after an impulsive-event trigger, so it receives a conditional distribution of impulsive candidates in which non-artillery gunfire is a hard negative rather than an outlier; outlierness with respect to the acoustic background is not equivalent to the artillery-launch label. One-class approaches remain relevant alternatives for first-stage novelty detection. Empirically, the supervised formulation is supported by the hard-negative results: the deployed model produces zero false positives on the small-arms gunshot class across all noise levels.
+Section II now discusses this family of methods (one-class SVMs, isolation forests, autoencoders) and explains why we nevertheless use a supervised binary classifier: the classifier operates after an impulsive-event trigger, so it receives a conditional distribution of impulsive candidates in which non-artillery gunfire is a hard negative rather than an outlier; outlierness with respect to the acoustic background is not equivalent to the artillery-launch label. One-class approaches remain relevant alternatives for first-stage novelty detection. The hard-negative results support the supervised choice: the deployed model produces zero false positives on the small-arms gunshot class across all noise levels.
 
 ### R3.2 Dataset details (artillery types, environments)
 
@@ -188,7 +188,7 @@ Section II now discusses this family of methods (one-class SVMs, isolation fores
 
 **Odpověď:**
 
-Section III.B now states this explicitly: the launch recordings originate from two separate measurement days with a single artillery type (a 152 mm self-propelled howitzer, named in Table I), with the recording station approximately 1–2 km from the impact area and the guns firing from an estimated 5–10 km standoff. The limitations section acknowledges that the corpus covers a single artillery type, so generalization across calibers is untested and remains future work.
+Section III.B now states this: the launch recordings originate from two separate measurement days with a single artillery type (a 152 mm self-propelled howitzer, named in Table I), with the recording station approximately 1–2 km from the impact area and the guns firing from an estimated 5–10 km standoff. The limitations section acknowledges that the corpus covers a single artillery type, so generalization across calibers is untested and remains future work.
 
 ### R3.3 Data augmentation and dataset size
 
@@ -196,7 +196,7 @@ Section III.B now states this explicitly: the launch recordings originate from t
 
 **Odpověď:**
 
-We agree, and the final version acts on this suggestion in three ways. (1) The launch class was re-extracted from the original measurement campaign using all four synchronized microphone channels instead of a single channel: 50 physical launch events, each represented by four synchronously cropped channel recordings. Training uses all four channels of each training event (32 events, 128 launch training samples), which provides natural sensor-position diversity; validation and test use one channel per event so that their samples remain statistically independent, and the split is performed at the level of physical events to prevent leakage between channels of the same shot. (2) Data augmentation is applied, and its design turned out to be the central experimental question of the revised paper: every training sample is augmented with additive-noise variants at four SNR levels (five-fold enlargement, 3,170 training samples in total), and a controlled ablation shows that the domain in which this augmentation is applied is decisive (waveform-domain augmentation versus cepstral-domain jitter: held-out MCC 0.98 versus 0.30 at 5 dB SNR for the same architecture). (3) Class imbalance is further mitigated by class-weighted training, and we report MCC as the headline metric because it is robust to class imbalance. The concern about small-data bias is addressed by reporting all results as mean ± standard deviation over five training seeds and five noise seeds, and the limitations section notes the small number of positive events explicitly.
+We agree, and the final version acts on this suggestion in three ways. (1) We re-extracted the launch class from the original measurement campaign using all four synchronized microphone channels instead of a single channel: 50 physical launch events, each represented by four synchronously cropped channel recordings. Training uses all four channels of each training event (32 events, 128 launch training samples), which provides natural sensor-position diversity; validation and test use one channel per event so that their samples remain statistically independent, and the split is performed at the level of physical events to prevent leakage between channels of the same shot. (2) Data augmentation is applied, and its design turned out to be the central experimental question of the revised paper: every training sample is augmented with additive-noise variants at four SNR levels (five-fold enlargement, 3,170 training samples in total), and a controlled ablation shows that the domain in which this augmentation is applied is decisive (waveform-domain augmentation versus cepstral-domain jitter: held-out MCC 0.98 versus 0.30 at 5 dB SNR for the same architecture). (3) Class imbalance is further mitigated by class-weighted training, and we report MCC as the headline metric because it is robust to class imbalance. The concern about small-data bias is addressed by reporting all results as mean ± standard deviation over five training seeds and five noise seeds, and the limitations section notes the small number of positive events.
 
 ### R3.4 Why CNN; anomaly-detection alternatives
 
@@ -204,7 +204,7 @@ We agree, and the final version acts on this suggestion in three ways. (1) The l
 
 **Odpověď:**
 
-Please see the response to the previous point: the task after the trigger stage is not anomaly detection but discrimination among impulsive events, where the most dangerous confusers (non-artillery gunfire) are themselves acoustically anomalous with respect to the background. An anomaly detector trained on the ambient distribution would correctly flag a small-arms gunshot as anomalous, which does not provide the artillery/non-artillery decision we need. This motivation for supervised binary classification, and for a CNN over the MFCC tensor as an established compact choice for local spectro-temporal patterns, is now stated explicitly in Section II. We agree that one-class methods are lightweight and MCU-feasible, and we consider them relevant for the first (novelty-detection) stage rather than the second.
+Please see the response to the previous point: the task after the trigger stage is not anomaly detection but discrimination among impulsive events, where the most dangerous confusers (non-artillery gunfire) are themselves acoustically anomalous with respect to the background. An anomaly detector trained on the ambient distribution would correctly flag a small-arms gunshot as anomalous, which does not provide the artillery/non-artillery decision we need. This motivation for supervised binary classification, and for a CNN over the MFCC tensor as an established compact choice for local spectro-temporal patterns, is now stated in Section II. We agree that one-class methods are lightweight and MCU-feasible, and we consider them relevant for the first (novelty-detection) stage rather than the second.
 
 ### R3.5 Missing train/val/test split, eval on training data
 
@@ -213,7 +213,7 @@ Please see the response to the previous point: the task after the trigger stage 
 
 **Odpověď:**
 
-We agree, and the evaluation methodology was fully reworked for the final version. The corpus is now divided into training, validation, and test partitions (Table I), with the split performed at the level of physical events, so the four synchronized channels of one launch never cross partitions. The validation partition drives early stopping and model selection; the held-out test partition is used only for the final evaluation and never influences training. All results in Section V are reported on this held-out test partition as mean ± std over five training seeds and five noise-realization seeds (25 runs per table cell). Generalization to data from other sources (different weapon types, sites, and recording campaigns) is beyond what the current corpus supports and is stated explicitly as a limitation in Section VI; see also our response to the next point below.
+The reviewer is right, and we reworked the evaluation methodology for the final version. The corpus is now divided into training, validation, and test partitions (Table I), with the split performed at the level of physical events, so the four synchronized channels of one launch never cross partitions. The validation partition drives early stopping and model selection; the held-out test partition is used only for the final evaluation and never influences training. All results in Section V are reported on this held-out test partition as mean ± std over five training seeds and five noise-realization seeds (25 runs per table cell). Generalization to data from other sources (different weapon types, sites, and recording campaigns) is beyond what the current corpus supports and is stated as a limitation in Section VI; see also our response to the next point below.
 
 ### R3.6 Three inference regimes unexplained (float32 vs int8 vs ESP32)
 
@@ -223,7 +223,7 @@ We agree, and the evaluation methodology was fully reworked for the final versio
 
 **Odpověď:**
 
-The purpose of the three regimes is now stated explicitly in the embedded-inference subsection: desktop float32 is the reference, desktop int8 isolates the effect of full-integer quantization from hardware effects, and ESP32-S3 deployment isolates the effect of the embedded runtime and kernels. The counterintuitive differences in the submitted version had a concrete cause uncovered by a reproduction audit: the float32 and int8 numbers came from two different training runs of the same architecture, because the original training script did not seed weight initialization (see our responses to Reviewer 2, point 6, and Reviewer 4, major points 1 and 2). After fully seeded retraining, the three regimes agree as expected: float32 and int8 MCC differ by at most ±0.02 without a consistent direction (Table III reports both), so quantization is performance-neutral rather than performance-improving, and ESP32-S3 matches PC int8 bit-exactly on 1,171 of 1,176 identical transmitted inputs, with the five decision-boundary exceptions analyzed in Section V.C.
+The purpose of the three regimes is now stated in the embedded-inference subsection: desktop float32 is the reference, desktop int8 isolates the effect of full-integer quantization from hardware effects, and ESP32-S3 deployment isolates the effect of the embedded runtime and kernels. A reproduction audit found the concrete cause of the counterintuitive differences in the submitted version: the float32 and int8 numbers came from two different training runs of the same architecture, because the original training script did not seed weight initialization (see our responses to Reviewer 2, point 6, and Reviewer 4, major points 1 and 2). After fully seeded retraining, the three regimes agree as expected: float32 and int8 MCC differ by at most ±0.02 without a consistent direction (Table III reports both), so quantization is performance-neutral rather than performance-improving, and ESP32-S3 matches PC int8 bit-exactly on 1,171 of 1,176 identical transmitted inputs, with the five decision-boundary exceptions analyzed in Section V.C.
 
 ### R3.7 Validation on unseen data
 
@@ -231,7 +231,7 @@ The purpose of the three regimes is now stated explicitly in the embedded-infere
 
 **Odpověď:**
 
-Addressed together with the split rework above: every reported number now comes from the held-out test partition, which is never encountered during training or model selection, and the evaluation noise realizations use seeds disjoint from the training augmentation. Validation on an entirely independent recording campaign (different artillery types, sites, and recording equipment) exceeds what the current corpus supports; Section VI names this explicitly as the main open validation step, together with the single-artillery-type coverage of the corpus.
+Addressed together with the split rework above: every reported number now comes from the held-out test partition, which is never encountered during training or model selection, and the evaluation noise realizations use seeds disjoint from the training augmentation. Validation on an entirely independent recording campaign (different artillery types, sites, and recording equipment) exceeds what the current corpus supports; Section VI names this as the main open validation step, together with the single-artillery-type coverage of the corpus.
 
 ---
 
@@ -294,7 +294,7 @@ We agree, and the investigation the reviewer asks for was carried out; the claim
 
 **Odpověď:**
 
-We agree, and the evaluation was redone from scratch. The corpus-level stress test was removed entirely; all reported robustness numbers, including the headline figures in the abstract and conclusion, now come exclusively from the held-out test partition of an event-level train/validation/test split (Table I), aggregated over five training and five noise seeds. The headline figures were updated accordingly: held-out int8 MCC 0.99 at 30 dB and 0.98 at 5 dB, with the stress levels of 0 and −5 dB (0.95 and 0.83) reported separately in Table III and marked as beyond the validated trigger envelope.
+The evaluation was redone from scratch. The corpus-level stress test was removed entirely; all reported robustness numbers, including the headline figures in the abstract and conclusion, now come exclusively from the held-out test partition of an event-level train/validation/test split (Table I), aggregated over five training and five noise seeds. The headline figures were updated accordingly: held-out int8 MCC 0.99 at 30 dB and 0.98 at 5 dB, with the stress levels of 0 and −5 dB (0.95 and 0.83) reported separately in Table III and marked as beyond the validated trigger envelope.
 
 ### R4.4 End-to-end dependence on the trigger
 
@@ -314,7 +314,7 @@ Added as suggested. The discussion (Section VI) now states: "Because each classi
 
 **Odpověď:**
 
-Primarily availability: ESP32-S3 was the low-power Edge AI platform available to us, and it is a suitable representative of the class, combining low cost with mature TensorFlow Lite Micro support and vendor-accelerated ESP-NN kernels. The embedded-inference subsection states explicitly that it serves as a representative deployment target, not as proof of generalization across embedded hardware. The classifier itself is portable: all ten registered operators are natively supported by TensorFlow Lite Micro, so the same int8 artifact deploys on other TFLM-capable MCUs. An evaluation of the same model on an STM32 performance-line MCU is planned; the conclusion now names STM32-class MCUs among the broader deployment targets in future work.
+Primarily availability: ESP32-S3 was the low-power Edge AI platform available to us, and it is a suitable representative of the class: low-cost, with mature TensorFlow Lite Micro support and vendor-accelerated ESP-NN kernels. The embedded-inference subsection states that it serves as a representative deployment target, not as proof of generalization across embedded hardware. The classifier itself is portable: all ten registered operators are natively supported by TensorFlow Lite Micro, so the same int8 artifact deploys on other TFLM-capable MCUs. An evaluation of the same model on an STM32 performance-line MCU is planned; the conclusion now names STM32-class MCUs among the broader deployment targets in future work.
 
 ### R4.6 Front-end placement / purpose of the MCU
 
@@ -323,7 +323,7 @@ Primarily availability: ESP32-S3 was the low-power Edge AI platform available to
 
 **Odpověď:**
 
-Clarified in the embedded-inference subsection. In the target system, the complete chain is intended to run on the MCU: continuous acquisition into a circular buffer, the trigger stage, MFCC extraction of the post-trigger window, and the classifier. Host-computed MFCC tensors are a validation instrument only: they guarantee that the PC and the ESP32-S3 receive bit-identical inputs, which is what makes the per-sample platform comparison meaningful. The paper states explicitly that the reported latency covers classifier inference on one MFCC segment only, and on-device MFCC extraction together with end-to-end latency is named in the conclusion as future work, as the reviewer suggests.
+Clarified in the embedded-inference subsection. In the target system, the complete chain is intended to run on the MCU: continuous acquisition into a circular buffer, the trigger stage, MFCC extraction of the post-trigger window, and the classifier. Host-computed MFCC tensors are a validation instrument only: they guarantee that the PC and the ESP32-S3 receive bit-identical inputs, which is what makes the per-sample platform comparison meaningful. The paper states that the reported latency covers classifier inference on one MFCC segment only, and on-device MFCC extraction together with end-to-end latency is named in the conclusion as future work, as the reviewer suggests.
 
 ### R4.7 Dataset details
 
@@ -333,7 +333,7 @@ Clarified in the embedded-inference subsection. In the target system, the comple
 
 **Odpověď:**
 
-The corpus is not published. Section III.B now reports the measurement geometry: the recording station was positioned approximately 1–2 km from the impact area, and the guns fired from an estimated 5–10 km from the station; launch signatures in the corpus were therefore recorded at a multi-kilometre standoff. Behavior across calibers: the corpus covers a single artillery type (152 mm self-propelled howitzer, stated in Table I), and the limitations section now says explicitly that cross-caliber generalization is untested and remains future work.
+The corpus is not published. Section III.B now reports the measurement geometry: the recording station was positioned approximately 1–2 km from the impact area, and the guns fired from an estimated 5–10 km from the station; launch signatures in the corpus were therefore recorded at a multi-kilometre standoff. Behavior across calibers: the corpus covers a single artillery type (152 mm self-propelled howitzer, stated in Table I), and the limitations section now states that cross-caliber generalization is untested and remains future work.
 
 ### R4.8 Sampling configuration
 
@@ -350,7 +350,7 @@ Justified in Section III.D. The 22.05 kHz rate is a deliberate design choice for
 
 **Odpověď:**
 
-The definition is now given explicitly in the experimental setup: the acoustic SNR is set per event: zero-mean Gaussian noise with variance σ² = P·10^(−SNR/10) is added to the entire 1 s event clip, where P is the mean power of the clean clip. The text also states the two consequences of this choice: the SNR is referenced to the whole event clip rather than to the 60 ms analysis window (for impulsive events, the effective in-window SNR is therefore higher than the nominal value), and peak detection with window extraction is re-run on the noisy waveform, so the evaluation includes noise-induced window-placement errors as well.
+The definition is now given in the experimental setup. The acoustic SNR is set per event: zero-mean Gaussian noise with variance σ² = P·10^(−SNR/10) is added to the entire 1 s event clip, where P is the mean power of the clean clip. The text also states the two consequences of this choice: the SNR is referenced to the whole event clip rather than to the 60 ms analysis window (for impulsive events, the effective in-window SNR is therefore higher than the nominal value), and peak detection with window extraction is re-run on the noisy waveform, so the evaluation includes noise-induced window-placement errors as well.
 
 ### R4-minor: Power/energy measurement
 
@@ -359,7 +359,7 @@ The definition is now given explicitly in the experimental setup: the acoustic S
 
 **Odpověď:**
 
-Correct: the deployment study reports latency and memory only; power and energy were not instrumented in this validation round, and we did not want to present datasheet-derived estimates as measurements. The conclusion now lists power and energy per classified decision explicitly among the future-work items, next to on-device MFCC extraction and end-to-end latency.
+Correct: the deployment study reports latency and memory only; power and energy were not instrumented in this validation round, and we did not want to present datasheet-derived estimates as measurements. The conclusion now lists power and energy per classified decision among the future-work items, next to on-device MFCC extraction and end-to-end latency.
 
 ### R4-minor: Figures 1 and 2
 
@@ -417,10 +417,10 @@ Q7: Platform choice: ESP32-S3 was the readily available representative of low-po
 
 **Odpověď (souhrn k bodům a–d):**
 
-(a) Resolved. The discrepancy was traced by a reproduction audit to a violated same-model premise in the submitted version (two different training runs behind the float32 and int8 numbers). The rebuilt validation shows bit-exact agreement between PC int8 and ESP32-S3 on 1,171 of 1,176 identical transmitted inputs, with the five decision-boundary cases explained mechanistically in Section V.C.
+(a) Resolved. The discrepancy was traced by a reproduction audit to a violated same-model premise in the submitted version (two different training runs behind the float32 and int8 numbers). The rebuilt validation shows bit-exact agreement between PC int8 and ESP32-S3 on 1,171 of 1,176 identical transmitted inputs, with the five decision-boundary cases explained in Section V.C.
 
 (b) Done. Every reported number, including all headline figures in the abstract and conclusion, now comes from the held-out test partition of an event-level train/validation/test split, aggregated over five training and five noise seeds.
 
 (c) Resolved by withdrawal. The quantization claim was removed from the entire paper; measured on the same model, int8 quantization is performance-neutral (within ±0.02 MCC of float32, Table III).
 
-(d) Addressed point by point above: standoff geometry and the single covered caliber are stated in Section III.B (point 7), the sampling-rate rationale is given (point 8), the platform motivation is stated (point 5), the intended host/MCU partitioning is clarified (point 6), and power/energy measurement is explicitly listed as future work.
+(d) Addressed point by point above: standoff geometry and the single covered caliber are stated in Section III.B (point 7), the sampling-rate rationale is given (point 8), the platform motivation is stated (point 5), the intended host/MCU partitioning is clarified (point 6), and power/energy measurement is listed as future work.
