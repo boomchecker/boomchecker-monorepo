@@ -37,7 +37,7 @@ Added. The abstract now states explicitly: "The embedded experiment validates on
 
 **Odpověď:**
 
-Section II was revised at approximately constant length: three tangential sentences (and two references) were removed, and the freed space now carries (1b) key quantitative results of the cited prior work — 97.5 % launch/impact discrimination and 93.6 % variant classification for the classical mortar/artillery line (Desai et al., Hohil et al.), firearm-identification accuracies above 90 % for CNN approaches (Raponi et al.), and 96.3 % accuracy at 187 ms per 2 s segment on a Raspberry Pi 4 for the recent CRNN classifier (Elkarous et al., 2025) — together with a sharper closing statement of the two questions the paper answers. Regarding (2), the experimental part has grown substantially in the final version: the dataset section now describes the extended multi-microphone corpus with an event-level train/validation/test split, and the results section adds a controlled augmentation ablation, held-out multi-seed evaluation, and extended SNR levels. The total reference count decreased.
+Section II was revised at approximately constant length: three tangential sentences (and two references) were removed, and the freed space now carries (1b) key quantitative results of the cited prior work — 97.5 % launch/impact discrimination and 93.6 % variant classification for the classical mortar/artillery line (Desai et al., Hohil et al.), firearm-identification accuracies above 90 % for CNN approaches (Raponi et al.), and 96.3 % accuracy at 187 ms per 2 s segment on a Raspberry Pi 4 for the recent CRNN classifier (Elkarous et al., 2025) — together with a sharper closing statement of the two questions the paper answers. Regarding (2), the experimental part has grown substantially in the final version: the dataset section now describes the extended multi-microphone corpus with an event-level train/validation/test split, and the results section adds a controlled augmentation ablation, held-out multi-seed evaluation, and extended SNR levels. In addition, a deduplication pass across the whole manuscript removed repeated statements. The total reference count decreased.
 
 ### R1.4 Section III.A (trigger stage)
 
@@ -132,7 +132,7 @@ We agree that acoustic weapon detection itself is not novel, and the revised Sec
 
 **Odpověď:**
 
-We audited every acronym in the manuscript and fixed the following: CNN and MFCC are now defined at their first use in the main body (Section I), and definitions were added for ASR, MCU, STFT, and DCT at their first occurrences.
+We audited every acronym in the manuscript and fixed the following: CNN and MFCC are now defined at their first use in the main body (Section I), and definitions were added for ASR and MCU at their first occurrences.
 
 ### R2.3 References for techniques
 
