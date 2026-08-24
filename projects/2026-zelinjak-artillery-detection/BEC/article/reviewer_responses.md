@@ -160,11 +160,11 @@ We appreciate the suggestion, but data sharing is restricted in this case: owing
 
 ### R2.6 PC vs ESP32 int8 discrepancy
 
-> 6. According to the provided description, the same int8 quantized inference is performed on the targeted embedded platform and a desktop setup as a reference. However, the results in Table III demonstrate a noticeable and consistent performance difference between desktop and embedded deployment of the same int8-quantized classifier at each SNR level. For instance, the desktop deployment shows approximately 10% worse average performance in Accuracy, F1, MCC; up to 40% worse performance in the case of Precision; along with up to 20% improved Recall. What could be the reason behind this? These outcomes need to be addressed and explained/discussed either in Section V.C "ESP32-S3 Deployment Results" or in Section VI. "DISCUSSION AND LIMITATIONS".
+> 6. According to the provided description, the same int8 quantized inference is performed on the targeted embedded platform and a desktop setup as a reference. However, the results in Table III demonstrate a noticeable and consistent performance difference between desktop and embedded deployment of the same int8-quantized classifier at each SNR level. For instance, the desktop deployment shows approximately 10% worse average performance in Accuracy, F1, MCC; up to 40% worse performance in the case of Precision; along with up to 20% improved Recall. What could be the reason behind this? These outcomes need to be addressed and explained/discussed either in Section V.C “ESP32-S3 Deployment Results” or in Section VI. “DISCUSSION AND LIMITATIONS”.
 
 **Odpověď:**
 
-_(doplnit)_
+A full reproduction audit traced the root cause: the compared numbers in the submitted version did not come from the same trained model. The original training script did not seed weight initialization and overwrote its output on every run, so the deployed int8 artifact and the float32 reference originated from two different training runs of the same architecture (a weight-level comparison of the two artifacts shows near-zero correlation), and the legacy evaluation pipeline could not be exactly reconstructed. Instead of patching the old numbers, the entire evaluation was rebuilt for the final version: training is fully seeded, the deployed model is the quantization of exactly the reported float32 model, and the embedded validation transmits identical host-computed MFCC tensors to the device. Under this protocol, 1,171 of 1,176 on-device inferences are bit-exact matches of PC int8 inference; the five disagreements are decision-boundary samples whose PC-side score equals exactly 0.5, where the coarse logit quantization of this confident model (one least-significant bit spans 10.8 logit units) amplifies a legal one-bit rounding difference between the TFLite and TFLite Micro kernels. This mechanism is explained in Section V.C as requested, and the platform discrepancy of the old Table III no longer exists.
 
 ---
 
@@ -223,7 +223,7 @@ We agree, and the evaluation methodology was fully reworked for the final versio
 
 **Odpověď:**
 
-_(doplnit)_
+The purpose of the three regimes is now stated explicitly in the embedded-inference subsection: desktop float32 is the reference, desktop int8 isolates the effect of full-integer quantization from hardware effects, and ESP32-S3 deployment isolates the effect of the embedded runtime and kernels. The counterintuitive differences in the submitted version had a concrete cause uncovered by a reproduction audit: the float32 and int8 numbers came from two different training runs of the same architecture, because the original training script did not seed weight initialization (see our responses to Reviewer 2, point 6, and Reviewer 4, major points 1 and 2). After fully seeded retraining, the three regimes agree as expected: float32 and int8 MCC differ by at most ±0.02 without a consistent direction (Table II reports both), so quantization is performance-neutral rather than performance-improving, and ESP32-S3 matches PC int8 bit-exactly on 1,171 of 1,176 identical transmitted inputs, with the five decision-boundary exceptions analyzed in Section V.C.
 
 ### R3.7 Validation on unseen data
 
@@ -268,7 +268,7 @@ Addressed together with the split rework above: every reported number now comes 
 
 **Odpověď:**
 
-_(doplnit)_
+We agree that one fixed integer model on identical inputs must give essentially identical numbers on both platforms, and this observation was the decisive clue. A reproduction audit showed that the submitted results did not satisfy the "same model" premise: the deployed int8 artifact and the float32 reference originated from two different training runs of the same architecture (the original training script did not seed weight initialization; a weight-level comparison of the two artifacts shows near-zero correlation), so the reported cross-precision and cross-platform differences were artifacts of comparing different models. The final version retrains the pipeline fully seeded, deploys the quantization of exactly the reported float32 model, and validates it by transmitting identical host-computed MFCC tensors to the device and comparing predictions per sample. The result confirms the reviewer's expectation: 1,171 of 1,176 on-device inferences are bit-exact matches of PC int8; the five disagreements are samples whose PC-side score equals exactly 0.5, where a legal one-bit rounding difference between the TFLite and TFLite Micro kernels is amplified by the coarse logit quantization of this confident model (one least-significant bit spans 10.8 logit units). Platform behavior is therefore equivalent up to rounding at the decision boundary (Section V.C), and the headline results no longer depend on any cross-platform discrepancy.
 
 ### R4-M2 "Quantization improves robustness" not established
 
