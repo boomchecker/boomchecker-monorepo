@@ -681,6 +681,19 @@ if(BOOMLINK_STANDALONE)
     ${BOOMLINK_WARNING_FLAGS} ${BOOMLINK_WERROR_FLAGS})
   add_test(NAME boomlink_link_rx_test COMMAND boomlink_link_rx_test)
 
+  # The TX pipeline (sections 9.1, 9.6, 9.7). A separate binary from the RX one
+  # because what it needs from the harness is different in kind: the RX scenarios
+  # present traffic and assert on classification, while these advance a clock one
+  # millisecond at a time and assert on WHEN the pipeline moves. Section 15.2 lists
+  # ACK timeout, retry count and randomized backoff bounds as fake-radio territory
+  # precisely because none of them is observable against real hardware.
+  add_executable(boomlink_link_tx_test tests/link_tx_test.c tests/fake_port.c)
+  target_link_libraries(boomlink_link_tx_test PRIVATE boomlink_linkengine)
+  target_include_directories(boomlink_link_tx_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests)
+  target_compile_options(boomlink_link_tx_test PRIVATE
+    ${BOOMLINK_WARNING_FLAGS} ${BOOMLINK_WERROR_FLAGS})
+  add_test(NAME boomlink_link_tx_test COMMAND boomlink_link_tx_test)
+
   # The Nanopb-free boundary (boomlink.md section 9), checked as a TEST rather
   # than only as a CI step, so `task test` runs it and a developer finds out
   # before pushing. The target structure enforces the common case at compile

@@ -26,6 +26,12 @@ static bool is_valid_node_id(uint32_t node_id) {
   return node_id != BOOMLINK_ADDR_INVALID && node_id != BOOMLINK_ADDR_BROADCAST;
 }
 
+/* Forward-declared because the RX path completes a transmission (an arriving ACK
+   is what usually ends one) while the TX pipeline is defined below it. The file is
+   ordered RX-then-TX to match section 9.2's pipeline order, and this one edge
+   between them is the reason the two halves are not fully separable. */
+static void finish_tx(boomlink_link_t *link, boomlink_tx_outcome_t outcome);
+
 bool boomlink_link_init(boomlink_link_t *link, const boomlink_link_config_t *config,
                         const boomlink_port_t *port, uint32_t session_id) {
   if (link == NULL || config == NULL || !boomlink_port_is_valid(port)) {
@@ -66,15 +72,21 @@ bool boomlink_link_init(boomlink_link_t *link, const boomlink_link_config_t *con
   return true;
 }
 
-/** Transmit one already-encoded frame, accumulating airtime and failures. */
+/**
+ * Transmit one already-encoded frame, accumulating airtime and failures.
+ *
+ * Does NOT re-check `len` against the port's ceiling, and the absence is
+ * deliberate rather than an omission. Section 7.3's "an oversized frame is
+ * rejected before transmission" is enforced at the only place a caller can be
+ * told about it - boomlink_link_send(), which refuses the payload outright - and
+ * both routes here are bounded by construction: a DATA frame's length is fixed
+ * when it is queued, and an ACK is exactly a header, which boomlink_port_is_valid()
+ * guarantees fits. A second check here would be a branch no test could reach, and
+ * an unreachable branch that looks like a safety net is worse than none: it reads
+ * as covered ground. If the invariant were ever broken the driver's own send()
+ * would refuse the frame, which lands in the ordinary refusal path below.
+ */
 static bool transmit(boomlink_link_t *link, const uint8_t *frame, size_t len) {
-  if (len > link->port.max_packet) {
-    /* Section 7.3: "An oversized frame is rejected before transmission". The
-       frame layer cannot make this check - it has no radio dependency and so
-       cannot know the limit - which is why it lands here. */
-    link->stats.tx_failures++;
-    return false;
-  }
   const int result = link->port.send(link->port.ctx, frame, len);
   if (result != 0) {
     link->stats.tx_failures++;
@@ -193,8 +205,20 @@ static void handle_packet(boomlink_link_t *link, size_t len, float rssi, float s
       link->stats.rx_other_destination++;
       return;
     }
-    /* Nothing is pending yet in this build - the stop-and-wait state arrives with
-       the TX pipeline - so every ACK addressed to us is currently unmatched. */
+    /* Section 9.2's "match ACK frames against the pending TX". The matcher lives
+       in the frame layer, pinned there against near-miss vectors, because the
+       error that hides is an OVER-PERMISSIVE match - one comparing only
+       (session_id, sequence) accepts another node's ACK for its own traffic, and
+       every delivery test still passes because a correct ACK matches too. */
+    if (link->tx.state == BOOMLINK_TX_STATE_WAIT_ACK &&
+        boomlink_linkframe_ack_matches(&link->tx.header, &header, link->config.node_id)) {
+      link->stats.ack_received++;
+      finish_tx(link, BOOMLINK_TX_ACKED);
+      return;
+    }
+    /* Addressed to us but acknowledging nothing we are waiting for: late (the
+       frame already timed out and was retried, and this is the ACK of an earlier
+       attempt), or forged. */
     link->stats.ack_unmatched++;
     return;
   }
@@ -243,32 +267,203 @@ static void handle_packet(boomlink_link_t *link, size_t len, float rssi, float s
   }
 }
 
-/** Dequeue one frame and put it on the air. */
-static void service_tx(boomlink_link_t *link) {
-  boomlink_txqueue_item_t item;
-  if (!boomlink_txqueue_pop(&link->txqueue, &item)) {
+/**
+ * How long to wait for the ACK of a `frame_len`-byte transmission, in
+ * milliseconds.
+ *
+ * Section 9.6 requires this "derived from/configured for the active radio profile
+ * rather than assuming one fixed timeout for every spreading factor and packet
+ * size", which is why the airtime comes from the port: at SF12 one full packet is
+ * seconds of airtime, and a timeout that ignored that would expire before the
+ * frame had even finished going out. Three terms:
+ *
+ *   the frame's own airtime  - send() returns when the radio ACCEPTED the packet,
+ *                              not when it finished radiating it, so all of this
+ *                              is still ahead of us when the clock is read;
+ *   an ACK's airtime         - a bare header, the smallest packet there is;
+ *   ack_timeout_margin_ms    - everything airtime cannot know: the peer's
+ *                              turnaround, superloop latency at both ends, and
+ *                              millisecond clock granularity.
+ *
+ * Rounded UP, and that matters more than it looks: a timeout expiring one
+ * millisecond into the ACK provokes exactly the retransmission the ACK existed to
+ * prevent, and then the peer suppresses the duplicate and re-ACKs, so the link
+ * pays double airtime to arrive where it already was.
+ */
+static uint32_t ack_window_ms(const boomlink_link_t *link, size_t frame_len) {
+  const uint64_t frame_us = link->port.airtime_us(link->port.ctx, frame_len);
+  const uint64_t ack_us =
+      link->port.airtime_us(link->port.ctx, BOOMLINK_LINKFRAME_HEADER_SIZE);
+  const uint64_t total = ((frame_us + ack_us + 999u) / 1000u) +
+                         (uint64_t)link->config.ack_timeout_margin_ms;
+  /* 64-bit throughout and clamped, because a port is free to report large airtime
+     values and the margin is a full uint32_t - the sum overflows a uint32_t long
+     before either term is implausible, and an overflowed window is a frame that
+     times out immediately and retries as fast as the superloop runs. */
+  return total > (uint64_t)UINT32_MAX ? UINT32_MAX : (uint32_t)total;
+}
+
+/**
+ * Section 9.7's randomized retry delay, uniform over
+ * [backoff_min_ms, backoff_max_ms].
+ *
+ * The randomization is the whole point: several nodes detecting the same gunshot
+ * transmit at almost the same moment, and a FIXED retry delay has them collide
+ * again at the same offset, indefinitely. Equal bounds are legal and mean exactly
+ * that, which is why the configuration allows it but the default should not.
+ *
+ * The modulo introduces a bias towards the low end of the range when the span
+ * does not divide 2^32. Named rather than corrected: this is collision avoidance
+ * between a handful of nodes, not sampling, and the bias is under one part in
+ * 10^7 for any span this configuration would use. Section 14 keeps cryptographic
+ * quality a separate concern.
+ */
+static uint32_t draw_backoff_ms(boomlink_link_t *link) {
+  const uint32_t lo = link->config.backoff_min_ms;
+  const uint32_t hi = link->config.backoff_max_ms;
+  if (hi <= lo) {
+    return lo;
+  }
+  const uint32_t span = hi - lo;
+  if (span == UINT32_MAX) {
+    /* span + 1 would be 0, and a modulo by zero is undefined - the whole range is
+       already what the generator produces, so use it directly. */
+    return link->port.random_u32(link->port.ctx);
+  }
+  return lo + (link->port.random_u32(link->port.ctx) % (span + 1u));
+}
+
+/** Release the pipeline and report the outcome (section 9.6). */
+static void finish_tx(boomlink_link_t *link, boomlink_tx_outcome_t outcome) {
+  if (outcome == BOOMLINK_TX_NO_ACK) {
+    link->stats.tx_failures++;
+  }
+  const uint32_t destination = link->tx.header.destination_id;
+  const uint32_t sequence    = link->tx.header.sequence;
+  const uint8_t  attempts    = link->tx.attempts;
+
+  /* Cleared BEFORE the callback, not after. A callback that queues its next frame
+     - a retry policy one layer up, a command response - is an ordinary thing to
+     write, and it must not observe a pipeline that is half torn down. */
+  memset(&link->tx, 0, sizeof(link->tx));
+  link->tx.state = BOOMLINK_TX_STATE_IDLE;
+
+  if (link->config.on_tx_done != NULL) {
+    link->config.on_tx_done(link->config.on_tx_done_user, outcome, destination, sequence,
+                            attempts);
+  }
+}
+
+/** Put the held frame on the air once. */
+static void attempt_tx(boomlink_link_t *link, uint32_t now) {
+  uint8_t      frame[BOOMLINK_LINKFRAME_HEADER_SIZE + BOOMLINK_TX_MAX_PAYLOAD];
+  const size_t len = BOOMLINK_LINKFRAME_HEADER_SIZE + link->tx.item.payload_len;
+  boomlink_linkframe_encode(&link->tx.header, frame);
+  if (link->tx.item.payload_len > 0u) {
+    memcpy(&frame[BOOMLINK_LINKFRAME_HEADER_SIZE], link->tx.item.payload,
+           link->tx.item.payload_len);
+  }
+
+  if (!transmit(link, frame, len)) {
+    /* The radio refused - busy, or absent. The frame STAYS here, with the
+       sequence it was already assigned, and the next poll tries again. This is
+       the whole reason the pipeline holds a frame instead of transmitting
+       straight out of the queue: an earlier version popped first and dropped the
+       item on a refused send, so a busy radio silently destroyed queued traffic
+       while reporting nothing but a counter.
+       Not counted as an attempt, and NOT bounded by a refusal count. A count
+       would be the wrong shape: radio.h reports "busy" for the whole duration of
+       a transmission in progress, so at SF12 a single frame legitimately collects
+       thousands of refusals from a superloop polling every millisecond, and any
+       bound low enough to catch a dead radio would shed live traffic constantly.
+       A radio that refuses forever is a dead link whichever way this branch is
+       written; what matters is that it is VISIBLE, which is what tx_failures
+       does. */
     return;
   }
 
-  boomlink_linkframe_header_t header;
-  boomlink_linkframe_header_init(&header);
-  header.magic          = link->config.magic;
-  header.frame_type     = BOOMLINK_FRAME_TYPE_DATA;
-  header.destination_id = item.destination_id;
-  header.source_id      = link->config.node_id;
-  header.session_id     = link->session_id;
-  header.ack_requested  = item.ack_requested;
-  /* Section 9.1: assigned at DEQUEUE, so the on-air sequence stays monotonic per
-     session however the priority queue reordered things. */
-  header.sequence = link->next_sequence++;
-
-  uint8_t frame[BOOMLINK_LINKFRAME_HEADER_SIZE + BOOMLINK_TX_MAX_PAYLOAD];
-  boomlink_linkframe_encode(&header, frame);
-  if (item.payload_len > 0u) {
-    memcpy(&frame[BOOMLINK_LINKFRAME_HEADER_SIZE], item.payload, item.payload_len);
-  }
-  if (transmit(link, frame, BOOMLINK_LINKFRAME_HEADER_SIZE + item.payload_len)) {
+  link->tx.attempts++;
+  if (link->tx.attempts == 1u) {
     link->stats.tx_envelopes++;
+  } else {
+    /* Section 9.10 counts retries apart from envelopes, so the two never
+       double-count: transmissions on the air is their sum. */
+    link->stats.tx_retries++;
+  }
+
+  if (!link->tx.item.ack_requested) {
+    /* Nothing to wait for. Section 9.6's retry machinery is scoped to unicast
+       frames with ack_requested set, and a broadcast never has it (section 9.9),
+       so this is also the only path a broadcast can take. */
+    finish_tx(link, BOOMLINK_TX_SENT);
+    return;
+  }
+  link->tx.state         = BOOMLINK_TX_STATE_WAIT_ACK;
+  link->tx.sent_at_ms    = now;
+  link->tx.ack_window_ms = ack_window_ms(link, len);
+}
+
+/** Take the next queued frame into the pipeline, assigning its sequence. */
+static void dequeue_tx(boomlink_link_t *link) {
+  if (!boomlink_txqueue_pop(&link->txqueue, &link->tx.item)) {
+    return;
+  }
+  boomlink_linkframe_header_init(&link->tx.header);
+  link->tx.header.magic          = link->config.magic;
+  link->tx.header.frame_type     = BOOMLINK_FRAME_TYPE_DATA;
+  link->tx.header.destination_id = link->tx.item.destination_id;
+  link->tx.header.source_id      = link->config.node_id;
+  link->tx.header.session_id     = link->session_id;
+  link->tx.header.ack_requested  = link->tx.item.ack_requested;
+  /* Section 9.1: assigned at DEQUEUE, so the on-air sequence stays monotonic per
+     session however the priority queue reordered things - and assigned ONCE, so
+     every retransmission of this frame carries it unchanged (section 9.6), which
+     is what lets the receiver suppress the duplicate. */
+  link->tx.header.sequence = link->next_sequence++;
+  link->tx.attempts        = 0u;
+  link->tx.state           = BOOMLINK_TX_STATE_READY;
+}
+
+/** One step of section 9.6's stop-and-wait pipeline. */
+static void service_tx(boomlink_link_t *link) {
+  const uint32_t now = link->port.now_ms(link->port.ctx);
+
+  if (link->tx.state == BOOMLINK_TX_STATE_WAIT_ACK) {
+    if (boomlink_elapsed_ms(link->tx.sent_at_ms, now) < link->tx.ack_window_ms) {
+      /* Still inside the window. The queue is held: the radio is half-duplex, and
+         transmitting anything now would mean not hearing the ACK (section 9.6). */
+      return;
+    }
+    /* Section 9.6's "do not retry forever". attempts counts transmissions the
+       radio accepted, so max_attempts is a budget of transmissions and not of
+       timeouts - three attempts means three frames on the air, two retries. */
+    if (link->tx.attempts >= link->config.max_attempts) {
+      finish_tx(link, BOOMLINK_TX_NO_ACK);
+      return;
+    }
+    link->tx.state              = BOOMLINK_TX_STATE_BACKOFF;
+    link->tx.backoff_started_ms = now;
+    link->tx.backoff_ms         = draw_backoff_ms(link);
+    /* Deliberately returns rather than falling through to the retransmission: a
+       zero-length backoff is legal (equal bounds), and retransmitting in the same
+       poll would make the state unobservable and the delay untestable. One extra
+       superloop iteration costs nothing at this traffic rate. */
+    return;
+  }
+
+  if (link->tx.state == BOOMLINK_TX_STATE_BACKOFF) {
+    if (boomlink_elapsed_ms(link->tx.backoff_started_ms, now) < link->tx.backoff_ms) {
+      return;
+    }
+    link->tx.state = BOOMLINK_TX_STATE_READY;
+  }
+
+  if (link->tx.state == BOOMLINK_TX_STATE_IDLE) {
+    dequeue_tx(link);
+  }
+
+  if (link->tx.state == BOOMLINK_TX_STATE_READY) {
+    attempt_tx(link, now);
   }
 }
 
@@ -291,16 +486,55 @@ void boomlink_link_poll(boomlink_link_t *link) {
   service_tx(link);
 }
 
-boomlink_txqueue_result_t boomlink_link_send(boomlink_link_t *link, uint32_t destination_id,
-                                             boomlink_tx_priority_t priority,
-                                             bool request_ack, const uint8_t *payload,
-                                             size_t payload_len) {
+boomlink_link_send_result_t boomlink_link_send(boomlink_link_t *link,
+                                               uint32_t destination_id,
+                                               boomlink_tx_priority_t priority,
+                                               bool request_ack, const uint8_t *payload,
+                                               size_t payload_len) {
+  /* Section 9.1's "enforce destination rules". Broadcast is fine; these two are
+     not. The unconfigured address is nobody, and our own ID would put a frame on
+     the air that the receiving half of this very node would reject as an
+     impossible source - after paying for the airtime. */
+  if (destination_id == BOOMLINK_ADDR_INVALID || destination_id == link->config.node_id) {
+    link->stats.tx_dropped++;
+    return BOOMLINK_LINK_SEND_BAD_DESTINATION;
+  }
+
+  /* Section 7.3: "an oversized frame is rejected before transmission" - and
+     rejected HERE, where the caller finds out, rather than at the radio where the
+     only possible outcome is a silent drop. Checked against this port's
+     max_packet, which on a reduced radio profile is tighter than the queue's
+     compile-time slot size: without this, a payload that fits a slot but not the
+     radio would be queued, reported as accepted, and destroyed later. */
+  if (payload_len > link->port.max_packet - BOOMLINK_LINKFRAME_HEADER_SIZE) {
+    link->stats.tx_dropped++;
+    return BOOMLINK_LINK_SEND_TOO_LONG;
+  }
+
   /* Section 9.9: "broadcast never requests link ACK". Forced rather than
      rejected - the rule exists to prevent an ACK storm, and a caller
      broadcasting a detection event should not have to know it. */
   const bool ack = request_ack && destination_id != BOOMLINK_ADDR_BROADCAST;
-  return boomlink_txqueue_push(&link->txqueue, destination_id, priority, ack, payload,
-                               payload_len);
+  switch (boomlink_txqueue_push(&link->txqueue, destination_id, priority, ack, payload,
+                                payload_len)) {
+    case BOOMLINK_TXQUEUE_OK:
+      return BOOMLINK_LINK_SEND_OK;
+    case BOOMLINK_TXQUEUE_OK_EVICTED:
+      /* Counted apart from a drop: shedding telemetry to make room for a
+         detection is section 9.8's policy working, not a fault. */
+      link->stats.tx_shed++;
+      return BOOMLINK_LINK_SEND_OK_EVICTED;
+    case BOOMLINK_TXQUEUE_TOO_LONG:
+      /* Unreachable via the port check above, which is tighter or equal - kept
+         because the queue owns its own bound and this maps it rather than assuming
+         the two can never disagree. */
+      link->stats.tx_dropped++;
+      return BOOMLINK_LINK_SEND_TOO_LONG;
+    case BOOMLINK_TXQUEUE_FULL:
+    default:
+      link->stats.tx_dropped++;
+      return BOOMLINK_LINK_SEND_QUEUE_FULL;
+  }
 }
 
 /* These three are the engine's diagnostics surface, and the only functions here
@@ -332,4 +566,12 @@ void boomlink_link_reset_stats(boomlink_link_t *link) {
 
 uint32_t boomlink_link_session_id(const boomlink_link_t *link) {
   return link != NULL ? link->session_id : 0u;
+}
+
+boomlink_tx_state_t boomlink_link_tx_state(const boomlink_link_t *link) {
+  return link != NULL ? link->tx.state : BOOMLINK_TX_STATE_IDLE;
+}
+
+size_t boomlink_link_queue_depth(const boomlink_link_t *link) {
+  return link != NULL ? boomlink_txqueue_count(&link->txqueue) : 0u;
 }

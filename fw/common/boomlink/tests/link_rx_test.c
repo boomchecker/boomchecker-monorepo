@@ -207,7 +207,7 @@ static void test_a_unicast_frame_reaches_its_destination_and_nobody_else(void) {
 
   const uint8_t payload[] = {0xDE, 0xAD, 0xBE, 0xEF};
   CHECK(boomlink_link_send(&a.link, NODE_B, BOOMLINK_TXPRIO_NORMAL, false, payload,
-                           sizeof(payload)) == BOOMLINK_TXQUEUE_OK,
+                           sizeof(payload)) == BOOMLINK_LINK_SEND_OK,
         "queued");
   /* Nothing on the air until the link is serviced: section 9.1 assigns the
      sequence at dequeue, so send() cannot have transmitted. */
@@ -247,7 +247,7 @@ static void test_broadcast_reaches_everyone_and_asks_for_no_ack(void) {
      know the rule. If it did NOT, every node in range would answer and section
      9.5's ACK storm is exactly what happens. */
   CHECK(boomlink_link_send(&a.link, BOOMLINK_ADDR_BROADCAST, BOOMLINK_TXPRIO_NORMAL, true,
-                           payload, sizeof(payload)) == BOOMLINK_TXQUEUE_OK,
+                           payload, sizeof(payload)) == BOOMLINK_LINK_SEND_OK,
         "queued");
   boomlink_link_poll(&a.link);
   boomlink_link_poll(&b.link);
@@ -298,7 +298,7 @@ static void test_a_requested_ack_is_sent_and_is_the_frame_layers_ack(void) {
 
   const uint8_t payload[] = {0x42};
   CHECK(boomlink_link_send(&a.link, NODE_B, BOOMLINK_TXPRIO_NORMAL, true, payload,
-                           sizeof(payload)) == BOOMLINK_TXQUEUE_OK,
+                           sizeof(payload)) == BOOMLINK_LINK_SEND_OK,
         "queued");
   boomlink_link_poll(&a.link);
   REQUIRE(fake_air_count(&air) == 1u, "the DATA frame is on the air");
@@ -372,7 +372,7 @@ static void test_a_duplicate_is_not_delivered_twice_but_is_acknowledged_again(vo
 
   const uint8_t payload[] = {0x77};
   CHECK(boomlink_link_send(&a.link, NODE_B, BOOMLINK_TXPRIO_NORMAL, true, payload,
-                           sizeof(payload)) == BOOMLINK_TXQUEUE_OK,
+                           sizeof(payload)) == BOOMLINK_LINK_SEND_OK,
         "queued");
   boomlink_link_poll(&a.link);
   REQUIRE(fake_air_count(&air) == 1u, "on the air");
@@ -815,41 +815,48 @@ static void test_a_byte_corrupted_in_flight_is_classified_not_delivered(void) {
 
   /* Corruption on a real transmission from a real engine, rather than a header
      assembled by the test: the bytes that get damaged are the ones the engine
-     actually emits. Byte 0 is the magic (section 7.3's layout), so this is what a
-     bit error in the first symbol looks like - and section 7.3 requires it dropped
-     and counted before any further processing. */
-  a.ctx.corrupt_byte_index = 0;
+     actually emits.
+
+     Damage inside the PAYLOAD first, and it must NOT be rejected. Section 9.2 puts
+     a failed Protobuf decode at the BoomProtocol layer, counted separately, so
+     this layer hands the bytes over rather than judging them - a link that dropped
+     frames on payload content would be silently filtering the application. This
+     frame asks for no ACK, so the pipeline is free again afterwards (section 9.6
+     holds the queue while one is pending, which is why the order here matters). */
   const uint8_t payload[]  = {0x11, 0x22};
-  (void)boomlink_link_send(&a.link, NODE_B, BOOMLINK_TXPRIO_NORMAL, true, payload,
+  a.ctx.corrupt_byte_index = (int)BOOMLINK_LINKFRAME_HEADER_SIZE;
+  (void)boomlink_link_send(&a.link, NODE_B, BOOMLINK_TXPRIO_NORMAL, false, payload,
                            sizeof(payload));
   boomlink_link_poll(&a.link);
-  REQUIRE(fake_air_count(&air) == 1u, "the damaged frame reached the air");
   CHECK(a.ctx.corrupt_byte_index < 0, "the injector is one-shot");
   boomlink_link_poll(&b.link);
 
   boomlink_link_stats_t bs;
   boomlink_link_get_stats(&b.link, &bs);
-  CHECK(bs.rx_rejected_magic_or_version == 1u,
-        "a damaged magic byte is a foreign/unreadable frame, got %u",
-        (unsigned)bs.rx_rejected_magic_or_version);
-  CHECK(bs.rx_envelopes == 0u, "nothing was delivered");
-  CHECK(bs.ack_sent == 0u, "and nothing was acknowledged - the sender will retry");
-  CHECK(fake_air_count(&air) == 1u, "no ACK reached the air");
-
-  /* Damage inside the PAYLOAD is a different layer's problem. Section 9.2 puts a
-     failed Protobuf decode at the BoomProtocol layer, counted separately, so this
-     layer must hand the bytes over rather than judge them - a link that dropped
-     frames on payload content would be silently filtering the application. */
-  a.ctx.corrupt_byte_index = (int)BOOMLINK_LINKFRAME_HEADER_SIZE;
-  (void)boomlink_link_send(&a.link, NODE_B, BOOMLINK_TXPRIO_NORMAL, false, payload,
-                           sizeof(payload));
-  boomlink_link_poll(&a.link);
-  boomlink_link_poll(&b.link);
-  boomlink_link_get_stats(&b.link, &bs);
   CHECK(bs.rx_envelopes == 1u, "a damaged payload is still delivered, got %u",
         (unsigned)bs.rx_envelopes);
   CHECK(b.rx.last_payload[0] == (uint8_t)(payload[0] ^ 0xFFu),
         "with the damage intact: got %#04x", b.rx.last_payload[0]);
+
+  /* Byte 0 is the magic (section 7.3's layout), so this is what a bit error in the
+     first symbol looks like - and section 7.3 requires it dropped and counted
+     before any further processing. This one DOES ask for an ACK, so the silence
+     that follows is a real refusal rather than a frame that never wanted one. */
+  a.ctx.corrupt_byte_index = 0;
+  (void)boomlink_link_send(&a.link, NODE_B, BOOMLINK_TXPRIO_NORMAL, true, payload,
+                           sizeof(payload));
+  boomlink_link_poll(&a.link);
+  REQUIRE(fake_air_count(&air) == 2u, "the damaged frame reached the air");
+  boomlink_link_poll(&b.link);
+  boomlink_link_get_stats(&b.link, &bs);
+  CHECK(bs.rx_rejected_magic_or_version == 1u,
+        "a damaged magic byte is a foreign/unreadable frame, got %u",
+        (unsigned)bs.rx_rejected_magic_or_version);
+  CHECK(bs.rx_envelopes == 1u, "nothing further was delivered");
+  CHECK(bs.ack_sent == 0u, "and nothing was acknowledged - the sender will retry");
+  CHECK(fake_air_count(&air) == 2u, "no ACK reached the air");
+  CHECK(boomlink_link_tx_state(&a.link) == BOOMLINK_TX_STATE_WAIT_ACK,
+        "so A is still waiting for an ACK that will never come");
   scenario_end(&air);
 }
 

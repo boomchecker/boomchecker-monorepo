@@ -54,6 +54,59 @@ extern "C" {
 typedef void (*boomlink_link_rx_fn)(void *user, uint32_t source_id, const uint8_t *payload,
                                     size_t payload_len);
 
+/** How a queued frame's time in the TX pipeline ended. */
+typedef enum {
+  /* Transmitted, and no ACK was requested - so this is as much as the link can
+     ever know. Not "delivered": an unacknowledged frame that reached the air may
+     or may not have been heard, which is precisely what ack_requested buys. */
+  BOOMLINK_TX_SENT = 0,
+  /* The peer acknowledged it. The only outcome that means delivery. */
+  BOOMLINK_TX_ACKED,
+  /* Section 9.6's "final failure": every permitted attempt was transmitted and
+     none was acknowledged. */
+  BOOMLINK_TX_NO_ACK,
+} boomlink_tx_outcome_t;
+
+/**
+ * Called once per queued frame, when the TX pipeline is finished with it -
+ * section 9.6's "final failure is surfaced to the caller and counted in link
+ * statistics". Optional.
+ *
+ * Reported for success as well as failure, because a caller that only hears
+ * about failures cannot tell "delivered" from "still queued behind something",
+ * and at this traffic rate a detection event waiting on a retry sequence can sit
+ * in the pipeline for seconds.
+ *
+ * `sequence` is the on-air sequence every attempt carried (section 9.6 reuses it
+ * on retransmission), so a caller can correlate this with what a peer reports
+ * seeing. `attempts` is how many transmissions the radio actually accepted.
+ *
+ * Called from boomlink_link_poll() with the pipeline ALREADY back to idle, so
+ * calling boomlink_link_send() from here is safe and the frame it queues is
+ * simply the next one considered.
+ */
+typedef void (*boomlink_link_tx_done_fn)(void *user, boomlink_tx_outcome_t outcome,
+                                        uint32_t destination_id, uint32_t sequence,
+                                        uint8_t attempts);
+
+/** What boomlink_link_send() did with a frame. */
+typedef enum {
+  /* Queued. */
+  BOOMLINK_LINK_SEND_OK = 0,
+  /* Queued, and strictly lower-priority traffic was shed to make room (section
+     9.8's drop policy working as intended, not a fault). */
+  BOOMLINK_LINK_SEND_OK_EVICTED,
+  /* Not queued: the queue is full of traffic at least as urgent. */
+  BOOMLINK_LINK_SEND_QUEUE_FULL,
+  /* Not queued: header + payload exceeds what this port's radio can carry
+     (section 7.3's "an oversized frame is rejected before transmission"), so it
+     could never have been sent however long it waited. */
+  BOOMLINK_LINK_SEND_TOO_LONG,
+  /* Not queued: section 9.1's "enforce destination rules" - the unconfigured
+     address, or this node itself. */
+  BOOMLINK_LINK_SEND_BAD_DESTINATION,
+} boomlink_link_send_result_t;
+
 typedef struct {
   /* This node's address (section 7.2). Must be a real node ID - 0 and
      0xFFFFFFFF are rejected by boomlink_link_init(), because a node that is
@@ -89,6 +142,11 @@ typedef struct {
      discarded - which is what a monitoring node wants. */
   boomlink_link_rx_fn on_rx;
   void               *on_rx_user;
+
+  /* Where a finished transmission is reported (section 9.6). May be NULL, in
+     which case outcomes are only visible in the statistics. */
+  boomlink_link_tx_done_fn on_tx_done;
+  void                    *on_tx_done_user;
 } boomlink_link_config_t;
 
 /**
@@ -114,6 +172,26 @@ typedef struct {
  *                       unknowable. Not "longer than the radio's ceiling": with a
  *                       reduced radio profile the limit is that profile's, which
  *                       is exactly the case a fixed 255-byte check would miss.
+ *   tx_dropped        - a frame boomlink_link_send() refused, so it never entered
+ *                       the queue at all: a full queue, an oversize payload, or a
+ *                       destination section 9.1 forbids. The caller learns WHICH
+ *                       from the return value; this counter exists because a link
+ *                       shedding traffic before it ever reaches the radio would
+ *                       otherwise be invisible in the statistics - every counter
+ *                       section 9.10 lists describes what happened AFTER queueing.
+ *   tx_shed           - lower-priority traffic evicted to make room for something
+ *                       more urgent (section 9.8's policy). Counted apart from
+ *                       tx_dropped on purpose: this is the queue working as
+ *                       designed, and a node shedding telemetry to protect
+ *                       detections should not read as a node in trouble.
+ *
+ * On the two TX counters section 9.10 does list: tx_envelopes counts each
+ * envelope's FIRST transmission and tx_retries counts retransmissions of one, so
+ * transmissions on the air is their sum and neither double-counts the other.
+ * tx_failures counts a frame that exhausted section 9.6's attempts unacknowledged
+ * PLUS every transmission the radio refused - the second is not a lost frame (it
+ * stays queued and is retried) but it is airtime that did not happen, and a radio
+ * refusing constantly is the thing an operator needs to see.
  */
 typedef struct {
   uint32_t tx_envelopes;
@@ -129,6 +207,8 @@ typedef struct {
   uint32_t ack_unmatched;
   uint32_t rx_invalid_source;
   uint32_t rx_oversize;
+  uint32_t tx_dropped;
+  uint32_t tx_shed;
   /* Section 9.10: "cumulative TX airtime (for duty-cycle verification, section
      6.1)". Microseconds, from the port's estimate, accumulated over every
      transmission INCLUDING retries and ACKs - duty cycle is about what the
@@ -137,6 +217,27 @@ typedef struct {
   float    last_rssi_dbm;
   float    last_snr_db;
 } boomlink_link_stats_t;
+
+/**
+ * Where the one frame the TX pipeline is working on stands. Section 9.6:
+ * "BoomLink v1 is stop-and-wait: at most one ACK-pending frame is outstanding at
+ * any time, globally. While waiting for an ACK the TX queue is held."
+ */
+typedef enum {
+  /* Nothing in the pipeline. The next poll dequeues, if anything is queued. */
+  BOOMLINK_TX_STATE_IDLE = 0,
+  /* A frame is held, with its sequence already assigned, and the next poll
+     transmits it. Reached both by dequeueing and by a backoff expiring - and,
+     importantly, by a transmission the radio REFUSED: the frame stays here with
+     its sequence rather than being lost. */
+  BOOMLINK_TX_STATE_READY,
+  /* Transmitted; waiting for the matching ACK or for the timeout. Nothing else is
+     dequeued in this state, which is what makes it stop-and-wait. */
+  BOOMLINK_TX_STATE_WAIT_ACK,
+  /* The ACK timed out, attempts remain, and section 9.7's randomized delay is
+     running before the retransmission. */
+  BOOMLINK_TX_STATE_BACKOFF,
+} boomlink_tx_state_t;
 
 typedef struct {
   boomlink_link_config_t config;
@@ -149,6 +250,33 @@ typedef struct {
      each transmitted envelope". */
   uint32_t session_id;
   uint32_t next_sequence;
+
+  /* Section 9.6's stop-and-wait pipeline: exactly one frame, held here from the
+     moment it leaves the queue until it is acknowledged or gives up. Holding it
+     - rather than transmitting straight out of the queue - is what makes a
+     retransmission possible at all, and it is also what stops a busy radio from
+     destroying the frame: a refused send leaves this slot untouched. */
+  struct {
+    boomlink_tx_state_t     state;
+    boomlink_txqueue_item_t item;
+    /* Built once, when the frame is dequeued, and reused byte for byte on every
+       retransmission - section 9.6's "retransmission uses the SAME (session_id,
+       sequence) so the receiver can suppress duplicate delivery". Rebuilding it
+       per attempt would work only as long as nobody touched the sequence
+       assignment, which is exactly the kind of coupling that breaks quietly. */
+    boomlink_linkframe_header_t header;
+    /* Transmissions the radio ACCEPTED, which is what section 9.6's attempt
+       budget counts. A refused send radiated nothing and does not consume one. */
+    uint8_t                 attempts;
+    /* When the last accepted transmission happened, and the ACK window derived
+       from that attempt's own frame length (section 9.6 wants the timeout derived
+       from the active profile, not fixed). */
+    uint32_t                sent_at_ms;
+    uint32_t                ack_window_ms;
+    /* Section 9.7's randomized retry delay: when it started and how long it is. */
+    uint32_t                backoff_started_ms;
+    uint32_t                backoff_ms;
+  } tx;
 
   /* One RX staging buffer, sized to the largest packet ANY port may declare, so
      that the port's own max_packet is always the binding limit and the engine
@@ -194,13 +322,28 @@ bool boomlink_link_init(boomlink_link_t *link, const boomlink_link_config_t *con
  * to know the rule; the rule exists to prevent an ACK storm, and silently
  * getting it right is better than an error the caller has to handle.
  *
- * @return the queue's verdict, so a caller can tell "queued" from "the queue is
- *         full of more urgent traffic" from "too long to ever send".
+ * Two things ARE rejected rather than fixed up, both because there is no
+ * sensible correction and silently picking one would be worse:
+ *
+ *   - Section 9.1's "enforce destination rules". The unconfigured address is
+ *     nobody, and this node's own ID would have it talk to itself - a frame the
+ *     receiver would drop as an impossible source anyway (see rx_invalid_source),
+ *     after paying its airtime. Broadcast is of course allowed.
+ *   - A payload that does not fit this port's radio. Checked against the PORT,
+ *     not only against the queue's compile-time slot size, because the two differ
+ *     on any reduced radio profile - and accepting a frame there that can never be
+ *     transmitted means the caller is told "queued" about a frame that will be
+ *     destroyed later, which is the report it most needs not to get.
+ *
+ * @return what happened. Worth checking: the difference between "queued",
+ *         "the queue is full of more urgent traffic" and "this can never be sent"
+ *         is the difference between waiting, backing off and fixing the caller.
  */
-boomlink_txqueue_result_t boomlink_link_send(boomlink_link_t *link, uint32_t destination_id,
-                                             boomlink_tx_priority_t priority,
-                                             bool request_ack, const uint8_t *payload,
-                                             size_t payload_len);
+boomlink_link_send_result_t boomlink_link_send(boomlink_link_t *link,
+                                               uint32_t destination_id,
+                                               boomlink_tx_priority_t priority,
+                                               bool request_ack, const uint8_t *payload,
+                                               size_t payload_len);
 
 /**
  * Service the link: drain every packet the radio has, then transmit if the TX
@@ -233,6 +376,17 @@ void boomlink_link_reset_stats(boomlink_link_t *link);
 /** This node's session ID (section 9.3), for diagnostics. 0 for a NULL link,
  *  which is the "never assigned" value boomlink_link_init() refuses. */
 uint32_t boomlink_link_session_id(const boomlink_link_t *link);
+
+/**
+ * Where the stop-and-wait pipeline stands (section 9.6). For diagnostics and for
+ * tests: without it a test can only infer "the frame is still pending" from the
+ * absence of a transmission, which is also what a pipeline that silently dropped
+ * the frame looks like. BOOMLINK_TX_STATE_IDLE for a NULL link.
+ */
+boomlink_tx_state_t boomlink_link_tx_state(const boomlink_link_t *link);
+
+/** Frames waiting in the queue, NOT counting one already in the pipeline. */
+size_t boomlink_link_queue_depth(const boomlink_link_t *link);
 
 #ifdef __cplusplus
 }
