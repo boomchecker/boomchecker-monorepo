@@ -2,8 +2,9 @@
  ******************************************************************************
  * @file    link_tx_test.c
  * @brief   The link engine's TX pipeline: boomlink.md section 9.1's dequeue and
- *          sequence assignment, 9.6's stop-and-wait retry, and 9.7's randomized
- *          backoff.
+ *          sequence assignment, 9.6's stop-and-wait retry, and both of 9.7's
+ *          randomized delays - the TX jitter before a first transmission and the
+ *          backoff before a retry.
  *
  *          Section 15.2 lists ACK matching, ACK timeout, retry count, queue
  *          priority, queue overflow and randomized backoff bounds as things a
@@ -114,8 +115,9 @@ typedef struct {
   rx_log_t        rx;
 } node_t;
 
-static bool node_up_full(node_t *n, fake_air_t *air, uint8_t index, uint32_t node_id,
-                         uint8_t max_attempts, size_t max_packet) {
+static bool node_up_jittered(node_t *n, fake_air_t *air, uint8_t index, uint32_t node_id,
+                             uint8_t max_attempts, size_t max_packet,
+                             uint32_t tx_jitter_max_ms) {
   memset(n, 0, sizeof(*n));
   fake_port_init(&n->ctx, air, index, 0x1000u + node_id, &n->port);
   if (max_packet != 0u) {
@@ -128,12 +130,23 @@ static bool node_up_full(node_t *n, fake_air_t *air, uint8_t index, uint32_t nod
       .max_attempts          = max_attempts,
       .backoff_min_ms        = BACKOFF_MIN_MS,
       .backoff_max_ms        = BACKOFF_MAX_MS,
+      /* Zero in every scenario but the jitter one. Not laziness: section 9.7's
+         jitter delays the FIRST transmission, so with it on, "poll once and the
+         frame is on the air" stops holding and every other scenario here would
+         have to advance a clock before asserting anything. Off by default keeps
+         each scenario about the one mechanism it names. */
+      .tx_jitter_max_ms      = tx_jitter_max_ms,
       .on_rx                 = rx_capture,
       .on_rx_user            = &n->rx,
       .on_tx_done            = tx_capture,
       .on_tx_done_user       = &n->tx,
   };
   return boomlink_link_init(&n->link, &cfg, &n->port, 0x5000u + node_id);
+}
+
+static bool node_up_full(node_t *n, fake_air_t *air, uint8_t index, uint32_t node_id,
+                         uint8_t max_attempts, size_t max_packet) {
+  return node_up_jittered(n, air, index, node_id, max_attempts, max_packet, 0u);
 }
 
 static bool node_up(node_t *n, fake_air_t *air, uint8_t index, uint32_t node_id) {
@@ -592,6 +605,119 @@ static void test_the_backoff_is_randomized_within_its_bounds(void) {
   scenario_end(&air);
 }
 
+static void test_tx_jitter_spreads_out_a_simultaneous_detection(void) {
+  fake_air_t air;
+  fake_air_init(&air);
+
+  /* Section 9.7's opening requirement, and the one the section's own title is
+     about: "gunshots or other common acoustic events may be detected by several
+     nodes at almost the same time. If every node transmits immediately, collision
+     probability is high." Backoff cannot address that - it only separates nodes
+     that have ALREADY collided, at the cost of an ACK timeout each.
+     This scenario is the situation itself: three nodes, one event, all three
+     queueing in the same millisecond. */
+  const uint32_t JITTER_MAX_MS = 40u;
+  node_t         nodes[3];
+  const uint32_t ids[3] = {NODE_A, NODE_B, NODE_C};
+  for (size_t i = 0; i < 3u; i++) {
+    REQUIRE(node_up_jittered(&nodes[i], &air, (uint8_t)i, ids[i], 3u, 0u, JITTER_MAX_MS),
+            "node %zu came up", i);
+  }
+
+  const uint8_t detection[] = {0xD7};
+  for (size_t i = 0; i < 3u; i++) {
+    REQUIRE(boomlink_link_send(&nodes[i].link, 0x00000099u, BOOMLINK_TXPRIO_NORMAL, false,
+                               detection, sizeof(detection)) == BOOMLINK_LINK_SEND_OK,
+            "node %zu queued its detection", i);
+    boomlink_link_poll(&nodes[i].link);
+  }
+
+  /* The property that matters: not one of them transmitted on that poll. Without
+     jitter all three would be on the air already, in the same millisecond. */
+  CHECK(fake_air_count(&air) == 0u,
+        "no node may transmit immediately after a simultaneous detection, %zu on air",
+        fake_air_count(&air));
+  for (size_t i = 0; i < 3u; i++) {
+    CHECK(boomlink_link_tx_state(&nodes[i].link) == BOOMLINK_TX_STATE_JITTER,
+          "node %zu is waiting out its jitter, not backing off or idle", i);
+    CHECK(boomlink_link_queue_depth(&nodes[i].link) == 0u,
+          "node %zu's frame has left the queue - the sequence is assigned at "
+          "dequeue (section 9.1), before the delay, not after",
+          i);
+  }
+
+  /* Each node's own delay, measured. */
+  uint32_t drawn[3];
+  for (size_t i = 0; i < 3u; i++) {
+    drawn[i] = ms_until_state_leaves(&nodes[i], BOOMLINK_TX_STATE_JITTER);
+    CHECK(drawn[i] > 0u && drawn[i] <= JITTER_MAX_MS,
+          "node %zu waited %u ms, outside (0, %u]", i, (unsigned)drawn[i],
+          (unsigned)JITTER_MAX_MS);
+  }
+  CHECK(fake_air_count(&air) == 3u, "and then all three transmitted, %zu on air",
+        fake_air_count(&air));
+
+  /* The point of the whole mechanism: they did NOT all pick the same moment.
+     A fixed delay - or a jitter drawn from a seed shared across nodes - passes
+     every bounds check above and leaves the three in lockstep, which is the
+     failure section 9.7 exists to prevent, just moved later in time. The fake
+     seeds each node differently for exactly this reason (see fake_port_init). */
+  CHECK(drawn[0] != drawn[1] || drawn[1] != drawn[2],
+        "all three nodes drew the same delay (%u, %u, %u ms): they are still in "
+        "lockstep and will still collide",
+        (unsigned)drawn[0], (unsigned)drawn[1], (unsigned)drawn[2]);
+
+  /* And a retransmission uses the BACKOFF, not the jitter - the two delays are
+     distinct states so this is observable rather than inferred. */
+  node_t acked;
+  REQUIRE(node_up_jittered(&acked, &air, 3u, 0x00000044u, 3u, 0u, JITTER_MAX_MS),
+          "a fourth node came up");
+  REQUIRE(boomlink_link_send(&acked.link, 0x00000099u, BOOMLINK_TXPRIO_NORMAL, true,
+                             detection, sizeof(detection)) == BOOMLINK_LINK_SEND_OK,
+          "queued with an ACK requested");
+  boomlink_link_poll(&acked.link);
+  REQUIRE(boomlink_link_tx_state(&acked.link) == BOOMLINK_TX_STATE_JITTER,
+          "the first attempt is jittered");
+  REQUIRE(ms_until_state_leaves(&acked, BOOMLINK_TX_STATE_JITTER) > 0u,
+          "the jitter expired and it transmitted");
+  REQUIRE(boomlink_link_tx_state(&acked.link) == BOOMLINK_TX_STATE_WAIT_ACK,
+          "and it now waits for the ACK");
+  REQUIRE(ms_until_state_leaves(&acked, BOOMLINK_TX_STATE_WAIT_ACK) > 0u,
+          "the ACK window expired");
+  CHECK(boomlink_link_tx_state(&acked.link) == BOOMLINK_TX_STATE_BACKOFF,
+        "a retry waits in BACKOFF, not in JITTER - jitter is for the first "
+        "transmission only, and a retry that re-jittered would be applying the "
+        "wrong distribution to a node that has already collided");
+  const uint32_t backoff = ms_until_state_leaves(&acked, BOOMLINK_TX_STATE_BACKOFF);
+  CHECK(backoff >= BACKOFF_MIN_MS && backoff <= BACKOFF_MAX_MS,
+        "and it is drawn from the backoff range: %u ms, expected [%u, %u]",
+        (unsigned)backoff, (unsigned)BACKOFF_MIN_MS, (unsigned)BACKOFF_MAX_MS);
+  scenario_end(&air);
+}
+
+static void test_jitter_off_transmits_immediately(void) {
+  fake_air_t air;
+  fake_air_init(&air);
+  node_t a;
+  /* tx_jitter_max_ms = 0 must mean no delay at all, not a zero-length one that
+     still costs a poll. Every other scenario in this file depends on it - they
+     queue, poll once, and assert on what is on the air - so if 0 stopped meaning
+     "immediately" the failures would appear everywhere except here, where the
+     behaviour is actually specified. */
+  REQUIRE(node_up_jittered(&a, &air, 0u, NODE_A, 3u, 0u, 0u), "A came up unjittered");
+  const uint8_t payload[] = {0x01};
+  REQUIRE(boomlink_link_send(&a.link, NODE_B, BOOMLINK_TXPRIO_NORMAL, false, payload,
+                             sizeof(payload)) == BOOMLINK_LINK_SEND_OK,
+          "queued");
+  boomlink_link_poll(&a.link);
+  CHECK(fake_air_count(&air) == 1u,
+        "with jitter disabled the frame goes out on the first poll, %zu on air",
+        fake_air_count(&air));
+  CHECK(boomlink_link_tx_state(&a.link) == BOOMLINK_TX_STATE_IDLE,
+        "and the pipeline is free again - it never entered a delay state");
+  scenario_end(&air);
+}
+
 static void test_the_ack_window_is_derived_from_the_frame_not_fixed(void) {
   fake_air_t air;
   fake_air_init(&air);
@@ -828,10 +954,12 @@ int main(void) {
   test_a_refused_send_keeps_the_frame_and_its_order();
   test_a_near_miss_ack_leaves_the_frame_pending();
   test_the_backoff_is_randomized_within_its_bounds();
+  test_tx_jitter_spreads_out_a_simultaneous_detection();
+  test_jitter_off_transmits_immediately();
   test_the_ack_window_is_derived_from_the_frame_not_fixed();
   test_a_broadcast_is_sent_once_and_never_awaits_an_ack();
   test_send_refuses_what_can_never_be_transmitted();
   test_queue_pressure_is_visible_in_the_statistics();
   test_two_engines_exchange_traffic_in_both_directions();
-  BOOMLINK_TEST_REPORT("link_tx_test", 209);
+  BOOMLINK_TEST_REPORT("link_tx_test", 241);
 }

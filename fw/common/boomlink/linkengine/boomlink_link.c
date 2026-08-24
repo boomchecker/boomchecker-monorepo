@@ -105,6 +105,26 @@ static bool transmit(boomlink_link_t *link, const uint8_t *frame, size_t len) {
  * Sent immediately rather than queued. An ACK that waits behind queued traffic
  * can easily miss the sender's ACK timeout and provoke the very retry it exists
  * to prevent - and since it is 20 bytes with no payload, queueing buys nothing.
+ *
+ * Sent immediately EVEN WHILE this node is itself in BOOMLINK_TX_STATE_WAIT_ACK,
+ * which is worth stating because service_tx() says the opposite about its own
+ * traffic ("the queue is held... transmitting anything now would mean not hearing
+ * the ACK"). Both are deliberate; the asymmetry is not an oversight, and an
+ * earlier version of these two comments did read as a contradiction.
+ *
+ * The radio is half-duplex, so this ACK genuinely can mask an incoming ACK for
+ * our own pending frame, costing one retry. Deferring it is worse, not safer:
+ * the peer waiting on this ACK has an ACK window of the same order as ours, so a
+ * deferral until our wait ends makes ITS retry near-certain, where transmitting
+ * now only loses ours if the two transmissions actually overlap - one ACK's
+ * airtime inside a window several times longer. So the choice is between a
+ * certain retry on the peer's side and an occasional one on ours.
+ *
+ * What is held during our ACK wait is the QUEUE, which is the case section 9.6
+ * is actually about: a queued DATA frame can be seconds of airtime at a high
+ * spreading factor, and it has somewhere to wait. An ACK has neither property.
+ * If measurements ever show this trade going the wrong way, the fix is CAD or
+ * time slots (section 9.7's "later MAC improvements"), not a delayed ACK.
  */
 static void send_ack(boomlink_link_t *link, const boomlink_linkframe_header_t *received) {
   boomlink_linkframe_header_t ack;
@@ -318,9 +338,7 @@ static uint32_t ack_window_ms(const boomlink_link_t *link, size_t frame_len) {
  * 10^7 for any span this configuration would use. Section 14 keeps cryptographic
  * quality a separate concern.
  */
-static uint32_t draw_backoff_ms(boomlink_link_t *link) {
-  const uint32_t lo = link->config.backoff_min_ms;
-  const uint32_t hi = link->config.backoff_max_ms;
+static uint32_t draw_in_range_ms(boomlink_link_t *link, uint32_t lo, uint32_t hi) {
   if (hi <= lo) {
     return lo;
   }
@@ -331,6 +349,31 @@ static uint32_t draw_backoff_ms(boomlink_link_t *link) {
     return link->port.random_u32(link->port.ctx);
   }
   return lo + (link->port.random_u32(link->port.ctx) % (span + 1u));
+}
+
+static uint32_t draw_backoff_ms(boomlink_link_t *link) {
+  return draw_in_range_ms(link, link->config.backoff_min_ms, link->config.backoff_max_ms);
+}
+
+/**
+ * Section 9.7's pre-transmission jitter, uniform over [0, tx_jitter_max_ms].
+ *
+ * The delay backoff cannot substitute for. Backoff separates nodes that have
+ * ALREADY collided; this separates them before the collision, which is the
+ * situation 9.7 actually describes - several nodes detecting one gunshot within
+ * milliseconds, each transmitting immediately. Without it the first attempt
+ * collides every time and the retry is the only thing that ever spreads them
+ * out, which costs an ACK timeout per event on every node involved.
+ *
+ * Zero means disabled, and that is a real configuration rather than a
+ * placeholder: a gateway that is the only transmitter in its own conversation
+ * has nothing to collide with and no reason to add latency.
+ */
+static uint32_t draw_jitter_ms(boomlink_link_t *link) {
+  if (link->config.tx_jitter_max_ms == 0u) {
+    return 0u;
+  }
+  return draw_in_range_ms(link, 0u, link->config.tx_jitter_max_ms);
 }
 
 /** Release the pipeline and report the outcome (section 9.6). */
@@ -421,7 +464,19 @@ static void dequeue_tx(boomlink_link_t *link) {
      is what lets the receiver suppress the duplicate. */
   link->tx.header.sequence = link->next_sequence++;
   link->tx.attempts        = 0u;
-  link->tx.state           = BOOMLINK_TX_STATE_READY;
+
+  /* Section 9.7's TX jitter, before the first attempt only - a retransmission
+     gets the backoff instead. The sequence is assigned BEFORE the delay, not
+     after: 9.1 puts it at dequeue, and a frame that has left the queue has left
+     it whether or not it is on the air yet. */
+  const uint32_t jitter = draw_jitter_ms(link);
+  if (jitter > 0u) {
+    link->tx.state            = BOOMLINK_TX_STATE_JITTER;
+    link->tx.delay_started_ms = link->port.now_ms(link->port.ctx);
+    link->tx.delay_ms         = jitter;
+    return;
+  }
+  link->tx.state = BOOMLINK_TX_STATE_READY;
 }
 
 /** One step of section 9.6's stop-and-wait pipeline. */
@@ -441,9 +496,9 @@ static void service_tx(boomlink_link_t *link) {
       finish_tx(link, BOOMLINK_TX_NO_ACK);
       return;
     }
-    link->tx.state              = BOOMLINK_TX_STATE_BACKOFF;
-    link->tx.backoff_started_ms = now;
-    link->tx.backoff_ms         = draw_backoff_ms(link);
+    link->tx.state            = BOOMLINK_TX_STATE_BACKOFF;
+    link->tx.delay_started_ms = now;
+    link->tx.delay_ms         = draw_backoff_ms(link);
     /* Deliberately returns rather than falling through to the retransmission: a
        zero-length backoff is legal (equal bounds), and retransmitting in the same
        poll would make the state unobservable and the delay untestable. One extra
@@ -451,8 +506,12 @@ static void service_tx(boomlink_link_t *link) {
     return;
   }
 
-  if (link->tx.state == BOOMLINK_TX_STATE_BACKOFF) {
-    if (boomlink_elapsed_ms(link->tx.backoff_started_ms, now) < link->tx.backoff_ms) {
+  /* Both of section 9.7's delays, checked together because the arithmetic is the
+     same and only the reason for waiting differs. Kept as separate states so a
+     diagnostic can say which one it is - see boomlink_tx_state_t. */
+  if (link->tx.state == BOOMLINK_TX_STATE_BACKOFF ||
+      link->tx.state == BOOMLINK_TX_STATE_JITTER) {
+    if (boomlink_elapsed_ms(link->tx.delay_started_ms, now) < link->tx.delay_ms) {
       return;
     }
     link->tx.state = BOOMLINK_TX_STATE_READY;

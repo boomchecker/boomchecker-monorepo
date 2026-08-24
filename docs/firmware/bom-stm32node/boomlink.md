@@ -1336,8 +1336,12 @@ radio bring-up, but it is a deployment requirement, not an optional polish item.
 
 ### 14.1 What the unauthenticated link is knowingly open to
 
-Recorded so these are understood as deferred rather than overlooked. Each is closed by
-message authentication (PR 6) and by nothing short of it.
+Recorded so these are understood as deferred rather than overlooked. The first four are
+closed by message authentication (PR 6) and by nothing short of it — each one is an
+attacker getting a frame *accepted*, which is exactly what authentication prevents. The
+last is not: reading a valid frame needs no forgery, so only encryption closes it, which
+this section already scopes to "where confidentiality is required" rather than making it
+unconditional.
 
 - **Duplicate-window poisoning.** One forged frame carrying a sequence far ahead of a
   peer's real one moves that peer's duplicate window forward, and the peer's genuine
@@ -1354,13 +1358,17 @@ message authentication (PR 6) and by nothing short of it.
   The matcher already rejects everything weaker than an exact match, which is what keeps
   this to *guessing a live sequence* rather than *any ACK will do* — but a listener can
   hear the sequence it needs to guess.
-- **Traffic injection and observation generally.** Any node in radio range can inject a
-  well-formed frame or read every byte of one. The network ID (section 7.3) is a filter
-  for accidental coexistence, not a credential.
+- **Traffic injection generally.** Any node in radio range can put a well-formed frame on
+  the air and have it accepted. The network ID (section 7.3) is a filter for accidental
+  coexistence, not a credential.
+- **Traffic observation.** Any node in radio range can read every byte of every frame,
+  including the `(session_id, sequence)` pair the forged-ACK entry above needs. This is
+  the one item authentication does not touch — it requires transmitting nothing at all —
+  and it is what makes the other four easier rather than being a consequence of them.
 
-None of these is reachable through malformed input: they are all *valid* frames from an
-attacker who can transmit. That is the boundary this section draws, and it is why
-hardening the parser further does not move it.
+None of the first four is reachable through malformed input: they are all *valid* frames
+from an attacker who can transmit, which is why hardening the parser further does not move
+this boundary. The fifth needs no transmission and no frame of its own.
 
 ---
 

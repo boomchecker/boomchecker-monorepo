@@ -73,14 +73,25 @@ typedef enum {
 } boomlink_tx_outcome_t;
 
 /**
- * Called once per queued frame, when the TX pipeline is finished with it -
- * section 9.6's "final failure is surfaced to the caller and counted in link
- * statistics". Optional.
+ * Called when the TX pipeline is finished with a frame - section 9.6's "final
+ * failure is surfaced to the caller and counted in link statistics". Optional.
  *
  * Reported for success as well as failure, because a caller that only hears
  * about failures cannot tell "delivered" from "still queued behind something",
  * and at this traffic rate a detection event waiting on a retry sequence can sit
  * in the pipeline for seconds.
+ *
+ * NOT one call per accepted boomlink_link_send(), and a caller that pairs them
+ * one-to-one will leak a tracking entry every time this happens: a frame
+ * accepted with BOOMLINK_LINK_SEND_OK can afterwards be EVICTED from the queue
+ * by more urgent traffic (section 9.8). Such a frame never enters the pipeline,
+ * so it never receives a sequence - which is also why it cannot be reported
+ * here, since `sequence` is the only handle this callback gives a caller for
+ * saying which frame it means. Its trace is the tx_shed counter and the
+ * BOOMLINK_LINK_SEND_OK_EVICTED handed to whichever send displaced it.
+ * Reporting evictions properly would mean giving a queued frame an identity
+ * before dequeue, which section 9.1 deliberately does not do; if a consumer
+ * needs it, that is the design question to reopen rather than a counter to add.
  *
  * `sequence` is the on-air sequence every attempt carried (section 9.6 reuses it
  * on retransmission), so a caller can correlate this with what a peer reports
@@ -143,6 +154,35 @@ typedef struct {
   uint32_t backoff_min_ms;
   uint32_t backoff_max_ms;
 
+  /* Section 9.7's OTHER requirement, and the one that section actually opens
+     with: "the link layer therefore supports configurable randomized TX jitter
+     for event messages", with retry backoff named as something that must ALSO
+     have jitter. Drawn uniformly from [0, tx_jitter_max_ms] and applied before a
+     frame's FIRST transmission; retransmissions use the backoff above instead.
+     0 disables it.
+
+     This is the half that addresses the problem 9.7 describes. Backoff only
+     helps nodes that have already collided once; the collision itself happens
+     because several nodes detect the same gunshot within milliseconds and every
+     one of them transmits immediately. Without this they collide on the first
+     attempt every time, and the retry that follows is the only thing separating
+     them.
+
+     Applied to every queued frame rather than only to "event messages", because
+     the engine cannot tell one: section 9 forbids it from decoding the payload,
+     so a detection event and a telemetry reading are the same opaque bytes here.
+     That is not a compromise at this traffic rate - the cost is a few tens of
+     milliseconds of latency on traffic that is not latency-critical, and section
+     9.7 explicitly accepts it ("the original detection timestamp is captured
+     before this delay, so localization timing is not changed by radio
+     scheduling"). ACKs are unaffected: they never pass through the queue.
+
+     A caller that needs one class of traffic sent without jitter should raise
+     its priority - which does not skip the delay, but does mean it is the frame
+     the delay is spent on. If that proves insufficient, per-priority jitter
+     belongs here and nowhere else. */
+  uint32_t tx_jitter_max_ms;
+
   /* Where accepted payloads go. May be NULL, in which case DATA frames are still
      validated, deduplicated, acknowledged and counted, but their payloads are
      discarded - which is what a monitoring node wants. */
@@ -156,7 +196,7 @@ typedef struct {
 } boomlink_link_config_t;
 
 /**
- * Section 9.10's link statistics. Every counter that section lists, plus three
+ * Section 9.10's link statistics. Every counter that section lists, plus five
  * it does not, each earning its place by covering a drop that would otherwise be
  * invisible:
  *
@@ -233,10 +273,16 @@ typedef enum {
   /* Nothing in the pipeline. The next poll dequeues, if anything is queued. */
   BOOMLINK_TX_STATE_IDLE = 0,
   /* A frame is held, with its sequence already assigned, and the next poll
-     transmits it. Reached both by dequeueing and by a backoff expiring - and,
+     transmits it. Reached by a jitter or backoff delay expiring - and,
      importantly, by a transmission the radio REFUSED: the frame stays here with
      its sequence rather than being lost. */
   BOOMLINK_TX_STATE_READY,
+  /* Section 9.7's pre-transmission jitter, before the FIRST attempt. A distinct
+     state rather than a reuse of BACKOFF below: the two delays have different
+     causes and different durations, and a diagnostic (or a test) that could not
+     tell them apart could not tell "we are spreading out a simultaneous
+     detection" from "we already collided and are retrying". */
+  BOOMLINK_TX_STATE_JITTER,
   /* Transmitted; waiting for the matching ACK or for the timeout. Nothing else is
      dequeued in this state, which is what makes it stop-and-wait. */
   BOOMLINK_TX_STATE_WAIT_ACK,
@@ -279,9 +325,13 @@ typedef struct {
        from the active profile, not fixed). */
     uint32_t                sent_at_ms;
     uint32_t                ack_window_ms;
-    /* Section 9.7's randomized retry delay: when it started and how long it is. */
-    uint32_t                backoff_started_ms;
-    uint32_t                backoff_ms;
+    /* Whichever of section 9.7's two randomized delays is running - the jitter
+       before the first attempt, or the backoff before a retry. Named for what
+       they hold rather than for one of the two users: a field called
+       `backoff_ms` carrying a jitter draw is exactly the sort of small untruth
+       that makes a state machine hard to read. Which delay it is, is the state. */
+    uint32_t                delay_started_ms;
+    uint32_t                delay_ms;
   } tx;
 
   /* One RX staging buffer, sized to the largest packet ANY port may declare, so
