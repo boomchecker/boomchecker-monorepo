@@ -148,7 +148,7 @@ _(doplnit)_
 
 **Odpověď:**
 
-_(doplnit)_
+Fixed. The two waveform figures were consolidated into a single two-panel figure (see also Reviewer 4's minor comment), regenerated with the axis label "Normalized Amplitude" without a unit symbol.
 
 ### R2.5 Dataset as contribution
 
@@ -367,7 +367,7 @@ _(doplnit)_
 
 **Odpověď:**
 
-_(doplnit)_
+Consolidated. The two waveform figures are now a single two-panel figure: (a) an example artillery-launch recording and (b) the 60 ms peak-centered analysis window extracted by the processing pipeline. The window in panel (b) is produced by the actual extraction code used throughout the paper, so the figure also illustrates the window placement relative to the impulse onset. The axis labels were fixed per Reviewer 2, point 4.
 
 ### R4-Q Questions for the authors
 
