@@ -69,7 +69,7 @@ All four items are now reported in the embedded-inference subsection, measured o
 
 **Odpověď:**
 
-_(doplnit)_
+The reviewer's understanding is correct: in the validation protocol, the host computes the MFCC tensors from the (noise-corrupted) waveforms and transmits them to the ESP32-S3 over a serial link. The reported latency is measured on-device by the microsecond system timer placed immediately around the TFLite Micro interpreter invocation and is returned with each prediction; it therefore covers classifier inference only and excludes audio acquisition, triggering, feature extraction, and link transfer. The embedded-inference subsection now states both facts explicitly, and on-device MFCC extraction with end-to-end latency remains listed as future work.
 
 ### R1.8 Section V (float32 FP inflation)
 
