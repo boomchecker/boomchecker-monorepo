@@ -182,6 +182,90 @@ static void test_eviction_picks_by_priority_not_by_age(void) {
   CHECK(pop_tag(&q) == 1, "and the urgent item is still first out");
 }
 
+/**
+ * Drain the queue into `out_tags`, returning how many items came out.
+ */
+static size_t drain(boomlink_txqueue_t *q, int *out_tags, size_t cap) {
+  size_t count = 0u;
+  for (;;) {
+    const int tag = pop_tag(q);
+    if (tag < 0 || count >= cap) {
+      return count;
+    }
+    out_tags[count++] = tag;
+  }
+}
+
+static bool contains(const int *tags, size_t count, int tag) {
+  for (size_t i = 0; i < count; i++) {
+    if (tags[i] == tag) {
+      return true;
+    }
+  }
+  return false;
+}
+
+static void test_arrival_order_is_tracked_not_inferred_from_the_slot(void) {
+  boomlink_txqueue_t q;
+  boomlink_txqueue_init(&q);
+
+  /* Both "oldest first" rules - the one in the send order and the one in the
+     eviction policy - were unfalsifiable, and for the same reason: every scenario
+     filled the queue from empty, so slot index and arrival order agreed
+     everywhere and "the oldest" was indistinguishable from "the lowest slot
+     index". Verified: deleting the arrival comparison from BOTH searches left the
+     whole file green.
+     A freed slot being reused is what separates them, and it is the steady state
+     of any queue that is being drained and refilled rather than the exotic case
+     it sounds like. */
+
+  /* Send order. Fill three, pop the oldest (freeing the lowest slot), then push a
+     fresh item into that slot: it is now the NEWEST item in the LOWEST slot. */
+  CHECK(push(&q, BOOMLINK_TXPRIO_NORMAL, 1u) == BOOMLINK_TXQUEUE_OK, "first");
+  CHECK(push(&q, BOOMLINK_TXPRIO_NORMAL, 2u) == BOOMLINK_TXQUEUE_OK, "second");
+  CHECK(push(&q, BOOMLINK_TXPRIO_NORMAL, 3u) == BOOMLINK_TXQUEUE_OK, "third");
+  CHECK(pop_tag(&q) == 1, "the oldest goes first, freeing its slot");
+  CHECK(push(&q, BOOMLINK_TXPRIO_NORMAL, 4u) == BOOMLINK_TXQUEUE_OK,
+        "a fresh item reuses the freed slot");
+
+  CHECK(pop_tag(&q) == 2,
+        "the OLDEST remaining item must go next, not whichever occupies the "
+        "lowest slot - a LIFO here would delay detection events indefinitely "
+        "while a steady trickle of newer ones kept overtaking them");
+  CHECK(pop_tag(&q) == 3, "then the next oldest");
+  CHECK(pop_tag(&q) == 4, "and the newest last");
+  CHECK(pop_tag(&q) == -1, "empty");
+
+  /* Eviction order, the same trick. A queue full of telemetry, its oldest reading
+     popped and a fresh one put in that slot, then a detection event arrives: the
+     victim must be the oldest telemetry, not the newest one that happens to sit
+     in slot zero. Getting this backwards keeps the stalest reading and discards
+     the freshest, which is exactly inverted for the periodic telemetry this
+     policy exists to shed. */
+  boomlink_txqueue_init(&q);
+  for (uint8_t i = 0; i < BOOMLINK_TXQUEUE_SLOTS; i++) {
+    CHECK(push(&q, BOOMLINK_TXPRIO_LOW, (uint8_t)(10u + i)) == BOOMLINK_TXQUEUE_OK,
+          "telemetry %u", (unsigned)i);
+  }
+  CHECK(pop_tag(&q) == 10, "the oldest reading is sent, freeing its slot");
+  CHECK(push(&q, BOOMLINK_TXPRIO_LOW, 99u) == BOOMLINK_TXQUEUE_OK,
+        "the newest reading takes that slot");
+  CHECK(push(&q, BOOMLINK_TXPRIO_NORMAL, 200u) == BOOMLINK_TXQUEUE_OK_EVICTED,
+        "a detection event sheds one reading to get in");
+
+  int          tags[BOOMLINK_TXQUEUE_SLOTS + 2u];
+  const size_t count = drain(&q, tags, sizeof(tags) / sizeof(tags[0]));
+  CHECK(count == BOOMLINK_TXQUEUE_SLOTS, "the queue held %zu items, expected %u", count,
+        (unsigned)BOOMLINK_TXQUEUE_SLOTS);
+  CHECK(tags[0] == 200, "the detection is sent first, got %d", tags[0]);
+  CHECK(!contains(tags, count, 11),
+        "the OLDEST remaining reading (11) must be the one shed");
+  CHECK(contains(tags, count, 99),
+        "and the newest (99) must survive, whatever slot it landed in - it is the "
+        "reading worth keeping");
+  CHECK(contains(tags, count, 17), "every other reading survived too");
+}
+
 static void test_payload_is_copied_not_referenced(void) {
   boomlink_txqueue_t q;
   boomlink_txqueue_init(&q);
@@ -287,9 +371,10 @@ int main(void) {
   test_equal_priority_does_not_displace();
   test_telemetry_cannot_displace_urgent_traffic();
   test_eviction_picks_by_priority_not_by_age();
+  test_arrival_order_is_tracked_not_inferred_from_the_slot();
   test_payload_is_copied_not_referenced();
   test_the_fields_survive_the_round_trip();
   test_an_oversize_payload_is_refused();
   test_an_empty_queue_yields_nothing();
-  BOOMLINK_TEST_REPORT("txqueue_test", 150);
+  BOOMLINK_TEST_REPORT("txqueue_test", 175);
 }

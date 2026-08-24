@@ -1026,6 +1026,90 @@ def test_the_matcher_trusts_configuration_not_the_frames_own_source(tmp_path,
     ) is True
 
 
+def test_a_pending_frame_addressed_to_nobody_is_never_acknowledged(tmp_path,
+                                                                   linkframe_tool_path):
+    """The other half of the pending-side guard, which the broadcast case below
+    does not reach.
+
+    `_is_valid_node_id(pending.destination_id)` rejects two values, and only
+    ADDR_BROADCAST was covered - so `pending.destination_id != ADDR_BROADCAST`
+    passed every vector in this file. Verified. This one distinguishes them.
+
+    A pending frame addressed to 0 is not something a correct engine produces
+    (boomlink_link_send() refuses that destination), which is precisely the
+    argument for testing it: the guard exists for a stale or corrupted slot, and
+    an ACK forged with source_id = 0 satisfies
+    `ack.source_id == pending.destination_id` along with every other condition.
+    """
+    pending = ref.LinkFrameHeader(
+        destination_id=ref.ADDR_INVALID, source_id=ACKING_NODE,
+        session_id=SAMPLE["session_id"], sequence=SAMPLE["sequence"],
+        frame_type=ref.FrameType.DATA, ack_requested=True,
+    )
+    ack = ref.LinkFrameHeader(
+        destination_id=ACKING_NODE, source_id=ref.ADDR_INVALID,
+        session_id=pending.session_id, sequence=pending.sequence,
+        frame_type=ref.FrameType.ACK,
+    )
+    assert ref.ack_matches(pending, ack, ACKING_NODE) is False
+    assert ack_matches_with_tool(
+        tmp_path, linkframe_tool_path, pending, ack, name="_nodest"
+    ) is False
+
+
+def test_the_ack_frame_type_is_checked_against_ack_not_against_the_pending_frame(
+        tmp_path, linkframe_tool_path):
+    """`ack.frame_type == ACK`, never `ack.frame_type != pending.frame_type`.
+
+    In every other vector here the pending frame is DATA and the ACK is ACK, so
+    the two spellings agree and the substitution is invisible - a matcher written
+    the second way passed all of them. Verified.
+
+    They differ when the pending record's own type is ACK, which a correct engine
+    never produces (it only ever awaits an ACK for a DATA frame) but a stale slot
+    could. The contract is about the ARRIVING frame: an ACK carrying the right
+    session, sequence and addressing acknowledges the pending send whatever the
+    pending record says about itself. A matcher comparing the two types would
+    reject a perfectly good ACK there and retry a frame that was delivered.
+    """
+    pending = ref.LinkFrameHeader(
+        destination_id=PEER, source_id=ACKING_NODE,
+        session_id=SAMPLE["session_id"], sequence=SAMPLE["sequence"],
+        frame_type=ref.FrameType.ACK, ack_requested=True,
+    )
+    ack = ref.make_ack(pending, PEER)
+    assert ack.frame_type == ref.FrameType.ACK
+    assert pending.frame_type == ack.frame_type, "the point of this vector"
+    assert ref.ack_matches(pending, ack, ACKING_NODE) is True
+    assert ack_matches_with_tool(
+        tmp_path, linkframe_tool_path, pending, ack, name="_ackpending"
+    ) is True
+
+
+@pytest.mark.parametrize("bad", [-1, 1 << 32, (1 << 32) + 0x42, 1 << 64])
+def test_a_node_id_outside_the_uint32_range_is_refused(bad):
+    """The Python reference refuses a node ID that could not be in a header field.
+
+    Not pedantry about types: the C takes a `uint32_t`, so `2**32 + 0x42` arrives
+    there as `0x42` and MATCHES, while Python compares it against nothing and
+    quietly answers False. Two implementations whose whole job is to cross-check
+    each other would then disagree about a value neither could ever receive from
+    the wire, with the reference being the one calling it a mismatch. Raising
+    makes that a caller error instead of a silent divergence.
+    """
+    pending, ack = _pending_and_ack()
+    with pytest.raises((ValueError, TypeError)):
+        ref.ack_matches(pending, ack, bad)
+    with pytest.raises((ValueError, TypeError)):
+        ref.make_ack(pending, bad)
+    with pytest.raises((ValueError, TypeError)):
+        ref.is_for_node(bad, ACKING_NODE)
+    # And the in-range boundaries are accepted, so this is a range check rather
+    # than a rejection of anything unusual-looking.
+    assert ref.is_for_node(ref.ADDR_BROADCAST, ACKING_NODE) is True
+    assert ref.is_for_node(0, ACKING_NODE) is False
+
+
 def test_a_broadcast_pending_frame_is_never_acknowledged(tmp_path, linkframe_tool_path):
     """Broadcast frames are not acknowledged (section 9.9), and the matcher needs
     no special case for that: the ACK's source would have to be 0xFFFFFFFF, which
