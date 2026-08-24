@@ -30,7 +30,30 @@ static bool is_valid_node_id(uint32_t node_id) {
    is what usually ends one) while the TX pipeline is defined below it. The file is
    ordered RX-then-TX to match section 9.2's pipeline order, and this one edge
    between them is the reason the two halves are not fully separable. */
-static void finish_tx(boomlink_link_t *link, boomlink_tx_outcome_t outcome);
+static void finish_tx(boomlink_link_t *link, boomlink_tx_outcome_t outcome, float rssi_dbm,
+                      float snr_db);
+
+/**
+ * Whether a retry policy (the five knobs section 8.2's LinkConfig carries -
+ * everything boomlink_link_config_t has that ISN'T identity, callbacks, or
+ * state) is one the engine can run with. Shared between boomlink_link_init()
+ * and boomlink_link_reconfigure() so the two can never validate this subset
+ * differently - a reconfigure that accepted what init would have refused would
+ * make "was this link ever validly configured" depend on which function last
+ * touched it.
+ */
+static bool retry_policy_is_valid(uint8_t max_attempts, uint32_t backoff_min_ms,
+                                  uint32_t backoff_max_ms) {
+  /* Section 9.6 says "do not retry forever"; zero attempts is the opposite
+     mistake and would mean queued frames are never sent at all. */
+  if (max_attempts == 0u) {
+    return false;
+  }
+  if (backoff_max_ms < backoff_min_ms) {
+    return false;
+  }
+  return true;
+}
 
 bool boomlink_link_init(boomlink_link_t *link, const boomlink_link_config_t *config,
                         const boomlink_port_t *port, uint32_t session_id) {
@@ -44,12 +67,8 @@ bool boomlink_link_init(boomlink_link_t *link, const boomlink_link_config_t *con
   if (!is_valid_node_id(config->node_id)) {
     return false;
   }
-  /* Section 9.6 says "do not retry forever"; zero attempts is the opposite
-     mistake and would mean queued frames are never sent at all. */
-  if (config->max_attempts == 0u) {
-    return false;
-  }
-  if (config->backoff_max_ms < config->backoff_min_ms) {
+  if (!retry_policy_is_valid(config->max_attempts, config->backoff_min_ms,
+                             config->backoff_max_ms)) {
     return false;
   }
   /* Section 9.3's "fresh session_id on reboot" only means anything if one was
@@ -69,6 +88,20 @@ bool boomlink_link_init(boomlink_link_t *link, const boomlink_link_config_t *con
   link->next_sequence = 1u;
   boomlink_dupcache_init(&link->dupcache);
   boomlink_txqueue_init(&link->txqueue);
+  return true;
+}
+
+bool boomlink_link_reconfigure(boomlink_link_t *link, uint32_t ack_timeout_margin_ms,
+                               uint8_t max_attempts, uint32_t backoff_min_ms,
+                               uint32_t backoff_max_ms, uint32_t tx_jitter_max_ms) {
+  if (link == NULL || !retry_policy_is_valid(max_attempts, backoff_min_ms, backoff_max_ms)) {
+    return false;
+  }
+  link->config.ack_timeout_margin_ms = ack_timeout_margin_ms;
+  link->config.max_attempts          = max_attempts;
+  link->config.backoff_min_ms        = backoff_min_ms;
+  link->config.backoff_max_ms        = backoff_max_ms;
+  link->config.tx_jitter_max_ms      = tx_jitter_max_ms;
   return true;
 }
 
@@ -233,7 +266,10 @@ static void handle_packet(boomlink_link_t *link, size_t len, float rssi, float s
     if (link->tx.state == BOOMLINK_TX_STATE_WAIT_ACK &&
         boomlink_linkframe_ack_matches(&link->tx.header, &header, link->config.node_id)) {
       link->stats.ack_received++;
-      finish_tx(link, BOOMLINK_TX_ACKED);
+      /* This ACK's own rssi/snr, not link->stats.last_rssi_dbm - see finish_tx()'s
+         comment for why reading the field back instead would be a stale value
+         waiting to happen. */
+      finish_tx(link, BOOMLINK_TX_ACKED, rssi, snr);
       return;
     }
     /* Addressed to us but acknowledging nothing we are waiting for: late (the
@@ -282,10 +318,21 @@ static void handle_packet(boomlink_link_t *link, size_t len, float rssi, float s
 
   link->stats.rx_envelopes++;
   if (link->config.on_rx != NULL) {
-    /* This packet's own rssi/snr, not the stats field above: a burst drained
-       in one boomlink_link_poll() call would otherwise have every delivered
-       payload misattributed to whichever packet happened to arrive last. */
-    link->config.on_rx(link->config.on_rx_user, header.source_id,
+    /* rssi/snr here MUST be these local parameters, not link->stats.last_rssi_dbm
+       /last_snr_db - even though they are bit-identical at this exact point,
+       since nothing between the assignment at the top of this function and here
+       can have changed either one. That equality is an artefact of this
+       function's own single-threaded, non-reentrant shape, not a guarantee: no
+       test can tell the two apart today, and none should be expected to - the
+       property that matters is stated and tested elsewhere (see
+       boomlink_link_rx_fn's doc comment and
+       test_a_drained_burst_reports_each_packets_own_signal_quality), which is
+       that a multi-packet drain must not converge every call to the LAST
+       packet's reading. Reading from stats here would keep passing that test
+       for the wrong reason, until the day this function's shape changes enough
+       to make the two diverge - silently, since nothing pins which one this
+       line is supposed to read from except this comment. */
+    link->config.on_rx(link->config.on_rx_user, header.source_id, header.destination_id,
                        &link->rx_buffer[BOOMLINK_LINKFRAME_HEADER_SIZE], payload_len,
                        rssi, snr);
   }
@@ -380,8 +427,28 @@ static uint32_t draw_jitter_ms(boomlink_link_t *link) {
   return draw_in_range_ms(link, 0u, link->config.tx_jitter_max_ms);
 }
 
-/** Release the pipeline and report the outcome (section 9.6). */
-static void finish_tx(boomlink_link_t *link, boomlink_tx_outcome_t outcome) {
+/**
+ * Release the pipeline and report the outcome (section 9.6).
+ *
+ * `rssi_dbm`/`snr_db` are the ACKing frame's OWN signal quality for
+ * BOOMLINK_TX_ACKED, 0.0f for the other two outcomes - there is no incoming
+ * packet to report one for, and 0.0f is this codebase's existing "nothing to
+ * report" sentinel for signal quality (see boomlink_link_stats_t.last_rssi_dbm
+ * and the RX side's own "A received nothing and reports no RSSI" test). Passed
+ * through rather than read back from link->stats.last_rssi_dbm for the exact
+ * reason section 9.2's RX side takes rssi/snr as parameters instead of reading
+ * that same field: a caller relying on the "last" stats value instead would
+ * get a stale reading the moment more than one packet is drained in the same
+ * boomlink_link_poll() call and the ACK isn't the last of them - the same
+ * misattribution the RX callback's rssi_dbm/snr_db parameters exist to
+ * prevent, just needing a burst that buries the ACK instead of a burst of
+ * payloads. Invisible today only because the one real port (radio.h) is
+ * single-slot (see boomlink_link_poll()'s own comment on that limit); the fake
+ * port already supports a burst, which is how this would surface the moment a
+ * real multi-packet port exists.
+ */
+static void finish_tx(boomlink_link_t *link, boomlink_tx_outcome_t outcome, float rssi_dbm,
+                      float snr_db) {
   if (outcome == BOOMLINK_TX_NO_ACK) {
     link->stats.tx_failures++;
   }
@@ -397,7 +464,7 @@ static void finish_tx(boomlink_link_t *link, boomlink_tx_outcome_t outcome) {
 
   if (link->config.on_tx_done != NULL) {
     link->config.on_tx_done(link->config.on_tx_done_user, outcome, destination, sequence,
-                            attempts);
+                            attempts, rssi_dbm, snr_db);
   }
 }
 
@@ -442,7 +509,7 @@ static void attempt_tx(boomlink_link_t *link, uint32_t now) {
     /* Nothing to wait for. Section 9.6's retry machinery is scoped to unicast
        frames with ack_requested set, and a broadcast never has it (section 9.9),
        so this is also the only path a broadcast can take. */
-    finish_tx(link, BOOMLINK_TX_SENT);
+    finish_tx(link, BOOMLINK_TX_SENT, 0.0f, 0.0f); /* nothing was received */
     return;
   }
   link->tx.state         = BOOMLINK_TX_STATE_WAIT_ACK;
@@ -497,7 +564,7 @@ static void service_tx(boomlink_link_t *link) {
        radio accepted, so max_attempts is a budget of transmissions and not of
        timeouts - three attempts means three frames on the air, two retries. */
     if (link->tx.attempts >= link->config.max_attempts) {
-      finish_tx(link, BOOMLINK_TX_NO_ACK);
+      finish_tx(link, BOOMLINK_TX_NO_ACK, 0.0f, 0.0f); /* nothing was received */
       return;
     }
     link->tx.state            = BOOMLINK_TX_STATE_BACKOFF;

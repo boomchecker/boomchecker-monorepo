@@ -62,19 +62,23 @@ typedef struct {
   uint32_t              last_destination;
   uint32_t              last_sequence;
   uint8_t               last_attempts;
+  float                 last_rssi_dbm;
+  float                 last_snr_db;
   unsigned              acked;
   unsigned              sent;
   unsigned              no_ack;
 } tx_log_t;
 
 static void tx_capture(void *user, boomlink_tx_outcome_t outcome, uint32_t destination_id,
-                       uint32_t sequence, uint8_t attempts) {
+                       uint32_t sequence, uint8_t attempts, float rssi_dbm, float snr_db) {
   tx_log_t *log         = (tx_log_t *)user;
   log->calls++;
   log->last_outcome     = outcome;
   log->last_destination = destination_id;
   log->last_sequence    = sequence;
   log->last_attempts    = attempts;
+  log->last_rssi_dbm    = rssi_dbm;
+  log->last_snr_db      = snr_db;
   switch (outcome) {
     case BOOMLINK_TX_ACKED:
       log->acked++;
@@ -95,9 +99,11 @@ typedef struct {
   uint8_t  last_payload[8];
 } rx_log_t;
 
-static void rx_capture(void *user, uint32_t source_id, const uint8_t *payload,
-                       size_t payload_len, float rssi_dbm, float snr_db) {
+static void rx_capture(void *user, uint32_t source_id, uint32_t destination_id,
+                       const uint8_t *payload, size_t payload_len, float rssi_dbm,
+                       float snr_db) {
   rx_log_t *log    = (rx_log_t *)user;
+  (void)destination_id;
   (void)rssi_dbm;
   (void)snr_db;
   log->calls++;
@@ -239,6 +245,12 @@ static void test_an_ack_completes_the_pending_frame(void) {
   CHECK(a.tx.last_destination == NODE_B, "for the right destination");
   CHECK(a.tx.last_attempts == 1u, "after one attempt, got %u",
         (unsigned)a.tx.last_attempts);
+  /* The ACKing frame's OWN signal quality, not a placeholder - a BOOMLINK_TX_ACKED
+     outcome is a received packet, and section 9.10's whole reason last_rssi_dbm/
+     last_snr_db exist is that this is worth reporting. */
+  CHECK(a.tx.last_rssi_dbm < 0.0f, "the ACK's RSSI was reported, got %f",
+        (double)a.tx.last_rssi_dbm);
+  CHECK(a.tx.last_snr_db > 0.0f, "and its SNR, got %f", (double)a.tx.last_snr_db);
 
   boomlink_linkframe_header_t sent;
   size_t                      sent_payload = 0u;
@@ -782,6 +794,12 @@ static void test_a_broadcast_is_sent_once_and_never_awaits_an_ack(void) {
   CHECK(a.tx.last_outcome == BOOMLINK_TX_SENT,
         "reported as sent - not as acknowledged, which nothing established");
   CHECK(a.tx.last_destination == BOOMLINK_ADDR_BROADCAST, "to the broadcast address");
+  /* Nothing was received for a SENT outcome, so there is no reading to report -
+     0.0f is this codebase's existing sentinel for that, not a fabricated
+     measurement. */
+  CHECK(a.tx.last_rssi_dbm == 0.0f, "no signal quality is reported for SENT, got %f",
+        (double)a.tx.last_rssi_dbm);
+  CHECK(a.tx.last_snr_db == 0.0f, "same for SNR");
 
   fake_port_advance_ms(&a.ctx, 100000u);
   boomlink_link_poll(&a.link);
@@ -791,6 +809,98 @@ static void test_a_broadcast_is_sent_once_and_never_awaits_an_ack(void) {
   boomlink_link_get_stats(&a.link, &as);
   CHECK(as.tx_retries == 0u, "no retries");
   CHECK(as.tx_failures == 0u, "and no failure - an unacknowledged broadcast is normal");
+  scenario_end(&air);
+}
+
+static void test_reconfigure_applies_live_without_disturbing_a_pending_frame(void) {
+  fake_air_t air;
+  fake_air_init(&air);
+  node_t a;
+  /* max_attempts=1, so the frame currently in flight would give up on its very
+     first timeout under the ORIGINAL policy - which is exactly what makes a
+     change taking effect on it observable, rather than only on the next frame. */
+  REQUIRE(node_up_full(&a, &air, 0u, NODE_A, 1u, 0u), "A came up with one attempt");
+
+  const uint8_t payload[] = {0x5Eu};
+  REQUIRE(boomlink_link_send(&a.link, NODE_B, BOOMLINK_TXPRIO_NORMAL, true, payload,
+                             sizeof(payload)) == BOOMLINK_LINK_SEND_OK,
+          "queued");
+  boomlink_link_poll(&a.link);
+  REQUIRE(boomlink_link_tx_state(&a.link) == BOOMLINK_TX_STATE_WAIT_ACK,
+          "the first attempt is on the air and waiting");
+  boomlink_linkframe_header_t first;
+  size_t                      ignored = 0u;
+  REQUIRE(parse_air(&air, 0u, &first, &ignored), "it parses");
+
+  /* Reconfigure WHILE that frame is pending. section 8.2's LinkConfig is a
+     runtime-updatable message group - this is what makes the update apply to a
+     live link mean something, rather than only to whatever gets queued next. */
+  const uint32_t NEW_BACKOFF_MS = 5u;
+  REQUIRE(boomlink_link_reconfigure(&a.link, MARGIN_MS, 3u, NEW_BACKOFF_MS, NEW_BACKOFF_MS,
+                                    0u),
+          "a valid policy is accepted");
+  CHECK(boomlink_link_tx_state(&a.link) == BOOMLINK_TX_STATE_WAIT_ACK,
+        "the pending frame's state is untouched by reconfiguring");
+
+  /* Under the OLD policy (max_attempts=1) this timeout would have been final
+     failure. Under the new one (max_attempts=3) it must retry instead - proof
+     the live pipeline is reading the UPDATED policy, not a snapshot taken when
+     the frame was dequeued. */
+  const uint32_t window = ms_until_state_leaves(&a, BOOMLINK_TX_STATE_WAIT_ACK);
+  CHECK(window > MARGIN_MS, "the window was measured");
+  CHECK(boomlink_link_tx_state(&a.link) == BOOMLINK_TX_STATE_BACKOFF,
+        "reconfigured max_attempts (3) permits a retry the old policy (1) would not have");
+  const uint32_t backoff = ms_until_state_leaves(&a, BOOMLINK_TX_STATE_BACKOFF);
+  CHECK(backoff == NEW_BACKOFF_MS,
+        "and the backoff comes from the NEW range (fixed at %u ms), got %u - the old "
+        "[%u, %u] range must not still be in effect",
+        (unsigned)NEW_BACKOFF_MS, (unsigned)backoff, (unsigned)BACKOFF_MIN_MS,
+        (unsigned)BACKOFF_MAX_MS);
+
+  REQUIRE(fake_air_count(&air) == 2u, "the retry went out, %zu on air", fake_air_count(&air));
+  boomlink_linkframe_header_t retry;
+  REQUIRE(parse_air(&air, 1u, &retry, &ignored), "it parses");
+  CHECK(retry.sequence == first.sequence && retry.session_id == first.session_id,
+        "it is the SAME frame retried, not a fresh one from the queue - "
+        "reconfigure must not touch the session, sequence, or the pending item");
+
+  /* One more round trip through the new policy, ending in final failure at
+     attempt 3 as the new max_attempts promises. */
+  const uint32_t window2 = ms_until_state_leaves(&a, BOOMLINK_TX_STATE_WAIT_ACK);
+  CHECK(window2 > MARGIN_MS, "second window measured");
+  const uint32_t backoff2 = ms_until_state_leaves(&a, BOOMLINK_TX_STATE_BACKOFF);
+  CHECK(backoff2 == NEW_BACKOFF_MS, "second backoff still from the new range, got %u",
+        (unsigned)backoff2);
+  const uint32_t window3 = ms_until_state_leaves(&a, BOOMLINK_TX_STATE_WAIT_ACK);
+  CHECK(window3 > MARGIN_MS, "third window measured");
+  CHECK(boomlink_link_tx_state(&a.link) == BOOMLINK_TX_STATE_IDLE,
+        "after exactly 3 attempts the reconfigured budget is exhausted");
+  REQUIRE(a.tx.calls == 1u, "one outcome reported, got %u", a.tx.calls);
+  CHECK(a.tx.last_outcome == BOOMLINK_TX_NO_ACK, "as a failure");
+  CHECK(a.tx.last_attempts == 3u, "after 3 attempts - the reconfigured budget, got %u",
+        (unsigned)a.tx.last_attempts);
+
+  /* Rejections leave the policy exactly as the last SUCCESSFUL call left it. */
+  CHECK(!boomlink_link_reconfigure(&a.link, MARGIN_MS, 0u, NEW_BACKOFF_MS, NEW_BACKOFF_MS, 0u),
+        "zero attempts is refused");
+  CHECK(!boomlink_link_reconfigure(&a.link, MARGIN_MS, 3u, 100u, 10u, 0u),
+        "an inverted backoff range is refused");
+  CHECK(!boomlink_link_reconfigure(NULL, MARGIN_MS, 3u, NEW_BACKOFF_MS, NEW_BACKOFF_MS, 0u),
+        "a NULL link is refused rather than dereferenced");
+
+  /* Prove the rejections truly left nothing changed: send one more frame and
+     confirm it still runs the 3-attempt / 5 ms policy from the successful call
+     above, not a partially-applied mix of it and a rejected one. */
+  REQUIRE(boomlink_link_send(&a.link, NODE_B, BOOMLINK_TXPRIO_NORMAL, true, payload,
+                             sizeof(payload)) == BOOMLINK_LINK_SEND_OK,
+          "a second frame queued");
+  boomlink_link_poll(&a.link);
+  const uint32_t window4 = ms_until_state_leaves(&a, BOOMLINK_TX_STATE_WAIT_ACK);
+  CHECK(window4 > MARGIN_MS, "window measured");
+  const uint32_t backoff4 = ms_until_state_leaves(&a, BOOMLINK_TX_STATE_BACKOFF);
+  CHECK(backoff4 == NEW_BACKOFF_MS,
+        "still the policy from the last SUCCESSFUL reconfigure, got %u ms",
+        (unsigned)backoff4);
   scenario_end(&air);
 }
 
@@ -960,8 +1070,9 @@ int main(void) {
   test_jitter_off_transmits_immediately();
   test_the_ack_window_is_derived_from_the_frame_not_fixed();
   test_a_broadcast_is_sent_once_and_never_awaits_an_ack();
+  test_reconfigure_applies_live_without_disturbing_a_pending_frame();
   test_send_refuses_what_can_never_be_transmitted();
   test_queue_pressure_is_visible_in_the_statistics();
   test_two_engines_exchange_traffic_in_both_directions();
-  BOOMLINK_TEST_REPORT("link_tx_test", 241);
+  BOOMLINK_TEST_REPORT("link_tx_test", 271);
 }

@@ -137,7 +137,7 @@ endif()
 # int/long/size_t are different widths on the target, so -Wformat and
 # sign-compare diagnostics appear there and nowhere else.
 #
-# Named for what it covers rather than BOOMLINK_TARGET_WERROR, which is what
+# Named for what it covers rather than BOOMLINK_LINKFRAME_WERROR, which is what
 # it was called when the frame layer was the only such target. It now gates two,
 # and a knob whose name says "linkframe" while silently also governing the engine
 # is the kind of thing that gets switched off for a reason applying to only one of

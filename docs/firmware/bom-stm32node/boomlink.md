@@ -1362,17 +1362,29 @@ Before field use, add message authentication and replay protection; encryption s
 added where confidentiality is required. The security layer should protect the serialized
 BoomProtocol payload while preserving the layering above.
 
+**"Protect the payload" is necessary but not sufficient, and PR 6 must scope itself
+accordingly rather than inherit only this sentence.** Section 14.1's duplicate-window
+poisoning, session reset, and forged-ACK risks are enacted entirely through the **link
+frame header** — `source_id`, `session_id`, `sequence` — and an ACK frame carries no
+payload at all (section 7.3), so all three remain fully open no matter how strong
+payload-level authentication is. Closing them requires authenticating the header fields
+the link layer itself trusts for session/sequence/ACK matching, which is a materially
+different (and larger) task than authenticating the Envelope, and cuts against section
+9's goal of keeping the link frame layer simple and Nanopb-free — a tension PR 6 has to
+resolve, not one this paragraph resolves by asserting "protect the payload" covers it.
+
 Security is intentionally a separate implementation PR so it does not block the first
 radio bring-up, but it is a deployment requirement, not an optional polish item.
 
 ### 14.1 What the unauthenticated link is knowingly open to
 
 Recorded so these are understood as deferred rather than overlooked. The first four are
-closed by message authentication (PR 6) and by nothing short of it — each one is an
-attacker getting a frame *accepted*, which is exactly what authentication prevents. The
-last is not: reading a valid frame needs no forgery, so only encryption closes it, which
-this section already scopes to "where confidentiality is required" rather than making it
-unconditional.
+closed by message authentication (PR 6, scoped to cover the **link frame header** per
+the note above - payload-only authentication closes none of the first three) and by
+nothing short of it — each one is an attacker getting a frame *accepted*, which is
+exactly what authentication prevents. The last is not: reading a valid frame needs no
+forgery, so only encryption closes it, which this section already scopes to "where
+confidentiality is required" rather than making it unconditional.
 
 - **Duplicate-window poisoning.** One forged frame carrying a sequence far ahead of a
   peer's real one moves that peer's duplicate window forward, and the peer's genuine

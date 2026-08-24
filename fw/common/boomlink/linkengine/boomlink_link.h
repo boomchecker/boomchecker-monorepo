@@ -51,6 +51,18 @@ extern "C" {
  * would double the RX buffering for no benefit, since the dispatcher runs in the
  * same superloop.
  *
+ * `destination_id` is the frame's own addressing - either this node's `node_id`
+ * (unicast) or BOOMLINK_ADDR_BROADCAST - and it is the ONLY place a caller can
+ * learn which one this was. Section 7.1 keeps addressing out of the Protobuf
+ * payload entirely ("addressing... live in the fixed binary link frame header
+ * ... not in Protobuf"), so nothing above this layer can recover it once the
+ * payload has been handed over. This matters concretely for section 9.9's
+ * "commands that are dangerous when broadcast should be rejected by the
+ * application service unless explicitly designed for broadcast" - a
+ * CommandService built on this callback cannot enforce that rule without this
+ * field, since a rejected-when-broadcast command looks identical to an
+ * accepted unicast one in every other parameter here.
+ *
  * `rssi_dbm`/`snr_db` are THIS packet's signal quality, not the "last" value
  * boomlink_link_stats_t carries - the distinction matters exactly when it looks
  * like it wouldn't: boomlink_link_poll() drains every packet the radio is
@@ -67,8 +79,9 @@ extern "C" {
  * read into, so a re-entrant poll would replace the payload underneath a handler
  * that is still reading it.
  */
-typedef void (*boomlink_link_rx_fn)(void *user, uint32_t source_id, const uint8_t *payload,
-                                    size_t payload_len, float rssi_dbm, float snr_db);
+typedef void (*boomlink_link_rx_fn)(void *user, uint32_t source_id, uint32_t destination_id,
+                                    const uint8_t *payload, size_t payload_len,
+                                    float rssi_dbm, float snr_db);
 
 /** How a queued frame's time in the TX pipeline ended. */
 typedef enum {
@@ -118,7 +131,16 @@ typedef enum {
  * tell two of its own in-flight sends apart puts its own identifier in the
  * payload, the same as it would to correlate a CommandResponse.
  *
-
+ * `rssi_dbm`/`snr_db` are the ACKing frame's OWN signal quality for
+ * BOOMLINK_TX_ACKED - the same per-event reasoning boomlink_link_rx_fn's
+ * identically-named parameters exist for, and not a coincidence: an ACK is
+ * still a received packet, and reading link->stats.last_rssi_dbm instead would
+ * go stale the moment a burst drains more than one packet in the same
+ * boomlink_link_poll() call and the ACK isn't the last of them. 0.0f for
+ * BOOMLINK_TX_SENT and BOOMLINK_TX_NO_ACK, where nothing was received to
+ * report a reading for - this codebase's existing "nothing to report"
+ * sentinel for signal quality, not a plausible-looking measurement.
+ *
  * Called from boomlink_link_poll() with the pipeline ALREADY back to idle, so
  * calling boomlink_link_send() from here is safe and the frame it queues is
  * simply the next one considered. Re-entering boomlink_link_poll() is not - see
@@ -126,7 +148,7 @@ typedef enum {
  */
 typedef void (*boomlink_link_tx_done_fn)(void *user, boomlink_tx_outcome_t outcome,
                                         uint32_t destination_id, uint32_t sequence,
-                                        uint8_t attempts);
+                                        uint8_t attempts, float rssi_dbm, float snr_db);
 
 /** What boomlink_link_send() did with a frame. */
 typedef enum {
@@ -399,6 +421,47 @@ typedef struct {
  */
 bool boomlink_link_init(boomlink_link_t *link, const boomlink_link_config_t *config,
                         const boomlink_port_t *port, uint32_t session_id);
+
+/**
+ * Apply a new retry policy to a LIVE link - section 8.2's `LinkConfig`, a
+ * runtime-updatable message group distinct from `GeneralConfig` (which carries
+ * `node_id`, not covered here) - without disturbing anything else: the
+ * session, the sequence counter, the duplicate cache, the TX queue, and any
+ * frame currently in the pipeline all survive untouched.
+ *
+ * This exists because the only alternative is calling boomlink_link_init()
+ * again, and that is the wrong tool for a configuration update: it
+ * `memset()`s the whole engine, silently dropping every queued frame with no
+ * counter and no on_tx_done callback, and forces a session_id choice that is
+ * wrong either way - the same session replays low sequence numbers into a
+ * peer's still-live duplicate window (section 9.3's whole reason session_id
+ * exists), and a fresh one makes an ordinary settings change look like a
+ * reboot to every peer watching for one. Writing the five fields directly
+ * bypasses boomlink_link_init()'s validation instead, which is the failure
+ * mode boomlink_link_reset_stats() already avoids for statistics and this
+ * function avoids for retry policy - by existing as a narrow, validated
+ * mutator rather than leaving a caller to choose between two wrong options.
+ *
+ * `node_id`, `magic`, and the RX/TX-done callbacks are NOT reconfigurable here
+ * on purpose. They are identity and wiring, not policy: section 7.2 makes a
+ * node's own address something bring-up decides once, not something a live
+ * link should discover it now has a different opinion about, and the
+ * callbacks are a superloop wiring concern with no config-message analogue in
+ * section 8.2 at all. A caller needing to change either genuinely needs a
+ * fresh boomlink_link_init() and everything that implies.
+ *
+ * Validated exactly as boomlink_link_init() validates the same fields - see
+ * retry_policy_is_valid() in the .c file, the one place both functions share
+ * this check from, so they cannot drift into disagreeing about what a valid
+ * policy is.
+ *
+ * @return false, leaving the link's current policy untouched, if `link` is
+ *         NULL or the new policy fails validation (section 9.6's "do not
+ *         retry forever" - max_attempts 0 - or an inverted backoff range).
+ */
+bool boomlink_link_reconfigure(boomlink_link_t *link, uint32_t ack_timeout_margin_ms,
+                               uint8_t max_attempts, uint32_t backoff_min_ms,
+                               uint32_t backoff_max_ms, uint32_t tx_jitter_max_ms);
 
 /**
  * Queue `payload` for `destination_id`. Does not transmit - boomlink_link_poll()

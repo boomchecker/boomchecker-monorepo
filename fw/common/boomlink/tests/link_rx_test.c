@@ -37,6 +37,7 @@ BOOMLINK_TEST_STATE;
 typedef struct {
   unsigned calls;
   uint32_t last_source;
+  uint32_t last_destination;
   uint8_t  last_payload[64];
   size_t   last_len;
   float    last_rssi_dbm;
@@ -50,18 +51,20 @@ typedef struct {
   float    call_snr_db[4];
 } rx_log_t;
 
-static void rx_capture(void *user, uint32_t source_id, const uint8_t *payload,
-                       size_t payload_len, float rssi_dbm, float snr_db) {
+static void rx_capture(void *user, uint32_t source_id, uint32_t destination_id,
+                       const uint8_t *payload, size_t payload_len, float rssi_dbm,
+                       float snr_db) {
   rx_log_t *log     = (rx_log_t *)user;
   if (log->calls < sizeof(log->call_rssi_dbm) / sizeof(log->call_rssi_dbm[0])) {
     log->call_rssi_dbm[log->calls] = rssi_dbm;
     log->call_snr_db[log->calls]   = snr_db;
   }
   log->calls++;
-  log->last_source  = source_id;
-  log->last_len     = payload_len;
-  log->last_rssi_dbm = rssi_dbm;
-  log->last_snr_db   = snr_db;
+  log->last_source      = source_id;
+  log->last_destination = destination_id;
+  log->last_len         = payload_len;
+  log->last_rssi_dbm    = rssi_dbm;
+  log->last_snr_db      = snr_db;
   if (payload_len > sizeof(log->last_payload)) {
     payload_len = sizeof(log->last_payload);
   }
@@ -251,6 +254,12 @@ static void test_a_unicast_frame_reaches_its_destination_and_nobody_else(void) {
 
   CHECK(b.rx.calls == 1u, "B received it");
   CHECK(b.rx.last_source == NODE_A, "from A, got %08X", (unsigned)b.rx.last_source);
+  /* Section 7.1 keeps addressing entirely out of the payload, so this callback
+     parameter is the ONLY place a caller learns whether it was addressed to
+     itself or to everyone - which section 9.9's "reject dangerous broadcast
+     commands unless designed for it" needs to be enforceable at all. */
+  CHECK(b.rx.last_destination == NODE_B, "addressed to B specifically, got %08X",
+        (unsigned)b.rx.last_destination);
   CHECK(b.rx.last_len == sizeof(payload), "with the payload intact");
   CHECK(memcmp(b.rx.last_payload, payload, sizeof(payload)) == 0, "byte for byte");
   /* Section 7.2's whole point. C hears the packet - it is a radio - and must
@@ -286,6 +295,13 @@ static void test_broadcast_reaches_everyone_and_asks_for_no_ack(void) {
 
   CHECK(b.rx.calls == 1u, "B received the broadcast");
   CHECK(c.rx.calls == 1u, "C received the broadcast");
+  /* The control for the unicast scenario's same assertion: THIS one must read
+     BROADCAST, not either receiver's own node_id, or a CommandService built on
+     this callback could not tell the two cases apart. */
+  CHECK(b.rx.last_destination == BOOMLINK_ADDR_BROADCAST,
+        "B saw it addressed to broadcast, got %08X", (unsigned)b.rx.last_destination);
+  CHECK(c.rx.last_destination == BOOMLINK_ADDR_BROADCAST,
+        "and so did C, got %08X", (unsigned)c.rx.last_destination);
   CHECK(fake_air_count(&air) == 1u,
         "exactly one transmission: nobody acknowledged a broadcast (%zu on air)",
         fake_air_count(&air));
@@ -1215,5 +1231,5 @@ int main(void) {
   test_the_duplicate_key_is_source_session_and_sequence();
   test_resetting_the_statistics_does_not_reset_the_link();
   test_a_reboot_is_only_visible_through_the_session();
-  BOOMLINK_TEST_REPORT("link_rx_test", 216);
+  BOOMLINK_TEST_REPORT("link_rx_test", 219);
 }

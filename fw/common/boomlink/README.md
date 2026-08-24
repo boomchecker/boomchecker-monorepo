@@ -63,8 +63,13 @@ This directory is a CMake project that builds two different ways:
 
 - **Standalone** (this README's "building and testing" - what `task test`
   does): host-native compiler, builds `boomlink_codec_tool` and
-  `boomlink_linkframe_tool` and runs the full CTest suite (two C self-tests
-  plus the Python interop/compatibility tests).
+  `boomlink_linkframe_tool` and runs the full CTest suite - the codec and
+  link frame CLI self-tests, the link engine's C scenario binaries (port,
+  duplicate cache, TX queue, RX pipeline, TX pipeline - see `CMakeLists.txt`
+  for the current list, not restated here since it only grows), the
+  Nanopb-free boundary and encoder-bound checks, and the Python
+  interop/compatibility suite. Run `ctest --preset Debug` for the exact count
+  and names.
 - **As a subdirectory** of `fw/bom-stm32node`'s ARM cross build: the
   `boomlink_protocol`, `boomlink_linkframe` and `boomlink_linkengine` static
   libraries are built. `boomlink_protocol` is linked into the firmware and
