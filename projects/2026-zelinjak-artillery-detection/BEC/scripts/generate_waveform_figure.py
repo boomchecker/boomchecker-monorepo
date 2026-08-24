@@ -93,7 +93,7 @@ def main() -> None:
     axes[1].xaxis.set_minor_locator(mticker.MultipleLocator(5))
 
     OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(OUTPUT_PATH, dpi=300)
+    fig.savefig(OUTPUT_PATH, dpi=300, bbox_inches="tight", pad_inches=0.02)
     print(f"Peak at {peak_index / sr * 1000:.1f} ms, window {window_start / sr * 1000:.0f}"
           f"--{(window_start + window_samples) / sr * 1000:.0f} ms")
     print(f"Saved {OUTPUT_PATH}")
