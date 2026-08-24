@@ -121,7 +121,7 @@ size_t boomlink_dupcache_used(const boomlink_dupcache_t *cache);
 uint32_t boomlink_dupcache_evictions(const boomlink_dupcache_t *cache);
 
 #ifdef __cplusplus
-}
+}  /* extern "C" */
 #endif
 
 #endif /* BOOMLINK_DUPCACHE_H */

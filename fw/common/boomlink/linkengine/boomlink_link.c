@@ -282,8 +282,12 @@ static void handle_packet(boomlink_link_t *link, size_t len, float rssi, float s
 
   link->stats.rx_envelopes++;
   if (link->config.on_rx != NULL) {
+    /* This packet's own rssi/snr, not the stats field above: a burst drained
+       in one boomlink_link_poll() call would otherwise have every delivered
+       payload misattributed to whichever packet happened to arrive last. */
     link->config.on_rx(link->config.on_rx_user, header.source_id,
-                       &link->rx_buffer[BOOMLINK_LINKFRAME_HEADER_SIZE], payload_len);
+                       &link->rx_buffer[BOOMLINK_LINKFRAME_HEADER_SIZE], payload_len,
+                       rssi, snr);
   }
 }
 

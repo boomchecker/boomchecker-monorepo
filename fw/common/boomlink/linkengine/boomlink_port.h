@@ -189,7 +189,7 @@ bool boomlink_port_is_valid(const boomlink_port_t *port);
 uint32_t boomlink_elapsed_ms(uint32_t earlier, uint32_t now);
 
 #ifdef __cplusplus
-}
+}  /* extern "C" */
 #endif
 
 #endif /* BOOMLINK_PORT_H */

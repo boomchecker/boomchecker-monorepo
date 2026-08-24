@@ -51,13 +51,24 @@ extern "C" {
  * would double the RX buffering for no benefit, since the dispatcher runs in the
  * same superloop.
  *
+ * `rssi_dbm`/`snr_db` are THIS packet's signal quality, not the "last" value
+ * boomlink_link_stats_t carries - the distinction matters exactly when it looks
+ * like it wouldn't: boomlink_link_poll() drains every packet the radio is
+ * holding in a single call (a burst arriving faster than the superloop polls,
+ * which section 9.7's whole reason for jitter is several nodes producing at
+ * once), and a caller reading the stats field instead of this parameter after
+ * the drain has moved on would attribute the LAST packet's signal quality to
+ * every one of them. Section 11's gateway forwarding needs per-detection
+ * RSSI/SNR for exactly this reason. The stats field remains for a caller that
+ * only wants a spot check, not a per-event record.
+ *
  * Calling boomlink_link_send() from here is fine. Calling boomlink_link_poll()
  * is NOT: this pointer is into the one staging buffer the next packet would be
  * read into, so a re-entrant poll would replace the payload underneath a handler
  * that is still reading it.
  */
 typedef void (*boomlink_link_rx_fn)(void *user, uint32_t source_id, const uint8_t *payload,
-                                    size_t payload_len);
+                                    size_t payload_len, float rssi_dbm, float snr_db);
 
 /** How a queued frame's time in the TX pipeline ended. */
 typedef enum {
@@ -97,6 +108,17 @@ typedef enum {
  * on retransmission), so a caller can correlate this with what a peer reports
  * seeing. `attempts` is how many transmissions the radio actually accepted.
  *
+ * `sequence` is NOT known until this callback fires, so it cannot serve as an
+ * enqueue-time handle: a caller queueing two ACK-requested frames to the same
+ * peer close together cannot tell which completion belongs to which
+ * boomlink_link_send() call, since priority reordering can transmit (and
+ * report) the second one first. Section 9.6 already names the fix for this at
+ * the application layer rather than here: "application request/response
+ * correlation uses request_id, not sequence number" - a caller that needs to
+ * tell two of its own in-flight sends apart puts its own identifier in the
+ * payload, the same as it would to correlate a CommandResponse.
+ *
+
  * Called from boomlink_link_poll() with the pipeline ALREADY back to idle, so
  * calling boomlink_link_send() from here is safe and the frame it queues is
  * simply the next one considered. Re-entering boomlink_link_poll() is not - see
@@ -260,6 +282,16 @@ typedef struct {
      transmission INCLUDING retries and ACKs - duty cycle is about what the
      radio actually radiated, not about what succeeded. */
   uint64_t tx_airtime_us;
+  /* Section 9.10's "last RSSI"/"last SNR" - the signal quality of the last
+     packet the RADIO DELIVERED, whatever it turned out to be, updated before
+     magic/version/length are checked. Deliberate: an operator watching this
+     field wants to know the channel is noisy or a foreign transmitter is in
+     range, and a burst of foreign or malformed traffic IS that diagnostic
+     signal - discarding it here would make the one field meant to answer
+     "is the channel healthy" blind to exactly the traffic that answers it.
+     For per-EVENT signal quality of an accepted frame - which is what a
+     drained burst needs, since this field only ever holds the last one -
+     use the rssi_dbm/snr_db parameters boomlink_link_rx_fn receives instead. */
   float    last_rssi_dbm;
   float    last_snr_db;
 } boomlink_link_stats_t;
@@ -416,6 +448,21 @@ boomlink_link_send_result_t boomlink_link_send(boomlink_link_t *link,
  * TX side considers whether the frame it acknowledges has timed out, or a
  * loaded superloop could produce a retry for a frame that was in fact
  * acknowledged - burning airtime and forcing the peer to suppress a duplicate.
+ *
+ * "Drain every packet the radio has" only helps a burst if the PORT can hold
+ * more than one between two calls to this function - and the only real port
+ * that exists today, fw/bom-stm32node/App/radio/radio.h, cannot: it is
+ * single-slot, and its own header says so ("a future consumer... must replace
+ * this single-slot model with its own queue"). This engine does not add that
+ * queue; it only drains whatever the port is holding when called, which for
+ * radio.h is at most one packet regardless of how this loop is written. A
+ * burst of near-simultaneous transmissions - the exact "several nodes detect
+ * one gunshot" scenario section 9.7's jitter exists to spread out, not
+ * eliminate - can still lose all-but-the-latest packet to radio.h's overwrite,
+ * invisibly to every BoomLink statistic, on real hardware today. The fake port
+ * used by this package's tests buffers the whole burst in its shared "air"
+ * log, which is exactly why this gap is invisible from the host side. Giving
+ * the port a real queue is Phase C's work, not this one's.
  */
 void boomlink_link_poll(boomlink_link_t *link);
 
@@ -451,7 +498,7 @@ boomlink_tx_state_t boomlink_link_tx_state(const boomlink_link_t *link);
 size_t boomlink_link_queue_depth(const boomlink_link_t *link);
 
 #ifdef __cplusplus
-}
+}  /* extern "C" */
 #endif
 
 #endif /* BOOMLINK_LINK_H */

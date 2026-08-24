@@ -96,8 +96,10 @@ typedef struct {
 } rx_log_t;
 
 static void rx_capture(void *user, uint32_t source_id, const uint8_t *payload,
-                       size_t payload_len) {
+                       size_t payload_len, float rssi_dbm, float snr_db) {
   rx_log_t *log    = (rx_log_t *)user;
+  (void)rssi_dbm;
+  (void)snr_db;
   log->calls++;
   log->last_source = source_id;
   log->last_len    = payload_len;

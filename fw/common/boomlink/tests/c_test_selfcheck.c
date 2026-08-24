@@ -6,11 +6,12 @@
  *
  *          This exists because c_test.h's `return 1` is the only way any C test
  *          in this package can fail, and nothing exercised it: the path only runs
- *          when a test is already failing. Changing it to `return 0` made all
- *          four C binaries - 394 checks across the port, duplicate cache, TX
- *          queue and RX pipeline - exit 0 forever while printing their failures
- *          to stderr, and it was demonstrated with two real duplicate-cache bugs
- *          green at the same time.
+ *          when a test is already failing. Changing it to `return 0` made every
+ *          C binary built from c_test.h exit 0 forever while printing its
+ *          failures to stderr - every check in every one of them, a number this
+ *          comment does not restate because it only grows and would drift the
+ *          moment a test was added - and it was demonstrated with two real
+ *          duplicate-cache bugs green at the same time.
  *
  *          Which is exactly the failure c_test.h's own header warns about, in a
  *          package where a helper that exited positively instead of aborting once

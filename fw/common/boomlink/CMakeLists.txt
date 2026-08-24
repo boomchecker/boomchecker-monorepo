@@ -653,12 +653,15 @@ if(BOOMLINK_STANDALONE)
 
   # Whether the C harness can FAIL at all. c_test.h's `return 1` is the only path
   # by which any C test here fails, and nothing exercised it - the path only runs
-  # when a test is already failing. Changing it to `return 0` made all four C
-  # binaries exit 0 forever while printing their failures to stderr, demonstrated
-  # with two real duplicate-cache bugs green at the same time. One character, 394
-  # checks. The selfcheck binary is built but deliberately NOT registered as a
-  # test of its own: it is supposed to fail, and the script is what knows which
-  # failures are the expected ones.
+  # when a test is already failing. Changing it to `return 0` made every C binary
+  # built from c_test.h exit 0 forever while printing its failures to stderr,
+  # demonstrated with two real duplicate-cache bugs green at the same time. One
+  # character, and the exact check count it would have hidden only grows as more
+  # tests are added - see each binary's own BOOMLINK_TEST_REPORT() floor below for
+  # the current number, since a count restated here would drift the moment a test
+  # was added and nobody was looking at this comment. The selfcheck binary is
+  # built but deliberately NOT registered as a test of its own: it is supposed to
+  # fail, and the script is what knows which failures are the expected ones.
   add_executable(boomlink_c_test_selfcheck tests/c_test_selfcheck.c)
   target_include_directories(boomlink_c_test_selfcheck PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests)
   target_compile_options(boomlink_c_test_selfcheck PRIVATE

@@ -98,8 +98,17 @@ static bool fake_poll_rx(void *ctx_v, uint8_t *buf, size_t cap, size_t *out_len,
     /* The TRUE length, not what fitted - the engine must be able to tell that a
        packet was longer than its buffer instead of silently accepting a prefix. */
     *out_len       = tx->wire_len;
-    *out_rssi_dbm  = -95.5f;
-    *out_snr_db    = 7.25f;
+    /* Varies by SENDER, not a shared constant, so a scenario can tell "this
+       packet's own signal quality" apart from "whichever packet the receiver
+       processed last" - which is exactly the distinction
+       boomlink_link_rx_fn's rssi_dbm/snr_db parameters exist to preserve
+       across a multi-packet drain. A constant here would make that
+       distinction untestable: every packet would look identical regardless of
+       which one a caller actually received. Still fictional, like every other
+       number this fake reports - the engine only ever records and compares
+       these, never interprets them as physics. */
+    *out_rssi_dbm  = -95.5f - (float)tx->sender;
+    *out_snr_db    = 7.25f + (float)tx->sender;
     return true;
   }
   return false;

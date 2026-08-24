@@ -39,14 +39,29 @@ typedef struct {
   uint32_t last_source;
   uint8_t  last_payload[64];
   size_t   last_len;
+  float    last_rssi_dbm;
+  float    last_snr_db;
+  /* Every call's OWN rssi/snr, not just the last - so a scenario can prove the
+     callback parameter tracks each delivered packet individually rather than
+     collapsing to whatever boomlink_link_stats_t happens to hold once the
+     whole drain is done. Capped at 4: no scenario here delivers more in one
+     burst. */
+  float    call_rssi_dbm[4];
+  float    call_snr_db[4];
 } rx_log_t;
 
 static void rx_capture(void *user, uint32_t source_id, const uint8_t *payload,
-                       size_t payload_len) {
+                       size_t payload_len, float rssi_dbm, float snr_db) {
   rx_log_t *log     = (rx_log_t *)user;
+  if (log->calls < sizeof(log->call_rssi_dbm) / sizeof(log->call_rssi_dbm[0])) {
+    log->call_rssi_dbm[log->calls] = rssi_dbm;
+    log->call_snr_db[log->calls]   = snr_db;
+  }
   log->calls++;
   log->last_source  = source_id;
   log->last_len     = payload_len;
+  log->last_rssi_dbm = rssi_dbm;
+  log->last_snr_db   = snr_db;
   if (payload_len > sizeof(log->last_payload)) {
     payload_len = sizeof(log->last_payload);
   }
@@ -469,6 +484,17 @@ static void test_foreign_and_malformed_traffic_are_counted_apart(void) {
   CHECK(s.rx_envelopes == 0u, "nothing was delivered");
   CHECK(b.rx.calls == 0u, "and the callback was never reached");
   CHECK(s.ack_sent == 0u, "none of it was acknowledged");
+  /* Signal quality is recorded from the last packet the RADIO delivered,
+     whatever it turned out to be - before any of the rejections above. None of
+     these three packets was ever accepted, and last_rssi_dbm/last_snr_db must
+     still not be the powered-on zero: an operator watching this field wants to
+     know the channel carried something, and a run of foreign or malformed
+     traffic is itself the diagnostic signal that field exists to show. */
+  CHECK(s.last_rssi_dbm != 0.0f,
+        "signal quality must be recorded even for traffic that was never "
+        "accepted, got %f",
+        (double)s.last_rssi_dbm);
+  CHECK(s.last_snr_db != 0.0f, "same for SNR, got %f", (double)s.last_snr_db);
   scenario_end(&air);
 }
 
@@ -577,6 +603,60 @@ static void test_signal_quality_and_airtime_are_recorded(void) {
   /* A node that received nothing has no signal quality to report, rather than a
      plausible-looking zero. */
   CHECK(as.last_rssi_dbm == 0.0f, "A received nothing and reports no RSSI");
+  scenario_end(&air);
+}
+
+static void test_a_drained_burst_reports_each_packets_own_signal_quality(void) {
+  fake_air_t air;
+  fake_air_init(&air);
+  node_t a, b, c;
+  REQUIRE(node_up(&a, &air, 0u, NODE_A), "A came up");
+  REQUIRE(node_up(&b, &air, 1u, NODE_B), "B came up");
+  REQUIRE(node_up(&c, &air, 2u, NODE_C), "C came up");
+
+  /* Two frames land on the air BEFORE B polls even once - a burst, exactly the
+     shape section 9.7's jitter is meant to spread out but cannot eliminate.
+     boomlink_link_poll() drains the whole air in one call, and until the
+     callback carried its own rssi/snr, a caller could only read
+     boomlink_link_stats_t's "last" field - which by the time the drain
+     finishes holds only the SECOND packet's numbers, misattributed to both. */
+  const uint8_t from_a[] = {0xA0};
+  const uint8_t from_c[] = {0xC0};
+  (void)boomlink_link_send(&a.link, NODE_B, BOOMLINK_TXPRIO_NORMAL, false, from_a,
+                           sizeof(from_a));
+  boomlink_link_poll(&a.link); /* A's frame reaches the air; B has not polled yet */
+  (void)boomlink_link_send(&c.link, NODE_B, BOOMLINK_TXPRIO_NORMAL, false, from_c,
+                           sizeof(from_c));
+  boomlink_link_poll(&c.link); /* C's frame reaches the air too */
+  REQUIRE(fake_air_count(&air) == 2u, "both frames are waiting for B, got %zu",
+          fake_air_count(&air));
+
+  boomlink_link_poll(&b.link); /* one call, expected to drain both */
+  REQUIRE(b.rx.calls == 2u, "both were delivered in the one poll, got %u", b.rx.calls);
+
+  /* fake_port_init varies rssi/snr by SENDER index (see fake_port.c), so A's
+     frame (index 0) and C's (index 2) are reported at different signal
+     quality - which is what makes "each call got its OWN reading" and "every
+     call collapsed to the same reading" distinguishable in the first place. */
+  CHECK(b.rx.call_rssi_dbm[0] != b.rx.call_rssi_dbm[1],
+        "the two calls must carry DIFFERENT signal quality (got %f and %f) - "
+        "identical values would mean the callback is reporting something "
+        "constant rather than this packet's own reading",
+        (double)b.rx.call_rssi_dbm[0], (double)b.rx.call_rssi_dbm[1]);
+  CHECK(b.rx.call_snr_db[0] != b.rx.call_snr_db[1], "same for SNR");
+
+  /* And the stats "last" field, checked against the SECOND call only - proving
+     it is exactly the value a caller relying on stats instead of the
+     parameter would have wrongly attributed to the FIRST packet too. */
+  boomlink_link_stats_t bs;
+  boomlink_link_get_stats(&b.link, &bs);
+  CHECK(bs.last_rssi_dbm == b.rx.call_rssi_dbm[1],
+        "the stats field holds only the last packet's reading, got %f vs %f",
+        (double)bs.last_rssi_dbm, (double)b.rx.call_rssi_dbm[1]);
+  CHECK(bs.last_rssi_dbm != b.rx.call_rssi_dbm[0],
+        "which is NOT the first packet's own reading - the gap this test exists "
+        "to close, got %f for both",
+        (double)bs.last_rssi_dbm);
   scenario_end(&air);
 }
 
@@ -1125,6 +1205,7 @@ int main(void) {
   test_a_broadcast_asking_for_an_ack_is_never_acknowledged();
   test_an_unmatched_ack_is_counted_not_delivered();
   test_signal_quality_and_airtime_are_recorded();
+  test_a_drained_burst_reports_each_packets_own_signal_quality();
   test_a_failing_radio_is_counted_and_does_not_wedge_the_queue();
   test_sequence_is_monotonic_despite_priority_reordering();
   test_a_frame_from_an_impossible_source_is_never_accepted();
@@ -1134,5 +1215,5 @@ int main(void) {
   test_the_duplicate_key_is_source_session_and_sequence();
   test_resetting_the_statistics_does_not_reset_the_link();
   test_a_reboot_is_only_visible_through_the_session();
-  BOOMLINK_TEST_REPORT("link_rx_test", 204);
+  BOOMLINK_TEST_REPORT("link_rx_test", 216);
 }

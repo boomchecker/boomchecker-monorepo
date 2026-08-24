@@ -161,14 +161,28 @@ size_t boomlink_txqueue_count(const boomlink_txqueue_t *queue);
 size_t boomlink_txqueue_count_at(const boomlink_txqueue_t *queue,
                                  boomlink_tx_priority_t priority);
 
-/** Pushes refused because the queue was full of equally-or-more urgent traffic. */
+/**
+ * Pushes refused because the queue was full of equally-or-more urgent traffic.
+ *
+ * The engine keeps its OWN copy of this at the boomlink_link_send() call site
+ * (tx_dropped in boomlink_link_stats_t, section 9.10) rather than reading it
+ * back from here - deliberately, not an oversight: this queue is also tested in
+ * isolation (txqueue_test.c), where a counter that only existed on the engine
+ * would be unreachable, and the engine's version additionally folds in the
+ * oversize-payload and bad-destination rejections this pure data structure has
+ * no way to know about. The two counters agree on every path both can see.
+ */
 uint32_t boomlink_txqueue_rejected(const boomlink_txqueue_t *queue);
 
-/** Items dropped to make room for more urgent traffic. */
+/**
+ * Items dropped to make room for more urgent traffic. See
+ * boomlink_txqueue_rejected() for why the engine keeps its own copy
+ * (tx_shed) instead of reading this one back.
+ */
 uint32_t boomlink_txqueue_evicted(const boomlink_txqueue_t *queue);
 
 #ifdef __cplusplus
-}
+}  /* extern "C" */
 #endif
 
 #endif /* BOOMLINK_TXQUEUE_H */

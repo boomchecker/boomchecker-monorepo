@@ -1111,6 +1111,19 @@ Priorities reorder only the queue. Sequence numbers are assigned at dequeue (sec
 9.1), so the on-air sequence remains monotonic per session regardless of priority
 reordering, and the receiver's duplicate window stays simple.
 
+**"Reorder only the queue" is not a preemption guarantee, and worth stating precisely so
+it isn't read as a stronger one.** Once a frame leaves the queue into section 9.6's single
+global pipeline slot, nothing can displace it — a `LOW`-priority frame already mid-retry
+holds that slot for the rest of its retry/backoff cycle even if a `HIGH`-priority
+detection is queued behind it, bounded by `max_attempts` and the backoff range, so single
+low digits of seconds at this deployment's traffic rate. "Low-priority telemetry must not
+block urgent traffic" above is about the queue's *ordering*, which this respects — the
+urgent frame is served next, not last — not about *preempting* whatever the pipeline is
+already doing. A guarantee of the second kind would need CAD or time slots (the "later MAC
+improvements" this section already defers) to interrupt an in-flight transmission or
+retry, which is a materially larger mechanism than a priority queue and is out of scope
+here.
+
 ### 9.9 Broadcast
 
 Broadcast destination:
@@ -1561,9 +1574,9 @@ Scope:
 - implement `session_id` and monotonically increasing `sequence` assigned at dequeue;
 - implement bounded duplicate suppression;
 - implement unicast ACK as a link frame type — the frame's field mapping already exists
-  as `boomlink_linkframe_make_ack()`; what remains is the delivery logic, the two
-  receiver-side responsibilities the frame layer cannot take on, and a decision on where
-  the ACK matcher lives (all three in section 9.5);
+  as `boomlink_linkframe_make_ack()`; the delivery logic, the two receiver-side
+  responsibilities the frame layer cannot take on, and where the ACK matcher lives are
+  all implemented and decided (section 9.5);
 - implement stop-and-wait delivery (single outstanding ACK-pending frame);
 - implement bounded retry and ACK timeout;
 - implement randomized retry backoff;
