@@ -50,6 +50,11 @@ extern "C" {
  * duration of the call - copy what you need. A queue of received payloads here
  * would double the RX buffering for no benefit, since the dispatcher runs in the
  * same superloop.
+ *
+ * Calling boomlink_link_send() from here is fine. Calling boomlink_link_poll()
+ * is NOT: this pointer is into the one staging buffer the next packet would be
+ * read into, so a re-entrant poll would replace the payload underneath a handler
+ * that is still reading it.
  */
 typedef void (*boomlink_link_rx_fn)(void *user, uint32_t source_id, const uint8_t *payload,
                                     size_t payload_len);
@@ -83,7 +88,8 @@ typedef enum {
  *
  * Called from boomlink_link_poll() with the pipeline ALREADY back to idle, so
  * calling boomlink_link_send() from here is safe and the frame it queues is
- * simply the next one considered.
+ * simply the next one considered. Re-entering boomlink_link_poll() is not - see
+ * boomlink_link_rx_fn.
  */
 typedef void (*boomlink_link_tx_done_fn)(void *user, boomlink_tx_outcome_t outcome,
                                         uint32_t destination_id, uint32_t sequence,
@@ -338,6 +344,12 @@ bool boomlink_link_init(boomlink_link_t *link, const boomlink_link_config_t *con
  * @return what happened. Worth checking: the difference between "queued",
  *         "the queue is full of more urgent traffic" and "this can never be sent"
  *         is the difference between waiting, backing off and fixing the caller.
+ *
+ * `link` must be a brought-up engine; unlike the three diagnostics below, this is
+ * not NULL-tolerant. The distinction is deliberate rather than inconsistency:
+ * this and boomlink_link_poll() are called from the superloop that owns the
+ * engine, where a NULL is a wiring error to find at bring-up, while the
+ * diagnostics are reached from a CLI where a missing reading beats a hard fault.
  */
 boomlink_link_send_result_t boomlink_link_send(boomlink_link_t *link,
                                                uint32_t destination_id,
