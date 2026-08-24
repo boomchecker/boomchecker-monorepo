@@ -1073,6 +1073,24 @@ is not changed by radio scheduling.
 Retry backoff must also include jitter. Later MAC improvements may add CAD or time slots,
 but they are not required for the first prototype.
 
+**How "for event messages" is implemented.** The jitter is configurable per node
+(`tx_jitter_max_ms`, drawn uniformly over `[0, max]`, applied before a frame's *first*
+transmission only — a retransmission uses the backoff range instead) and it applies to
+**every queued frame**, not only to detections. The link layer cannot identify an event
+message: section 9 forbids it from decoding the payload, so a detection and a telemetry
+reading are the same opaque bytes to it. Narrowing the delay would mean either the caller
+passing a flag the link layer would only forward, or inferring intent from priority —
+both of which put an application concern into the link layer to save latency on traffic
+that is not latency-sensitive.
+
+The cost is a few tens of milliseconds on queued traffic, which this section already
+accepts for the traffic it *is* aimed at. Two things are unaffected: ACKs, which never
+pass through the queue, and the detection timestamp, which is captured before the delay
+so localization timing does not move. Setting the maximum to 0 disables the delay
+entirely, which is the right configuration for a node that is the only transmitter in its
+own conversation. If one class of traffic ever genuinely needs to skip the delay,
+per-priority jitter is the extension point.
+
 ### 9.8 Priority TX queue
 
 At minimum use three logical priorities:
