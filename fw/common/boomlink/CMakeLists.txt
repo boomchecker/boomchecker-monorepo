@@ -528,6 +528,7 @@ target_compile_options(boomlink_linkframe PRIVATE
 add_library(boomlink_linkengine STATIC
   ${CMAKE_CURRENT_SOURCE_DIR}/linkengine/boomlink_port.c
   ${CMAKE_CURRENT_SOURCE_DIR}/linkengine/boomlink_dupcache.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/linkengine/boomlink_txqueue.c
 )
 target_include_directories(boomlink_linkengine PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}/linkengine
@@ -640,6 +641,17 @@ if(BOOMLINK_STANDALONE)
   target_compile_options(boomlink_dupcache_test PRIVATE
     ${BOOMLINK_WARNING_FLAGS} ${BOOMLINK_WERROR_FLAGS})
   add_test(NAME boomlink_dupcache_test COMMAND boomlink_dupcache_test)
+
+  # The priority TX queue (section 9.8) as a pure data structure. Its two
+  # requirements pull against each other - urgent traffic must not wait behind
+  # telemetry, and the drop policy must shed telemetry rather than detections -
+  # so both directions of the eviction rule need their own cases.
+  add_executable(boomlink_txqueue_test tests/txqueue_test.c)
+  target_link_libraries(boomlink_txqueue_test PRIVATE boomlink_linkengine)
+  target_include_directories(boomlink_txqueue_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests)
+  target_compile_options(boomlink_txqueue_test PRIVATE
+    ${BOOMLINK_WARNING_FLAGS} ${BOOMLINK_WERROR_FLAGS})
+  add_test(NAME boomlink_txqueue_test COMMAND boomlink_txqueue_test)
 
   # The Nanopb-free boundary (boomlink.md section 9), checked as a TEST rather
   # than only as a CI step, so `task test` runs it and a developer finds out
