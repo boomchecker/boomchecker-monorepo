@@ -21,7 +21,8 @@
 
 #include <stdio.h>
 
-/* Failure counter, defined once per test binary via BOOMLINK_TEST_MAIN_STATE. */
+/* Failure and check counters, defined once per test binary via
+   BOOMLINK_TEST_STATE. */
 extern int boomlink_test_failures;
 extern int boomlink_test_checks;
 
@@ -68,13 +69,36 @@ extern int boomlink_test_checks;
   } while (0)
 
 /**
- * Report and exit. Prints the number of checks as well as the number of
- * failures, so a run that silently stopped exercising anything - a scenario list
- * that lost an entry, a file that compiled to nothing - is visible as a drop in
- * the count rather than as another clean pass.
+ * Report and exit. `min_checks` is a FLOOR on how many checks must have run.
+ *
+ * The floor exists because printing the count achieves nothing on its own, which
+ * is what an earlier version of this comment wrongly claimed: ctest keys on the
+ * exit code, hides stdout on success, and nothing compares the count to
+ * anything. So a scenario hollowed out with an early `return` dropped
+ * link_rx_test from 103 checks to 93 with ctest reporting 100% passed - verified.
+ * Comparing against a floor here makes coverage disappearing a failure.
+ *
+ * Deliberately a floor rather than an exact count: adding checks must not require
+ * touching a number, so the value only ever moves up, and the direction it fails
+ * in is the one worth catching. Losing a whole scenario from main() is already a
+ * compile error (-Werror=unused-function), so this covers the other half - a
+ * scenario that still runs but stopped asserting.
+ *
+ * The `return 1` path below is the ONLY way any C test in this package can fail,
+ * and it is exercised by tests/c_test_selfcheck.c via check_c_test.sh - without
+ * that, changing it to `return 0` makes all four binaries pass forever while
+ * printing their failures to stderr. That is not hypothetical: it was measured,
+ * with two real duplicate-cache bugs green at the same time.
  */
-#define BOOMLINK_TEST_REPORT(name)                                          \
+#define BOOMLINK_TEST_REPORT(name, min_checks)                              \
   do {                                                                      \
+    if (boomlink_test_checks < (min_checks)) {                              \
+      fprintf(stderr,                                                       \
+              "%s: only %d checks ran, expected at least %d - coverage "     \
+              "disappeared rather than failing\n",                          \
+              (name), boomlink_test_checks, (int)(min_checks));             \
+      return 1;                                                             \
+    }                                                                       \
     if (boomlink_test_failures != 0) {                                      \
       fprintf(stderr, "%s: %d of %d checks FAILED\n", (name),               \
               boomlink_test_failures, boomlink_test_checks);                \

@@ -291,5 +291,5 @@ int main(void) {
   test_the_fields_survive_the_round_trip();
   test_an_oversize_payload_is_refused();
   test_an_empty_queue_yields_nothing();
-  BOOMLINK_TEST_REPORT("txqueue_test");
+  BOOMLINK_TEST_REPORT("txqueue_test", 150);
 }

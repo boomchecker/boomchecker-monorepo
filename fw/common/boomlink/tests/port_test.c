@@ -305,5 +305,5 @@ int main(void) {
   test_nodes_seeded_differently_do_not_march_in_lockstep();
   test_an_oversize_packet_reports_its_true_length();
   test_the_air_reports_its_own_overflow();
-  BOOMLINK_TEST_REPORT("port_test");
+  BOOMLINK_TEST_REPORT("port_test", 60);
 }

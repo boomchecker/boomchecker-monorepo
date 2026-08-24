@@ -201,5 +201,5 @@ int main(void) {
   test_the_frame_that_moved_the_window_cannot_return();
   test_a_jump_past_the_window_forgets_only_what_it_must();
   test_eviction_is_least_recently_used();
-  BOOMLINK_TEST_REPORT("dupcache_test");
+  BOOMLINK_TEST_REPORT("dupcache_test", 81);
 }

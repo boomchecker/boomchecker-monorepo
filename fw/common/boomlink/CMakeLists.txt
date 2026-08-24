@@ -631,6 +631,22 @@ if(BOOMLINK_STANDALONE)
     ${BOOMLINK_WARNING_FLAGS} ${BOOMLINK_WERROR_FLAGS})
   add_test(NAME boomlink_port_test COMMAND boomlink_port_test)
 
+  # Whether the C harness can FAIL at all. c_test.h's `return 1` is the only path
+  # by which any C test here fails, and nothing exercised it - the path only runs
+  # when a test is already failing. Changing it to `return 0` made all four C
+  # binaries exit 0 forever while printing their failures to stderr, demonstrated
+  # with two real duplicate-cache bugs green at the same time. One character, 394
+  # checks. The selfcheck binary is built but deliberately NOT registered as a
+  # test of its own: it is supposed to fail, and the script is what knows which
+  # failures are the expected ones.
+  add_executable(boomlink_c_test_selfcheck tests/c_test_selfcheck.c)
+  target_include_directories(boomlink_c_test_selfcheck PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests)
+  target_compile_options(boomlink_c_test_selfcheck PRIVATE
+    ${BOOMLINK_WARNING_FLAGS} ${BOOMLINK_WERROR_FLAGS})
+  add_test(NAME boomlink_c_test_harness
+    COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/tests/check_c_test.sh
+            $<TARGET_FILE:boomlink_c_test_selfcheck>)
+
   # Duplicate suppression (section 9.4) as a pure data structure, so the cases
   # that actually break it can be reached directly: a sequence wrap, both edges
   # of the reordering window, a peer rebooting mid-conversation, and LRU

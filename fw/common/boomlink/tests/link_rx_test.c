@@ -540,5 +540,5 @@ int main(void) {
   test_signal_quality_and_airtime_are_recorded();
   test_a_failing_radio_is_counted_and_does_not_wedge_the_queue();
   test_sequence_is_monotonic_despite_priority_reordering();
-  BOOMLINK_TEST_REPORT("link_rx_test");
+  BOOMLINK_TEST_REPORT("link_rx_test", 103);
 }
