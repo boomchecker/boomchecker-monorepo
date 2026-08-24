@@ -17,6 +17,10 @@ includes:
     taskfile: ./fw/apps/stm32node-cli/Taskfile.yml
     dir: ./fw/apps/stm32node-cli
     optional: true
+  boom-test:
+    taskfile: ./fw/apps/boom-test/Taskfile.yml
+    dir: ./fw/apps/boom-test
+    optional: true
   scripts:
     taskfile: ./scripts/Taskfile.yml
     dir: ./scripts

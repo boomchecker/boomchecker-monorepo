@@ -1317,6 +1317,17 @@ At minimum keep repeatable two-board tests for:
 
 Record RSSI/SNR and retry counters so RF issues can be separated from protocol issues.
 
+These scenarios are exercised by a dedicated pytest harness, **Boom Test**
+(`fw/apps/boom-test/`), rather than manual console commands repeated by hand. It
+connects to two boards over USB, designates one `master` and one `slave` for the
+run - a test-harness pairing only; BoomLink itself has no master address (section
+7.2) - and drives both through their USB CLI (`cli.c`). Scenario 1 above is
+implemented today, since it only needs the `radio status`/`radio ping` commands
+PR 1 already added; scenarios 2-8 need the BoomLink link engine (PR 3), the
+detection/config/command services (PR 4) and the USB gateway framing (PR 5)
+respectively, and land here as those PRs do. See the harness's own README for
+setup and usage.
+
 ---
 
 ## 16. Agent implementation rules
@@ -1579,6 +1590,43 @@ A mesh PR must define:
 - gateway selection;
 - airtime/collision impact;
 - interaction with ACK semantics.
+
+## PR 9 — Boom Test: HiL harness foundation
+
+Not yet tracked by an issue - file one before starting this PR.
+
+**Goal:** make section 15.3's two-board scenarios runnable as repeatable pytest
+scenarios instead of manual console steps, starting with the one scenario PR 1
+already makes possible.
+
+Scope:
+
+- add `fw/apps/boom-test/`, a pytest project driving two boards' USB CLI (`cli.c`)
+  over serial;
+- auto-discover connected boards by USB VID/PID (`0483:5710`, see
+  `fw/bom-stm32node/host/boomchecker-node.inf`) and deterministically pair two of
+  them into `master`/`slave` roles for the run, with `--master-port`/
+  `--slave-port` to override discovery when more than two boards are attached or
+  ports are pinned;
+- implement section 15.3 scenario 1 (raw RadioLib/EBYTE ping/pong): send `radio
+  ping` from one board, assert the other's `radio rx: ...` line reports the
+  matching payload, RSSI and SNR, in both directions;
+- add discovery/pairing smoke tests so a broken test rig fails fast with an
+  actionable message instead of a confusing scenario failure;
+- add non-hardware unit tests for the CLI reply parsing so that logic is covered
+  without two physical boards.
+
+Acceptance criteria:
+
+- `task boom-test:test` skips cleanly (not fails) when fewer than two boards are
+  connected;
+- with two boards connected, the ping/pong scenario passes in both directions and
+  reports RSSI/SNR;
+- adding scenarios 2-8 as their owning PRs land only requires new test modules,
+  not changes to discovery/pairing/role assignment.
+
+Not in scope: scenarios 2-8 (blocked on PR 3/4/5); CI execution (no hardware
+runner exists for this yet).
 
 ---
 

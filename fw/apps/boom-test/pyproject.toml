@@ -1,0 +1,39 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "boom-test"
+version = "0.1.0"
+description = "Hardware-in-the-loop pytest suite for BoomLink: master/slave two-board radio scenarios over USB CDC serial"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "pyserial>=3.5,<4",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+    "ruff>=0.5",
+]
+
+[project.scripts]
+boom-test-ports = "boom_test.discovery:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/boom_test"]
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+markers = [
+    "hil: requires two physical boomchecker-node boards connected over USB (master + slave)",
+]
