@@ -180,7 +180,7 @@ _(doplnit)_
 
 **Odpověď:**
 
-Section II now discusses this family of methods (one-class SVMs, isolation forests, autoencoders, with a citation to their evaluation on embedded platforms) and explains why we nevertheless use a supervised binary classifier: the classifier operates after an impulsive-event trigger, so it receives a conditional distribution of impulsive candidates in which non-artillery gunfire is a hard negative rather than an outlier; outlierness with respect to the acoustic background is not equivalent to the artillery-launch label. One-class approaches remain relevant alternatives for first-stage novelty detection. Empirically, the supervised formulation is supported by the hard-negative results: the deployed model produces zero false positives on the small-arms gunshot class across all noise levels.
+Section II now discusses this family of methods (one-class SVMs, isolation forests, autoencoders) and explains why we nevertheless use a supervised binary classifier: the classifier operates after an impulsive-event trigger, so it receives a conditional distribution of impulsive candidates in which non-artillery gunfire is a hard negative rather than an outlier; outlierness with respect to the acoustic background is not equivalent to the artillery-launch label. One-class approaches remain relevant alternatives for first-stage novelty detection. Empirically, the supervised formulation is supported by the hard-negative results: the deployed model produces zero false positives on the small-arms gunshot class across all noise levels.
 
 ### R3.2 Dataset details (artillery types, environments)
 
