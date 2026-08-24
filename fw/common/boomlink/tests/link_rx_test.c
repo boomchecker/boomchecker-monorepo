@@ -650,25 +650,38 @@ static void test_a_drained_burst_reports_each_packets_own_signal_quality(void) {
   boomlink_link_poll(&b.link); /* one call, expected to drain both */
   REQUIRE(b.rx.calls == 2u, "both were delivered in the one poll, got %u", b.rx.calls);
 
-  /* fake_port_init varies rssi/snr by SENDER index (see fake_port.c), so A's
-     frame (index 0) and C's (index 2) are reported at different signal
-     quality - which is what makes "each call got its OWN reading" and "every
-     call collapsed to the same reading" distinguishable in the first place. */
-  CHECK(b.rx.call_rssi_dbm[0] != b.rx.call_rssi_dbm[1],
-        "the two calls must carry DIFFERENT signal quality (got %f and %f) - "
-        "identical values would mean the callback is reporting something "
-        "constant rather than this packet's own reading",
-        (double)b.rx.call_rssi_dbm[0], (double)b.rx.call_rssi_dbm[1]);
-  CHECK(b.rx.call_snr_db[0] != b.rx.call_snr_db[1], "same for SNR");
+  /* fake_port_init varies rssi/snr by SENDER index (see fake_port.c: rssi =
+     -95.5 - sender, snr = 7.25 + sender), so A (index 0) and C (index 2) have
+     KNOWN, DIFFERENT, exact expected values. Asserted as exact literals, not
+     just "the two calls differ" - a callback that reported the PREVIOUS call's
+     reading instead of its own (an off-by-one: call 0 gets a stale/zeroed
+     value, call 1 gets what should have been call 0's) would still satisfy an
+     inequality check, since a wrong value and a right one are still two
+     different numbers. Exact values are the only way to prove call N reports
+     packet N's own reading rather than merely "a reading that isn't the same
+     as some other call's". */
+  CHECK(b.rx.call_rssi_dbm[0] == -95.5f,
+        "call 0 (A, sender index 0) must report A's own reading, got %f",
+        (double)b.rx.call_rssi_dbm[0]);
+  CHECK(b.rx.call_snr_db[0] == 7.25f, "and A's own SNR, got %f",
+        (double)b.rx.call_snr_db[0]);
+  CHECK(b.rx.call_rssi_dbm[1] == -97.5f,
+        "call 1 (C, sender index 2) must report C's own reading, got %f",
+        (double)b.rx.call_rssi_dbm[1]);
+  CHECK(b.rx.call_snr_db[1] == 9.25f, "and C's own SNR, got %f",
+        (double)b.rx.call_snr_db[1]);
 
-  /* And the stats "last" field, checked against the SECOND call only - proving
-     it is exactly the value a caller relying on stats instead of the
+  /* And the stats "last" field, checked against the SECOND call's exact value -
+     proving it is exactly what a caller relying on stats instead of the
      parameter would have wrongly attributed to the FIRST packet too. */
   boomlink_link_stats_t bs;
   boomlink_link_get_stats(&b.link, &bs);
   CHECK(bs.last_rssi_dbm == b.rx.call_rssi_dbm[1],
         "the stats field holds only the last packet's reading, got %f vs %f",
         (double)bs.last_rssi_dbm, (double)b.rx.call_rssi_dbm[1]);
+  CHECK(bs.last_snr_db == b.rx.call_snr_db[1],
+        "same for SNR, got %f vs %f", (double)bs.last_snr_db,
+        (double)b.rx.call_snr_db[1]);
   CHECK(bs.last_rssi_dbm != b.rx.call_rssi_dbm[0],
         "which is NOT the first packet's own reading - the gap this test exists "
         "to close, got %f for both",

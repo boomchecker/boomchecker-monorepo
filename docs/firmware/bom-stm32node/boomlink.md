@@ -1101,8 +1101,9 @@ NORMAL  detection events, configuration responses
 LOW     periodic telemetry, non-critical diagnostics
 ```
 
-The exact mapping can be adjusted, but low-priority telemetry must not block urgent
-traffic.
+The exact mapping can be adjusted, but low-priority telemetry must not be queued ahead of
+urgent traffic - see below for the precise scope of that guarantee once something has
+already left the queue.
 
 The queue is statically bounded. When full, the drop policy should prefer dropping or
 coalescing low-priority telemetry before detection or command traffic.
@@ -1117,9 +1118,9 @@ global pipeline slot, nothing can displace it — a `LOW`-priority frame already
 holds that slot for the rest of its retry/backoff cycle even if a `HIGH`-priority
 detection is queued behind it, bounded by `max_attempts` and the backoff range, so single
 low digits of seconds at this deployment's traffic rate. "Low-priority telemetry must not
-block urgent traffic" above is about the queue's *ordering*, which this respects — the
-urgent frame is served next, not last — not about *preempting* whatever the pipeline is
-already doing. A guarantee of the second kind would need CAD or time slots (the "later MAC
+be queued ahead of urgent traffic" above is about the queue's *ordering*, which this
+respects — the urgent frame is served next, not last — not about *preempting* whatever the
+pipeline is already doing. A guarantee of the second kind would need CAD or time slots (the "later MAC
 improvements" this section already defers) to interrupt an in-flight transmission or
 retry, which is a materially larger mechanism than a priority queue and is out of scope
 here.
