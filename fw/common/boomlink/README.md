@@ -20,9 +20,12 @@ Both layers are cross-checked against an independent Python implementation on
 the same wire bytes: Python protobuf for the codec, `boomlink_linkframe.py` for
 the header.
 
-Not here: radio transport, and the link engine itself (addressing state, ACK
-matching, retry, duplicate suppression, TX queue) - those are the later phases
-of the roadmap's PR 3.
+Also here: `linkengine/` - the link engine itself (addressing state, ACK matching,
+retry, duplicate suppression, TX queue; section 9). Not here: radio transport, and
+anything that wires the engine into `fw/bom-stm32node` - a call site, a
+`target_link_libraries` entry, a CLI command. Both `boomlink_linkframe` and
+`boomlink_linkengine` are already cross-compiled for the target (see "Building and
+testing" below); nothing links them yet, which is deliberate and covered there.
 
 ## Layout
 
@@ -46,8 +49,16 @@ linkframe/        BoomLink's fixed 20-byte link frame header (section 7.3):
                   a binding to the C, so the two can check each other (and
                   the parser PR 5's host CLI will use). No Nanopb dependency,
                   by design and by build config
+linkengine/       BoomLink's link engine (section 9): boomlink_link.h/.c ties
+                  together duplicate suppression (boomlink_dupcache.h/.c), the
+                  priority TX queue (boomlink_txqueue.h/.c), and the radio port
+                  seam (boomlink_port.h/.c) that a real radio or tests/'s fake
+                  implements. No Nanopb dependency, same as linkframe/ above
 tests/            host-native C CLI tools (codec_tool.c, linkframe_tool.c,
-                  sharing tool_support.c) + pytest suite + golden vectors
+                  sharing tool_support.c) + the link engine's C scenario
+                  binaries (port_test.c, dupcache_test.c, txqueue_test.c,
+                  link_rx_test.c, link_tx_test.c, against fake_port.h/.c's
+                  deterministic fake radio) + pytest suite + golden vectors
                   (vectors_spec.py is their single source of truth,
                   sha256-pinned - see "Protocol compatibility rules")
 CMakeLists.txt    generation + libraries + (standalone only) test targets

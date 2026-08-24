@@ -197,6 +197,28 @@ sketch:
   has no failure path by design. The Python reference had carried these three as dataclass
   defaults from the start, so the two implementations were not equally easy to misuse.
 
+What the link engine actually landed as, where it differs from this section's original
+sketch:
+
+- The sketch put addressing, ACK, retry and queue logic entirely under
+  `bom-stm32node/App/link/` (`boomlink.h/.c`, `boomlink_tx.c`, `boomlink_rx.c`,
+  `boomlink_queue.c`), STM32-target-only. It landed instead as `boomlink_linkengine` -
+  target-agnostic C under `fw/common/boomlink/linkengine/`, the same shared-code split as
+  `linkframe/` above, so it can run against a fake radio on the host (section 15.2)
+  rather than only ever on hardware.
+- It is four translation units, not one: `boomlink_link.h/.c` (the section 9 state
+  machine), `boomlink_dupcache.h/.c` (section 9.4's duplicate window),
+  `boomlink_txqueue.h/.c` (section 9.8's priority queue), and `boomlink_port.h/.c` (the
+  radio seam a real radio, or `fw/common/boomlink/tests/`'s fake, implements) - split so
+  each has its own focused test binary rather than one monolith.
+- `App/link/` under `bom-stm32node` is therefore not four files but one call site:
+  wiring `boomlink_link_poll()`/`boomlink_link_send()` to the real radio port and the
+  BoomProtocol dispatcher, plus the `target_link_libraries` entry the archive does not
+  yet have. That wiring is this PR's Phase C - both `boomlink_linkframe` and
+  `boomlink_linkengine` are already cross-compiled for the target (`fw/common/boomlink`'s
+  README, "Building and testing"), but nothing links them yet, on purpose: it proves both
+  free of host-isms before anything depends on them.
+
 ```text
 fw/
 ├── common/
@@ -221,6 +243,12 @@ fw/
 │       │   ├── boomlink_linkframe.h
 │       │   ├── boomlink_linkframe.c
 │       │   └── boomlink_linkframe.py  # independent host parser, not a binding
+│       ├── linkengine/              # the link engine (section 9) - NO Nanopb
+│       │   │                        # dependency, same as linkframe/ above
+│       │   ├── boomlink_link.h/.c       # section 9's TX/RX state machine
+│       │   ├── boomlink_dupcache.h/.c   # section 9.4's duplicate window
+│       │   ├── boomlink_txqueue.h/.c    # section 9.8's priority queue
+│       │   └── boomlink_port.h/.c       # radio seam - tests/'s fake implements it too
 │       ├── tests/
 │       │   ├── test_encode_decode.py
 │       │   ├── test_compatibility.py
@@ -1629,7 +1657,8 @@ Scope:
 - implement bounded priority TX queue;
 - expose BoomLink statistics;
 - add fake-radio/native tests for all behaviours;
-- expose ping/pong over BoomLink on hardware.
+- expose ping/pong over BoomLink on hardware — deferred to this PR's Phase C, once the
+  link engine has a firmware call site (section 4's "what actually landed").
 
 Acceptance criteria:
 
