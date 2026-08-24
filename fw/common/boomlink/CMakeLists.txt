@@ -529,6 +529,7 @@ add_library(boomlink_linkengine STATIC
   ${CMAKE_CURRENT_SOURCE_DIR}/linkengine/boomlink_port.c
   ${CMAKE_CURRENT_SOURCE_DIR}/linkengine/boomlink_dupcache.c
   ${CMAKE_CURRENT_SOURCE_DIR}/linkengine/boomlink_txqueue.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/linkengine/boomlink_link.c
 )
 target_include_directories(boomlink_linkengine PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}/linkengine
@@ -652,6 +653,17 @@ if(BOOMLINK_STANDALONE)
   target_compile_options(boomlink_txqueue_test PRIVATE
     ${BOOMLINK_WARNING_FLAGS} ${BOOMLINK_WERROR_FLAGS})
   add_test(NAME boomlink_txqueue_test COMMAND boomlink_txqueue_test)
+
+  # The engine's RX pipeline (section 9.2) and the delivery it exists for. Every
+  # scenario runs TWO engines on one fake medium, so a frame is built by one and
+  # validated by the other - a test that constructed the expected frame itself
+  # would agree with a misreading of section 7.3 as happily as the code does.
+  add_executable(boomlink_link_rx_test tests/link_rx_test.c tests/fake_port.c)
+  target_link_libraries(boomlink_link_rx_test PRIVATE boomlink_linkengine)
+  target_include_directories(boomlink_link_rx_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests)
+  target_compile_options(boomlink_link_rx_test PRIVATE
+    ${BOOMLINK_WARNING_FLAGS} ${BOOMLINK_WERROR_FLAGS})
+  add_test(NAME boomlink_link_rx_test COMMAND boomlink_link_rx_test)
 
   # The Nanopb-free boundary (boomlink.md section 9), checked as a TEST rather
   # than only as a CI step, so `task test` runs it and a developer finds out
