@@ -61,7 +61,7 @@ The artillery corpus was enlarged and restructured for the final version: launch
 
 **Odpověď:**
 
-_(doplnit)_
+All four items are now reported in the embedded-inference subsection, measured on the deployed firmware build and given as absolute values (partition and memory percentages are omitted, since ESP32 modules differ in flash/PSRAM configuration): the final int8 model occupies 81,400 bytes (72,193 parameters); the firmware uses 201.5 kB of flash code and 144.0 kB of flash data (417.7 kB application image); occupied on-chip RAM is 143.8 kB, dominated by the statically allocated 80 KiB tensor arena (model weights are executed in place from flash and require no RAM copy). All ten operators registered in the selective resolver are natively supported by TensorFlow Lite Micro on ESP32-S3; the compute-intensive ones (Conv2D, FullyConnected, MaxPool2D, ReLU, Logistic, Softmax) execute through the ESP-NN accelerated kernels, and the remaining four (Reshape, Shape, StridedSlice, Pack) are lightweight data-movement operations.
 
 ### R1.7 Section III.F (host-computed MFCC, latency)
 
