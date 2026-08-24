@@ -314,7 +314,7 @@ Added as suggested. The discussion (Section VI) now states: "Because each classi
 
 **Odpověď:**
 
-_(doplnit)_
+Primarily availability: ESP32-S3 was the low-power Edge AI platform available to us, and it is a suitable representative of the class, combining low cost with mature TensorFlow Lite Micro support and vendor-accelerated ESP-NN kernels. The embedded-inference subsection states explicitly that it serves as a representative deployment target, not as proof of generalization across embedded hardware. The classifier itself is portable: all ten registered operators are natively supported by TensorFlow Lite Micro, so the same int8 artifact deploys on other TFLM-capable MCUs. An evaluation of the same model on an STM32 performance-line MCU is planned; the conclusion now names STM32-class MCUs among the broader deployment targets in future work.
 
 ### R4.6 Front-end placement / purpose of the MCU
 
@@ -341,7 +341,7 @@ The corpus is not published. Section III.B now reports the measurement geometry:
 
 **Odpověď:**
 
-_(doplnit)_
+Justified in Section III.D. The 22.05 kHz rate is a deliberate design choice for the embedded target: audio buffers (the circular buffer in particular) and MFCC compute scale with the sampling rate, so on a RAM-constrained MCU, sampling at 44.1 or 48 kHz would double the memory and compute cost. The dominant energy of the artillery-launch signature lies well below the resulting 11 kHz Nyquist limit, so the higher rates would add no usable signal content for this classifier. Corpus recordings from heterogeneous sources (native rates up to 48 kHz) are resampled to this common front-end rate, and all reported results, including the deployed model, use it.
 
 ### R4-minor: Acoustic SNR definition
 
@@ -394,9 +394,9 @@ Q4: Defined per event in the experimental setup; see the SNR minor point above.
 
 Q5: The corpus is not public; it covers a single artillery type (152 mm self-propelled howitzer) recorded at a multi-kilometre standoff (recording station 1–2 km from the impact area, guns an estimated 5–10 km from the station); see point 7.
 
-Q6: _(doplnit: zdůvodnění 22.05 kHz, viz R4.8)_
+Q6: Yes, 22.05 kHz is the front-end sample rate, chosen deliberately for the embedded target: buffers and MFCC compute scale with the rate, and the launch signature's dominant energy lies well below the 11 kHz Nyquist limit, so 44.1 kHz would double RAM and compute cost without adding usable signal content (point 8). Recordings with higher native rates are resampled to this common rate.
 
-Q7: Platform choice: _(doplnit: proč ESP32-S3, viz R4.5)_. Front-end placement: in the intended deployment the complete chain runs on the MCU; host-computed MFCC tensors serve only to give both platforms bit-identical validation inputs (point 6).
+Q7: Platform choice: ESP32-S3 was the readily available representative of low-power Edge AI platforms, with mature TensorFlow Lite Micro support and accelerated kernels; an STM32 performance-line evaluation of the same model is planned (point 5). Front-end placement: in the intended deployment the complete chain runs on the MCU; host-computed MFCC tensors serve only to give both platforms bit-identical validation inputs (point 6).
 
 ### R4 Overall assessment
 
