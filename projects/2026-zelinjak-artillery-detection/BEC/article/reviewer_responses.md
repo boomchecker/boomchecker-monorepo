@@ -85,7 +85,7 @@ This sentence no longer appears in the paper: it described the previous corpus-l
 
 **Odpověď:**
 
-_(doplnit)_
+Adopted. The scope statements now appear early in the paper: the abstract states that the embedded experiment validates only the post-trigger classifier, the introduction declares the trigger, data acquisition, and circular-buffer logic as previously validated components outside the paper's scope, and the embedded-inference subsection states explicitly that MFCC extraction runs on the host and that the reported latency covers classifier inference on one MFCC segment only, not the end-to-end pipeline. Section VI keeps the consolidated discussion of limitations, including continuous-stream false-trigger rates, and was trimmed of the statements that now appear earlier in the paper.
 
 ### R1.10 Other comments
 
@@ -282,7 +282,7 @@ We agree that one fixed integer model on identical inputs must give essentially 
 
 **Odpověď:**
 
-_(doplnit)_
+We agree, and the investigation the reviewer asks for was carried out; the claim did not survive it and has been withdrawn from the entire paper (abstract, results, discussion, and conclusion). The reproduction audit showed that the float32 and int8 numbers in the submitted version came from two different trained models (see major point 1), which also explains why the two int8 regimes disagreed. The decisive experiment then quantized the same model: across five noise seeds, quantization changed MCC by about −0.01 on average, i.e. slightly negative rather than positive. The final version reports the float32 and int8 results of the same seeded models side by side in Table II; they agree within ±0.02 MCC without a consistent direction, and the text now states that int8 quantization is performance-neutral for this classifier.
 
 ### R4-M3 Headline numbers partly from training data
 
@@ -323,7 +323,7 @@ _(doplnit)_
 
 **Odpověď:**
 
-_(doplnit)_
+Clarified in the embedded-inference subsection. In the target system, the complete chain is intended to run on the MCU: continuous acquisition into a circular buffer, the trigger stage, MFCC extraction of the post-trigger window, and the classifier. Host-computed MFCC tensors are a validation instrument only: they guarantee that the PC and the ESP32-S3 receive bit-identical inputs, which is what makes the per-sample platform comparison meaningful. The paper states explicitly that the reported latency covers classifier inference on one MFCC segment only, and on-device MFCC extraction together with end-to-end latency is named in the conclusion as future work, as the reviewer suggests.
 
 ### R4.7 Dataset details
 
@@ -359,7 +359,7 @@ The definition is now given explicitly in the experimental setup: the acoustic S
 
 **Odpověď:**
 
-_(doplnit)_
+Correct: the deployment study reports latency and memory only; power and energy were not instrumented in this validation round, and we did not want to present datasheet-derived estimates as measurements. The conclusion now lists power and energy per classified decision explicitly among the future-work items, next to on-device MFCC extraction and end-to-end latency.
 
 ### R4-minor: Figures 1 and 2
 
@@ -384,7 +384,19 @@ Consolidated. The two waveform figures are now a single two-panel figure: (a) an
 
 **Odpověď (Q1–Q7, průřezově; většina otázek se kryje s body výše):**
 
-_(doplnit)_
+Q1: Answered under major point 1. The submitted comparison violated the same-model premise; after the rebuild, 1,171 of 1,176 on-device inferences match PC int8 bit-exactly on identical transmitted inputs, and the five decision-boundary cases are analyzed in Section V.C.
+
+Q2: Yes. The audit ruled quantization out entirely: the apparent float32 to int8 improvement was an artifact of comparing two different trained models, not of preprocessing, scaling, or quantization. On the same model, quantization is performance-neutral (within ±0.02 MCC); the claim was withdrawn (major point 2).
+
+Q3: All results in the final version are on data not used in training: the held-out test partition of an event-level train/validation/test split, reported as mean ± std over five training and five noise seeds (major point 3).
+
+Q4: Defined per event in the experimental setup; see the SNR minor point above.
+
+Q5: The corpus is not public; it covers a single artillery type (152 mm self-propelled howitzer) recorded at a multi-kilometre standoff (recording station 1–2 km from the impact area, guns an estimated 5–10 km from the station); see point 7.
+
+Q6: _(doplnit: zdůvodnění 22.05 kHz, viz R4.8)_
+
+Q7: Platform choice: _(doplnit: proč ESP32-S3, viz R4.5)_. Front-end placement: in the intended deployment the complete chain runs on the MCU; host-computed MFCC tensors serve only to give both platforms bit-identical validation inputs (point 6).
 
 ### R4 Overall assessment
 
@@ -405,4 +417,10 @@ _(doplnit)_
 
 **Odpověď (souhrn k bodům a–d):**
 
-_(doplnit)_
+(a) Resolved. The discrepancy was traced by a reproduction audit to a violated same-model premise in the submitted version (two different training runs behind the float32 and int8 numbers). The rebuilt validation shows bit-exact agreement between PC int8 and ESP32-S3 on 1,171 of 1,176 identical transmitted inputs, with the five decision-boundary cases explained mechanistically in Section V.C.
+
+(b) Done. Every reported number, including all headline figures in the abstract and conclusion, now comes from the held-out test partition of an event-level train/validation/test split, aggregated over five training and five noise seeds.
+
+(c) Resolved by withdrawal. The quantization claim was removed from the entire paper; measured on the same model, int8 quantization is performance-neutral (within ±0.02 MCC of float32, Table II).
+
+(d) Addressed point by point above: standoff geometry and the single covered caliber are stated in Section III.B (point 7), the sampling-rate rationale is given (point 8), the platform motivation is stated (point 5), the intended host/MCU partitioning is clarified (point 6), and power/energy measurement is explicitly listed as future work.
