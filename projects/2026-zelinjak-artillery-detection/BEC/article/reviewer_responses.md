@@ -350,7 +350,7 @@ _(doplnit)_
 
 **Odpověď:**
 
-_(doplnit)_
+The definition is now given explicitly in the experimental setup: the acoustic SNR is set per event — zero-mean Gaussian noise with variance σ² = P·10^(−SNR/10) is added to the entire 1 s event clip, where P is the mean power of the clean clip. The text also states the two consequences of this choice: the SNR is referenced to the whole event clip rather than to the 60 ms analysis window (for impulsive events, the effective in-window SNR is therefore higher than the nominal value), and peak detection with window extraction is re-run on the noisy waveform, so the evaluation includes noise-induced window-placement errors as well.
 
 ### R4-minor: Power/energy measurement
 
