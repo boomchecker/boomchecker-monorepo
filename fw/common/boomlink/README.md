@@ -127,6 +127,34 @@ PR. It defaults to OFF, so a stricter local compiler than CI's can't block
 an unrelated build; pass `-DBOOMLINK_WERROR=OFF` if a new compiler version
 starts flagging something mid-task.
 
+## Where boomlink.md section 15.2's list is covered
+
+Section 15.2 names sixteen things a fake radio backend has to make testable.
+Written down here because the list is a requirement and nothing enforces the
+mapping - if a target is renamed or a scenario deleted, this table goes stale
+silently. Treat it as a reading aid, not a check.
+
+| Section 15.2 item | Where |
+| --- | --- |
+| link frame header encode/parse round-trip | `tests/test_linkframe.py`, both implementations on the same bytes |
+| wrong magic/network ID or version rejected | `link_rx_test`: foreign and malformed traffic counted apart |
+| unicast delivery | `link_rx_test`: reaches its destination and nobody else |
+| wrong destination rejection | same scenario - the third node hears it and declines |
+| broadcast acceptance | `link_rx_test`: broadcast reaches everyone, asks for no ACK |
+| ACK matching | `link_tx_test`: an ACK completes the pending frame; near-miss ACKs do not. Rejection is pinned in `test_linkframe.py`, where an over-permissive matcher cannot hide |
+| ACK timeout | `link_tx_test`: measured by advancing the clock 1 ms at a time, and shown to scale with the frame rather than being fixed |
+| retry count | `link_tx_test`: three attempts, identical bytes, then final failure |
+| duplicate suppression | `link_rx_test`: delivered once; and the key is `(source, session, sequence)`, pinned field by field |
+| duplicate ACK resend | `link_rx_test`: the duplicate is acknowledged again, not delivered again |
+| sequence/session across a reboot | `link_rx_test`: the same session replays and goes deaf; a fresh one is delivered. `dupcache_test` covers the table's own side |
+| queue priority | `txqueue_test`, plus `link_rx_test` for the on-air sequence staying monotonic across reordering |
+| queue overflow policy | `txqueue_test` in both directions, plus `link_tx_test` for the statistics |
+| randomized backoff bounds | `link_tx_test`: seven measured draws, all in range and not all equal |
+| malformed packet rejection | `link_rx_test`: truncated, oversize, and a byte corrupted in flight |
+| a fake radio backend at all | `boomlink_port.h` + `tests/fake_port.h`, and `port_test` tests the fake itself - a fake that delivered a node its own frames would make duplicate suppression look like it worked without a second node involved |
+
+Section 15.3's hardware tests are out of scope for host CI by definition.
+
 ## Protocol compatibility rules (boomlink.md section 15.1)
 
 Every PR that changes anything under `proto/` or `nanopb/` must keep these

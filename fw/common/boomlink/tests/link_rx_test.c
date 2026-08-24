@@ -66,13 +66,7 @@ typedef struct {
  * fake's full capacity, which is what every scenario but the reduced-profile one
  * wants.
  */
-static bool node_up_with_max_packet(node_t *n, fake_air_t *air, uint8_t index,
-                                    uint32_t node_id, size_t max_packet) {
-  memset(n, 0, sizeof(*n));
-  fake_port_init(&n->ctx, air, index, 0x1000u + node_id, &n->port);
-  if (max_packet != 0u) {
-    n->port.max_packet = max_packet;
-  }
+static boomlink_link_config_t node_config(node_t *n, uint32_t node_id) {
   boomlink_link_config_t cfg = {
       .node_id               = node_id,
       .magic                 = BOOMLINK_LINKFRAME_MAGIC_DEFAULT,
@@ -83,9 +77,31 @@ static bool node_up_with_max_packet(node_t *n, fake_air_t *air, uint8_t index,
       .on_rx                 = rx_capture,
       .on_rx_user            = &n->rx,
   };
+  return cfg;
+}
+
+static bool node_up_with_max_packet(node_t *n, fake_air_t *air, uint8_t index,
+                                    uint32_t node_id, size_t max_packet) {
+  memset(n, 0, sizeof(*n));
+  fake_port_init(&n->ctx, air, index, 0x1000u + node_id, &n->port);
+  if (max_packet != 0u) {
+    n->port.max_packet = max_packet;
+  }
+  const boomlink_link_config_t cfg = node_config(n, node_id);
   /* Session per boot (section 9.3), distinct per node so a scenario cannot pass
      by confusing two peers' state. */
   return boomlink_link_init(&n->link, &cfg, &n->port, 0x5000u + node_id);
+}
+
+/**
+ * Restart `n`'s engine with `session_id`, leaving its radio, clock and delivery
+ * log alone - which is exactly what a reboot looks like from the peer's side.
+ * The board comes back with the same node ID and a sequence counter starting
+ * over; only the session says anything happened.
+ */
+static bool node_reboot(node_t *n, uint32_t node_id, uint32_t session_id) {
+  const boomlink_link_config_t cfg = node_config(n, node_id);
+  return boomlink_link_init(&n->link, &cfg, &n->port, session_id);
 }
 
 static bool node_up(node_t *n, fake_air_t *air, uint8_t index, uint32_t node_id) {
@@ -1013,6 +1029,91 @@ static void test_resetting_the_statistics_does_not_reset_the_link(void) {
   scenario_end(&air);
 }
 
+static void test_a_reboot_is_only_visible_through_the_session(void) {
+  fake_air_t air;
+  fake_air_init(&air);
+  node_t a, b;
+  REQUIRE(node_up(&a, &air, 0u, NODE_A), "A came up");
+  REQUIRE(node_up(&b, &air, 1u, NODE_B), "B came up");
+
+  /* Section 15.2's "sequence/session behaviour across reboot simulation", at the
+     engine level. The duplicate cache's own test covers the table's side of this;
+     what it cannot show is the consequence, which is that after a reboot a node
+     re-sends sequence 1 - a number its peer has already accepted and would
+     otherwise suppress. */
+  const uint8_t payload[] = {0x01};
+  for (unsigned i = 0; i < 2u; i++) {
+    (void)boomlink_link_send(&a.link, NODE_B, BOOMLINK_TXPRIO_NORMAL, false, payload,
+                             sizeof(payload));
+    boomlink_link_poll(&a.link);
+  }
+  boomlink_link_poll(&b.link);
+  boomlink_link_stats_t bs;
+  boomlink_link_get_stats(&b.link, &bs);
+  REQUIRE(bs.rx_envelopes == 2u, "both pre-reboot frames arrived, got %u",
+          (unsigned)bs.rx_envelopes);
+  const uint32_t old_session = boomlink_link_session_id(&a.link);
+
+  /* The failure FIRST, because it is what the rest of this exists to avoid: a
+     board that comes back with the SAME session - an unseeded PRNG returning the
+     same value every boot, which is exactly what a microcontroller with no entropy
+     at reset gives you - replays sequences its peer has already accepted. B has
+     seen sequences 1 and 2 in this session, so sequence 1 is inside its
+     reordering window and is dropped. The node is transmitting into a void while
+     every counter on its own side says the frame went out.
+     Ordering matters here and cost this scenario a rewrite: doing the new-session
+     reboot first destroys B's entry for the old session (a peer that reboots
+     reuses its slot, section 9.4), so the replay afterwards looks fresh and this
+     assertion would pass for the wrong reason. */
+  REQUIRE(node_reboot(&a, NODE_A, old_session), "A rebooted into its OLD session");
+  (void)boomlink_link_send(&a.link, NODE_B, BOOMLINK_TXPRIO_NORMAL, false, payload,
+                           sizeof(payload));
+  boomlink_link_poll(&a.link);
+  boomlink_link_poll(&b.link);
+
+  const fake_transmission_t *replay = fake_air_transmission(&air, 2u);
+  REQUIRE(replay != NULL, "the post-reboot frame was logged");
+  boomlink_linkframe_header_t after;
+  size_t                      ignored = 0u;
+  REQUIRE(boomlink_linkframe_parse(replay->bytes, replay->len,
+                                   BOOMLINK_LINKFRAME_MAGIC_DEFAULT, &after,
+                                   &ignored) == BOOMLINK_LINKFRAME_OK,
+          "it parses");
+  CHECK(after.sequence == 1u,
+        "the sequence really does restart at 1 after a reboot, got %u - if it did "
+        "not, this scenario would be testing nothing",
+        (unsigned)after.sequence);
+  CHECK(after.session_id == old_session, "and the session really was reused");
+  boomlink_link_get_stats(&b.link, &bs);
+  CHECK(bs.rx_envelopes == 2u,
+        "a reboot into the old session is deaf: nothing new was delivered, got %u",
+        (unsigned)bs.rx_envelopes);
+  CHECK(bs.rx_duplicates == 1u,
+        "the frame was suppressed as a replay, got %u - which is exactly why "
+        "session_id must actually differ across boots, and why "
+        "boomlink_link_init() refuses to invent one",
+        (unsigned)bs.rx_duplicates);
+
+  /* And now correctly, per section 9.3: a FRESH session on reboot. The same
+     sequence number, from the same node, to the same peer - and delivered,
+     because the session is what tells B this is a new conversation rather than a
+     replay of the old one. */
+  REQUIRE(node_reboot(&a, NODE_A, old_session + 0x777u), "A rebooted properly");
+  CHECK(boomlink_link_session_id(&a.link) != old_session, "with a new session");
+  (void)boomlink_link_send(&a.link, NODE_B, BOOMLINK_TXPRIO_NORMAL, false, payload,
+                           sizeof(payload));
+  boomlink_link_poll(&a.link);
+  boomlink_link_poll(&b.link);
+  boomlink_link_get_stats(&b.link, &bs);
+  CHECK(bs.rx_envelopes == 3u,
+        "sequence 1 in a new session is delivered, got %u envelopes",
+        (unsigned)bs.rx_envelopes);
+  CHECK(bs.rx_duplicates == 1u, "and not counted as a duplicate, got %u",
+        (unsigned)bs.rx_duplicates);
+  CHECK(b.rx.last_source == NODE_A, "still recognisably from the same node");
+  scenario_end(&air);
+}
+
 int main(void) {
   test_init_refuses_an_unusable_configuration();
   test_the_diagnostics_tolerate_a_null_link();
@@ -1032,5 +1133,6 @@ int main(void) {
   test_a_byte_corrupted_in_flight_is_classified_not_delivered();
   test_the_duplicate_key_is_source_session_and_sequence();
   test_resetting_the_statistics_does_not_reset_the_link();
-  BOOMLINK_TEST_REPORT("link_rx_test", 187);
+  test_a_reboot_is_only_visible_through_the_session();
+  BOOMLINK_TEST_REPORT("link_rx_test", 204);
 }

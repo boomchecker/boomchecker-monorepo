@@ -105,9 +105,16 @@ typedef struct {
    * requires cumulative TX airtime for duty-cycle verification (section 6.1).
    * Both need the same LoRa symbol-time arithmetic, which depends on spreading
    * factor, bandwidth, coding rate, preamble length and the implicit/explicit
-   * header choice. That knowledge belongs to the radio layer - which already has
-   * it, since RadioLib computes it - and putting it here keeps the engine free
-   * of PHY details, the same boundary that keeps Protobuf out of the radio.
+   * header choice. That knowledge belongs to the radio layer, and putting it here
+   * keeps the engine free of PHY details - the same boundary that keeps Protobuf
+   * out of the radio.
+   *
+   * Precisely, since an earlier version of this comment said the radio layer
+   * "already has it": RadioLib can compute it (PhysicalLayer::getTimeOnAir(len),
+   * in the vendored copy under fw/bom-stm32node/third_party/RadioLib), but
+   * App/radio/radio.h does not expose it today. So implementing this callback on
+   * the target means adding that accessor to the radio layer, not just forwarding
+   * to something that is already there.
    *
    * A fake may return anything self-consistent; the engine only ever compares
    * and scales these values, never interprets them as physics.

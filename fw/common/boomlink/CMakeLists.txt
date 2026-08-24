@@ -690,10 +690,15 @@ if(BOOMLINK_STANDALONE)
     ${BOOMLINK_WARNING_FLAGS} ${BOOMLINK_WERROR_FLAGS})
   add_test(NAME boomlink_txqueue_test COMMAND boomlink_txqueue_test)
 
-  # The engine's RX pipeline (section 9.2) and the delivery it exists for. Every
-  # scenario runs TWO engines on one fake medium, so a frame is built by one and
-  # validated by the other - a test that constructed the expected frame itself
-  # would agree with a misreading of section 7.3 as happily as the code does.
+  # The engine's RX pipeline (section 9.2) and the delivery it exists for. Where
+  # delivery is the subject, a scenario runs TWO engines on one fake medium, so a
+  # frame is built by one and validated by the other - a test that constructed the
+  # expected frame itself would agree with a misreading of section 7.3 as happily
+  # as the code does. The rejection scenarios cannot be shaped that way and are
+  # forged-and-injected instead: no compliant engine emits a frame from the
+  # broadcast address or an ACK addressed to a third party, so a receiver-side
+  # guard is only reachable by traffic no sender would produce. An earlier version
+  # of this comment claimed EVERY scenario ran two engines.
   add_executable(boomlink_link_rx_test tests/link_rx_test.c tests/fake_port.c)
   target_link_libraries(boomlink_link_rx_test PRIVATE boomlink_linkengine)
   target_include_directories(boomlink_link_rx_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests)
