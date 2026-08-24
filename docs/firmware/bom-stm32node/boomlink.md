@@ -1401,29 +1401,39 @@ radio bring-up, but it is a deployment requirement, not an optional polish item.
 
 ### 14.1 What the unauthenticated link is knowingly open to
 
-Recorded so these are understood as deferred rather than overlooked. The first four are
-closed by message authentication (PR 6, scoped to cover the **link frame header** per
-the note above - payload-only authentication closes none of the first three) and by
-nothing short of it — each one is an attacker getting a frame *accepted*, which is
-exactly what authentication prevents. The last is not: reading a valid frame needs no
-forgery, so only encryption closes it, which this section already scopes to "where
-confidentiality is required" rather than making it unconditional.
+Recorded so these are understood as deferred rather than overlooked. The first four
+require header-scoped message authentication **and** replay protection (PR 6) — not
+authentication alone, which is the distinction "and by nothing short of it" used to
+elide here until it was pointed out. Authentication proves a frame's header was not
+fabricated or altered; it says nothing about whether the frame is *fresh*. A frame that
+was genuine once and is recorded and replayed later carries a perfectly valid
+authentication tag, so each of the first three below is reachable by *replaying* a past
+frame exactly as well as by *forging* a new one — authentication closes only the forging
+path, which is why this section's opening paragraph already asks for both, and 14.1
+should not read as though authentication were sufficient on its own. The last risk is
+neither: reading a valid frame needs no forgery or replay, so only encryption closes it,
+which this section already scopes to "where confidentiality is required" rather than
+making it unconditional.
 
-- **Duplicate-window poisoning.** One forged frame carrying a sequence far ahead of a
-  peer's real one moves that peer's duplicate window forward, and the peer's genuine
-  frames are then discarded as stale until it changes session. Deliberately *not*
+- **Duplicate-window poisoning.** One forged *or replayed* frame carrying a sequence far
+  ahead of a peer's real one moves that peer's duplicate window forward, and the peer's
+  genuine frames are then discarded as stale until it changes session. Deliberately *not*
   mitigated with a heuristic bound on how far a sequence may jump: such a bound trades a
   certain replay hole (a jump just under the limit still works) for an uncertain liveness
   one (a peer whose sequence legitimately advances during a radio outage goes deaf), and
-  choosing a number for it without field data would be guessing. Authentication makes the
-  question moot; a heuristic would make it worse and harder to reason about.
-- **Session reset.** A forged frame from a real source with an unfamiliar `session_id`
-  reuses that peer's cache entry (section 9.4), discarding the window it had built.
+  choosing a number for it without field data would be guessing. Authentication *and*
+  replay protection together make the question moot; authentication alone does not — a
+  genuine high-sequence frame recorded once and replayed later carries a valid tag and
+  advances the window exactly as a forged one would.
+- **Session reset.** A forged *or replayed* frame from a real source carrying an
+  unfamiliar `session_id` reuses that peer's cache entry (section 9.4), discarding the
+  window it had built.
 - **Forged ACKs.** An ACK matching a pending frame's `(session_id, sequence)` and
   addressed correctly completes that frame early, so a lost frame is reported delivered.
   The matcher already rejects everything weaker than an exact match, which is what keeps
   this to *guessing a live sequence* rather than *any ACK will do* — but a listener can
-  hear the sequence it needs to guess.
+  hear the sequence it needs to guess, or skip guessing altogether and replay a genuine
+  ACK recorded from an unrelated exchange that happens to carry a colliding pair.
 - **Traffic injection generally.** Any node in radio range can put a well-formed frame on
   the air and have it accepted. The network ID (section 7.3) is a filter for accidental
   coexistence, not a credential.
