@@ -122,11 +122,12 @@ if(BOOMLINK_STANDALONE AND BOOMLINK_WERROR)
 endif()
 
 # One exception to all of the above, and the only warning knob declared in BOTH
-# modes: -Werror for boomlink_linkframe alone, off by default.
+# modes: -Werror for this package's TARGET-BOUND libraries - boomlink_linkframe
+# and boomlink_linkengine - off by default.
 #
 # It exists because three places (this file, README.md and
-# .github/workflows/test-bom-stm32node-build.yaml) justify cross-compiling the
-# link frame layer as proving it is "free of host-isms AND warning-clean for the
+# .github/workflows/test-bom-stm32node-build.yaml) justify cross-compiling those
+# libraries as proving they are "free of host-isms AND warning-clean for the
 # target". Only the first half was true: nothing put -Werror on the ARM build,
 # and the workflow's check only asserts the archive exists - so adding
 # `static int unused_var = 7;` to boomlink_linkframe.c left the ARM build green
@@ -136,16 +137,23 @@ endif()
 # int/long/size_t are different widths on the target, so -Wformat and
 # sign-compare diagnostics appear there and nowhere else.
 #
+# Named for what it covers rather than BOOMLINK_TARGET_WERROR, which is what
+# it was called when the frame layer was the only such target. It now gates two,
+# and a knob whose name says "linkframe" while silently also governing the engine
+# is the kind of thing that gets switched off for a reason applying to only one of
+# them.
+#
 # Default OFF, ON in CI, for exactly the reason BOOMLINK_WERROR is: a developer's
 # local firmware build must never be blocked by a warning from a compiler newer
-# than CI's, least of all on code they did not touch. Scoped to this ONE
-# small hand-written target, so it cannot spread to the CubeMX-generated sources
-# or the vendored libraries.
-option(BOOMLINK_LINKFRAME_WERROR
-       "Treat warnings as errors when compiling boomlink_linkframe (CI turns this on)" OFF)
-set(BOOMLINK_LINKFRAME_WERROR_FLAGS "")
-if(BOOMLINK_LINKFRAME_WERROR)
-  set(BOOMLINK_LINKFRAME_WERROR_FLAGS -Werror)
+# than CI's, least of all on code they did not touch. Scoped to these two
+# hand-written libraries, so it cannot spread to the CubeMX-generated sources or
+# the vendored libraries.
+option(BOOMLINK_TARGET_WERROR
+       "Treat warnings as errors in the libraries cross-compiled for the target - \
+boomlink_linkframe and boomlink_linkengine (CI turns this on)" OFF)
+set(BOOMLINK_TARGET_WERROR_FLAGS "")
+if(BOOMLINK_TARGET_WERROR)
+  set(BOOMLINK_TARGET_WERROR_FLAGS -Werror)
 endif()
 
 # Nanopb is vendored once, under bom-stm32node/third_party/ (git submodule
@@ -485,7 +493,7 @@ endif()
 # missing a symbol an acceptance criterion required, whereas here cross-
 # compiling it early is what proves it is free of host-isms and warning-clean
 # for the target before any firmware depends on it. The second half of that claim
-# is only true when BOOMLINK_LINKFRAME_WERROR is on, which is why CI turns it on
+# is only true when BOOMLINK_TARGET_WERROR is on, which is why CI turns it on
 # - see that option above.
 #
 # Precisely: the archive is BUILT but never reaches the linker at all - it is
@@ -503,28 +511,40 @@ target_include_directories(boomlink_linkframe PUBLIC
 # _Static_assert (C11), same self-contained reasoning as boomlink_protocol.
 target_compile_features(boomlink_linkframe PUBLIC c_std_11)
 # BOOMLINK_WERROR_FLAGS is the host-build knob (empty outside the standalone
-# branch); BOOMLINK_LINKFRAME_WERROR_FLAGS is the one that also applies under the
+# branch); BOOMLINK_TARGET_WERROR_FLAGS is the one that also applies under the
 # ARM cross build, which is what makes "warning-clean for the target" a checked
 # claim rather than a stated one. Both are listed so either can enable it.
 target_compile_options(boomlink_linkframe PRIVATE
-  ${BOOMLINK_WARNING_FLAGS} ${BOOMLINK_WERROR_FLAGS} ${BOOMLINK_LINKFRAME_WERROR_FLAGS})
+  ${BOOMLINK_WARNING_FLAGS} ${BOOMLINK_WERROR_FLAGS} ${BOOMLINK_TARGET_WERROR_FLAGS})
 
 # BoomLink's link engine (boomlink.md section 9): the stateful half of the link
 # layer - addressing, ACK/retry, duplicate suppression, TX queue - as opposed to
 # boomlink_linkframe's stateless header codec.
 #
 # A SEPARATE target from boomlink_linkframe, and the separation is the same one
-# section 9 draws: this depends on the frame layer, never the reverse. It also
-# inherits the frame layer's Nanopb-free property transitively (it links only
-# boomlink_linkframe, so the check registered below covers it too) - section 9's
-# "BoomLink never decodes the Protobuf payload" applies to the engine at least as
-# much as to the header codec, since the engine is what would be tempted to look
-# inside a payload to make a routing or retry decision.
+# section 9 draws: this depends on the frame layer, never the reverse. Section 9's
+# "BoomLink never decodes the Protobuf payload and has no Nanopb dependency"
+# applies to the engine at least as much as to the header codec - the engine is
+# what would be tempted to look inside a payload to make a routing or retry
+# decision.
+#
+# That property is NOT inherited from the frame layer, and an earlier version of
+# this comment claimed it was ("it links only boomlink_linkframe, so the check
+# registered below covers it too"). Linking a Nanopb-free library says nothing
+# about what this target's OWN four sources include: a relative include reaching
+# nanopb's headers needs no CMake change at all, and emits no symbol at all if it
+# only uses a macro or a typedef. Verified - such an include in boomlink_link.c
+# left every one of the twelve tests green. All four translation units are
+# therefore named explicitly in the check registered further down, alongside this
+# archive.
 #
 # Built in the ARM cross build for the same reason boomlink_linkframe is: to
-# prove it is free of host-isms and (with BOOMLINK_LINKFRAME_WERROR) warning-clean
+# prove it is free of host-isms and (with BOOMLINK_TARGET_WERROR) warning-clean
 # for the target before any firmware depends on it. Nothing links it yet; Phase C
-# adds it to fw/bom-stm32node's target_link_libraries.
+# adds it to fw/bom-stm32node's target_link_libraries. The workflow asserts the
+# archive is produced, because with no dependents nothing else would notice it
+# disappearing - verified by marking this target EXCLUDE_FROM_ALL, which left the
+# firmware job green with the engine never cross-compiled at all.
 add_library(boomlink_linkengine STATIC
   ${CMAKE_CURRENT_SOURCE_DIR}/linkengine/boomlink_port.c
   ${CMAKE_CURRENT_SOURCE_DIR}/linkengine/boomlink_dupcache.c
@@ -537,7 +557,7 @@ target_include_directories(boomlink_linkengine PUBLIC
 target_link_libraries(boomlink_linkengine PUBLIC boomlink_linkframe)
 target_compile_features(boomlink_linkengine PUBLIC c_std_11)
 target_compile_options(boomlink_linkengine PRIVATE
-  ${BOOMLINK_WARNING_FLAGS} ${BOOMLINK_WERROR_FLAGS} ${BOOMLINK_LINKFRAME_WERROR_FLAGS})
+  ${BOOMLINK_WARNING_FLAGS} ${BOOMLINK_WERROR_FLAGS} ${BOOMLINK_TARGET_WERROR_FLAGS})
 
 if(BOOMLINK_STANDALONE)
   enable_testing()
@@ -703,16 +723,34 @@ if(BOOMLINK_STANDALONE)
   # only uses a macro or typedef, so an archive check cannot see it either. The
   # script checks symbols AND the compiler's own include list; see its header.
   #
-  # The artefact list is passed from here rather than hardcoded in the workflow,
-  # so a target added by a later phase (the link engine, which must hold the
-  # same property) is one line away from being covered.
+  # Both lists are passed from here rather than hardcoded in the workflow. An
+  # earlier version of this comment said a target added by a later phase would be
+  # "one line away from being covered", and that was wrong twice over: the script
+  # took exactly ONE source (`shift 4`), so the engine's four translation units
+  # could not be added at all, and the engine target's own comment claimed it
+  # inherited the property transitively. Verified: a relative
+  # `#include "../../../bom-stm32node/third_party/nanopb/pb.h"` in
+  # boomlink_link.c left all twelve tests green.
+  #
+  # So every translation unit that must hold the property is named, and so is
+  # every archive. The engine's four sources are listed individually rather than
+  # globbed: a glob silently covers a new file, which sounds good until the new
+  # file is one that legitimately needs a different rule, and there would be
+  # nothing here saying which files this claim is about.
   add_test(NAME boomlink_no_nanopb_dependency
     COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/tests/check_no_nanopb.sh
             ${Python3_EXECUTABLE}
             ${BOOMLINK_NANOPB_DIR}
             ${CMAKE_CURRENT_BINARY_DIR}/compile_commands.json
+            --sources
             ${CMAKE_CURRENT_SOURCE_DIR}/linkframe/boomlink_linkframe.c
+            ${CMAKE_CURRENT_SOURCE_DIR}/linkengine/boomlink_port.c
+            ${CMAKE_CURRENT_SOURCE_DIR}/linkengine/boomlink_dupcache.c
+            ${CMAKE_CURRENT_SOURCE_DIR}/linkengine/boomlink_txqueue.c
+            ${CMAKE_CURRENT_SOURCE_DIR}/linkengine/boomlink_link.c
+            --artefacts
             $<TARGET_FILE:boomlink_linkframe>
+            $<TARGET_FILE:boomlink_linkengine>
             $<TARGET_FILE:boomlink_linkframe_tool>
   )
 

@@ -66,18 +66,21 @@ This directory is a CMake project that builds two different ways:
   `boomlink_linkframe_tool` and runs the full CTest suite (two C self-tests
   plus the Python interop/compatibility tests).
 - **As a subdirectory** of `fw/bom-stm32node`'s ARM cross build: the
-  `boomlink_protocol` and `boomlink_linkframe` static libraries are built.
-  `boomlink_protocol` is linked into the firmware and actually exercised there
-  by the `proto` CLI command in `Core/Src/cli.c` (see its comment for why that
-  matters); `boomlink_linkframe` is cross-compiled but not yet referenced by
-  anything, which is deliberate - it proves the header is free of host-isms and
-  warning-clean for the target before the link engine that will use it exists.
-  The warning-clean half needs `-DBOOMLINK_LINKFRAME_WERROR=ON`, which CI passes
+  `boomlink_protocol`, `boomlink_linkframe` and `boomlink_linkengine` static
+  libraries are built. `boomlink_protocol` is linked into the firmware and
+  actually exercised there by the `proto` CLI command in `Core/Src/cli.c` (see
+  its comment for why that matters); the other two are cross-compiled but not
+  yet referenced by anything, which is deliberate - it proves they are free of
+  host-isms and warning-clean for the target before the firmware that will use
+  them exists.
+  The warning-clean half needs `-DBOOMLINK_TARGET_WERROR=ON`, which CI passes
   and a local firmware build does not (so a warning from a newer compiler than
   CI's never blocks you); without it a warning there is only log text.
-  The archive is built but never reaches the linker at all (nothing links it),
-  so wiring it into the firmware will need a `target_link_libraries` entry in
-  `fw/bom-stm32node`, not merely a call site. No tests - a
+  Both archives are built but never reach the linker at all (nothing links
+  them), so wiring them into the firmware will need `target_link_libraries`
+  entries in `fw/bom-stm32node`, not merely a call site. The workflow asserts
+  both archives exist, because with no dependents nothing else would notice
+  their disappearing. No tests - a
   cross-compiled host tool makes no sense, and pytest cannot run on an
   STM32. Note this makes the host Python packages below a hard requirement
   of building the **firmware**, not just of running these tests: code

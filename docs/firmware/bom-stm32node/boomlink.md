@@ -847,10 +847,20 @@ Concrete initial shape:
 - LRU eviction when the table is full. A very stale retransmission from an evicted
   source may be delivered twice — acceptable at this scale and traffic rate.
 
+A frame from a source already in the table but carrying a *different* `session_id` means
+that peer rebooted (section 9.3), and its entry is **reused** rather than a second one
+added: a peer that reboots a few times would otherwise evict unrelated peers with
+sessions that are already dead. The cost is symmetrical with the eviction note above —
+a straggler still in flight across the peer's reboot resets what the current session's
+window remembers, so one already-delivered frame can be delivered twice. Both are the
+same trade, and both are preferable to letting one rebooting peer occupy two slots.
+
 If a duplicate packet is received:
 
 - do not dispatch it to the application again;
-- if it requests ACK, transmit the ACK again;
+- if it is **unicast** and requests ACK, transmit the ACK again — a broadcast frame is
+  never acknowledged at all (section 9.5's receiver-side responsibilities), so the
+  scoping here matches the rule list there rather than reading as a second, laxer one;
 - update duplicate statistics.
 
 The cache must be statically bounded. No unbounded map or dynamic allocation.
@@ -959,6 +969,15 @@ options:
 2. Keep it in the engine, and cover the rejection cases explicitly in its own tests — a
    fake-radio test that feeds a *mismatched* ACK and asserts the frame is still pending.
 
+**Decided: option 1, and option 2 as well rather than instead.** The matcher lives in the
+frame layer as `boomlink_linkframe_ack_matches()`, pinned against near-miss vectors by
+the Python mirror, because the over-permissive failure above is invisible to any test the
+engine alone can have. The engine then *also* feeds mismatched ACKs — wrong source, wrong
+sequence, wrong session, and a DATA frame wearing the right fields — and asserts the frame
+is still pending, because pinning the predicate does not prove the engine consults it.
+The two are cheap together and neither substitutes for the other: the frame layer's tests
+say the answer is right, the engine's say the question was asked.
+
 The matching rule itself is not a new decision either way. It is the inverse of the
 mapping above, for a **unicast** pending frame — 9.6 scopes ACK waits to unicast, so
 `pending.destination_id` is always a real node: frame type ACK, `session_id` and
@@ -1017,6 +1036,30 @@ Initial policy:
 - final failure is surfaced to the caller and counted in link statistics.
 
 Do not retry forever.
+
+**What counts as an attempt.** The attempt budget counts transmissions the radio
+*accepted*, not calls to it. A driver that refuses a send — `radio_send()` reports busy
+while a transmission is in progress, and reports the same for absent hardware — radiated
+nothing, so the frame keeps its slot in the pipeline, keeps its already-assigned
+`(session_id, sequence)`, and is offered again on a later poll. Two consequences worth
+stating, because both look like bugs and neither is:
+
+- The frame is **held**, not popped and re-queued. An implementation that dequeues before
+  transmitting and drops the item on a refused send lets a busy radio silently destroy
+  queued traffic, which is the failure this paragraph exists to rule out.
+- Refusals are **not** bounded by a count. At SF12 a single frame legitimately collects
+  thousands of "busy" refusals from a superloop polling every millisecond, so any bound
+  low enough to detect a dead radio would shed live traffic constantly. A radio refusing
+  forever is a dead link however this is written; what matters is that it is visible,
+  which the *TX failures* counter (section 9.10) provides.
+
+**Final failure is not the same as no delivery.** An unacknowledged frame may well have
+arrived — the ACK is what was lost. The outcome reported to the caller therefore
+distinguishes *acknowledged* (the only outcome that means delivery), *sent* (transmitted
+with no ACK requested, so the link knows nothing more) and *no ACK* (every attempt
+transmitted, none acknowledged). Success is reported as well as failure: a caller told
+only about failures cannot tell delivery from a frame still waiting behind a retry
+sequence, which at this traffic rate can be seconds.
 
 ### 9.7 Random backoff and simultaneous detections
 
@@ -1083,6 +1126,41 @@ Expose at least:
 - cumulative TX airtime (for duty-cycle verification, section 6.1);
 - last RSSI;
 - last SNR.
+
+**Additions the implementation found necessary.** Every counter in the list above
+describes something that happened *after* a frame was queued, or to a frame that parsed.
+Four drops fall outside that and would otherwise be invisible — a link discarding traffic
+with every listed counter reading zero:
+
+- **unmatched ACK** — an ACK addressed to this node that acknowledges nothing pending:
+  late (the frame already timed out and was retried) or forged. Distinct from *ACK
+  received*, which counts the useful ones. An ACK addressed to *someone else* is
+  deliberately **not** counted here: on a shared medium that arrives constantly and is
+  ordinary overheard traffic, so it belongs with *packets ignored for another
+  destination*. Conflating the two buries the interesting case in the ordinary one.
+- **invalid source** — a frame whose `source_id` is the unconfigured address, the
+  broadcast address, or *this node's own ID*. The last is a reflection, a second board
+  flashed with the same ID, or a spoof; accepting it would have the node acknowledge
+  itself and file the frame in its own duplicate cache under its own key, so its own
+  later traffic could be suppressed as a duplicate of it. Counted by neither the
+  malformed nor the wrong-destination statistic, since the frame is well-formed and
+  correctly addressed.
+- **oversize packet** — longer than the port declared it can carry, so only a prefix was
+  staged. Note this is the *active profile's* limit, not a fixed 255: on a reduced radio
+  profile a buffer-sized check would accept packets the radio could not have produced.
+- **dropped before queueing** and **shed for more urgent traffic** — a frame the send
+  call refused (full queue, oversize payload, forbidden destination), and lower-priority
+  traffic evicted under section 9.8's policy. Kept apart on purpose: the first is a node
+  generating more than the link can carry, the second is the drop policy working as
+  designed, and a node protecting detections should not read as a node in trouble.
+
+One clarification on the listed counters, since two readings are possible: *TX envelopes*
+counts each envelope's **first** transmission and *TX retries* counts retransmissions of
+one, so transmissions radiated is their sum and neither double-counts the other. *TX
+failures* covers both a frame that exhausted section 9.6's attempts unacknowledged and
+every transmission the radio itself refused — the second is not a lost frame (it stays
+queued and is retried) but it is airtime that did not happen, and a radio refusing
+constantly is what an operator needs to see.
 
 ---
 
@@ -1255,6 +1333,34 @@ BoomProtocol payload while preserving the layering above.
 
 Security is intentionally a separate implementation PR so it does not block the first
 radio bring-up, but it is a deployment requirement, not an optional polish item.
+
+### 14.1 What the unauthenticated link is knowingly open to
+
+Recorded so these are understood as deferred rather than overlooked. Each is closed by
+message authentication (PR 6) and by nothing short of it.
+
+- **Duplicate-window poisoning.** One forged frame carrying a sequence far ahead of a
+  peer's real one moves that peer's duplicate window forward, and the peer's genuine
+  frames are then discarded as stale until it changes session. Deliberately *not*
+  mitigated with a heuristic bound on how far a sequence may jump: such a bound trades a
+  certain replay hole (a jump just under the limit still works) for an uncertain liveness
+  one (a peer whose sequence legitimately advances during a radio outage goes deaf), and
+  choosing a number for it without field data would be guessing. Authentication makes the
+  question moot; a heuristic would make it worse and harder to reason about.
+- **Session reset.** A forged frame from a real source with an unfamiliar `session_id`
+  reuses that peer's cache entry (section 9.4), discarding the window it had built.
+- **Forged ACKs.** An ACK matching a pending frame's `(session_id, sequence)` and
+  addressed correctly completes that frame early, so a lost frame is reported delivered.
+  The matcher already rejects everything weaker than an exact match, which is what keeps
+  this to *guessing a live sequence* rather than *any ACK will do* — but a listener can
+  hear the sequence it needs to guess.
+- **Traffic injection and observation generally.** Any node in radio range can inject a
+  well-formed frame or read every byte of one. The network ID (section 7.3) is a filter
+  for accidental coexistence, not a credential.
+
+None of these is reachable through malformed input: they are all *valid* frames from an
+attacker who can transmit. That is the boundary this section draws, and it is why
+hardening the parser further does not move it.
 
 ---
 
