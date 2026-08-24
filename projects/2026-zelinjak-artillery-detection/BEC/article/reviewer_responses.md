@@ -77,7 +77,7 @@ The reviewer's understanding is correct: in the validation protocol, the host co
 
 **Odpověď:**
 
-_(doplnit)_
+This sentence no longer appears in the paper: it described the previous corpus-level evaluation of the MFCC-jitter-trained model, in which the float32 reference produced inflated false-positive counts. After retraining with waveform-domain augmentation and switching to a held-out evaluation, the behavior changed qualitatively. Float32 and int8 inference now agree within ±0.02 MCC at every SNR level, and the deployed classifier fails in the opposite, operationally benign direction: from 5 dB downward, precision stays at 1.000 while recall decreases, so under extreme noise the classifier misses launches rather than raising false alarms, and across all noise levels no small-arms gunshot in the test set was ever classified as an artillery launch (Section V.B).
 
 ### R1.9 Section VI (limitations earlier)
 
@@ -213,7 +213,7 @@ Please see the response to the previous point: the task after the trigger stage 
 
 **Odpověď:**
 
-_(doplnit)_
+We agree, and the evaluation methodology was fully reworked for the final version. The corpus is now divided into training, validation, and test partitions (Table I), with the split performed at the level of physical events, so the four synchronized channels of one launch never cross partitions. The validation partition drives early stopping and model selection; the held-out test partition is used only for the final evaluation and never influences training. All results in Section V are reported on this held-out test partition as mean ± std over five training seeds and five noise-realization seeds (25 runs per table cell). Generalization to data from other sources (different weapon types, sites, and recording campaigns) is beyond what the current corpus supports and is stated explicitly as a limitation in Section VI; see also our response to the next point below.
 
 ### R3.6 Three inference regimes unexplained (float32 vs int8 vs ESP32)
 
@@ -231,7 +231,7 @@ _(doplnit)_
 
 **Odpověď:**
 
-_(doplnit)_
+Addressed together with the split rework above: every reported number now comes from the held-out test partition, which is never encountered during training or model selection, and the evaluation noise realizations use seeds disjoint from the training augmentation. Validation on an entirely independent recording campaign (different artillery types, sites, and recording equipment) exceeds what the current corpus supports; Section VI names this explicitly as the main open validation step, together with the single-artillery-type coverage of the corpus.
 
 ---
 
@@ -294,7 +294,7 @@ _(doplnit)_
 
 **Odpověď:**
 
-_(doplnit)_
+We agree, and the evaluation was redone from scratch. The corpus-level stress test was removed entirely; all reported robustness numbers, including the headline figures in the abstract and conclusion, now come exclusively from the held-out test partition of an event-level train/validation/test split (Table I), aggregated over five training and five noise seeds. The headline figures were updated accordingly: held-out int8 MCC 0.99 at 30 dB and 0.98 at 5 dB, with the stress levels of 0 and −5 dB (0.95 and 0.83) reported separately in Table II and marked as beyond the validated trigger envelope.
 
 ### R4.4 End-to-end dependence on the trigger
 
