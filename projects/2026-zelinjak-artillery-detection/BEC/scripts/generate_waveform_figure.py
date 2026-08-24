@@ -13,7 +13,7 @@ Reference recording: BEC/scripts/reference_launch_ch1.wav (channel 1 of launch e
 the same front end as the pipeline (librosa, resampled to 22.05 kHz) and normalized
 to [-1, 1] for display.
 
-Output: BEC/article/figs/sec2_waveform_combined.png (300 dpi).
+Output: BEC/article/figs/sec2_waveform_combined.pdf (vector).
 """
 
 from __future__ import annotations
@@ -35,7 +35,7 @@ sys.path.insert(0, str(PROJECT_ROOT / "ml"))
 from utils import extract_window, find_peak, load_signal  # noqa: E402
 
 WAV_PATH = SCRIPT_DIR / "reference_launch_ch1.wav"
-OUTPUT_PATH = SCRIPT_DIR.parent / "article" / "figs" / "sec2_waveform_combined.png"
+OUTPUT_PATH = SCRIPT_DIR.parent / "article" / "figs" / "sec2_waveform_combined.pdf"
 
 WINDOW_MS = 60
 BEFORE_FRAC = 0.3  # must match ml/utils.py extract_window (30 % before / 70 % after peak)
@@ -93,7 +93,7 @@ def main() -> None:
     axes[1].xaxis.set_minor_locator(mticker.MultipleLocator(5))
 
     OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(OUTPUT_PATH, dpi=300, bbox_inches="tight", pad_inches=0.02)
+    fig.savefig(OUTPUT_PATH, bbox_inches="tight", pad_inches=0.02)
     print(f"Peak at {peak_index / sr * 1000:.1f} ms, window {window_start / sr * 1000:.0f}"
           f"--{(window_start + window_samples) / sr * 1000:.0f} ms")
     print(f"Saved {OUTPUT_PATH}")
