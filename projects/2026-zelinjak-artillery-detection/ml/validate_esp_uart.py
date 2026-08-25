@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import csv
 import re
 import struct
 import time
@@ -16,8 +17,8 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 FEATURE_ROOT = PROJECT_ROOT / "generated" / "features"
 FEATURE_INDEX = FEATURE_ROOT / "features_manifest.csv"
 
-# Matches the board's "PREDIKCIA: 0.9961 (Cas: 32 ms)" response, see firmware/esp32s3/main/main.cpp.
-RESPONSE_RE = re.compile(r"PREDIKCIA:\s*([-\d.]+)\s*\(Cas:\s*(\d+)\s*ms\)")
+# Matches the board's "PREDIKCIA: 0.9961 (Cas: 32054 us)" response, see firmware/esp32s3/main/main.cpp.
+RESPONSE_RE = re.compile(r"PREDIKCIA:\s*([-\d.]+)\s*\(Cas:\s*(\d+)\s*us\)")
 
 
 def main() -> None:
@@ -31,9 +32,11 @@ def main() -> None:
     parser.add_argument("--features", type=Path, default=FEATURE_INDEX)
     parser.add_argument("--limit", type=int, default=0)
     parser.add_argument("--timeout", type=float, default=3.0)
+    parser.add_argument("--per-sample-csv", type=Path, default=None, help="Write one row per sample with the raw score.")
     args = parser.parse_args()
 
     index = pd.read_csv(args.features)
+    feature_root = args.features.parent
     rows = index[index["variant"] == args.variant]
     if args.split != "all":
         rows = rows[rows["split"] == args.split]
@@ -44,13 +47,14 @@ def main() -> None:
 
     y_true: list[int] = []
     y_pred: list[int] = []
-    latencies_ms: list[int] = []
+    latencies_us: list[int] = []
     errors = 0
+    per_sample_rows: list[dict] = []
 
     with serial.Serial(args.port, args.baud, timeout=args.timeout) as uart:
         time.sleep(1.0)
         for row in rows.itertuples(index=False):
-            mfcc = np.load(FEATURE_ROOT / row.feature_path).astype(np.float32).flatten()
+            mfcc = np.load(feature_root / row.feature_path).astype(np.float32).flatten()
             if len(mfcc) != 696:
                 print(f"skip {row.recording_id}: expected 696 floats, got {len(mfcc)}")
                 continue
@@ -65,13 +69,38 @@ def main() -> None:
                 continue
 
             score = float(match.group(1))
-            latency_ms = int(match.group(2))
-            predicted = 1 if score > 0.5 else 0
+            latency_us = int(match.group(2))
+            # >=0.5, matching the PC-side threshold in evaluate_pc.py / evaluate_robustness.py
+            # (the board's own C++ dequantization widens to int32 automatically, so no overflow
+            # bug applies here - this only aligns the decision threshold, not the score itself).
+            predicted = 1 if score >= 0.5 else 0
 
             y_true.append(int(row.class_id))
             y_pred.append(predicted)
-            latencies_ms.append(latency_ms)
-            print(f"{row.recording_id},expected={row.class_id},predicted={predicted},score={score:.4f},latency_ms={latency_ms}")
+            latencies_us.append(latency_us)
+            per_sample_rows.append(
+                {
+                    "recording_id": row.recording_id,
+                    "variant": args.variant,
+                    "split": row.split,
+                    "class_id": int(row.class_id),
+                    "score": score,
+                    "pred": predicted,
+                    "latency_us": latency_us,
+                }
+            )
+            print(
+                f"{row.recording_id},expected={row.class_id},predicted={predicted},"
+                f"score={score:.4f},latency_us={latency_us}"
+            )
+
+    if args.per_sample_csv:
+        args.per_sample_csv.parent.mkdir(parents=True, exist_ok=True)
+        with args.per_sample_csv.open("w", newline="", encoding="utf-8") as handle:
+            writer = csv.DictWriter(handle, fieldnames=list(per_sample_rows[0].keys()))
+            writer.writeheader()
+            writer.writerows(per_sample_rows)
+        print(f"Wrote {args.per_sample_csv}")
 
     if not y_true:
         print("No valid responses received; no statistics to report.")
@@ -87,7 +116,8 @@ def main() -> None:
     print(f"Recall            : {recall_score(y_true_arr, y_pred_arr, zero_division=0):.4f}")
     print(f"F1                : {f1_score(y_true_arr, y_pred_arr, zero_division=0):.4f}")
     print(f"MCC               : {matthews_corrcoef(y_true_arr, y_pred_arr):.4f}")
-    print(f"Avg latency (ms)  : {sum(latencies_ms) / len(latencies_ms):.2f}")
+    avg_latency_us = sum(latencies_us) / len(latencies_us)
+    print(f"Avg latency (ms)  : {avg_latency_us / 1000:.3f} (min {min(latencies_us) / 1000:.3f}, max {max(latencies_us) / 1000:.3f})")
 
 
 if __name__ == "__main__":
