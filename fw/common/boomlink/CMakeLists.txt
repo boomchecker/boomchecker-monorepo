@@ -496,12 +496,12 @@ endif()
 # is only true when BOOMLINK_TARGET_WERROR is on, which is why CI turns it on
 # - see that option above.
 #
-# Precisely: the archive is BUILT but never reaches the linker at all - it is
-# not on bom-stm32node.elf's link line, because nothing links it. So Phase C
-# needs more than a call site: it must also add boomlink_linkframe to
-# fw/bom-stm32node/CMakeLists.txt's target_link_libraries. Worth stating,
-# because "the linker just drops it for now" would imply the archive is already
-# on the link line and only a reference is missing.
+# Precisely, before Phase C: the archive was BUILT but never reached the
+# linker at all - not on bom-stm32node.elf's link line, because nothing linked
+# it, which is a stronger statement than "the linker just drops it for now"
+# (that would imply the archive was already on the link line and only a
+# reference was missing). Phase C's fw/bom-stm32node/CMakeLists.txt now links
+# boomlink_linkengine, which PUBLIC-links this target too - see that file.
 add_library(boomlink_linkframe STATIC
   ${CMAKE_CURRENT_SOURCE_DIR}/linkframe/boomlink_linkframe.c
 )
@@ -540,11 +540,11 @@ target_compile_options(boomlink_linkframe PRIVATE
 #
 # Built in the ARM cross build for the same reason boomlink_linkframe is: to
 # prove it is free of host-isms and (with BOOMLINK_TARGET_WERROR) warning-clean
-# for the target before any firmware depends on it. Nothing links it yet; Phase C
-# adds it to fw/bom-stm32node's target_link_libraries. The workflow asserts the
-# archive is produced, because with no dependents nothing else would notice it
-# disappearing - verified by marking this target EXCLUDE_FROM_ALL, which left the
-# firmware job green with the engine never cross-compiled at all.
+# for the target. Phase C (fw/bom-stm32node/App/link/) now links it - the
+# workflow's "archive is produced" assertion below predates that and stays
+# useful anyway: it is what caught this archive never being cross-compiled at
+# all, when this target was briefly marked EXCLUDE_FROM_ALL, at a point in
+# review where nothing yet linked it and nothing else would have noticed.
 add_library(boomlink_linkengine STATIC
   ${CMAKE_CURRENT_SOURCE_DIR}/linkengine/boomlink_port.c
   ${CMAKE_CURRENT_SOURCE_DIR}/linkengine/boomlink_dupcache.c

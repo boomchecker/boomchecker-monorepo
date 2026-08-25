@@ -211,13 +211,15 @@ sketch:
   `boomlink_txqueue.h/.c` (section 9.8's priority queue), and `boomlink_port.h/.c` (the
   radio seam a real radio, or `fw/common/boomlink/tests/`'s fake, implements) - split so
   each has its own focused test binary rather than one monolith.
-- `App/link/` under `bom-stm32node` is therefore not four files but one call site:
-  wiring `boomlink_link_poll()`/`boomlink_link_send()` to the real radio port and the
-  BoomProtocol dispatcher, plus the `target_link_libraries` entry the archive does not
-  yet have. That wiring is this PR's Phase C - both `boomlink_linkframe` and
-  `boomlink_linkengine` are already cross-compiled for the target (`fw/common/boomlink`'s
-  README, "Building and testing"), but nothing links them yet, on purpose: it proves both
-  free of host-isms before anything depends on them.
+- `App/link/` under `bom-stm32node` is therefore not four files but two, both added by
+  Phase C: `boomlink_radio_port.c/.h` (the `boomlink_port_t` seam, wired to
+  `App/radio/radio.h`) and `link_service.c/.h` (the `boomlink_link_t` instance,
+  `cli.c`'s call site into it, and the `target_link_libraries` entry that finally links
+  both `boomlink_linkframe` and `boomlink_linkengine` into the firmware image - they
+  had only ever been cross-compiled before, on purpose, to prove them free of host-isms
+  before anything depended on them). The `link` CLI command (`link status` / `link
+  enable`/`disable` / `link ping <node_id_hex>`) is the ping/pong PR 3's scope names -
+  see section 15.3 for how it coexists with the pre-existing raw `radio ping` test.
 
 ```text
 fw/
@@ -1535,6 +1537,17 @@ At minimum keep repeatable two-board tests for:
 
 Record RSSI/SNR and retry counters so RF issues can be separated from protocol issues.
 
+Tests 1 and 2 above cannot both run against the same receiving board at the same
+moment: `App/radio/radio.h`'s `radio_poll_rx()` is single-consumer, and by default
+the link engine (`App/link/link_service.h`) is that one consumer, so a raw
+(non-BoomLink-framed) packet sent to a board in that state is parsed as a link
+frame, rejected as malformed/bad-magic, and never reaches test 1's raw preview.
+Run `link disable` on the RECEIVING board first for test 1; `link enable`
+(the default) restores test 2. `link ping <node_id_hex> [text]` is test 2's
+CLI entry point - `link status` on the peer reports the `node_id` to target,
+since section 7.2's bring-up-only address (a board's unique ID XORed together;
+see `link_service.c`) has no fixed value to write down here.
+
 ---
 
 ## 16. Agent implementation rules
@@ -1657,8 +1670,11 @@ Scope:
 - implement bounded priority TX queue;
 - expose BoomLink statistics;
 - add fake-radio/native tests for all behaviours;
-- expose ping/pong over BoomLink on hardware — deferred to this PR's Phase C, once the
-  link engine has a firmware call site (section 4's "what actually landed").
+- expose ping/pong over BoomLink on hardware — `App/link/link_service.h`'s
+  `link ping <node_id_hex> [text]`, once the link engine had a firmware call site
+  to expose it from (section 4's "what actually landed" for the link engine).
+  Landed as this PR's Phase C, a following PR rather than a milestone inside
+  this one - see that PR's own description for what it covers.
 
 Acceptance criteria:
 

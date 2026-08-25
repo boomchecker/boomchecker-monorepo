@@ -601,10 +601,11 @@ void boomlink_link_poll(boomlink_link_t *link) {
   size_t len  = 0u;
   float  rssi = 0.0f;
   float  snr  = 0.0f;
-  /* Drain, not one-per-poll: the radio's own model is single-slot (see
-     radio.h), so a second packet arriving before this returns is lost either
-     way - but a caller that polls once per superloop iteration must not fall
-     permanently behind a burst it could have caught.
+  /* Drain, not one-per-poll: the radio's own model is a small fixed-depth
+     ring, not unbounded (see radio.h - Phase C), so a packet arriving once
+     that ring is already full is lost either way - but a caller that polls
+     once per superloop iteration must not fall behind a burst smaller than
+     the ring that it could have caught by draining here instead.
      The cap offered is the PORT's, not the buffer's: they differ on a reduced
      radio profile, and offering more than the radio can produce would leave the
      oversize check comparing against a limit no real packet can exceed. */

@@ -79,15 +79,16 @@ extern "C" {
  * read into, so a re-entrant poll would replace the payload underneath a handler
  * that is still reading it.
  *
- * This signature has grown a parameter in two separate review rounds
- * (`destination_id`, then `rssi_dbm`/`snr_db`) and costs nothing to grow again
- * today, since no firmware code implements it yet - only this package's own
- * test doubles do. That stops being true the moment Phase C wires a real
- * dispatcher against it: a third addition then breaks every real
- * implementation instead of two test files. If another field turns out to be
- * needed after that point, collecting these into one `boomlink_rx_info_t`
- * parameter is the change to make then, not something worth doing pre-emptively
- * now against a need that has not materialized.
+ * This signature grew a parameter in two separate review rounds
+ * (`destination_id`, then `rssi_dbm`/`snr_db`), which cost nothing at the
+ * time since no firmware code implemented it yet - only this package's own
+ * test doubles did. That stopped being true once Phase C wired a real
+ * dispatcher against it (`fw/bom-stm32node/Core/Src/cli.c`'s `link_on_rx()`):
+ * a further addition now breaks that real implementation too, not just the
+ * test doubles. If another field turns out to be needed, collecting these
+ * into one `boomlink_rx_info_t` parameter is the change to make then, not
+ * something worth doing pre-emptively now against a need that has not
+ * materialized.
  */
 typedef void (*boomlink_link_rx_fn)(void *user, uint32_t source_id, uint32_t destination_id,
                                     const uint8_t *payload, size_t payload_len,
@@ -560,19 +561,24 @@ boomlink_link_send_result_t boomlink_link_send(boomlink_link_t *link,
  * acknowledged - burning airtime and forcing the peer to suppress a duplicate.
  *
  * "Drain every packet the radio has" only helps a burst if the PORT can hold
- * more than one between two calls to this function - and the only real port
- * that exists today, fw/bom-stm32node/App/radio/radio.h, cannot: it is
- * single-slot, and its own header says so ("a future consumer... must replace
- * this single-slot model with its own queue"). This engine does not add that
- * queue; it only drains whatever the port is holding when called, which for
- * radio.h is at most one packet regardless of how this loop is written. A
- * burst of near-simultaneous transmissions - the exact "several nodes detect
- * one gunshot" scenario section 9.7's jitter exists to spread out, not
- * eliminate - can still lose all-but-the-latest packet to radio.h's overwrite,
- * invisibly to every BoomLink statistic, on real hardware today. The fake port
- * used by this package's tests buffers the whole burst in its shared "air"
- * log, which is exactly why this gap is invisible from the host side. Giving
- * the port a real queue is Phase C's work, not this one's.
+ * more than one between two calls to this function. The only real port that
+ * exists today, fw/bom-stm32node/App/radio/radio.h, now can (Phase C gave it
+ * a small fixed-depth ring backing radio_poll_rx(), replacing the single
+ * slot its header used to describe) - a burst of near-simultaneous
+ * transmissions, the exact "several nodes detect one gunshot" scenario
+ * section 9.7's jitter exists to spread out rather than eliminate, survives
+ * between two calls to this function instead of all-but-the-latest being
+ * silently lost.
+ *
+ * The ring is still bounded, and this engine still does not add a queue of
+ * its own on top of the port's - a burst LARGER than the port's ring still
+ * loses whatever does not fit, now counted honestly in the port's own
+ * overrun statistic (radio_stats_t::rx_overruns on the target) rather than
+ * silently overwritten. The fake port used by this package's tests buffers
+ * an entire burst unboundedly in its shared "air" log, so exercising this
+ * remaining edge - a burst deeper than the real ring - is a test neither
+ * side currently writes; sizing the ring for the traffic a real deployment
+ * produces is that ring's own concern, not this function's.
  */
 void boomlink_link_poll(boomlink_link_t *link);
 
