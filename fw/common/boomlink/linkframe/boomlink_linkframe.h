@@ -391,6 +391,45 @@ bool boomlink_linkframe_make_ack(const boomlink_linkframe_header_t received[BOOM
                                  boomlink_linkframe_header_t out_ack[BOOMLINK_LINKFRAME_ONE]);
 
 /**
+ * Whether `ack` acknowledges `pending` for a node whose address is
+ * `local_node_id` - the inverse of boomlink_linkframe_make_ack()'s mapping, and
+ * section 9.2's "match ACK frames against the pending TX".
+ *
+ * All five conditions must hold: `ack` is an ACK frame, its `session_id` and
+ * `sequence` equal the awaited frame's, its `source_id` is the node the awaited
+ * frame was addressed to, and its `destination_id` is this node.
+ *
+ * Lives here rather than in the link engine for one reason, and it is not the
+ * one that put the builder here. A matcher that TRANSPOSES a pair cannot hide:
+ * it fails to match ACKs from the pinned builder, and the engine's first
+ * delivery test catches it. The error that hides is the opposite one - an
+ * OVER-PERMISSIVE matcher. One comparing only (session_id, sequence), ignoring
+ * the addressing entirely, accepts another node's ACK for its own traffic, or a
+ * broadcast-addressed ACK. Every delivery test still passes, because a correct
+ * ACK matches too; what breaks is only REJECTION, which no delivery test
+ * exercises. Pinning it here, against explicit near-miss vectors, is what makes
+ * that visible.
+ *
+ * Not checked here, deliberately: `magic` and `version`, which parse() has
+ * already enforced on anything that reached this point, and the stop-and-wait
+ * rule itself (whether a frame is pending at all) which is engine state.
+ *
+ * Both `local_node_id` and `pending->destination_id` must be real node IDs, and
+ * neither check is a formality. A broadcast `pending` frame should never be in
+ * the ACK-pending slot at all - broadcast is not acknowledged (section 9.9) - but
+ * if it is, an ACK forged with `source_id` = 0xFFFFFFFF satisfies every field
+ * comparison and would match. make_ack() cannot build that ACK, which is
+ * precisely why trusting that nobody sends it would be wrong. Symmetrically, an
+ * ACK addressed to 0xFFFFFFFF would match at a node misconfigured to that
+ * address.
+ */
+BOOMLINK_LINKFRAME_MUST_CHECK
+bool boomlink_linkframe_ack_matches(
+    const boomlink_linkframe_header_t pending[BOOMLINK_LINKFRAME_ONE],
+    const boomlink_linkframe_header_t ack[BOOMLINK_LINKFRAME_ONE],
+    uint32_t local_node_id);
+
+/**
  * Whether a node whose address is `local_node_id` should accept a frame
  * addressed to `destination_id` - section 7.2's rule: the destination matches
  * the node exactly, or is the broadcast address.

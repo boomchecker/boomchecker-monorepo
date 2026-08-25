@@ -225,6 +225,38 @@ bool boomlink_linkframe_make_ack(const boomlink_linkframe_header_t received[stat
   return true;
 }
 
+BOOMLINK_LINKFRAME_MUST_CHECK
+bool boomlink_linkframe_ack_matches(const boomlink_linkframe_header_t pending[static 1],
+                                    const boomlink_linkframe_header_t ack[static 1],
+                                    uint32_t local_node_id) {
+  /* BOTH ends must be real node IDs before any field is compared, and both
+     guards are load-bearing against a forged ACK rather than a tidy-up:
+
+     local_node_id - an unconfigured or broadcast-addressed node has no pending
+     frames of its own, and without this an ACK addressed to 0xFFFFFFFF
+     "matches" at a node that thinks it IS 0xFFFFFFFF.
+
+     pending->destination_id - a broadcast frame is never acknowledged (section
+     9.9), so one should never be in the ACK-pending slot at all. But if it is,
+     an ACK forged with source_id = 0xFFFFFFFF satisfies
+     `ack->source_id == pending->destination_id` and every other condition below,
+     so it would match. make_ack() cannot build that ACK, which is exactly why
+     trusting that nobody sends it would be wrong - a non-compliant or hostile
+     peer can. Found by the near-miss vectors in test_linkframe.py, not by
+     reasoning: the first version of this function omitted this guard and
+     claimed in its comment that no special case was needed. */
+  if (!is_valid_node_id(local_node_id) || !is_valid_node_id(pending->destination_id)) {
+    return false;
+  }
+  /* Every one of these is load-bearing, and the ones that look redundant are
+     the important ones - see the header. Dropping the two address comparisons
+     leaves a matcher that accepts another node's ACK for its own traffic while
+     every delivery test still passes. */
+  return ack->frame_type == BOOMLINK_FRAME_TYPE_ACK &&
+         ack->session_id == pending->session_id && ack->sequence == pending->sequence &&
+         ack->source_id == pending->destination_id && ack->destination_id == local_node_id;
+}
+
 void boomlink_linkframe_header_init(boomlink_linkframe_header_t out_header[static 1]) {
   memset(out_header, 0, sizeof(*out_header));
   out_header->magic      = BOOMLINK_LINKFRAME_MAGIC_DEFAULT;
