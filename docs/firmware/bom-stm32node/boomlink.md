@@ -371,7 +371,7 @@ fw/
 │   │       │                          # landed" above for how this differs from
 │   │       │                          # the config_store.c/.h sketch this line used to show
 │   │       └── boomlink_flash_storage_port.h/.c  # boomlink_storage_port_t, backed by
-│   │                                              # the last flash sector (STM32H563xx_FLASH.ld)
+│   │                                              # the last flash sectors (STM32H563xx_FLASH.ld)
 │   ├── third_party/
 │   │   ├── embedded-cli/
 │   │   ├── RadioLib/

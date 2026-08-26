@@ -58,21 +58,25 @@ static bool flash_erase(void *ctx) {
   return status == HAL_OK;
 }
 
-static bool flash_write(void *ctx, uint32_t offset, const uint8_t *data, size_t len) {
+static bool flash_write(void *ctx, const uint8_t *data, size_t len) {
   (void)ctx;
 
   /* boomlink_storage_port_t's own contract (boomlink_storage_port.h) is that
-     `len` is always a write_granularity multiple and `offset` is always
-     aligned to it - boomlink_config_store_save() (the only caller) pads to
-     exactly that before ever calling write(). That granularity/alignment
-     half of the contract is trusted, not re-checked, the same way
-     radio_port.c trusts radio.h's own contracts - but UNLIKE that case, an
-     out-of-range offset/len here would not just be a caller bug this port
-     "doesn't need to survive": it would silently HAL_FLASH_Program() into
-     whatever firmware flash happens to sit past this region, not merely
-     misbehave inside memory this port owns. Cheap enough to check outright
-     rather than accept that blast radius on a contract violation. */
-  if ((size_t)offset + len > FLASH_STORAGE_SIZE) {
+     `len` is always a write_granularity multiple - boomlink_config_store_
+     save() (the only caller) pads to exactly that before ever calling
+     write(). That half of the contract is trusted, not re-checked, the
+     same way radio_port.c trusts radio.h's own contracts - but UNLIKE that
+     case, an out-of-range `len` here would not just be a caller bug this
+     port "doesn't need to survive": it would silently HAL_FLASH_Program()
+     into whatever firmware flash happens to sit past this region, not
+     merely misbehave inside memory this port owns. Cheap enough to check
+     outright rather than accept that blast radius on a contract violation.
+     No `offset` parameter (and so no offset+len overflow to worry about
+     here) - see boomlink_storage_port.h's own doc for why `write` never
+     takes one; the overflow-safe form this needs is the plain `len >
+     FLASH_STORAGE_SIZE` below, not the offset-including comparison
+     flash_read() still needs. */
+  if (len > FLASH_STORAGE_SIZE) {
     return false;
   }
 
@@ -82,7 +86,7 @@ static bool flash_write(void *ctx, uint32_t offset, const uint8_t *data, size_t 
 
   bool ok = true;
   for (size_t written = 0u; written < len; written += FLASH_STORAGE_WRITE_GRANULARITY) {
-    uint32_t dest = FLASH_STORAGE_BASE_ADDRESS + offset + (uint32_t)written;
+    uint32_t dest = FLASH_STORAGE_BASE_ADDRESS + (uint32_t)written;
     uint32_t src  = (uint32_t)(uintptr_t)&data[written];
     if (HAL_FLASH_Program(FLASH_TYPEPROGRAM_QUADWORD, dest, src) != HAL_OK) {
       ok = false;
@@ -96,11 +100,15 @@ static bool flash_write(void *ctx, uint32_t offset, const uint8_t *data, size_t 
 
 static bool flash_read(void *ctx, uint32_t offset, uint8_t *out, size_t len) {
   (void)ctx;
-  /* Same offset/len bound as flash_write() and for the same reason: an
-     out-of-range read here is a plain memcpy() from wherever that lands in
-     the address space, not a bounds-checked call into a fake's own buffer
-     the way tests/config_store_test.c's fake_read() is. */
-  if ((size_t)offset + len > FLASH_STORAGE_SIZE) {
+  /* Overflow-safe by construction, unlike a bare `offset + len >
+     FLASH_STORAGE_SIZE` would be: `offset` and `len` are both
+     caller-supplied, and on this Cortex-M33 target `size_t` is 32 bits (see
+     fw/common/boomlink/CMakeLists.txt's own comment on int/long/size_t
+     width differences from the 64-bit host test build) - a large enough
+     `offset` plus a small `len` can wrap a bare sum past FLASH_STORAGE_SIZE
+     right back under it. Bounding `offset` first, then subtracting from a
+     value already known >= offset, cannot wrap the same way. */
+  if (offset > FLASH_STORAGE_SIZE || len > FLASH_STORAGE_SIZE - offset) {
     return false;
   }
   /* Flash is memory-mapped and directly readable on this part - no HAL call

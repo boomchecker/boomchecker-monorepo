@@ -647,6 +647,45 @@ static void test_get_config_is_null_tolerant(void) {
   CHECK(out.general.node_id == 42u, "a real service must be read out faithfully");
 }
 
+static void test_set_restores_has_x_even_if_it_started_false(void) {
+  /* boomlink_node_config_t (typedef'd to the generated boomlink_NodeConfig,
+     see boomlink_config_service.h's own doc) carries has_general/has_link/
+     etc. only because Nanopb generates them for every message-type field -
+     they mean nothing to this file (nothing here ever branches on
+     svc.current.has_X) but they matter to PR 4 Phase B's storage wrapper,
+     which Nanopb-encodes this exact type: a false has_X there means "skip
+     this group entirely" on the wire, so a group whose has_X went missing
+     would silently vanish from a persisted config and come back as
+     defaults on the next boot. Every real path here goes through
+     boomlink_node_config_defaults() (which forces every has_X true), so
+     this scenario cannot happen today - this test starts from a
+     deliberately-unrealistic svc.current with every has_X false anyway, to
+     prove handle_set() re-establishes it on its own rather than merely
+     preserving whatever was already there. */
+  boomlink_config_service_t svc = make_svc(1000u);
+  svc.current.has_general        = false;
+  svc.current.has_link           = false;
+  svc.current.has_detection      = false;
+  svc.current.has_gnss           = false;
+  svc.current.has_telemetry      = false;
+
+  boomlink_ConfigMessage req                          = {0};
+  req.which_message                                   = boomlink_ConfigMessage_set_request_tag;
+  req.message.set_request.expected_config_version     = 1u;
+  req.message.set_request.has_telemetry               = true;
+  req.message.set_request.telemetry.report_interval_s = 42u;
+
+  boomlink_ConfigMessage resp;
+  bool ok = handle(&svc, &req, &resp);
+
+  REQUIRE(ok, "a SET always answers");
+  CHECK(resp.message.set_response.result == boomlink_ConfigSetResult_CONFIG_SET_RESULT_OK,
+        "a non-hazardous SET must still apply as OK regardless of the pre-existing has_X state");
+  CHECK(svc.current.has_telemetry,
+        "the group actually written by this SET must have has_telemetry restored to true");
+  CHECK(!svc.current.has_general, "a group NOT written by this SET must be left exactly as it was");
+}
+
 static void test_handle_rejects_malformed_or_missing_arguments(void) {
   boomlink_config_service_t   svc = make_svc(1000u);
   boomlink_dispatch_rx_info_t rx  = {0};
@@ -686,6 +725,7 @@ int main(void) {
   test_radio_negative_zero_is_not_a_hazardous_change();
   test_radio_nan_does_not_permanently_break_hazard_detection();
   test_get_config_is_null_tolerant();
+  test_set_restores_has_x_even_if_it_started_false();
   test_handle_rejects_malformed_or_missing_arguments();
   BOOMLINK_TEST_REPORT("config_service_test", 115);
 }

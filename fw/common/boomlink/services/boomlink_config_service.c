@@ -226,23 +226,44 @@ static bool handle_set(boomlink_config_service_t *svc, const boomlink_ConfigSetR
      bother restating. A caller changing one field is expected to GET the
      current group first and send the whole thing back with that one field
      edited - see config.proto's ConfigSetRequest doc. */
+  /* next.has_X set alongside each next.X assignment below, not left to
+     whatever svc->current.has_X already was: `next.X = req->X` only copies
+     the submessage's VALUE, and boomlink_node_config_t's has_X only ever
+     starts true because boomlink_node_config_defaults() forces it there -
+     a future caller of boomlink_config_service_init() that ever seeded
+     svc->current from a hand-built config with some has_X false (nothing
+     today does; boomlink_config_service.h's own doc already says this is
+     the caller's responsibility) would otherwise never see it self-heal on
+     a later SET. That matters for Phase B specifically: an
+     always-true-and-forgotten-about has_X is invisible to every reader in
+     THIS file (nothing here ever branches on next.has_X), but Nanopb skips
+     encoding a singular message field whose has_X is false, so
+     boomlink_config_store_save() would silently drop that whole group from
+     the persisted blob - it would read back as all-zero defaults on the
+     next boot even though every GET in the current session answered
+     correctly. */
   boomlink_node_config_t next = svc->current;
   if (req->has_general) {
     next.general          = req->general;
     next.general.node_id  = svc->current.general.node_id; /* hazardous - restored below if changed */
+    next.has_general       = true;
   }
   if (req->has_link) {
     next.link       = req->link;
     next.link.magic = svc->current.link.magic; /* hazardous - restored below if changed */
+    next.has_link    = true;
   }
   if (req->has_detection) {
-    next.detection = req->detection;
+    next.detection     = req->detection;
+    next.has_detection = true;
   }
   if (req->has_gnss) {
-    next.gnss = req->gnss;
+    next.gnss     = req->gnss;
+    next.has_gnss = true;
   }
   if (req->has_telemetry) {
-    next.telemetry = req->telemetry;
+    next.telemetry     = req->telemetry;
+    next.has_telemetry = true;
   }
   /* RadioConfig is entirely hazardous - `next.radio` deliberately NOT
      touched here, only in the staged snapshot below. */

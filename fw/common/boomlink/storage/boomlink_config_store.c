@@ -104,8 +104,17 @@ bool boomlink_config_store_save(const boomlink_storage_port_t *port,
      padding (BOOMLINK_CONFIG_STORE_MAX_WRITE_GRANULARITY bounds that, and
      the check above already rejected any port claiming more) - no heap, so
      this has to be big enough up front rather than sized from the real
-     encoded length after the fact. */
-  uint8_t buf[BOOMLINK_CONFIG_STORE_HEADER_SIZE + boomlink_NodeConfig_size +
+     encoded length after the fact.
+
+     _Alignas(4): STM32H5's HAL_FLASH_Program() documents its DataAddress
+     parameter as "shall be 32-bit aligned" (stm32h5xx_hal_flash.c) -
+     `port->write()` is handed this buffer's address directly on the real
+     target (boomlink_flash_storage_port.c's flash_write(), which programs
+     it 16 bytes at a time), and a plain `uint8_t[]` has no alignment
+     guarantee stronger than 1 on its own. Aligning `buf` itself to 4 is
+     enough: flash_write()'s own 16-byte stride only ever offsets from
+     `buf`'s start by a multiple of 16, and 16 is itself a multiple of 4. */
+  _Alignas(4) uint8_t buf[BOOMLINK_CONFIG_STORE_HEADER_SIZE + boomlink_NodeConfig_size +
              BOOMLINK_CONFIG_STORE_MAX_WRITE_GRANULARITY] = {0};
 
   pb_ostream_t stream = pb_ostream_from_buffer(&buf[BOOMLINK_CONFIG_STORE_HEADER_SIZE],
@@ -142,5 +151,5 @@ bool boomlink_config_store_save(const boomlink_storage_port_t *port,
   if (!port->erase(port->ctx)) {
     return false;
   }
-  return port->write(port->ctx, 0, buf, padded_len);
+  return port->write(port->ctx, buf, padded_len);
 }

@@ -18,7 +18,8 @@
  *          own doc for why a single region, not a ping-pong pair, is enough
  *          for section 10.1's stated contract), so `erase` and `write` take
  *          no address - there is only ever one thing to erase and one place
- *          to write.
+ *          to write. `read` is the exception: a load reads the header, then
+ *          the blob that follows it, so it alone needs an `offset`.
  ******************************************************************************
  */
 #ifndef BOOMLINK_STORAGE_PORT_H
@@ -52,11 +53,18 @@ typedef struct {
   bool (*erase)(void *ctx);
 
   /**
-   * Write `len` bytes at `offset` within the managed region. `len` is
-   * always a multiple of `write_granularity` and `offset` is always aligned
-   * to it - boomlink_config_store.c pads its buffer before calling this, so
-   * a real implementation never needs to handle a partial-granule write.
-   * The region is always erased (via `erase`) immediately before the first
+   * Write `len` bytes at the START of the managed region - no `offset`
+   * parameter, unlike `read` below, because boomlink_config_store_save()
+   * always erases and rewrites the whole region as one buffer; there is
+   * never a second place to write to. (An earlier version of this port took
+   * an `offset` here anyway, always called with 0 - dead generality that
+   * gave a real flash implementation an unnecessary offset+len bounds
+   * calculation to get right, which is exactly what went wrong the one time
+   * it wasn't: see boomlink_flash_storage_port.c's own history.) `len` is
+   * always a multiple of `write_granularity` -
+   * boomlink_config_store.c pads its buffer before calling this, so a real
+   * implementation never needs to handle a partial-granule write. The
+   * region is always erased (via `erase`) immediately before the first
    * write of a save, never written to twice without an erase between - flash
    * can only clear bits by erasing, not set them back, so writing the same
    * bytes twice without erasing would not reliably produce the second
@@ -65,13 +73,25 @@ typedef struct {
    * @return true if the write succeeded and (where the hardware can tell)
    *         verified, false otherwise.
    */
-  bool (*write)(void *ctx, uint32_t offset, const uint8_t *data, size_t len);
+  bool (*write)(void *ctx, const uint8_t *data, size_t len);
 
   /**
    * Read `len` bytes at `offset` within the managed region into `out`. No
    * alignment requirement - a boot-time load reads the fixed-size header
    * first and only reads the exact `protobuf_length` it declares next, not
    * necessarily a `write_granularity` multiple.
+   *
+   * A real implementation MUST reject `offset + len` past `region_size`
+   * using an overflow-safe comparison (`offset > region_size || len >
+   * region_size - offset`, never a bare `offset + len > region_size` -
+   * `offset` and `len` are both caller-supplied and, on a target where
+   * `size_t` is 32 bits, unlike this package's 64-bit host test build,
+   * `offset + len` can itself wrap past `region_size` for a large enough
+   * `offset`). Not reachable through boomlink_config_store_load() today
+   * (it only ever calls this with `offset` 0 or `BOOMLINK_CONFIG_STORE_
+   * HEADER_SIZE`), but this is the one callback whose contract genuinely
+   * needs `offset`, so this port's own bounds-checking is what has to hold
+   * regardless.
    *
    * @return true if the read succeeded, false otherwise (e.g. out of range).
    */

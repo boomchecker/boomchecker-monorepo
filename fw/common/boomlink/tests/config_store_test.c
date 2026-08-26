@@ -50,7 +50,15 @@ typedef struct {
   uint8_t bytes[FAKE_REGION_SIZE];
   bool    fail_erase;
   bool    fail_write;
-  bool    fail_read;
+  /* -1 never fails a read; any other value fails ONLY the read() call at
+     that exact offset (still populating `out` with the real bytes first -
+     see fake_read()'s own comment on why). boomlink_config_store_load()
+     makes two read() calls, at offset 0 (the header) and offset
+     BOOMLINK_CONFIG_STORE_HEADER_SIZE (the blob) - a single shared
+     fail_read flag could not fail one without also failing the other, and
+     failing both leaves the SECOND read()'s own check free to mask a
+     missing check on the FIRST. */
+  int64_t fail_read_at_offset;
   size_t  last_write_len; /* what write() was actually called with, for the padding test below */
 } fake_flash_t;
 
@@ -59,10 +67,10 @@ static void fake_flash_init(fake_flash_t *f) {
      written region must look the same to load() as a genuinely erased one,
      not a lucky all-zero buffer a memset(0) would give for free. */
   memset(f->bytes, 0xFF, sizeof(f->bytes));
-  f->fail_erase      = false;
-  f->fail_write      = false;
-  f->fail_read       = false;
-  f->last_write_len  = 0u;
+  f->fail_erase          = false;
+  f->fail_write          = false;
+  f->fail_read_at_offset = -1;
+  f->last_write_len      = 0u;
 }
 
 static bool fake_erase(void *ctx) {
@@ -74,23 +82,44 @@ static bool fake_erase(void *ctx) {
   return true;
 }
 
-static bool fake_write(void *ctx, uint32_t offset, const uint8_t *data, size_t len) {
+static bool fake_write(void *ctx, const uint8_t *data, size_t len) {
   fake_flash_t *f = (fake_flash_t *)ctx;
-  if (f->fail_write || (size_t)offset + len > sizeof(f->bytes)) {
+  if (f->fail_write || len > sizeof(f->bytes)) {
     return false;
   }
-  memcpy(&f->bytes[offset], data, len);
+  memcpy(f->bytes, data, len);
   f->last_write_len = len;
   return true;
 }
 
 static bool fake_read(void *ctx, uint32_t offset, uint8_t *out, size_t len) {
   fake_flash_t *f = (fake_flash_t *)ctx;
-  if (f->fail_read || (size_t)offset + len > sizeof(f->bytes)) {
+  /* Overflow-safe, matching what boomlink_storage_port.h's own doc now
+     requires of any real read() implementation - see
+     boomlink_flash_storage_port.c's flash_read() for why a bare `offset +
+     len > sizeof(f->bytes)` would not be safe on a 32-bit size_t target
+     (this fake's own size_t is 64-bit, so it would never actually observe
+     the wrap, but a fake that used the unsafe idiom would set the wrong
+     example for what a real implementation needs). */
+  if (offset > sizeof(f->bytes) || len > sizeof(f->bytes) - offset) {
     return false;
   }
+  /* The memcpy happens BEFORE the fail_read_at_offset check, deliberately:
+     this models a spurious hardware error that still leaves genuinely
+     correct (previously-saved, valid) bytes in `out` - the worst case for a
+     caller that ignores this function's return value, since there is then
+     nothing else (a garbage magic, a garbage CRC) left to coincidentally
+     catch the mistake for it. A version that left `out` untouched on
+     failure would let test_load_propagates_a_header_read_failure below
+     pass for the wrong reason: uninitialized stack memory in `header`
+     almost never happens to look like a real header, so
+     boomlink_config_store_load()'s own magic check would reject it anyway
+     even with the real read() check removed, masking exactly the bug that
+     test exists to catch - confirmed by actually removing that check and
+     observing the test still pass before this comment (and the matching
+     rewrite of this function) were added. */
   memcpy(out, &f->bytes[offset], len);
-  return true;
+  return (int64_t)offset != f->fail_read_at_offset;
 }
 
 static boomlink_storage_port_t make_port(fake_flash_t *f) {
@@ -360,6 +389,66 @@ static void test_save_rejects_write_granularity_above_the_max(void) {
         "write_granularity above BOOMLINK_CONFIG_STORE_MAX_WRITE_GRANULARITY must be rejected");
 }
 
+static void test_save_propagates_an_erase_failure(void) {
+  /* fail_erase/fail_write/fail_read exist on fake_flash_t specifically to
+     exercise section 10.1's "torn write / hardware error" path - a real
+     erase or program failure must fail save()/load() cleanly, not be
+     silently swallowed. */
+  fake_flash_t             f;
+  fake_flash_init(&f);
+  boomlink_storage_port_t port = make_port(&f);
+  boomlink_NodeConfig      cfg = sample_config();
+  f.fail_erase                  = true;
+
+  CHECK(!boomlink_config_store_save(&port, &cfg),
+        "save() must report false when the port's erase() reports a hardware error");
+}
+
+static void test_save_propagates_a_write_failure(void) {
+  fake_flash_t             f;
+  fake_flash_init(&f);
+  boomlink_storage_port_t port = make_port(&f);
+  boomlink_NodeConfig      cfg = sample_config();
+  f.fail_write                  = true;
+
+  CHECK(!boomlink_config_store_save(&port, &cfg),
+        "save() must report false when the port's write() reports a hardware error, even "
+        "though erase() already succeeded and may have destroyed the prior contents");
+}
+
+static void test_load_propagates_a_header_read_failure(void) {
+  fake_flash_t             f;
+  fake_flash_init(&f);
+  boomlink_storage_port_t port = make_port(&f);
+  boomlink_NodeConfig      in  = sample_config();
+  REQUIRE(boomlink_config_store_save(&port, &in), "setup: save must succeed");
+
+  f.fail_read_at_offset = 0; /* the header read only - the blob read at offset 16 still succeeds */
+
+  boomlink_NodeConfig out = (boomlink_NodeConfig)boomlink_NodeConfig_init_zero;
+  CHECK(!boomlink_config_store_load(&port, &out),
+        "load() must report false when the port's HEADER read() reports a hardware error, "
+        "even though the region genuinely holds a valid, previously-saved config and the "
+        "blob read that follows would have succeeded");
+  CHECK(out.config_version == 0u, "*out must be left untouched on a failed load");
+}
+
+static void test_load_propagates_a_blob_read_failure(void) {
+  fake_flash_t             f;
+  fake_flash_init(&f);
+  boomlink_storage_port_t port = make_port(&f);
+  boomlink_NodeConfig      in  = sample_config();
+  REQUIRE(boomlink_config_store_save(&port, &in), "setup: save must succeed");
+
+  f.fail_read_at_offset = BOOMLINK_CONFIG_STORE_HEADER_SIZE; /* the blob read only */
+
+  boomlink_NodeConfig out = (boomlink_NodeConfig)boomlink_NodeConfig_init_zero;
+  CHECK(!boomlink_config_store_load(&port, &out),
+        "load() must report false when the port's BLOB read() reports a hardware error, "
+        "even though the header read that preceded it succeeded and was genuinely valid");
+  CHECK(out.config_version == 0u, "*out must be left untouched on a failed load");
+}
+
 static void test_null_arguments_are_rejected(void) {
   fake_flash_t             f;
   fake_flash_init(&f);
@@ -426,6 +515,10 @@ int main(void) {
   test_region_too_small_for_even_the_header_fails_closed();
   test_save_rejects_a_config_too_large_for_the_region();
   test_save_rejects_write_granularity_above_the_max();
+  test_save_propagates_an_erase_failure();
+  test_save_propagates_a_write_failure();
+  test_load_propagates_a_header_read_failure();
+  test_load_propagates_a_blob_read_failure();
   test_null_arguments_are_rejected();
   test_save_pads_the_write_to_a_full_granule();
   BOOMLINK_TEST_REPORT("config_store_test", 30);
