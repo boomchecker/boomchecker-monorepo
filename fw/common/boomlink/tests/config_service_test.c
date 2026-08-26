@@ -557,6 +557,36 @@ static void test_set_rejects_an_attempt_to_change_magic_past_one_byte(void) {
         "255 fits exactly in one byte and must be accepted as a real hazardous change");
 }
 
+/* Regression test for a real bug found by review, not by any test written
+   alongside the original fix: magic_is_valid() once accepted 0 as a valid
+   CHANGE target even though App/link/link_service.c's link_service_init()
+   treats a configured magic of 0 as "never set, fall back to
+   BOOMLINK_LINKFRAME_MAGIC_DEFAULT" (see that function's own doc). A
+   ConfigSet could commit magic=0 into `current` - reported by every later
+   ConfigGet as the node's real, permanent magic - while the very next
+   reboot silently ran with 0xB0 instead, permanently diverging what is
+   persisted/reported from what actually runs. Sabotage-verified: reverting
+   magic_is_valid() to its pre-fix `return magic <= 0xFFu;` form made this
+   test (and only this test) fail before it existed. */
+static void test_set_rejects_an_attempt_to_change_magic_to_zero(void) {
+  boomlink_config_service_t svc = make_svc(1000u);
+
+  boomlink_ConfigMessage req                      = {0};
+  req.which_message                               = boomlink_ConfigMessage_set_request_tag;
+  req.message.set_request.expected_config_version = 1u;
+  req.message.set_request.has_link                = true;
+  req.message.set_request.link.magic              = 0u; /* the "unconfigured" sentinel */
+
+  boomlink_ConfigMessage resp;
+  handle(&svc, &req, &resp);
+  CHECK(resp.message.set_response.result == boomlink_ConfigSetResult_CONFIG_SET_RESULT_INVALID,
+        "0 is link_service_init()'s own fallback sentinel, not a real magic value a node may "
+        "CHANGE its identity to");
+  /* 0xB0 = BOOMLINK_LINKFRAME_MAGIC_DEFAULT (spelled out as a literal for
+     the same reason test_hazardous_magic_change_is_staged does, above). */
+  CHECK(svc.current.link.magic == 0xB0u, "a rejected change must not have touched the real magic");
+}
+
 static void test_resending_an_unchanged_but_still_unconfigured_node_id_is_not_rejected(void) {
   /* A fresh node's node_id defaults to 0x00000000 (section 7.2's
      "unconfigured"). A caller editing an unrelated GeneralConfig field
@@ -815,6 +845,7 @@ int main(void) {
   test_a_conflicting_hazardous_set_while_one_is_pending_is_rejected();
   test_set_rejects_an_attempt_to_change_node_id_to_an_invalid_value();
   test_set_rejects_an_attempt_to_change_magic_past_one_byte();
+  test_set_rejects_an_attempt_to_change_magic_to_zero();
   test_resending_an_unchanged_but_still_unconfigured_node_id_is_not_rejected();
   test_radio_negative_zero_is_not_a_hazardous_change();
   test_radio_nan_does_not_permanently_break_hazard_detection();
@@ -823,5 +854,5 @@ int main(void) {
   test_commit_and_revert_both_restore_has_radio();
   test_resending_an_unchanged_radio_value_still_restores_has_radio();
   test_handle_rejects_malformed_or_missing_arguments();
-  BOOMLINK_TEST_REPORT("config_service_test", 115);
+  BOOMLINK_TEST_REPORT("config_service_test", 117);
 }

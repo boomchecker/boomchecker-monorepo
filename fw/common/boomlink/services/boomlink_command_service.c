@@ -47,6 +47,40 @@ static void run_diagnostic(bool (*action)(void *, char *, size_t), void *ctx,
   out_diagnostic[out_diagnostic_cap - 1] = '\0';
 }
 
+/* Section 9.9: "commands that are dangerous when broadcast should be
+   rejected by the application service unless explicitly designed for
+   broadcast." A table rather than one hardcoded `if` per command: Reboot
+   was the first case fixed here, then review found ClearStatistics had the
+   identical unguarded shape (one broadcast frame wiping every reachable
+   node's diagnostic counters at once) - two independent instances of the
+   same gap is exactly the pattern that keeps recurring one command at a
+   time in this codebase's own review history, so this closes it structurally
+   instead of waiting for a human to remember a third `if`.
+   StartDetection/StopDetection are included pre-emptively: both are `NULL`
+   in every ops struct wired today (no detection algorithm exists - see
+   boomlink_command_ops_t's own doc), so this changes nothing observable
+   yet, but the day a real detector IS wired behind them, a broadcast
+   StopDetection silencing the whole fleet's detection from one frame would
+   be exactly as severe as the Reboot case - this way that guard is already
+   in place before the landmine can be stepped on, not after.
+   Identify/SelfTest/RequestDiagnostics are deliberately NOT included: none
+   of them change persistent state or safety-relevant behavior - a broadcast
+   Identify is a nuisance (every node blinks, nothing breaks), and a
+   broadcast SelfTest/RequestDiagnostics reply storm is the same "no
+   per-peer rate limiting" risk boomlink.md's Phase C notes already name as
+   a known, separately-tracked gap, not a new one this table should absorb. */
+static bool command_is_dangerous_over_broadcast(boomlink_CommandType type) {
+  switch (type) {
+    case boomlink_CommandType_COMMAND_TYPE_REBOOT:
+    case boomlink_CommandType_COMMAND_TYPE_CLEAR_STATISTICS:
+    case boomlink_CommandType_COMMAND_TYPE_START_DETECTION:
+    case boomlink_CommandType_COMMAND_TYPE_STOP_DETECTION:
+      return true;
+    default:
+      return false;
+  }
+}
+
 bool boomlink_command_service_handle(void *user, const boomlink_dispatch_rx_info_t *rx,
                                      const boomlink_CommandMessage *request,
                                      boomlink_CommandMessage *out_response) {
@@ -64,23 +98,18 @@ bool boomlink_command_service_handle(void *user, const boomlink_dispatch_rx_info
   resp->result                          = boomlink_CommandResult_COMMAND_RESULT_UNSUPPORTED;
   memset(resp->diagnostic, 0, sizeof(resp->diagnostic));
 
-  /* Section 9.9: "commands that are dangerous when broadcast should be
-     rejected by the application service unless explicitly designed for
-     broadcast." Reboot is the obvious case this names - one broadcast
-     frame resetting an entire fleet at once, mid-detection, from any
-     radio-range transmitter with no ACK/handshake required (broadcast
-     never requests or needs one). This is the first point in the chain
-     that has both `rx->destination_id` and the command type together:
-     boomlink_dispatch_process() passes `rx` through unfiltered, and
-     boomlink_command_ops_t's per-command callbacks (see that struct's own
-     doc) do not receive it at all, so nothing "closer" to the actual
-     reboot action could enforce this instead. COMMAND_RESULT_FAILED, not
-     UNSUPPORTED: this node CAN reboot (a unicast Reboot still works), it
-     is this specific broadcast request that is refused, and UNSUPPORTED
-     would misreport a capability the node genuinely has. `ops->reboot`
+  /* This is the first point in the chain that has both `rx->destination_id`
+     and the command type together: boomlink_dispatch_process() passes `rx`
+     through unfiltered, and boomlink_command_ops_t's per-command callbacks
+     (see that struct's own doc) do not receive it at all, so nothing
+     "closer" to the actual action could enforce this instead.
+     COMMAND_RESULT_FAILED, not UNSUPPORTED: this node CAN perform the
+     command (a unicast request still works, when wired), it is this
+     specific broadcast request that is refused, and UNSUPPORTED would
+     misreport a capability the node genuinely has. The real ops callback
      is deliberately not called at all - not even to have it decline. */
-  if (type == boomlink_CommandType_COMMAND_TYPE_REBOOT && rx != NULL &&
-      rx->destination_id == BOOMLINK_ADDR_BROADCAST) {
+  if (rx != NULL && rx->destination_id == BOOMLINK_ADDR_BROADCAST &&
+      command_is_dangerous_over_broadcast(type)) {
     resp->result = boomlink_CommandResult_COMMAND_RESULT_FAILED;
     return true;
   }

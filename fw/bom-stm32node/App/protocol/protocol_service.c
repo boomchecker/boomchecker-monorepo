@@ -48,6 +48,16 @@ static boomlink_config_service_t s_config_svc;
 static boomlink_command_ops_t    s_command_ops;
 static bool                      s_initialized;
 
+/* Initialized once by protocol_service_load_config() (always called before
+   anything else in this file can run - see cli.c's boot sequence) and
+   reused by persist_current_config() below for every later save, rather
+   than re-initializing a local one per call: boomlink_flash_storage_port_
+   init()'s own doc says it is safe to call at any point in boot, but
+   nothing about it needing to be called more than once, and a single
+   stable instance is what App/link/link_service.c's own s_port already
+   does for the radio port seam. */
+static boomlink_storage_port_t s_storage_port;
+
 static bool     s_reboot_armed;
 static uint32_t s_reboot_armed_at_ms;
 
@@ -124,11 +134,27 @@ static bool cmd_request_diagnostics(void *ctx, char *out_diagnostic, size_t out_
 }
 
 void protocol_service_load_config(boomlink_node_config_t *out) {
-  boomlink_storage_port_t port;
-  boomlink_flash_storage_port_init(&port);
-  if (!boomlink_config_store_load(&port, out)) {
+  boomlink_flash_storage_port_init(&s_storage_port);
+  if (!boomlink_config_store_load(&s_storage_port, out)) {
     boomlink_node_config_defaults(out);
   }
+}
+
+/* Persist `s_config_svc.current` as it stands right now. Called from
+   protocol_service_on_rx() at the two points a config change actually
+   becomes this node's real, standing configuration - see those call
+   sites' own comments for exactly which two and why not any of the
+   others. Return value intentionally ignored: boomlink_config_store_
+   save()'s own doc says a hardware failure here just means the region
+   "look[s] invalid on the next load" (the same fallback path a fresh or
+   corrupt save already takes), and this file has no diagnostic channel
+   of its own to report a failure through outside of a CLI context - the
+   same "not checked, no bring-up retry" posture link_service_init() and
+   protocol_service_init() already take on their own failure paths. */
+static void persist_current_config(void) {
+  boomlink_node_config_t current;
+  boomlink_config_service_get_config(&s_config_svc, &current);
+  (void)boomlink_config_store_save(&s_storage_port, &current);
 }
 
 bool protocol_service_init(const boomlink_node_config_t *loaded_config) {
@@ -189,6 +215,27 @@ void protocol_service_on_rx(void *user, uint32_t source_id, uint32_t destination
   boomlink_dispatch_result_t result = boomlink_dispatch_process(&s_dispatch, &rx, &envelope);
   if (!result.has_response) {
     return;
+  }
+
+  /* A non-hazardous ConfigSet already applied its change to `current`
+     unconditionally, inside boomlink_dispatch_process() above - section
+     8.2's own "applies non-hazardous fields right away" rule, independent
+     of whether the response below manages to reach the requester. Persist
+     it now, not gated on the send-success check further down: that gating
+     exists for the hazardous commit/confirm case, where section 8.2
+     requires waiting for send success BEFORE the change takes effect at
+     all - a non-hazardous field has no such rule, it is already live, and
+     flash must reflect that regardless of what happens to this particular
+     reply. (The hazardous case is persisted separately, on confirm - see
+     below - since only a CONFIRMED change is meant to be permanent; see
+     boomlink_config_service_confirm_pending_apply()'s own doc.) */
+  bool is_ok_config_response = result.response.which_payload == boomlink_Envelope_config_tag &&
+                               result.response.payload.config.which_message ==
+                                   boomlink_ConfigMessage_set_response_tag &&
+                               result.response.payload.config.message.set_response.result ==
+                                   boomlink_ConfigSetResult_CONFIG_SET_RESULT_OK;
+  if (is_ok_config_response) {
+    persist_current_config();
   }
 
   uint8_t buf[boomlink_Envelope_size];
@@ -281,9 +328,18 @@ void protocol_service_on_rx(void *user, uint32_t source_id, uint32_t destination
   if (is_pending_config) {
     boomlink_config_service_commit_pending_apply(&s_config_svc, HAL_GetTick());
     s_confirm_eligible = false;
+    /* Deliberately NOT persisted at commit: the change is only in `current`
+       provisionally here (WAITING, still revertible on timeout - see
+       boomlink_config_service_poll()'s own doc). Persisting a value flash
+       might still have to revert moments later would need a SECOND write
+       to undo it, and a reboot landing inside that window would boot into
+       a hazardous, never-confirmed value read back as if it were settled.
+       Persisting only once truly CONFIRMED (below) means flash never holds
+       anything this node itself would not also be running. */
   } else if (s_confirm_eligible &&
              boomlink_config_service_apply_state(&s_config_svc) == BOOMLINK_CONFIG_APPLY_WAITING) {
     boomlink_config_service_confirm_pending_apply(&s_config_svc);
+    persist_current_config();
   }
 }
 

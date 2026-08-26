@@ -1863,6 +1863,17 @@ the real seam, not the sketch" approach PR 3's own Phase C took — section 4):
   `boomlink_config_store_load()` against the real flash port before
   `link_service_init()`, falling back to `boomlink_node_config_defaults()` on a
   missing/invalid save (section 10.1's own fallback rule);
+- config persistence on an actual write — `protocol_service_on_rx()` calls
+  `boomlink_config_store_save()` at exactly the two points a change becomes this
+  node's real standing configuration: right after a non-hazardous `ConfigSet`
+  applies (independent of whether the response reaches the requester - the change
+  is already live either way), and right after a hazardous change is CONFIRMED
+  (not at commit, and not on an abandoned/reverted stage - see that function's own
+  comment for why only a confirmed change is ever written to flash). Found missing
+  entirely by review during this phase - `boomlink_config_store_save()` had no
+  caller anywhere in the firmware before this, silently contradicting this
+  section's own "persist validated NodeConfig to flash" scope item and PR 4's
+  stated acceptance criteria;
 - `link_service_init()` extended to accept the loaded `node_id`/`magic` instead of
   always deriving/hardcoding them, with the UID-derivation and
   `BOOMLINK_LINKFRAME_MAGIC_DEFAULT` fallbacks it already had kept for an unconfigured
@@ -1920,9 +1931,15 @@ Deliberately deferred, not silently dropped:
 - **`usb_forward_enabled` gateway/relay behaviour** — zero existing hooks between the
   USB CDC path and the link engine; this would be a new feature, not a wiring task, and
   was originally scoped to this phase before that became clear;
-- **live radio/node_id/magic reconfiguration** — no such capability exists anywhere in
-  this firmware (see the "confirmed" note above); a hazardous config change is real and
-  persisted, but only takes effect on the node's next reboot;
+- **live node_id/magic reconfiguration** — no such capability exists anywhere in this
+  firmware (see the "confirmed" note above); a hazardous change to either is real and
+  persisted, but only takes effect on the node's next reboot, via `protocol_service_
+  load_config()` feeding the new value into `link_service_init()`;
+- **RadioConfig reconfiguration at all, live or on reboot** — a stricter gap than
+  node_id/magic's: `radio_init()` (`App/radio/radio.h`) takes no parameters and always
+  programs `e22_radio::DefaultProfile()`'s fixed values, so a persisted RadioConfig
+  change is real and reported by `ConfigGet`, but has no code path that ever applies it
+  to the actual radio, on this boot or any future one, until a later PR adds a setter;
 - **most `TelemetryReport` fields** — no hardware backs them yet (no uptime counter, no
   ADC sampling loop, no GNSS parsing); telemetry stays schema-and-dispatch-recognition
   only, the same state Phase A left it in.

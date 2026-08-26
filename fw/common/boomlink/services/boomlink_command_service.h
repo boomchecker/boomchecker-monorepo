@@ -52,13 +52,15 @@ extern "C" {
  * not this service's to enforce (it has no notion of "has been sent" to
  * enforce it against).
  *
- * **reboot() is never called for a broadcast request.** Section 9.9:
- * "commands that are dangerous when broadcast should be rejected by the
- * application service unless explicitly designed for broadcast" -
- * boomlink_command_service_handle() enforces this itself for Reboot
- * (answering COMMAND_RESULT_FAILED without invoking this callback at all),
- * since it is the only point in this chain that sees both `rx` and the
- * command type together.
+ * **reboot()/clear_statistics()/start_detection()/stop_detection() are
+ * never called for a broadcast request.** Section 9.9: "commands that are
+ * dangerous when broadcast should be rejected by the application service
+ * unless explicitly designed for broadcast" - boomlink_command_service_
+ * handle() enforces this itself for exactly these four (see its own
+ * command_is_dangerous_over_broadcast() for why these and not the other
+ * three), answering COMMAND_RESULT_FAILED without invoking the callback at
+ * all, since it is the only point in this chain that sees both `rx` and
+ * the command type together.
  */
 typedef struct {
   bool (*reboot)(void *ctx);
@@ -85,9 +87,10 @@ typedef struct {
  * (e.g. it decoded as a CommandResponse instead - a malformed exchange this
  * service cannot answer either way) or `user` is NULL.
  *
- * A Reboot request addressed to BOOMLINK_ADDR_BROADCAST (via `rx->
- * destination_id`) is answered COMMAND_RESULT_FAILED without ever calling
- * `ops->reboot` - see that field's own doc for why.
+ * A Reboot/ClearStatistics/StartDetection/StopDetection request addressed
+ * to BOOMLINK_ADDR_BROADCAST (via `rx->destination_id`) is answered
+ * COMMAND_RESULT_FAILED without ever calling the matching ops callback -
+ * see boomlink_command_ops_t's own doc for why these four.
  */
 bool boomlink_command_service_handle(void *user, const boomlink_dispatch_rx_info_t *rx,
                                      const boomlink_CommandMessage *request,
