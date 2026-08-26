@@ -42,9 +42,32 @@ uint32_t      s_txStartMs = 0;
 radio_stats_t s_stats = {};
 int           s_lastError = 0;
 
-uint8_t s_rxBuf[RADIO_MAX_PAYLOAD];
-size_t  s_rxLen     = 0;
-bool    s_rxPending = false;
+/* RX ring depth: bounded and small, on purpose. This exists so a burst of
+   near-simultaneous transmissions - section 9.7's "several nodes detect one
+   gunshot" scenario - survives between two calls to radio_poll_rx() instead
+   of radio.h's previous single-slot model silently overwriting all but the
+   latest (see boomlink_link_poll()'s doc comment, which named this exact gap
+   as Phase C's work). Four is generous past what BoomLink's own tests
+   exercise for one burst and small enough that the RAM cost stays trivial;
+   revisit if a real deployment's node density says otherwise. */
+constexpr size_t kRxRingDepth = 4;
+
+struct RxSlot {
+  uint8_t buf[RADIO_MAX_PAYLOAD];
+  size_t  len;
+  /* This slot's OWN signal quality, not s_stats.last_rssi_dbm/last_snr_db -
+     the same per-packet-vs-"last" distinction BoomLink's own RX/TX-done
+     callbacks exist for. Reading the stats field here would misattribute
+     whichever packet arrived LAST to every packet still waiting in the ring,
+     exactly the bug a ring buffer is meant to let this file stop having. */
+  float   rssi_dbm;
+  float   snr_db;
+};
+
+RxSlot s_rxRing[kRxRingDepth];
+size_t s_rxHead  = 0; /* next slot radio_process() fills */
+size_t s_rxTail  = 0; /* next slot radio_poll_rx() drains */
+size_t s_rxCount = 0; /* packets currently buffered */
 
 /* RadioLib callback attached once via setDio1Action() (setPacketReceivedAction
    and setPacketSentAction are both aliases for the same single DIO1 attach
@@ -152,9 +175,28 @@ void radio_process(void) {
     }
     case Mode::kReceiving: {
       size_t len = s_radio->getPacketLength();
-      if (len > sizeof(s_rxBuf)) {
-        len = sizeof(s_rxBuf);
+      if (len > RADIO_MAX_PAYLOAD) {
+        len = RADIO_MAX_PAYLOAD;
       }
+      float rssi = s_radio->getRSSI();
+      float snr  = s_radio->getSNR();
+      s_stats.last_rssi_dbm = rssi;
+      s_stats.last_snr_db   = snr;
+
+      if (s_rxCount == kRxRingDepth) {
+        /* Ring full: drop the INCOMING packet rather than evicting one
+           radio_poll_rx() hasn't drained yet - the already-buffered packets
+           are legitimate traffic waiting for their turn, not stale data to
+           discard. Still must read it off the chip (readData() is also what
+           clears the chip's own RX state), the bytes just go nowhere. */
+        uint8_t discard[RADIO_MAX_PAYLOAD];
+        (void)s_radio->readData(discard, len);
+        s_stats.rx_overruns++;
+        EnterReceive();
+        break;
+      }
+
+      RxSlot &slot = s_rxRing[s_rxHead];
       /* readData()'s `len` is not "read at most this many bytes and nothing
          else": SX126x::readData treats len==0 as "I don't know the length,
          figure it out yourself" rather than "read zero bytes". That only
@@ -164,17 +206,13 @@ void radio_process(void) {
          to leave room for BoomLink's link-frame header) enough that this
          clamp could itself produce 0. The static_assert above only checks
          the upper bound, not this. */
-      int16_t state = s_radio->readData(s_rxBuf, len);
-      s_stats.last_rssi_dbm = s_radio->getRSSI();
-      s_stats.last_snr_db   = s_radio->getSNR();
+      int16_t state = s_radio->readData(slot.buf, len);
       if (state == RADIOLIB_ERR_NONE) {
-        if (s_rxPending) {
-          /* radio_poll_rx() hasn't drained the previous packet yet - it is
-             about to be silently replaced (see radio.h). */
-          s_stats.rx_overruns++;
-        }
-        s_rxLen     = len;
-        s_rxPending = true;
+        slot.len      = len;
+        slot.rssi_dbm = rssi;
+        slot.snr_db   = snr;
+        s_rxHead      = (s_rxHead + 1) % kRxRingDepth;
+        s_rxCount++;
         s_stats.rx_packets++;
       } else if (state == RADIOLIB_ERR_CRC_MISMATCH) {
         s_stats.rx_crc_errors++;
@@ -224,24 +262,33 @@ int radio_send(const uint8_t *data, size_t len) {
 
 bool radio_poll_rx(uint8_t *buf, size_t max_len, size_t *out_len,
                     float *out_rssi_dbm, float *out_snr_db) {
-  if (!s_rxPending) {
+  if (s_rxCount == 0) {
     return false;
   }
+  const RxSlot &slot = s_rxRing[s_rxTail];
   if (buf != nullptr) {
-    size_t copyLen = (s_rxLen > max_len) ? max_len : s_rxLen;
-    memcpy(buf, s_rxBuf, copyLen);
+    size_t copyLen = (slot.len > max_len) ? max_len : slot.len;
+    memcpy(buf, slot.buf, copyLen);
   }
   if (out_len != nullptr) {
-    *out_len = s_rxLen;
+    *out_len = slot.len;
   }
   if (out_rssi_dbm != nullptr) {
-    *out_rssi_dbm = s_stats.last_rssi_dbm;
+    *out_rssi_dbm = slot.rssi_dbm;
   }
   if (out_snr_db != nullptr) {
-    *out_snr_db = s_stats.last_snr_db;
+    *out_snr_db = slot.snr_db;
   }
-  s_rxPending = false;
+  s_rxTail = (s_rxTail + 1) % kRxRingDepth;
+  s_rxCount--;
   return true;
+}
+
+uint32_t radio_airtime_us(size_t len) {
+  if (s_radio == nullptr) {
+    return 0;
+  }
+  return static_cast<uint32_t>(s_radio->getTimeOnAir(len));
 }
 
 void radio_get_profile(radio_profile_t *out) {

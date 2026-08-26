@@ -7,6 +7,7 @@
 #include "cli.h"
 #include "boomlink_codec.h"
 #include "embedded_cli.h"
+#include "link_service.h"
 #include "main.h"   /* Error_Handler */
 #include "pcm_stream.h"
 #include "radio.h"
@@ -196,7 +197,15 @@ static void print_radio_status(EmbeddedCli *cli)
    packet. Run it on one board while the other's console is watched for the
    "radio rx: ..." line that cli_process() prints automatically (see
    print_rx_frame()) - manually repeating this in both directions is the
-   "raw RadioLib ping/pong" hardware test from boomlink.md section 15.3. */
+   "raw RadioLib ping/pong" hardware test from boomlink.md section 15.3.
+   `radio ping`'s SEND side works regardless of `link enable`/`link
+   disable` (radio_send() has no exclusivity issue - see radio.h). Its RX
+   preview needs the *receiving* board to have run `link disable` first:
+   radio_poll_rx() is single-consumer, and by default the link engine owns
+   it (see link_service.h) - a raw, non-BoomLink-framed payload sent to a
+   board that has NOT disabled the link engine is consumed by BoomLink
+   instead, rejected as malformed/bad-magic, and never reaches this preview
+   at all. */
 static void cmd_radio(EmbeddedCli *cli, char *args, void *context)
 {
   (void)context;
@@ -321,12 +330,41 @@ static void cmd_proto(EmbeddedCli *cli, char *args, void *context)
    received/counted, just truncated for the debug print. */
 #define RADIO_RX_PREVIEW_MAX 64u
 
+/* Render up to `cap - 1` bytes of `buf` as printable ASCII (unprintable
+   bytes shown as '.') into `out`, NUL-terminated. Returns the number of
+   bytes actually rendered, so a caller can tell whether `len` was longer
+   than what fit. Shared by the raw and BoomLink-level RX previews below -
+   both need exactly this, on payloads from two different sources.
+
+   `cap == 0` renders nothing rather than underflowing `cap - 1u` to
+   SIZE_MAX: unreachable today (every call site passes a compile-time-sized
+   local array), but cheap to close off rather than leave as a contract only
+   its current callers happen to uphold. */
+static size_t ascii_preview(char *out, size_t cap, const uint8_t *buf, size_t len)
+{
+  if (cap == 0u)
+  {
+    return 0;
+  }
+  size_t n = (len < cap - 1u) ? len : (cap - 1u);
+  for (size_t i = 0; i < n; i++)
+  {
+    char c = (char)buf[i];
+    out[i] = (c >= 0x20 && c < 0x7f) ? c : '.';
+  }
+  out[n] = '\0';
+  return n;
+}
+
 /* Auto-print any packet radio_process() has finished receiving since the
    last call. Called every cli_process() tick so `radio ping` on another
-   board shows up without a dedicated poll command. */
+   board shows up without a dedicated poll command - but only while the
+   link engine does not own radio_poll_rx() (see link_service_enabled()):
+   radio.h's poll is single-consumer, and by default the link engine is the
+   one consumer. `link disable` hands it back to this. */
 static void print_rx_frame(void)
 {
-  if (s_cli == NULL)
+  if (s_cli == NULL || link_service_enabled())
   {
     return;
   }
@@ -340,16 +378,9 @@ static void print_rx_frame(void)
     return;
   }
 
-  /* Best-effort debug view of a raw bring-up payload (no BoomProtocol yet):
-     unprintable bytes show as '.'. */
+  /* Best-effort debug view of a raw bring-up payload (no BoomProtocol yet). */
   char preview[RADIO_RX_PREVIEW_MAX + 1];
-  size_t n = (len < sizeof(buf)) ? len : sizeof(buf);
-  for (size_t i = 0; i < n; i++)
-  {
-    char c = (char)buf[i];
-    preview[i] = (c >= 0x20 && c < 0x7f) ? c : '.';
-  }
-  preview[n] = '\0';
+  ascii_preview(preview, sizeof(preview), buf, len);
 
   char f1[16];
   char f2[16];
@@ -360,6 +391,301 @@ static void print_rx_frame(void)
   snprintf(line, sizeof(line), "radio rx: \"%s\"%s (%u bytes, RSSI %s dBm, SNR %s dB)",
            preview, (len > sizeof(buf)) ? "..." : "", (unsigned)len, f1, f2);
   embeddedCliPrint(s_cli, line);
+}
+
+static const char *tx_state_name(boomlink_tx_state_t state)
+{
+  switch (state)
+  {
+    case BOOMLINK_TX_STATE_IDLE:     return "idle";
+    case BOOMLINK_TX_STATE_READY:    return "ready";
+    case BOOMLINK_TX_STATE_JITTER:   return "jitter";
+    case BOOMLINK_TX_STATE_WAIT_ACK: return "wait-ack";
+    case BOOMLINK_TX_STATE_BACKOFF:  return "backoff";
+    default:                         return "?";
+  }
+}
+
+static const char *send_result_name(boomlink_link_send_result_t rc)
+{
+  switch (rc)
+  {
+    case BOOMLINK_LINK_SEND_OK:              return "queued";
+    case BOOMLINK_LINK_SEND_OK_EVICTED:      return "queued (evicted lower-priority traffic)";
+    case BOOMLINK_LINK_SEND_QUEUE_FULL:      return "failed: queue full";
+    case BOOMLINK_LINK_SEND_TOO_LONG:        return "failed: too long for this radio";
+    case BOOMLINK_LINK_SEND_BAD_DESTINATION: return "failed: bad destination";
+    default:                                 return "failed: unknown";
+  }
+}
+
+static const char *tx_outcome_name(boomlink_tx_outcome_t outcome)
+{
+  switch (outcome)
+  {
+    case BOOMLINK_TX_SENT:   return "sent (no ack requested)";
+    case BOOMLINK_TX_ACKED:  return "acked";
+    case BOOMLINK_TX_NO_ACK: return "no ack (final failure)";
+    default:                return "?";
+  }
+}
+
+/* boomlink_link_rx_fn - prints an accepted DATA frame's payload. The
+   BoomLink-level counterpart to print_rx_frame()'s raw preview, with the
+   addressing and per-packet signal quality only this layer knows. Called
+   from link_service_process() (cli_process() -> boomlink_link_poll()), so
+   never from interrupt context; `payload` is only valid for this call,
+   which is exactly how long the preview needs it. */
+static void link_on_rx(void *user, uint32_t source_id, uint32_t destination_id,
+                       const uint8_t *payload, size_t payload_len, float rssi_dbm,
+                       float snr_db)
+{
+  (void)user;
+  if (s_cli == NULL)
+  {
+    return;
+  }
+
+  char preview[RADIO_RX_PREVIEW_MAX + 1];
+  size_t n = ascii_preview(preview, sizeof(preview), payload, payload_len);
+
+  char f1[16];
+  char f2[16];
+  fmt_fixed(f1, sizeof(f1), rssi_dbm, 1);
+  fmt_fixed(f2, sizeof(f2), snr_db, 1);
+
+  char line[RADIO_RX_PREVIEW_MAX + 128];
+  snprintf(line, sizeof(line),
+           "link rx: from 0x%08lX to %s \"%s\"%s (%u bytes, RSSI %s dBm, SNR %s dB)",
+           (unsigned long)source_id,
+           (destination_id == BOOMLINK_ADDR_BROADCAST) ? "broadcast" : "me", preview,
+           (payload_len > n) ? "..." : "", (unsigned)payload_len, f1, f2);
+  embeddedCliPrint(s_cli, line);
+}
+
+/* boomlink_link_tx_done_fn - prints the outcome of a `link ping`. Called
+   with the TX pipeline already back to idle (see the typedef's own doc), so
+   nothing here re-enters boomlink_link_poll(). rssi_dbm/snr_db are only a
+   real reading for BOOMLINK_TX_ACKED (0.0f is the "nothing received"
+   sentinel otherwise - see boomlink_link_tx_done_fn) so they are only
+   printed then, rather than as a plausible-looking zero. */
+static void link_on_tx_done(void *user, boomlink_tx_outcome_t outcome,
+                            uint32_t destination_id, uint32_t sequence, uint8_t attempts,
+                            float rssi_dbm, float snr_db)
+{
+  (void)user;
+  if (s_cli == NULL)
+  {
+    return;
+  }
+
+  char line[128];
+  if (outcome == BOOMLINK_TX_ACKED)
+  {
+    char f1[16];
+    char f2[16];
+    fmt_fixed(f1, sizeof(f1), rssi_dbm, 1);
+    fmt_fixed(f2, sizeof(f2), snr_db, 1);
+    snprintf(line, sizeof(line),
+             "link tx done: to 0x%08lX seq %lu attempts %u - %s (RSSI %s dBm, SNR %s dB)",
+             (unsigned long)destination_id, (unsigned long)sequence, (unsigned)attempts,
+             tx_outcome_name(outcome), f1, f2);
+  }
+  else
+  {
+    snprintf(line, sizeof(line), "link tx done: to 0x%08lX seq %lu attempts %u - %s",
+             (unsigned long)destination_id, (unsigned long)sequence, (unsigned)attempts,
+             tx_outcome_name(outcome));
+  }
+  embeddedCliPrint(s_cli, line);
+}
+
+static void print_link_status(EmbeddedCli *cli)
+{
+  boomlink_link_t *link = link_service_link();
+  if (link == NULL)
+  {
+    embeddedCliPrint(cli, "link: not initialized");
+    return;
+  }
+
+  /* Worst case (the ack/rx-rejection counters line, nine %lu fields at up
+     to 10 digits each) is 183 bytes + NUL = 184 - computed by hand, not
+     estimated, since this line reuses the same buffer for three different
+     format strings of different lengths. 224 leaves genuine margin past
+     that, rather than the 8 bytes a smaller buffer would. */
+  char line[224];
+  snprintf(line, sizeof(line),
+           "link: node 0x%08lX  session 0x%08lX  %s  queue %u  radio-poll: %s",
+           (unsigned long)link_service_node_id(), (unsigned long)boomlink_link_session_id(link),
+           tx_state_name(boomlink_link_tx_state(link)), (unsigned)boomlink_link_queue_depth(link),
+           link_service_enabled() ? "link" : "raw (see 'link enable')");
+  embeddedCliPrint(cli, line);
+
+  boomlink_link_stats_t stats;
+  boomlink_link_get_stats(link, &stats);
+
+  char f1[16];
+  char f2[16];
+  fmt_fixed(f1, sizeof(f1), stats.last_rssi_dbm, 1);
+  fmt_fixed(f2, sizeof(f2), stats.last_snr_db, 1);
+  snprintf(line, sizeof(line),
+           "  tx %lu (retry %lu, fail %lu)  rx %lu (dup %lu, malformed %lu)  last RSSI %s dBm  SNR %s dB",
+           (unsigned long)stats.tx_envelopes, (unsigned long)stats.tx_retries,
+           (unsigned long)stats.tx_failures, (unsigned long)stats.rx_envelopes,
+           (unsigned long)stats.rx_duplicates, (unsigned long)stats.rx_malformed, f1, f2);
+  embeddedCliPrint(cli, line);
+
+  snprintf(line, sizeof(line),
+           "  ack sent %lu recv %lu unmatched %lu  rx other-dest %lu bad-magic %lu bad-src %lu "
+           "oversize %lu  tx dropped %lu shed %lu",
+           (unsigned long)stats.ack_sent, (unsigned long)stats.ack_received,
+           (unsigned long)stats.ack_unmatched, (unsigned long)stats.rx_other_destination,
+           (unsigned long)stats.rx_rejected_magic_or_version,
+           (unsigned long)stats.rx_invalid_source, (unsigned long)stats.rx_oversize,
+           (unsigned long)stats.tx_dropped, (unsigned long)stats.tx_shed);
+  embeddedCliPrint(cli, line);
+}
+
+/* Parses `tok` as an optional "0x"/"0X" prefix followed by EXACTLY 1-8 hex
+   digits (no sign) into `*out`. Deliberately not strtoul(): it accepts a
+   leading '+'/'-' (so
+   "-1" silently parses as a huge unsigned value) and reports overflow by
+   returning ULONG_MAX/setting errno rather than by refusing to parse, so a
+   caller checking only "did the end pointer move" - the check this file
+   used before this function existed - accepts "1FFFFFFFF" as
+   0xFFFFFFFF... which happens to be BOOMLINK_ADDR_BROADCAST, turning a
+   typo into a real, silent, un-acked broadcast transmission (section
+   9.9's "broadcast never requests link ACK" only makes that quieter).
+   Capping at 8 digits makes the accumulation below incapable of
+   overflowing uint32_t in the first place - no ERANGE check needed.
+
+   Accepts an optional leading "0x"/"0X", stripped before the 1-8-digit
+   count below applies - not for strtoul() compatibility, but because
+   `link status` PRINTS every ID this way ("node 0x1234ABCD"), and section
+   15.3's own documented bring-up procedure is to read that line off one
+   board and paste it into another's `link ping`. Rejecting the exact
+   format the tool itself prints would fail this PR's own hardware
+   acceptance test on a technicality nobody would think to work around. */
+static bool parse_hex_u32(const char *tok, uint32_t *out)
+{
+  if (tok == NULL)
+  {
+    return false;
+  }
+  if (tok[0] == '0' && (tok[1] == 'x' || tok[1] == 'X'))
+  {
+    tok += 2;
+  }
+  size_t len = strlen(tok);
+  if (len == 0u || len > 8u)
+  {
+    return false;
+  }
+
+  uint32_t value = 0;
+  for (size_t i = 0; i < len; i++)
+  {
+    char     c = tok[i];
+    uint32_t digit;
+    if (c >= '0' && c <= '9')
+    {
+      digit = (uint32_t)(c - '0');
+    }
+    else if (c >= 'a' && c <= 'f')
+    {
+      digit = (uint32_t)(c - 'a') + 10u;
+    }
+    else if (c >= 'A' && c <= 'F')
+    {
+      digit = (uint32_t)(c - 'A') + 10u;
+    }
+    else
+    {
+      return false;
+    }
+    value = (value << 4) | digit;
+  }
+  *out = value;
+  return true;
+}
+
+/* `link ping` is deliberately just boomlink_link_send() with an ACK
+   requested - the "pong" IS section 9.6's own ACK, which link_on_tx_done()
+   above reports as BOOMLINK_TX_ACKED. No separate application-level pong is
+   needed to prove the round trip: an ACK is the receiving node's link
+   engine, not a human at a keyboard, replying. */
+static void cmd_link(EmbeddedCli *cli, char *args, void *context)
+{
+  (void)context;
+  const char *sub = embeddedCliGetToken(args, 1);
+
+  if (sub != NULL && strcmp(sub, "status") == 0)
+  {
+    print_link_status(cli);
+    return;
+  }
+
+  if (sub != NULL && strcmp(sub, "enable") == 0)
+  {
+    link_service_set_enabled(true);
+    embeddedCliPrint(cli, "link: enabled (owns radio RX)");
+    return;
+  }
+
+  if (sub != NULL && strcmp(sub, "disable") == 0)
+  {
+    link_service_set_enabled(false);
+    embeddedCliPrint(cli, "link: disabled (radio RX handed back to `radio ping`'s raw preview)");
+    return;
+  }
+
+  if (sub != NULL && strcmp(sub, "ping") == 0)
+  {
+    boomlink_link_t *link = link_service_link();
+    if (link == NULL)
+    {
+      embeddedCliPrint(cli, "link: not initialized");
+      return;
+    }
+    if (!link_service_enabled())
+    {
+      /* Not a hard error - the frame WOULD queue (boomlink_link_send()
+         doesn't know about this flag) - but link_service_process() skips
+         boomlink_link_poll() entirely while disabled, so it would sit
+         queued and never transmit, with the operator watching for a
+         `link tx done` line that can never arrive. Refusing here, rather
+         than queueing something already known to be doomed, is the
+         honest answer. */
+      embeddedCliPrint(cli, "link: disabled - `link ping` would queue but never transmit "
+                            "(see `link enable`)");
+      return;
+    }
+
+    uint32_t dest;
+    if (!parse_hex_u32(embeddedCliGetToken(args, 2), &dest))
+    {
+      embeddedCliPrint(cli, "usage: link ping <node_id_hex> [text]");
+      return;
+    }
+
+    const char *payload = embeddedCliGetToken(args, 3);
+    if (payload == NULL)
+    {
+      payload = "PING";
+    }
+
+    boomlink_link_send_result_t rc = boomlink_link_send(
+        link, dest, BOOMLINK_TXPRIO_NORMAL, true, (const uint8_t *)payload, strlen(payload));
+
+    char line[96];
+    snprintf(line, sizeof(line), "link ping: %s (watch for a `link tx done` line)",
+             send_result_name(rc));
+    embeddedCliPrint(cli, line);
+    return;
+  }
+
+  embeddedCliPrint(cli, "usage: link status | link enable | link disable | link ping <node_id_hex> [text]");
 }
 
 void cli_init(cli_tx_fn tx)
@@ -416,7 +742,8 @@ void cli_init(cli_tx_fn tx)
 
   CliCommandBinding radio_binding = {
     .name         = "radio",
-    .help         = "radio status | radio ping [text] | radio reset - raw SX1262 bring-up test",
+    .help         = "radio status | radio ping [text] | radio reset - raw SX1262 bring-up test "
+                    "(RX preview needs `link disable`)",
     .tokenizeArgs = true,
     .context      = NULL,
     .binding      = cmd_radio,
@@ -432,6 +759,25 @@ void cli_init(cli_tx_fn tx)
   };
   embeddedCliAddBinding(s_cli, proto_binding);
 
+  CliCommandBinding link_binding = {
+    .name         = "link",
+    .help         = "link status | link enable | link disable | link ping <node_id_hex> [text]",
+    .tokenizeArgs = true,
+    .context      = NULL,
+    .binding      = cmd_link,
+  };
+  embeddedCliAddBinding(s_cli, link_binding);
+
+  /* Brings the link engine up against radio.h (App/link/link_service.h).
+     Safe regardless of radio_init()'s own outcome - see link_service_init()'s
+     doc: its port forwards to radio.h's singleton on every call rather than
+     caching readiness, so this just means every send/poll is a no-op until
+     the radio is (if ever). Not checking the return value: a config this
+     file builds itself failing boomlink_link_init()'s validation would be a
+     programming error to catch at review/test time, not a field condition
+     to branch on - `link status` reports "not initialized" either way. */
+  (void)link_service_init(link_on_rx, NULL, link_on_tx_done, NULL);
+
   embeddedCliProcess(s_cli); /* print the initial prompt */
 }
 
@@ -442,6 +788,11 @@ void cli_process(void)
     return;
   }
   embeddedCliProcess(s_cli);
+  /* Drains RX (calling link_on_rx() for anything accepted) then services TX
+     (calling link_on_tx_done() for anything a pending `link ping` just
+     finished) - a no-op unless `link enable` currently owns radio_poll_rx(),
+     same arbitration print_rx_frame() below observes from the other side. */
+  link_service_process();
   print_rx_frame();
   tx_flush();
 }

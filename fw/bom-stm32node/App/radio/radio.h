@@ -90,20 +90,37 @@ int radio_send(const uint8_t *data, size_t len);
  * nothing new has arrived. Any of `buf`/out_len/out_rssi_dbm/out_snr_db may
  * be NULL.
  *
- * Single-slot, single-consumer: only the most recently completed packet is
- * held. A second packet finishing before this is called again silently
- * replaces the first (counted in radio_stats_t::rx_overruns), and two
- * independent callers polling this from the same superloop would each only
- * ever see some of the traffic, never all of it - today only cli.c's
- * automatic RX print calls this. A future consumer (BoomLink, PR3) must
- * replace this single-slot model with its own queue rather than add a
- * second poller here.
+ * Queued, single-consumer: a small fixed-depth ring holds packets that
+ * finished decoding before this was called again, so a burst of a few
+ * near-simultaneous transmissions survives between polls rather than all but
+ * the latest being silently lost. The ring is still bounded - a packet
+ * arriving when it is full is dropped and counted in
+ * radio_stats_t::rx_overruns, same as ever, just at a higher bar.
+ *
+ * Still single-consumer, and that part has NOT changed: two independent
+ * callers polling this from the same superloop would each only ever drain
+ * some of the queue, never see all of it, since every call pops the oldest
+ * buffered packet regardless of who is asking. Exactly one caller may poll
+ * this at a time - see App/link/link_service.h and cli.c's `link
+ * enable`/`link disable`, which arbitrate that between BoomLink and the raw
+ * bring-up RX preview so only one of them ever does.
  */
 bool radio_poll_rx(uint8_t *buf, size_t max_len, size_t *out_len,
                     float *out_rssi_dbm, float *out_snr_db);
 
 /** Fill *out with the active (fixed, bring-up) LoRa PHY profile. */
 void radio_get_profile(radio_profile_t *out);
+
+/**
+ * Estimated time on air, in microseconds, for a `len`-byte packet under the
+ * ACTIVE profile - RadioLib's PhysicalLayer::getTimeOnAir(len), which this
+ * layer computes but until now never exposed (see boomlink_port.h's
+ * airtime_us comment, which names this gap explicitly). Returns 0 if the
+ * radio is not ready, the same "nothing to report" sentinel radio_send()'s
+ * own error path implies - never a plausible-looking duration for a packet
+ * that cannot actually be sent right now.
+ */
+uint32_t radio_airtime_us(size_t len);
 
 /** Fill *out with a snapshot of the running link statistics. */
 void radio_get_stats(radio_stats_t *out);

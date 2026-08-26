@@ -442,10 +442,11 @@ static uint32_t draw_jitter_ms(boomlink_link_t *link) {
  * boomlink_link_poll() call and the ACK isn't the last of them - the same
  * misattribution the RX callback's rssi_dbm/snr_db parameters exist to
  * prevent, just needing a burst that buries the ACK instead of a burst of
- * payloads. Invisible today only because the one real port (radio.h) is
- * single-slot (see boomlink_link_poll()'s own comment on that limit); the fake
- * port already supports a burst, which is how this would surface the moment a
- * real multi-packet port exists.
+ * payloads. Once genuinely invisible on the real target because radio.h was
+ * single-slot (see boomlink_link_poll()'s own comment on that history); not
+ * anymore - Phase C gave radio.h a real multi-packet ring, the same kind the
+ * fake port this package tests against already had, so a burst that buries
+ * an ACK is now a real, reachable path on hardware too, not just in tests.
  */
 static void finish_tx(boomlink_link_t *link, boomlink_tx_outcome_t outcome, float rssi_dbm,
                       float snr_db) {
@@ -601,10 +602,11 @@ void boomlink_link_poll(boomlink_link_t *link) {
   size_t len  = 0u;
   float  rssi = 0.0f;
   float  snr  = 0.0f;
-  /* Drain, not one-per-poll: the radio's own model is single-slot (see
-     radio.h), so a second packet arriving before this returns is lost either
-     way - but a caller that polls once per superloop iteration must not fall
-     permanently behind a burst it could have caught.
+  /* Drain, not one-per-poll: the radio's own model is a small fixed-depth
+     ring, not unbounded (see radio.h - Phase C), so a packet arriving once
+     that ring is already full is lost either way - but a caller that polls
+     once per superloop iteration must not fall behind a burst smaller than
+     the ring that it could have caught by draining here instead.
      The cap offered is the PORT's, not the buffer's: they differ on a reduced
      radio profile, and offering more than the radio can produce would leave the
      oversize check comparing against a limit no real packet can exceed. */

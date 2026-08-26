@@ -21,11 +21,11 @@ the same wire bytes: Python protobuf for the codec, `boomlink_linkframe.py` for
 the header.
 
 Also here: `linkengine/` - the link engine itself (addressing state, ACK matching,
-retry, duplicate suppression, TX queue; section 9). Not here: radio transport, and
-anything that wires the engine into `fw/bom-stm32node` - a call site, a
-`target_link_libraries` entry, a CLI command. Both `boomlink_linkframe` and
-`boomlink_linkengine` are already cross-compiled for the target (see "Building and
-testing" below); nothing links them yet, which is deliberate and covered there.
+retry, duplicate suppression, TX queue; section 9). Not here: radio transport, which
+stays `fw/bom-stm32node`'s own concern - `App/link/boomlink_radio_port.c` there wires
+this package's `boomlink_port_t` seam to `App/radio/radio.h` and `App/link/
+link_service.c` owns the engine instance, both cross-compiled AND linked into the
+firmware image as of that package's Phase C.
 
 ## Layout
 
@@ -86,20 +86,21 @@ This directory is a CMake project that builds two different ways:
   and names.
 - **As a subdirectory** of `fw/bom-stm32node`'s ARM cross build: the
   `boomlink_protocol`, `boomlink_linkframe` and `boomlink_linkengine` static
-  libraries are built. `boomlink_protocol` is linked into the firmware and
-  actually exercised there by the `proto` CLI command in `Core/Src/cli.c` (see
-  its comment for why that matters); the other two are cross-compiled but not
-  yet referenced by anything, which is deliberate - it proves they are free of
-  host-isms and warning-clean for the target before the firmware that will use
-  them exists.
+  libraries are built AND, as of that package's Phase C, all three actually
+  linked into the firmware image - `boomlink_protocol` by the `proto` CLI
+  command (`Core/Src/cli.c`), `boomlink_linkframe`/`boomlink_linkengine` by
+  `App/link/`'s port adapter and engine call site, which the `link` CLI
+  command exercises. Before Phase C landed, the latter two were cross-compiled
+  but referenced by nothing - deliberately, to prove them free of host-isms
+  and warning-clean for the target before any firmware code used them; that
+  archive-without-a-linker-reference state was itself asserted by the
+  workflow (nothing else would have noticed one disappearing with no
+  dependents), which is a check worth keeping in mind if a similar target
+  ever needs cross-compiling ahead of its own call site again.
   The warning-clean half needs `-DBOOMLINK_TARGET_WERROR=ON`, which CI passes
   and a local firmware build does not (so a warning from a newer compiler than
   CI's never blocks you); without it a warning there is only log text.
-  Both archives are built but never reach the linker at all (nothing links
-  them), so wiring them into the firmware will need `target_link_libraries`
-  entries in `fw/bom-stm32node`, not merely a call site. The workflow asserts
-  both archives exist, because with no dependents nothing else would notice
-  their disappearing. No tests - a
+  No tests here either way - a
   cross-compiled host tool makes no sense, and pytest cannot run on an
   STM32. Note this makes the host Python packages below a hard requirement
   of building the **firmware**, not just of running these tests: code

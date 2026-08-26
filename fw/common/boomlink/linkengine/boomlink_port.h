@@ -13,10 +13,13 @@
  *          The engine cannot simply include the firmware's App/radio/radio.h.
  *          That header lives in fw/bom-stm32node (this package must stay
  *          host-buildable and knows nothing about that tree), it is a global
- *          singleton with no instance handle, and its own comment requires a
- *          replacement rather than reuse: "A future consumer (BoomLink, PR3)
- *          must replace this single-slot model with its own queue rather than
- *          add a second poller here."
+ *          singleton with no instance handle, and its own comment is explicit
+ *          that it stays single-CONSUMER even where Phase C gave it a real RX
+ *          queue: "Exactly one caller may poll this at a time" -
+ *          App/link/boomlink_radio_port.c is that one caller, arbitrated
+ *          against the firmware's raw bring-up path by App/link/
+ *          link_service.h's enable/disable flag, not by anything this engine
+ *          knows about.
  *
  *          Function pointers rather than link-time substitution, and one `ctx`
  *          rather than globals, for a specific reason: the interesting tests
@@ -111,10 +114,11 @@ typedef struct {
    *
    * Precisely, since an earlier version of this comment said the radio layer
    * "already has it": RadioLib can compute it (PhysicalLayer::getTimeOnAir(len),
-   * in the vendored copy under fw/bom-stm32node/third_party/RadioLib), but
-   * App/radio/radio.h does not expose it today. So implementing this callback on
-   * the target means adding that accessor to the radio layer, not just forwarding
-   * to something that is already there.
+   * in the vendored copy under fw/bom-stm32node/third_party/RadioLib), but until
+   * Phase C, App/radio/radio.h did not expose it - implementing this callback on
+   * the target needed a new radio_airtime_us() accessor added there, not just a
+   * forward to something that was already public. App/link/boomlink_radio_port.c
+   * is that forward, now that the accessor exists.
    *
    * A fake may return anything self-consistent; the engine only ever compares
    * and scales these values, never interprets them as physics.

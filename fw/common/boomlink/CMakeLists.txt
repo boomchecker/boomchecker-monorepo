@@ -7,11 +7,13 @@ cmake_minimum_required(VERSION 3.21)
 #
 # 1. add_subdirectory()'d from fw/bom-stm32node/CMakeLists.txt, under that
 #    project's ARM cross toolchain - produces the `boomlink_protocol` static
-#    library (generated Nanopb codec + boomlink_codec.c), which the firmware
-#    links, and `boomlink_linkframe` (the link frame header), which is
-#    cross-compiled but not yet linked by anything - see its own comment below.
-#    No tests are built this way: cross-compiled host tooling makes no sense,
-#    and the STM32 target has no way to run pytest.
+#    library (generated Nanopb codec + boomlink_codec.c), `boomlink_linkframe`
+#    (the link frame header) and `boomlink_linkengine` (the link engine), all
+#    three now actually linked into the firmware image (`App/link/` is the
+#    link engine's call site - see its own comment below for how that came
+#    to be true only as of Phase C). No tests are built this way:
+#    cross-compiled host tooling makes no sense, and the STM32 target has no
+#    way to run pytest.
 # 2. configured standalone, with the host's native compiler - additionally
 #    builds `boomlink_codec_tool` and `boomlink_linkframe_tool` (small CLIs
 #    used by the Python tests) and registers the native/host test suite via
@@ -487,21 +489,21 @@ endif()
 # something compile; if link-layer code needs to look inside the payload, the
 # layering is wrong.
 #
-# Built in the ARM cross build too, even though nothing in the firmware
-# references it yet - PR 3's later phases wire it in. That is deliberate, not
-# the "compiled but never linked" gap PR 2's review caught: there the ELF was
-# missing a symbol an acceptance criterion required, whereas here cross-
-# compiling it early is what proves it is free of host-isms and warning-clean
-# for the target before any firmware depends on it. The second half of that claim
+# Built in the ARM cross build, and - as of Phase C - actually linked into
+# the firmware too (fw/bom-stm32node/App/link/ is the call site; see that
+# target's own comment below for the fuller history of what this looked like
+# before Phase C landed). Cross-compiling it here, rather than only once
+# something depended on it, is what proves it free of host-isms and
+# warning-clean for the target ahead of time - the second half of that claim
 # is only true when BOOMLINK_TARGET_WERROR is on, which is why CI turns it on
 # - see that option above.
 #
-# Precisely: the archive is BUILT but never reaches the linker at all - it is
-# not on bom-stm32node.elf's link line, because nothing links it. So Phase C
-# needs more than a call site: it must also add boomlink_linkframe to
-# fw/bom-stm32node/CMakeLists.txt's target_link_libraries. Worth stating,
-# because "the linker just drops it for now" would imply the archive is already
-# on the link line and only a reference is missing.
+# Precisely, before Phase C: the archive was BUILT but never reached the
+# linker at all - not on bom-stm32node.elf's link line, because nothing linked
+# it, which is a stronger statement than "the linker just drops it for now"
+# (that would imply the archive was already on the link line and only a
+# reference was missing). Phase C's fw/bom-stm32node/CMakeLists.txt now links
+# boomlink_linkengine, which PUBLIC-links this target too - see that file.
 add_library(boomlink_linkframe STATIC
   ${CMAKE_CURRENT_SOURCE_DIR}/linkframe/boomlink_linkframe.c
 )
@@ -540,11 +542,11 @@ target_compile_options(boomlink_linkframe PRIVATE
 #
 # Built in the ARM cross build for the same reason boomlink_linkframe is: to
 # prove it is free of host-isms and (with BOOMLINK_TARGET_WERROR) warning-clean
-# for the target before any firmware depends on it. Nothing links it yet; Phase C
-# adds it to fw/bom-stm32node's target_link_libraries. The workflow asserts the
-# archive is produced, because with no dependents nothing else would notice it
-# disappearing - verified by marking this target EXCLUDE_FROM_ALL, which left the
-# firmware job green with the engine never cross-compiled at all.
+# for the target. Phase C (fw/bom-stm32node/App/link/) now links it - the
+# workflow's "archive is produced" assertion below predates that and stays
+# useful anyway: it is what caught this archive never being cross-compiled at
+# all, when this target was briefly marked EXCLUDE_FROM_ALL, at a point in
+# review where nothing yet linked it and nothing else would have noticed.
 add_library(boomlink_linkengine STATIC
   ${CMAKE_CURRENT_SOURCE_DIR}/linkengine/boomlink_port.c
   ${CMAKE_CURRENT_SOURCE_DIR}/linkengine/boomlink_dupcache.c
