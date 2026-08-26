@@ -1,0 +1,167 @@
+syntax = "proto3";
+
+package boomlink;
+
+// Configuration application messages (boomlink.md section 8.2).
+message ConfigMessage {
+  oneof message {
+    ConfigGetRequest get_request = 1;
+    ConfigGetResponse get_response = 2;
+    ConfigSetRequest set_request = 3;
+    ConfigSetResponse set_response = 4;
+  }
+}
+
+// Which of section 8.2's NodeConfig groups to read. Plain bools, not
+// submessage presence like ConfigSetRequest below: a GET carries no values,
+// so there is nothing for presence-of-a-message to attach to - these really
+// are just flags, and modeling them as anything heavier would be pretending
+// otherwise.
+message ConfigGetRequest {
+  bool include_general = 1;
+  bool include_link = 2;
+  bool include_radio = 3;
+  bool include_detection = 4;
+  bool include_gnss = 5;
+  bool include_telemetry = 6;
+}
+
+// Only the groups the request asked for are populated; Nanopb's has_<field>
+// on a message-type field is exactly "was this present", so a requester
+// tells populated-but-all-default apart from not-requested-at-all for free,
+// without this message needing its own parallel set of bools.
+message ConfigGetResponse {
+  uint32 config_version = 1;
+  GeneralConfig general = 2;
+  LinkConfig link = 3;
+  RadioConfig radio = 4;
+  DetectionConfig detection = 5;
+  GnssConfig gnss = 6;
+  TelemetryConfig telemetry = 7;
+}
+
+// Which groups to WRITE is likewise "is the submessage present", not a
+// separate flag - unlike ConfigGetRequest, these fields carry real values,
+// so presence is the natural and only signal needed.
+//
+// Each present group is a WHOLE-GROUP REPLACEMENT, not a per-field patch: a
+// receiver applies every field of a present group exactly as sent, plain
+// scalar zero-defaults included. Proto3 gives no way to tell "the caller
+// left this field at its zero default" apart from "the caller means zero"
+// for a plain scalar field, so a per-field patch built on presence would
+// silently reset every field of a group the caller did not bother
+// restating. A caller that wants to change one field of a group must GET
+// that group first, edit the one field, and SET the whole group back.
+message ConfigSetRequest {
+  // Optimistic concurrency (section 8.2): rejected unless this matches the
+  // node's current config_version at the moment this request is processed.
+  uint32 expected_config_version = 1;
+
+  GeneralConfig general = 2;
+  LinkConfig link = 3;
+  RadioConfig radio = 4;
+  DetectionConfig detection = 5;
+  GnssConfig gnss = 6;
+  TelemetryConfig telemetry = 7;
+}
+
+enum ConfigSetResult {
+  CONFIG_SET_RESULT_UNSPECIFIED = 0;
+  CONFIG_SET_RESULT_OK = 1;
+  // expected_config_version did not match - section 8.2's "a remote write
+  // with an outdated expected version is rejected instead of silently
+  // overwriting newer settings."
+  CONFIG_SET_RESULT_VERSION_CONFLICT = 2;
+  CONFIG_SET_RESULT_INVALID = 3;
+  // A RadioConfig/magic/node_id change was accepted and applied, but is
+  // PENDING confirmation within section 8.2's revert-on-timeout window -
+  // distinct from OK because the caller must not treat the change as final
+  // until a second, later confirmation actually arrives.
+  CONFIG_SET_RESULT_PENDING_CONFIRMATION = 4;
+  // A previous RadioConfig/magic/node_id change is still inside its own
+  // revert-on-timeout window. Rejected rather than merged with this
+  // request: section 8.2 does not describe overlapping windows, and
+  // guessing a merge policy risks a revert that restores neither the
+  // original state nor either requested one.
+  CONFIG_SET_RESULT_APPLY_IN_PROGRESS = 5;
+}
+
+message ConfigSetResponse {
+  ConfigSetResult result = 1;
+  // The version AFTER this request was processed, whether accepted or not -
+  // a caller always learns the authoritative version from the response
+  // itself rather than needing a follow-up ConfigGetRequest just to find
+  // out what happened.
+  uint32 config_version = 2;
+}
+
+message GeneralConfig {
+  uint32 node_id = 1;
+  uint32 default_destination_id = 2;
+  bool receive_enabled = 3;
+  bool transmit_enabled = 4;
+  bool usb_forward_enabled = 5;
+  bool promiscuous_monitor_enabled = 6;
+}
+
+// Mirrors boomlink_link_config_t's five runtime-reconfigurable fields
+// (fw/common/boomlink/linkengine/boomlink_link.h's
+// boomlink_link_reconfigure()), plus `magic` - section 8.2's own "two
+// fields need the same hazard treatment and are not currently assigned a
+// home" paragraph puts it here, alongside GeneralConfig.node_id, as a field
+// that needs revert-on-timeout apply semantics rather than an ordinary
+// immediate write.
+message LinkConfig {
+  uint32 magic = 1; // one byte on the wire (section 7.3); uint32 here for proto ergonomics
+  uint32 ack_timeout_margin_ms = 2;
+  uint32 max_attempts = 3;
+  uint32 backoff_min_ms = 4;
+  uint32 backoff_max_ms = 5;
+  uint32 tx_jitter_max_ms = 6;
+}
+
+// Mirrors radio_profile_t (fw/bom-stm32node/App/radio/radio.h). A change
+// here is section 8.2's canonical revert-on-timeout example: apply, wait for
+// a confirmation exchange on the new profile within a bounded window,
+// revert to the previous profile if none arrives.
+message RadioConfig {
+  float frequency_mhz = 1;
+  float bandwidth_khz = 2;
+  uint32 spreading_factor = 3;
+  uint32 coding_rate_denom = 4;
+  int32 tx_power_dbm = 5;
+  uint32 preamble_symbols = 6;
+  uint32 sync_word = 7;
+}
+
+// One field each, matching section 8.2's own literal example ("set gunshot
+// threshold -> configuration"). Deliberately minimal for the same reason
+// detection.proto's per-type detail is deferred: no drone/gunshot detector
+// exists in this firmware yet to say what else it would need.
+message DroneDetectionConfig {
+  uint32 confidence_threshold_percent = 1;
+}
+
+message GunshotDetectionConfig {
+  uint32 confidence_threshold_percent = 1;
+}
+
+message DetectionConfig {
+  bool detection_enabled = 1;
+  DroneDetectionConfig drone = 2;
+  GunshotDetectionConfig gunshot = 3;
+}
+
+// A GNSS module is already wired on this board (GPS_* pins - see
+// fw/bom-stm32node/Core/Inc/main.h) but has no driver yet, so this group is
+// intentionally minimal: whether a node should attempt to use it once one
+// exists. Not `reserved` for the rest - see detection.proto's identical
+// convention note - a driver PR adds fields here when it knows what they
+// are, rather than this PR guessing.
+message GnssConfig {
+  bool gnss_enabled = 1;
+}
+
+message TelemetryConfig {
+  uint32 report_interval_s = 1;
+}

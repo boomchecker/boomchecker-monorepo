@@ -223,6 +223,35 @@ sketch:
   ping/pong PR 3's scope names -
   see section 15.3 for how it coexists with the pre-existing raw `radio ping` test.
 
+What the protocol dispatcher and per-domain services actually landed as (PR 4 Phase A),
+where it differs from this section's original sketch:
+
+- The sketch put the dispatcher and every domain service under
+  `bom-stm32node/App/protocol/` and `App/services/`, STM32-target-only. They landed
+  instead as `boomlink_dispatch`, `boomlink_command_service` and
+  `boomlink_config_service` - target-agnostic C under `fw/common/boomlink/dispatch/` and
+  `fw/common/boomlink/services/` - the same reasoning that moved the link engine out of
+  `App/link/` in PR 3: no HAL/RadioLib dependency, so it belongs where it can be
+  host-tested, with a thin `App/` call site wiring real actions in later.
+- Unlike `linkframe/`/`linkengine/`, this layer is Nanopb-**dependent** on purpose: its
+  whole job is decoding what those layers deliberately never look inside (see
+  `boomlink_dispatch.h`'s own file doc).
+- `detection_service`/`telemetry_service`/`system_service` from the sketch do not exist
+  yet: Phase A wires DetectionMessage/TelemetryMessage/SystemMessage only as far as the
+  dispatcher recognizing and counting them (`on_detection`/`on_telemetry`/`on_system`
+  handler slots), since there is no detection algorithm, sensor reading or automatic
+  Ping responder yet to put behind a real service.
+- `boomlink_config_service` holds `NodeConfig` **in memory only** - `App/storage/
+  config_store.c/.h` from the sketch, and loading/saving it, is Phase B's job. Section
+  10.1's revert-on-timeout apply is implemented in full even so, generalized from just
+  RadioConfig to also cover `GeneralConfig.node_id`/`LinkConfig.magic` per this section's
+  own "two fields need the same hazard treatment" note - a `boomlink_config_hazard_t`
+  covering all three as one atomic stage/commit/confirm/revert unit.
+- `App/protocol/` and `App/services/` are therefore not yet added by any PR: Phase C
+  adds a thin call site analogous to Phase C's `App/link/link_service.c/.h` (wiring
+  `boomlink_dispatch_process()` and the two services to real RX bytes, a real send path,
+  and real command actions), not the fuller file lists this section originally sketched.
+
 ```text
 fw/
 ├── common/
@@ -253,6 +282,12 @@ fw/
 │       │   ├── boomlink_dupcache.h/.c   # section 9.4's duplicate window
 │       │   ├── boomlink_txqueue.h/.c    # section 9.8's priority queue
 │       │   └── boomlink_port.h/.c       # radio seam - tests/'s fake implements it too
+│       ├── dispatch/                # PR 4 Phase A - Nanopb-DEPENDENT, unlike the two above
+│       │   ├── boomlink_dispatch.h/.c          # routes a decoded Envelope by which_payload
+│       │   └── boomlink_envelope_builder.h/.c  # builds one-way DetectionEvent/TelemetryReport envelopes
+│       ├── services/                # PR 4 Phase A - per-domain logic behind the dispatcher
+│       │   ├── boomlink_command_service.h/.c   # section 8.3's command set, ops injected
+│       │   └── boomlink_config_service.h/.c    # section 8.2's ConfigGet/Set, in-memory only
 │       ├── tests/
 │       │   ├── test_encode_decode.py
 │       │   ├── test_compatibility.py
@@ -275,21 +310,14 @@ fw/
 │   │   │   │                          # the four-file sketch this line used to show
 │   │   │   ├── boomlink_radio_port.h/.c   # boomlink_port_t, wired to App/radio/radio.h
 │   │   │   └── link_service.h/.c          # the boomlink_link_t instance + cli.c's call site
-│   │   ├── protocol/
-│   │   │   ├── protocol_codec.h
-│   │   │   ├── protocol_codec.c
-│   │   │   ├── protocol_dispatcher.h
-│   │   │   ├── protocol_dispatcher.c
-│   │   │   ├── envelope_builder.h
-│   │   │   └── envelope_builder.c
-│   │   ├── services/
-│   │   │   ├── detection_service.c/.h
-│   │   │   ├── telemetry_service.c/.h
-│   │   │   ├── config_service.c/.h
-│   │   │   ├── command_service.c/.h
-│   │   │   └── system_service.c/.h
+│   │   ├── protocol/                  # not yet added - PR 4's later firmware-wiring
+│   │   │   │                          # phase adds a thin call site here, not the
+│   │   │   │                          # protocol_codec/protocol_dispatcher/envelope_builder
+│   │   │   │                          # split this line used to show; see PR 4 Phase A's
+│   │   │   │                          # "what actually landed" above
+│   │   ├── services/                  # not yet added - same note as protocol/ above
 │   │   └── storage/
-│   │       └── config_store.c/.h
+│   │       └── config_store.c/.h      # not yet added - PR 4 Phase B's job
 │   ├── third_party/
 │   │   ├── embedded-cli/
 │   │   ├── RadioLib/
@@ -1697,32 +1725,55 @@ Tracked by issue [#75](https://github.com/boomchecker/boomchecker-monorepo/issue
 **Goal:** make BoomLink useful for the actual sensor-node application while keeping one
 firmware image for every node.
 
+Split into three phases for the same reason PR 3 split off its own Phase C: schema and
+dispatch logic is host-testable target-agnostic C, flash persistence needs real hardware
+to validate safely, and firmware wiring needs both of the above to exist first. Each
+scope item below is tagged with the phase that lands it.
+
 Scope:
 
-- add `detection.proto`;
-- add `telemetry.proto`;
-- add `command.proto`;
-- add `config.proto`;
-- implement protocol dispatcher and per-domain services;
+- add `detection.proto` (Phase A);
+- add `telemetry.proto` (Phase A);
+- add `command.proto` (Phase A);
+- add `config.proto` (Phase A);
+- implement protocol dispatcher and per-domain services (Phase A);
 - implement DetectionEvent with timestamp quality, type, confidence and optional compact
-  localization metadata;
-- implement compact telemetry;
-- implement Reboot, Identify and SelfTest commands;
-- implement ConfigGet and ConfigSet;
-- add `config_version` / `expected_config_version` conflict handling;
-- add runtime general/link/radio/detection/telemetry configuration;
-- persist validated NodeConfig to flash with CRC/version wrapper;
-- implement safe defaults when stored config is missing/corrupt;
-- support `usb_forward_enabled` gateway behaviour without a separate firmware build.
+  localization metadata (Phase A: schema and dispatch recognition only — no detection
+  algorithm exists in this firmware yet, so per-type detail fields and real event
+  generation are left to whichever PR adds the first real detector);
+- implement compact telemetry (Phase A: schema and dispatch recognition only, same
+  caveat — no sensor readings are wired up yet);
+- implement Reboot, Identify and SelfTest commands (Phase A: dispatch plus injected
+  `boomlink_command_ops_t` callbacks; the real actions — NVIC reset, an LED, the
+  detection subsystem — are Phase C's job, against real hardware);
+- implement ConfigGet and ConfigSet (Phase A: in-memory `boomlink_config_service_t`,
+  including `config_version`/`expected_config_version` conflict handling and the
+  revert-on-timeout apply this section already specified for RadioConfig, generalized
+  to `GeneralConfig.node_id` and `LinkConfig.magic` per this section's own "two fields
+  need the same hazard treatment" note);
+- add runtime general/link/radio/detection/telemetry configuration (Phase A, in-memory);
+- persist validated NodeConfig to flash with CRC/version wrapper (Phase B);
+- implement safe defaults when stored config is missing/corrupt (Phase B loads them;
+  the `boomlink_node_config_defaults()` fallback itself already exists from Phase A);
+- support `usb_forward_enabled` gateway behaviour without a separate firmware build
+  (Phase C).
+
+Phase A deliberately does not extend the PR 2 Python/protoc golden-vector cross-check
+(`tests/vectors_spec.py`, hardcoded to `SystemMessage.{ping,pong}` shapes) to the four
+new message groups: no new hand-written serialization code exists for them, Nanopb's
+generic mechanics handle the wire format, and the host C test suite below already
+exercises every new struct field. Extending the cross-check is worth doing if a later
+phase adds hand-written encode/decode logic for one of these groups, not before.
 
 Acceptance criteria:
 
-- the same binary can boot as different node IDs/roles from persistent config;
-- a detector event reaches a gateway as a typed message;
-- detection parameters can be changed at runtime and persisted;
-- ConfigGet reports the active configuration;
-- stale ConfigSet is rejected using config versioning;
-- reboot does not require rebuilding to preserve role/identity.
+- the same binary can boot as different node IDs/roles from persistent config (Phase B);
+- a detector event reaches a gateway as a typed message (Phase A carries the message;
+  Phase C generates a real one);
+- detection parameters can be changed at runtime (Phase A) and persisted (Phase B);
+- ConfigGet reports the active configuration (Phase A, in-memory);
+- stale ConfigSet is rejected using config versioning (Phase A);
+- reboot does not require rebuilding to preserve role/identity (Phase B).
 
 ## PR 5 — Host CLI and end-to-end tooling
 

@@ -182,9 +182,11 @@ holding, and `tests/test_compatibility.py` is what enforces them:
 
 - **Never reuse a removed Protobuf field number.** Mark it `reserved` in the
   `.proto` file instead. (Numbers that were never assigned in the first
-  place - e.g. `Envelope.payload`'s 10-13, reserved by the roadmap for PR 4's
-  message groups - are not "removed" and are left as plain comments, not
-  `reserved`, since nothing needs protecting yet.)
+  place are not "removed" and are left as plain comments, not `reserved`,
+  since nothing needs protecting yet - `Envelope.payload`'s 10-13 were exactly
+  this before PR 4 Phase A assigned them to detection/config/command/telemetry;
+  `DetectionEvent`'s field 15 is the same convention, still unassigned, for
+  whichever PR adds the first real detector's per-type detail.)
 - **Bounded fields have a fixed maximum size** (`nanopb/<name>.options`),
   and exceeding it is a decode failure, not a buffer overflow, on the Nanopb
   side even when the peer's encoder (e.g. Python protobuf, which has no
@@ -250,3 +252,14 @@ holding, and `tests/test_compatibility.py` is what enforces them:
    - the one place both the Nanopb and Python generation steps read it from.
 6. Add golden vectors (`vectors_spec.py` + `generate_vectors.py`) and tests
    per the rules above.
+
+PR 4 Phase A's four new message groups (detection/telemetry/command/config)
+deliberately skipped step 6: `vectors_spec.py`/`test_compatibility.py` are
+hardcoded to `SystemMessage.{ping,pong}` shapes, extending that machinery is
+real effort, and nothing in Phase A writes hand-rolled encode/decode logic for
+these groups - Nanopb's generic mechanics are what serialize them, and the
+host C test suite (`dispatch_test`, `command_service_test`,
+`config_service_test`) already exercises every new struct field going through
+the dispatcher and services. Extend the cross-check when a later phase adds
+hand-written wire-format logic for one of these groups, not before - see
+boomlink.md's PR 4 section for the same reasoning in context.

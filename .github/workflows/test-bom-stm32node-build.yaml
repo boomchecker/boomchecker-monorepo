@@ -137,7 +137,7 @@ jobs:
         # text nobody reads.
         run: |
           status=0
-          for archive in libboomlink_linkframe.a libboomlink_linkengine.a; do
+          for archive in libboomlink_linkframe.a libboomlink_linkengine.a libboomlink_dispatch.a; do
             path="build/Debug/boomlink/$archive"
             if [ ! -f "$path" ]; then
               echo "❌ $path was not produced - it is no longer cross-compiled for the target"
