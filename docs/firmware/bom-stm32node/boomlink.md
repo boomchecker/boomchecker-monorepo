@@ -1916,8 +1916,13 @@ the real seam, not the sketch" approach PR 3's own Phase C took — section 4):
   `boomlink_config_service`, `boomlink_config_store`, `boomlink_flash_storage_port`,
   and transitively `boomlink_storage_port`) is now actually linked into
   `bom-stm32node.elf`, not merely cross-compiled — CI's build workflow gained a
-  matching "actually linked in" symbol check (one symbol per library in the group),
-  the same class of check PR 3 Phase C added for the link engine;
+  matching "actually linked in" symbol check - six symbols for the five libraries
+  (`boomlink_config_store` gets two, `_load` and `_save`, since `_save` having no
+  caller anywhere in the firmware is exactly the gap this phase's review found and
+  fixed - `_load` alone being linked proved nothing about `_save`, the two do not
+  share a translation-unit-level linker guarantee under this target's
+  `-ffunction-sections`/`--gc-sections` build), the same class of check PR 3 Phase C
+  added for the link engine;
 - `Reboot` is rejected (`COMMAND_RESULT_FAILED`, without ever calling the real
   action) when addressed to the broadcast address — section 9.9's "commands that are
   dangerous when broadcast should be rejected by the application service", enforced
@@ -2026,6 +2031,28 @@ Deliberately deferred, not silently dropped:
   correlation handle before the fact (see `protocol_service_on_rx()`'s comment on the
   identical limitation for config commit/confirm); left as a known gap rather than
   guessed at.
+- **`App/protocol/protocol_service.c`'s stage→commit→confirm wiring has no automated
+  regression test** — the whole file is ARM/HAL-dependent (no host-testable seam;
+  `fw/bom-stm32node` has no host test directory), so `s_confirm_eligible`'s same-tick
+  race fix, the two `persist_current_config()` call sites, and the deferred-reboot
+  timer are verified only by cross-compilation succeeding plus manual/reviewer
+  tracing - a regression in any of them (e.g. dropping the line that clears
+  `s_confirm_eligible` on commit) would fail no build, no CI symbol-linkage check,
+  and no test. Confirmed by deliberately reintroducing that exact regression during
+  this phase's review: the firmware still built and linked cleanly. A minimal
+  host-testable extraction of the commit/confirm-eligibility state machine (the same
+  "keep target-specific glue thin, put the logic somewhere host-testable" split this
+  file itself follows for dispatch/command/config service) would close this; left
+  as a tracked, deliberate gap rather than a silent one.
+- **When a Detection/Telemetry/System handler is ever wired** (`on_detection`/
+  `on_telemetry`/`on_system` are all `NULL` today - see this phase's own "what
+  actually landed" notes), **evaluate whether it needs the same dangerous-over-
+  broadcast treatment Command/Config now have** - nothing today is at risk (a `NULL`
+  handler only counts the message, per `boomlink_dispatch_process()`'s own doc), but
+  the day a Detection or Telemetry handler does more than count on receipt (logs to
+  flash, drives an alarm/relay), an unauthenticated broadcast frame could trigger
+  that side effect fleet-wide from one packet - the identical shape of hazard this
+  phase closed for `Reboot`/`ClearStatistics`/`ConfigSet`.
 
 ## PR 5 — Host CLI and end-to-end tooling
 
