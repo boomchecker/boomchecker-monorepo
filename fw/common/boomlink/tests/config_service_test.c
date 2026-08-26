@@ -686,6 +686,41 @@ static void test_set_restores_has_x_even_if_it_started_false(void) {
   CHECK(!svc.current.has_general, "a group NOT written by this SET must be left exactly as it was");
 }
 
+static void test_commit_and_revert_both_restore_has_radio(void) {
+  /* RadioConfig cannot go through the immediate-assignment block
+     test_set_restores_has_x_even_if_it_started_false already covers - it
+     is entirely hazardous, so its real value only ever lands in
+     svc.current via boomlink_config_service_commit_pending_apply() (the
+     COMMIT path) or the WAITING-timeout revert inside
+     boomlink_config_service_poll() (the REVERT path). Both need their own
+     has_radio assertion, the same way handle_set()'s immediate block needs
+     one per group - this test starts has_radio false (unrealistic today;
+     see the sibling test's own doc for why) and drives each path in turn. */
+  boomlink_config_service_t svc = make_svc(500u);
+
+  boomlink_ConfigMessage req                          = {0};
+  req.which_message                                   = boomlink_ConfigMessage_set_request_tag;
+  req.message.set_request.expected_config_version     = 1u;
+  req.message.set_request.has_radio                   = true;
+  req.message.set_request.radio.frequency_mhz         = 915.0f;
+  boomlink_ConfigMessage resp;
+  REQUIRE(handle(&svc, &req, &resp), "a SET always answers");
+  REQUIRE(resp.message.set_response.result ==
+              boomlink_ConfigSetResult_CONFIG_SET_RESULT_PENDING_CONFIRMATION,
+          "setup: any RadioConfig change is entirely hazardous");
+
+  svc.current.has_radio = false; /* the COMMIT path under test */
+  boomlink_config_service_commit_pending_apply(&svc, 1000u);
+  CHECK(svc.current.radio.frequency_mhz == 915.0f, "setup: commit must have applied the staged value");
+  CHECK(svc.current.has_radio, "commit_pending_apply() must restore has_radio, not just the value");
+
+  svc.current.has_radio = false; /* the REVERT path under test */
+  boomlink_config_service_poll(&svc, 1500u); /* elapsed exactly the 500ms confirm window */
+  REQUIRE(svc.apply_state == BOOMLINK_CONFIG_APPLY_IDLE, "setup: the window boundary must revert");
+  CHECK(svc.current.radio.frequency_mhz == 0.0f, "setup: revert must have restored the pre-change value");
+  CHECK(svc.current.has_radio, "poll()'s WAITING-timeout revert must restore has_radio too");
+}
+
 static void test_handle_rejects_malformed_or_missing_arguments(void) {
   boomlink_config_service_t   svc = make_svc(1000u);
   boomlink_dispatch_rx_info_t rx  = {0};
@@ -726,6 +761,7 @@ int main(void) {
   test_radio_nan_does_not_permanently_break_hazard_detection();
   test_get_config_is_null_tolerant();
   test_set_restores_has_x_even_if_it_started_false();
+  test_commit_and_revert_both_restore_has_radio();
   test_handle_rejects_malformed_or_missing_arguments();
   BOOMLINK_TEST_REPORT("config_service_test", 115);
 }

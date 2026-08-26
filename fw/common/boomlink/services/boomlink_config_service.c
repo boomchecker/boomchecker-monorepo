@@ -244,14 +244,14 @@ static bool handle_set(boomlink_config_service_t *svc, const boomlink_ConfigSetR
      correctly. */
   boomlink_node_config_t next = svc->current;
   if (req->has_general) {
-    next.general          = req->general;
-    next.general.node_id  = svc->current.general.node_id; /* hazardous - restored below if changed */
-    next.has_general       = true;
+    next.general         = req->general;
+    next.general.node_id = svc->current.general.node_id; /* hazardous - restored below if changed */
+    next.has_general     = true;
   }
   if (req->has_link) {
     next.link       = req->link;
     next.link.magic = svc->current.link.magic; /* hazardous - restored below if changed */
-    next.has_link    = true;
+    next.has_link   = true;
   }
   if (req->has_detection) {
     next.detection     = req->detection;
@@ -316,6 +316,18 @@ void boomlink_config_service_commit_pending_apply(boomlink_config_service_t *svc
   svc->current.general.node_id  = svc->staged.node_id;
   svc->current.link.magic       = svc->staged.magic;
   svc->current.radio            = svc->staged.radio;
+  /* has_general/has_link are already re-asserted by handle_set()'s
+     immediate-assignment block (a hazardous node_id/magic change requires
+     has_general/has_link true to even be detected as one) - has_radio has
+     no such immediate-assignment path to ride along with, since RadioConfig
+     is entirely deferred to this function, so it is asserted here on its
+     own. Same reasoning as handle_set()'s own has_X reassignment: harmless
+     today (every real svc->current starts from boomlink_node_config_
+     defaults(), which already forces this true), but this is where
+     RadioConfig's actual value lands, so this is where its presence flag
+     must be guaranteed too - see this file's history for the five other
+     groups this exact class of gap was fixed for. */
+  svc->current.has_radio        = true;
   svc->apply_started_at_ms      = now_ms; /* overwrites any STAGED-phase latch from poll() */
   svc->apply_state              = BOOMLINK_CONFIG_APPLY_WAITING;
 }
@@ -372,6 +384,7 @@ void boomlink_config_service_poll(boomlink_config_service_t *svc, uint32_t now_m
   svc->current.general.node_id = svc->revert_to.node_id;
   svc->current.link.magic      = svc->revert_to.magic;
   svc->current.radio           = svc->revert_to.radio;
+  svc->current.has_radio       = true; /* same reasoning as commit_pending_apply()'s own assertion */
   /* The revert is itself an observable state change - a client holding the
      config_version from the earlier PENDING_CONFIRMATION response must not
      be able to treat it as still current once the hazardous fields it

@@ -275,11 +275,11 @@ static void test_oversized_protobuf_length_fails_closed_without_oob_read(void) {
      own 256-byte physical backing array (so the fake's OWN offset+len bound
      in fake_read() cannot be what rejects this instead of the real check
      under test). AddressSanitizer (this package's whole host build, see
-     boomlink_no_nanopb_dependency's own comment on the build's sanitizer
-     flags) turns the resulting stack-buffer-overflow read of `blob`
-     (declared `uint8_t blob[boomlink_NodeConfig_size]`, 145 bytes) into an
-     immediate crash of this test binary if load() ever used this claimed
-     length to size that read instead of rejecting it outright first. */
+     CMakeLists.txt's own BOOMLINK_SANITIZE option near the top of the file)
+     turns the resulting stack-buffer-overflow read of `blob` (declared
+     `uint8_t blob[boomlink_NodeConfig_size]`, 145 bytes) into an immediate
+     crash of this test binary if load() ever used this claimed length to
+     size that read instead of rejecting it outright first. */
   uint32_t huge = (uint32_t)boomlink_NodeConfig_size + 55u; /* > 145, 16+200=216 fits the fake's 256 */
   put_u32_le(&f.bytes[8], huge);
 
