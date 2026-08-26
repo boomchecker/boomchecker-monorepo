@@ -31,7 +31,15 @@ extern "C" {
  *  message-type field presence, proto3 `optional` or not) but carry no
  *  meaning here - every group in a real NodeConfig is always present; see
  *  boomlink_node_config_defaults() and Phase B's save path for where they
- *  are forced true rather than left to chance. */
+ *  are forced true rather than left to chance. boomlink_config_service.c's
+ *  own mutation sites (handle_set(), boomlink_config_service_commit_
+ *  pending_apply(), and boomlink_config_service_poll()'s WAITING-timeout
+ *  revert) are equally responsible for keeping this true once a config has
+ *  been written to at runtime, not just at construction - every one of
+ *  them that assigns a group's VALUE must also assert that group's has_X,
+ *  since Nanopb skips encoding a singular message field whose has_X is
+ *  false and Phase B's storage wrapper would then silently drop that whole
+ *  group from a persisted save. */
 typedef boomlink_NodeConfig boomlink_node_config_t;
 
 /** Safe defaults (section 10.1's "missing/invalid -> load safe defaults"),
