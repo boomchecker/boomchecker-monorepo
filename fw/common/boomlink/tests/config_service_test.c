@@ -287,7 +287,7 @@ static void test_confirm_pending_apply_requires_waiting(void) {
   CHECK(svc.current.general.node_id == 77u, "confirm must not revert the already-applied value");
 }
 
-static void test_poll_is_a_no_op_while_staged(void) {
+static void test_poll_first_observation_of_staged_only_latches_the_clock(void) {
   boomlink_config_service_t svc = make_svc(500u);
 
   boomlink_ConfigMessage req                      = {0};
@@ -299,13 +299,63 @@ static void test_poll_is_a_no_op_while_staged(void) {
   handle(&svc, &req, &resp);
   REQUIRE(svc.apply_state == BOOMLINK_CONFIG_APPLY_STAGED, "setup");
 
-  /* The window has not started - apply_started_at_ms is still 0 from init,
-     so a naive elapsed check against a huge now_ms would revert something
-     that was never applied in the first place. */
+  /* handle_set() has no clock of its own, so poll() has to discover a fresh
+     stage rather than being told when it started - the first call, however
+     large now_ms is, must only LATCH that moment as the start of the
+     abandon-timeout, never revert immediately as if the window had already
+     elapsed since some earlier (nonexistent) start. */
   boomlink_config_service_poll(&svc, 1000000u);
   CHECK(svc.apply_state == BOOMLINK_CONFIG_APPLY_STAGED,
-        "poll must not touch a STAGED (not yet committed) change");
+        "the first observation of a stage must not itself abandon it");
   CHECK(svc.current.general.node_id == 0u, "the staged value must still not be in current");
+}
+
+static void test_poll_eventually_abandons_a_staged_change_nobody_ever_commits(void) {
+  boomlink_config_service_t svc = make_svc(500u);
+
+  boomlink_ConfigMessage req                      = {0};
+  req.which_message                               = boomlink_ConfigMessage_set_request_tag;
+  req.message.set_request.expected_config_version = 1u;
+  req.message.set_request.has_general             = true;
+  req.message.set_request.general.node_id         = 77u;
+  boomlink_ConfigMessage resp;
+  handle(&svc, &req, &resp);
+  REQUIRE(svc.apply_state == BOOMLINK_CONFIG_APPLY_STAGED, "setup");
+  REQUIRE(svc.current.config_version == 2u, "setup: staging still bumps the version");
+
+  /* The caller never learns the response was sent (a dropped ACK, a crash,
+     a bug) and never calls commit_pending_apply(). Without a timeout here,
+     apply_state would stay STAGED forever and every later hazardous SET
+     would answer APPLY_IN_PROGRESS permanently - the node's configuration
+     becomes unwritable until reboot, including the write that would fix
+     whatever is wrong. */
+  boomlink_config_service_poll(&svc, 1000u); /* first observation: latches the clock */
+  CHECK(svc.apply_state == BOOMLINK_CONFIG_APPLY_STAGED, "must not abandon on the very first poll");
+
+  boomlink_config_service_poll(&svc, 1499u); /* elapsed 499 < 500 since the latch */
+  CHECK(svc.apply_state == BOOMLINK_CONFIG_APPLY_STAGED,
+        "must still be pending just before the abandon window closes");
+
+  boomlink_config_service_poll(&svc, 1500u); /* elapsed exactly 500 since the latch */
+  CHECK(svc.apply_state == BOOMLINK_CONFIG_APPLY_IDLE, "the abandoned stage must eventually clear");
+  CHECK(svc.current.general.node_id == 0u,
+        "nothing was ever applied to current by staging, so there is nothing to revert");
+  CHECK(svc.current.config_version == 2u,
+        "abandoning a stage does not itself change current, so the version must not move again");
+
+  /* And a HAZARDOUS write - the class this gap actually blocks forever,
+     since round 1's APPLY_IN_PROGRESS scoping already lets non-hazardous
+     writes through regardless - must be possible again afterwards. */
+  boomlink_ConfigMessage req2                      = {0};
+  req2.which_message                               = boomlink_ConfigMessage_set_request_tag;
+  req2.message.set_request.expected_config_version = 2u;
+  req2.message.set_request.has_link                = true;
+  req2.message.set_request.link.magic              = 200u;
+  boomlink_ConfigMessage resp2;
+  handle(&svc, &req2, &resp2);
+  CHECK(resp2.message.set_response.result == boomlink_ConfigSetResult_CONFIG_SET_RESULT_PENDING_CONFIRMATION,
+        "a new hazardous change must be stageable again once the stale one is abandoned, not "
+        "stuck answering APPLY_IN_PROGRESS forever");
 }
 
 static void test_poll_reverts_exactly_at_the_window_boundary(void) {
@@ -320,16 +370,23 @@ static void test_poll_reverts_exactly_at_the_window_boundary(void) {
   handle(&svc, &req, &resp);
   boomlink_config_service_commit_pending_apply(&svc, 1000u);
   REQUIRE(svc.current.general.node_id == 77u, "setup: the new value is live");
+  REQUIRE(svc.current.config_version == 2u, "setup: staging already bumped the version once");
 
   boomlink_config_service_poll(&svc, 1499u); /* elapsed 499 < 500 */
   CHECK(svc.apply_state == BOOMLINK_CONFIG_APPLY_WAITING,
         "must still be waiting just before the window closes");
   CHECK(svc.current.general.node_id == 77u, "must not revert early");
+  CHECK(svc.current.config_version == 2u, "must not bump the version before actually reverting");
 
   boomlink_config_service_poll(&svc, 1500u); /* elapsed exactly 500 */
   CHECK(svc.apply_state == BOOMLINK_CONFIG_APPLY_IDLE, "the window boundary itself must revert");
   CHECK(svc.current.general.node_id == 0u, "reverted to the pre-change value, got %u",
         (unsigned)svc.current.general.node_id);
+  CHECK(svc.current.config_version == 3u,
+        "the revert is itself an observable change and must bump the version too, so a client's "
+        "cached expected_config_version from the PENDING_CONFIRMATION response can no longer "
+        "match - got %u",
+        (unsigned)svc.current.config_version);
 }
 
 static void test_a_conflicting_hazardous_set_while_one_is_pending_is_rejected(void) {
@@ -518,13 +575,13 @@ static void test_radio_negative_zero_is_not_a_hazardous_change(void) {
 static void test_radio_nan_does_not_permanently_break_hazard_detection(void) {
   /* RadioConfig's numeric ranges are deliberately not validated yet
      (config.proto's own CONFIG_SET_RESULT_INVALID comment), so a NaN CAN
-     legitimately end up in current.radio. Plain `==` is not reflexive for
-     NaN (NaN == NaN is false), and hazard comparison relies on
-     SELF-comparison for every field a SET leaves untouched - so once a NaN
-     landed in current, every later SET, however unrelated, would misreport
-     hazard_changed=true forever, with no timeout recovery (poll() does not
-     revert a merely-STAGED, uncommitted change - see
-     test_poll_is_a_no_op_while_staged). */
+     legitimately end up in current.radio once committed and confirmed (not
+     merely staged - see test_poll_eventually_abandons_a_staged_change_
+     nobody_ever_commits for why a stage alone can no longer get stuck this
+     way). Plain `==` is not reflexive for NaN (NaN == NaN is false), and
+     hazard comparison relies on SELF-comparison for every field a SET
+     leaves untouched - so once a NaN landed in current, every later SET,
+     however unrelated, would misreport hazard_changed=true forever. */
   boomlink_config_service_t svc = make_svc(1000u);
 
   boomlink_ConfigMessage req                      = {0};
@@ -595,7 +652,8 @@ int main(void) {
   test_requesting_the_current_hazardous_value_is_not_a_hazard_change();
   test_commit_pending_apply_requires_staged();
   test_confirm_pending_apply_requires_waiting();
-  test_poll_is_a_no_op_while_staged();
+  test_poll_first_observation_of_staged_only_latches_the_clock();
+  test_poll_eventually_abandons_a_staged_change_nobody_ever_commits();
   test_poll_reverts_exactly_at_the_window_boundary();
   test_a_conflicting_hazardous_set_while_one_is_pending_is_rejected();
   test_set_rejects_an_attempt_to_change_node_id_to_an_invalid_value();
@@ -605,5 +663,5 @@ int main(void) {
   test_radio_nan_does_not_permanently_break_hazard_detection();
   test_get_config_is_null_tolerant();
   test_handle_rejects_malformed_or_missing_arguments();
-  BOOMLINK_TEST_REPORT("config_service_test", 102);
+  BOOMLINK_TEST_REPORT("config_service_test", 113);
 }

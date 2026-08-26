@@ -68,7 +68,15 @@ typedef struct {
   boomlink_config_apply_state_t apply_state;
   boomlink_config_hazard_t      staged;      /* new values, not yet in `current` */
   boomlink_config_hazard_t      revert_to;   /* pre-change values, restored on timeout */
-  uint32_t                      apply_started_at_ms; /* set at STAGED->WAITING, not before */
+  /* WAITING: the real boomlink_config_service_commit_pending_apply() time,
+     start of the confirm-window countdown to a revert. STAGED: latched by
+     boomlink_config_service_poll() the first time it observes the stage
+     (handle_set() has no clock of its own - its signature is fixed by
+     boomlink_dispatch_config_fn), start of a DIFFERENT countdown to
+     abandoning a stage nobody ever committed. Never both at once - see
+     boomlink_config_service_poll()'s doc. */
+  uint32_t                      apply_started_at_ms;
+  bool                          staged_seen; /* has poll() latched apply_started_at_ms for STAGED yet */
   uint32_t                      confirm_window_ms;
 } boomlink_config_service_t;
 
@@ -114,7 +122,9 @@ bool boomlink_config_service_handle(void *user, const boomlink_dispatch_rx_info_
  * synchronous reset.
  *
  * Moves `staged` into `current`, starts the confirmation window from
- * `now_ms`, and moves to WAITING.
+ * `now_ms` (overwriting whatever boomlink_config_service_poll() may have
+ * latched into apply_started_at_ms while STAGED - see that function's own
+ * doc), and moves to WAITING.
  */
 void boomlink_config_service_commit_pending_apply(boomlink_config_service_t *svc, uint32_t now_ms);
 
@@ -131,11 +141,26 @@ void boomlink_config_service_confirm_pending_apply(boomlink_config_service_t *sv
 
 /**
  * Call periodically (every superloop tick, like boomlink_link_poll()).
- * Reverts `current`'s hazardous fields to `revert_to` if apply_state ==
- * WAITING and confirm_window_ms has elapsed since
- * boomlink_config_service_commit_pending_apply(). No-op otherwise -
- * including while STAGED, since the window has not started yet (see that
- * function's doc for why it starts at commit, not at handle()).
+ *
+ * WAITING: reverts `current`'s hazardous fields to `revert_to` (and bumps
+ * `config_version`, so a client's cached version can no longer match a node
+ * whose state just changed underneath it) if confirm_window_ms has elapsed
+ * since boomlink_config_service_commit_pending_apply().
+ *
+ * STAGED: if the caller never learns the PENDING_CONFIRMATION response was
+ * actually transmitted - a send failure, a crash, a bug - and so never
+ * calls boomlink_config_service_commit_pending_apply(), apply_state would
+ * otherwise stay STAGED forever, and every later hazardous SET would answer
+ * APPLY_IN_PROGRESS permanently: the node's configuration becomes
+ * unwritable until reboot, including the write that would fix whatever
+ * went wrong. To close that without giving handle_set() a clock it does not
+ * have (its signature is fixed by boomlink_dispatch_config_fn), this
+ * function itself latches `apply_started_at_ms` the FIRST time it observes
+ * STAGED, then abandons the stage once confirm_window_ms has elapsed since
+ * that latch - nothing in `current` was ever touched by staging alone, so
+ * there is nothing to revert, only the stage itself to drop.
+ *
+ * IDLE: no-op.
  */
 void boomlink_config_service_poll(boomlink_config_service_t *svc, uint32_t now_ms);
 

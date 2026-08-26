@@ -104,9 +104,10 @@ static bool on_system(void *user, const boomlink_dispatch_rx_info_t *rx,
 
 static boomlink_dispatch_rx_info_t make_rx(void) {
   boomlink_dispatch_rx_info_t rx = {0};
-  rx.source_id = 0x42u;
-  rx.rssi_dbm  = -80.0f;
-  rx.snr_db    = 7.5f;
+  rx.source_id      = 0x42u;
+  rx.destination_id = 0x99u;
+  rx.rssi_dbm       = -80.0f;
+  rx.snr_db         = 7.5f;
   return rx;
 }
 
@@ -136,6 +137,7 @@ static void test_detection_is_one_way_and_counted(void) {
   CHECK(cap.calls == 1, "detection handler called once, got %d", cap.calls);
   CHECK(cap.msg.message.event.event_id == 7u, "the handler must see the actual event");
   CHECK(cap.rx.source_id == rx.source_id, "rx info must be forwarded unchanged");
+  CHECK(cap.rx.destination_id == rx.destination_id, "destination_id must be forwarded too");
   CHECK(!result.has_response, "detection is one-way, never a response");
 
   boomlink_dispatch_stats_t stats;
@@ -470,5 +472,5 @@ int main(void) {
   test_get_stats_is_null_tolerant();
   test_init_resets_stats_even_over_stale_memory();
   test_new_message_groups_survive_a_real_nanopb_round_trip();
-  BOOMLINK_TEST_REPORT("dispatch_test", 61);
+  BOOMLINK_TEST_REPORT("dispatch_test", 62);
 }

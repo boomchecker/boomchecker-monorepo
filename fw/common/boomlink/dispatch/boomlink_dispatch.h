@@ -36,9 +36,19 @@ extern "C" {
  * identity... receive it as RX metadata passed alongside the decoded
  * Envelope"). Mirrors boomlink_link_rx_fn's parameters - this is the next
  * layer down the same information flows through.
+ *
+ * `destination_id` in particular: boomlink_link.h documents it as "the ONLY
+ * way a caller can learn" whether a frame was unicast or broadcast, since
+ * that distinction is absent from the Protobuf payload itself. A service
+ * that needs to refuse a dangerous action over broadcast (e.g. section
+ * 8.3's Reboot, or a ConfigSet touching a hazardous field) cannot do so
+ * without this field - carried here even though no handler in this PR
+ * reads it yet, so Phase C's caller has it to pass through without first
+ * having to extend this struct.
  */
 typedef struct {
   uint32_t source_id;
+  uint32_t destination_id;
   float    rssi_dbm;
   float    snr_db;
 } boomlink_dispatch_rx_info_t;

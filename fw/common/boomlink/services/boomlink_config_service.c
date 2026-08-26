@@ -38,6 +38,7 @@ void boomlink_config_service_init(boomlink_config_service_t *svc,
   svc->staged              = (boomlink_config_hazard_t){0};
   svc->revert_to           = (boomlink_config_hazard_t){0};
   svc->apply_started_at_ms = 0;
+  svc->staged_seen         = false;
   svc->confirm_window_ms   = confirm_window_ms;
 }
 
@@ -248,6 +249,7 @@ static bool handle_set(boomlink_config_service_t *svc, const boomlink_ConfigSetR
   svc->apply_state = BOOMLINK_CONFIG_APPLY_STAGED;
   svc->staged       = requested_hazard;
   svc->revert_to    = current_hazard;
+  svc->staged_seen  = false; /* poll() has not observed this stage yet */
   respond_set(out_response, boomlink_ConfigSetResult_CONFIG_SET_RESULT_PENDING_CONFIRMATION,
              svc->current.config_version);
   return true;
@@ -280,7 +282,7 @@ void boomlink_config_service_commit_pending_apply(boomlink_config_service_t *svc
   svc->current.general.node_id  = svc->staged.node_id;
   svc->current.link.magic       = svc->staged.magic;
   svc->current.radio            = svc->staged.radio;
-  svc->apply_started_at_ms      = now_ms;
+  svc->apply_started_at_ms      = now_ms; /* overwrites any STAGED-phase latch from poll() */
   svc->apply_state              = BOOMLINK_CONFIG_APPLY_WAITING;
 }
 
@@ -291,22 +293,50 @@ void boomlink_config_service_confirm_pending_apply(boomlink_config_service_t *sv
   svc->apply_state = BOOMLINK_CONFIG_APPLY_IDLE;
 }
 
+/* Unsigned subtraction is wrap-safe for any real elapsed span - see
+   fw/common/boomlink/linkengine/boomlink_port.h's boomlink_elapsed_ms() for
+   the full reasoning (not linked here: that would pull a services module
+   into depending on the link engine for one line of arithmetic that is
+   exactly as correct inlined). */
+static bool window_elapsed(uint32_t now_ms, uint32_t started_at_ms, uint32_t window_ms) {
+  return (uint32_t)(now_ms - started_at_ms) >= window_ms;
+}
+
 void boomlink_config_service_poll(boomlink_config_service_t *svc, uint32_t now_ms) {
-  if (svc == NULL || svc->apply_state != BOOMLINK_CONFIG_APPLY_WAITING) {
+  if (svc == NULL || svc->apply_state == BOOMLINK_CONFIG_APPLY_IDLE) {
     return;
   }
-  /* Unsigned subtraction is wrap-safe for any real elapsed span - see
-     fw/common/boomlink/linkengine/boomlink_port.h's boomlink_elapsed_ms()
-     for the full reasoning (not linked here: that would pull a services
-     module into depending on the link engine for one line of arithmetic
-     that is exactly as correct inlined). */
-  uint32_t elapsed = (uint32_t)(now_ms - svc->apply_started_at_ms);
-  if (elapsed < svc->confirm_window_ms) {
+
+  if (svc->apply_state == BOOMLINK_CONFIG_APPLY_STAGED) {
+    /* See this function's own header doc for why this exists at all: a
+       stage nobody ever commits must not block configuration forever. */
+    if (!svc->staged_seen) {
+      svc->apply_started_at_ms = now_ms;
+      svc->staged_seen         = true;
+      return;
+    }
+    if (!window_elapsed(now_ms, svc->apply_started_at_ms, svc->confirm_window_ms)) {
+      return;
+    }
+    /* Staging never touched `current` - only the bookkeeping needs dropping,
+       there is no hazardous value in `current` to revert. */
+    svc->apply_state = BOOMLINK_CONFIG_APPLY_IDLE;
+    svc->staged_seen = false;
+    return;
+  }
+
+  /* WAITING */
+  if (!window_elapsed(now_ms, svc->apply_started_at_ms, svc->confirm_window_ms)) {
     return;
   }
   svc->current.general.node_id = svc->revert_to.node_id;
   svc->current.link.magic      = svc->revert_to.magic;
   svc->current.radio           = svc->revert_to.radio;
+  /* The revert is itself an observable state change - a client holding the
+     config_version from the earlier PENDING_CONFIRMATION response must not
+     be able to treat it as still current once the hazardous fields it
+     described have reverted underneath it. */
+  svc->current.config_version += 1u;
   svc->apply_state             = BOOMLINK_CONFIG_APPLY_IDLE;
 }
 
