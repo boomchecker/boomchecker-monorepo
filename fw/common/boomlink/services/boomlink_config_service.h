@@ -87,12 +87,12 @@ void boomlink_config_service_init(boomlink_config_service_t *svc,
  * boomlink_config_service_handle` and `handlers.on_config_user = svc`.
  *
  * A GET always answers (returns true). A SET answers OK/VERSION_CONFLICT/
- * APPLY_IN_PROGRESS immediately and applies non-hazardous fields right
- * away; a hazardous field change answers PENDING_CONFIRMATION and STAGES
- * rather than applies (see boomlink_config_service_commit_pending_apply()'s
- * doc for why applying here would be too early). Returns false only if
- * `request` carries neither a GetRequest nor a SetRequest, or `user`/
- * `out_response` is NULL.
+ * INVALID/APPLY_IN_PROGRESS immediately and applies non-hazardous fields
+ * right away; a hazardous field change answers PENDING_CONFIRMATION and
+ * STAGES rather than applies (see boomlink_config_service_commit_pending_
+ * apply()'s doc for why applying here would be too early). Returns false
+ * only if `request` carries neither a GetRequest nor a SetRequest, or
+ * `user`/`out_response` is NULL.
  */
 bool boomlink_config_service_handle(void *user, const boomlink_dispatch_rx_info_t *rx,
                                     const boomlink_ConfigMessage *request,

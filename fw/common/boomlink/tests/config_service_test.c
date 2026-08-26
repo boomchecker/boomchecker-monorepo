@@ -19,6 +19,8 @@
  */
 #include "boomlink_config_service.h"
 
+#include <math.h>
+
 #include "c_test.h"
 
 BOOMLINK_TEST_STATE;
@@ -513,6 +515,47 @@ static void test_radio_negative_zero_is_not_a_hazardous_change(void) {
   CHECK(svc.apply_state == BOOMLINK_CONFIG_APPLY_IDLE, "nothing should be pending");
 }
 
+static void test_radio_nan_does_not_permanently_break_hazard_detection(void) {
+  /* RadioConfig's numeric ranges are deliberately not validated yet
+     (config.proto's own CONFIG_SET_RESULT_INVALID comment), so a NaN CAN
+     legitimately end up in current.radio. Plain `==` is not reflexive for
+     NaN (NaN == NaN is false), and hazard comparison relies on
+     SELF-comparison for every field a SET leaves untouched - so once a NaN
+     landed in current, every later SET, however unrelated, would misreport
+     hazard_changed=true forever, with no timeout recovery (poll() does not
+     revert a merely-STAGED, uncommitted change - see
+     test_poll_is_a_no_op_while_staged). */
+  boomlink_config_service_t svc = make_svc(1000u);
+
+  boomlink_ConfigMessage req                      = {0};
+  req.which_message                               = boomlink_ConfigMessage_set_request_tag;
+  req.message.set_request.expected_config_version = 1u;
+  req.message.set_request.has_radio               = true;
+  req.message.set_request.radio.frequency_mhz     = NAN;
+  boomlink_ConfigMessage resp;
+  handle(&svc, &req, &resp);
+  REQUIRE(resp.message.set_response.result ==
+              boomlink_ConfigSetResult_CONFIG_SET_RESULT_PENDING_CONFIRMATION,
+          "setup: staging a NaN frequency is itself a real hazard change from the default 0.0f");
+  boomlink_config_service_commit_pending_apply(&svc, 100u);
+  boomlink_config_service_confirm_pending_apply(&svc);
+  REQUIRE(svc.apply_state == BOOMLINK_CONFIG_APPLY_IDLE, "setup: the NaN is now permanently applied");
+  REQUIRE(isnan(svc.current.radio.frequency_mhz), "setup: confirm it actually landed as NaN");
+
+  /* A completely unrelated, non-hazardous SET afterwards must not be stuck
+     misreporting a phantom hazard forever. */
+  boomlink_ConfigMessage req2                          = {0};
+  req2.which_message                                   = boomlink_ConfigMessage_set_request_tag;
+  req2.message.set_request.expected_config_version     = 2u;
+  req2.message.set_request.has_telemetry               = true;
+  req2.message.set_request.telemetry.report_interval_s = 30u;
+  boomlink_ConfigMessage resp2;
+  handle(&svc, &req2, &resp2);
+  CHECK(resp2.message.set_response.result == boomlink_ConfigSetResult_CONFIG_SET_RESULT_OK,
+        "a NaN sitting in current.radio must not misreport every later SET as hazardous");
+  CHECK(svc.apply_state == BOOMLINK_CONFIG_APPLY_IDLE, "nothing should be pending");
+}
+
 static void test_get_config_is_null_tolerant(void) {
   boomlink_node_config_t out;
   boomlink_config_service_get_config(NULL, &out);
@@ -559,7 +602,8 @@ int main(void) {
   test_set_rejects_an_attempt_to_change_magic_past_one_byte();
   test_resending_an_unchanged_but_still_unconfigured_node_id_is_not_rejected();
   test_radio_negative_zero_is_not_a_hazardous_change();
+  test_radio_nan_does_not_permanently_break_hazard_detection();
   test_get_config_is_null_tolerant();
   test_handle_rejects_malformed_or_missing_arguments();
-  BOOMLINK_TEST_REPORT("config_service_test", 97);
+  BOOMLINK_TEST_REPORT("config_service_test", 102);
 }

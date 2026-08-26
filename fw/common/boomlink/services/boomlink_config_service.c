@@ -5,6 +5,8 @@
  */
 #include "boomlink_config_service.h"
 
+#include <math.h>
+
 /* For BOOMLINK_ADDR_INVALID/BOOMLINK_ADDR_BROADCAST (boomlink.md section
    7.2) - reused rather than duplicated as bare hex literals, the same
    "read the real value, don't hardcode a second copy" reasoning
@@ -47,16 +49,35 @@ static boomlink_config_hazard_t hazard_snapshot(const boomlink_node_config_t *cf
   return h;
 }
 
-/* Field-by-field with `==` for the two floats, not memcmp() on the whole
-   struct: IEEE-754 equality and bit-pattern equality disagree on signed
-   zero (-0.0f == 0.0f is true; their bit patterns are not), so memcmp()
-   can misreport a numerically-unchanged resend as a hazardous change.
-   Confirmed: a RadioConfig differing only by +0.0f vs -0.0f in
-   frequency_mhz staged a PENDING_CONFIRMATION and blocked every other
-   config write until it was committed or timed out, even though nothing
-   about the profile actually changed. */
+/* `==`, except two NaNs also compare equal - not full IEEE-754 semantics,
+   RESTORING them where this specific use needs it. IEEE-754 `==` is not
+   reflexive (NaN == NaN is false), but this comparison is asked "is this
+   still the same value as itself" every time a SET leaves a field
+   untouched (requested_hazard starts as a byte copy of current_hazard - see
+   handle_set() below), and RadioConfig's numeric ranges are deliberately
+   not validated yet (config.proto's own CONFIG_SET_RESULT_INVALID comment),
+   so a NaN CAN legitimately end up in current.radio. Plain `==` there would
+   never be reflexive again once that happened: every later SET, however
+   unrelated, would misreport hazard_changed=true forever, with no timeout
+   recovery (poll() does not revert a merely-STAGED, uncommitted change) -
+   confirmed by staging and confirming a NaN frequency_mhz, then observing a
+   completely unrelated telemetry-only SET come back PENDING_CONFIRMATION
+   instead of OK. */
+static bool float_equal_or_both_nan(float a, float b) {
+  return a == b || (isnan(a) && isnan(b));
+}
+
+/* Field-by-field, not memcmp() on the whole struct: IEEE-754 equality and
+   bit-pattern equality disagree on signed zero (-0.0f == 0.0f is true;
+   their bit patterns are not), so memcmp() can misreport a
+   numerically-unchanged resend as a hazardous change. Confirmed: a
+   RadioConfig differing only by +0.0f vs -0.0f in frequency_mhz staged a
+   PENDING_CONFIRMATION and blocked every other config write until it was
+   committed or timed out, even though nothing about the profile actually
+   changed. */
 static bool radio_config_equal(const boomlink_RadioConfig *a, const boomlink_RadioConfig *b) {
-  return a->frequency_mhz == b->frequency_mhz && a->bandwidth_khz == b->bandwidth_khz &&
+  return float_equal_or_both_nan(a->frequency_mhz, b->frequency_mhz) &&
+         float_equal_or_both_nan(a->bandwidth_khz, b->bandwidth_khz) &&
          a->spreading_factor == b->spreading_factor &&
          a->coding_rate_denom == b->coding_rate_denom && a->tx_power_dbm == b->tx_power_dbm &&
          a->preamble_symbols == b->preamble_symbols && a->sync_word == b->sync_word;
