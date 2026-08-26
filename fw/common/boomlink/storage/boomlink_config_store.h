@@ -76,10 +76,14 @@ extern "C" {
  *  with a coarser one without this file needing to change. Not enforced by
  *  boomlink_storage_port_is_valid() (a generic-port check, see its own doc -
  *  this constant is this wrapper format's own, not a generic port
- *  property); boomlink_config_store_save() instead checks the padded length
- *  it actually computes against `sizeof` its local buffer before ever
- *  writing into it, which catches an oversized write_granularity exactly
- *  the same as it catches an oversized config. */
+ *  property); boomlink_config_store_save() checks `write_granularity`
+ *  against this constant directly, up front, rather than only relying on
+ *  the padded length it computes staying inside `sizeof` its local buffer -
+ *  an earlier version of this file trusted that second check alone and was
+ *  wrong to: `write_granularity` near SIZE_MAX makes the padding
+ *  arithmetic (`total_len + write_granularity - 1u`) overflow to a small
+ *  wrapped value, which sails straight past a bare `sizeof(buf)` check
+ *  without ever being caught by it. */
 #define BOOMLINK_CONFIG_STORE_MAX_WRITE_GRANULARITY 64u
 
 /**

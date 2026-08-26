@@ -624,10 +624,10 @@ target_compile_options(boomlink_config_service PRIVATE
 # PR 4 Phase B: the seam between the config storage wrapper below and
 # whatever actually holds the bytes (a real flash sector on the target, an
 # in-memory buffer in host tests) - no Nanopb dependency of its own, same
-# reasoning as linkframe/linkengine's own boundary (section 9), even though
-# nothing enforces that with a test here the way boomlink_no_nanopb_
-# dependency does for those two: this seam is new and small enough that the
-# habit has not yet been worth automating.
+# reasoning as linkframe/linkengine's own boundary (section 9). Enforced by
+# the same boomlink_no_nanopb_dependency test those two use, further down
+# this file - a review round that found this claim was, at first, only a
+# comment here and not actually checked.
 #
 # boomlink_crc32.c lives in this library rather than boomlink_config_store
 # below for the same Nanopb-free reason: the checksum algorithm has no
@@ -901,6 +901,13 @@ if(BOOMLINK_STANDALONE)
   # globbed: a glob silently covers a new file, which sounds good until the new
   # file is one that legitimately needs a different rule, and there would be
   # nothing here saying which files this claim is about.
+  # PR 4 Phase B added a third Nanopb-free target, boomlink_storage_port
+  # (storage/boomlink_storage_port.c + storage/boomlink_crc32.c) - its own
+  # CMakeLists.txt comment claims "no Nanopb dependency of its own" the same
+  # way linkframe/linkengine do, so it belongs in this same check rather
+  # than being a documented-but-unverified claim. boomlink_crc32_test is the
+  # consumer artefact for it, the same role boomlink_linkframe_tool plays
+  # for linkframe/linkengine below.
   add_test(NAME boomlink_no_nanopb_dependency
     COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/tests/check_no_nanopb.sh
             ${Python3_EXECUTABLE}
@@ -912,10 +919,14 @@ if(BOOMLINK_STANDALONE)
             ${CMAKE_CURRENT_SOURCE_DIR}/linkengine/boomlink_dupcache.c
             ${CMAKE_CURRENT_SOURCE_DIR}/linkengine/boomlink_txqueue.c
             ${CMAKE_CURRENT_SOURCE_DIR}/linkengine/boomlink_link.c
+            ${CMAKE_CURRENT_SOURCE_DIR}/storage/boomlink_storage_port.c
+            ${CMAKE_CURRENT_SOURCE_DIR}/storage/boomlink_crc32.c
             --artefacts
             $<TARGET_FILE:boomlink_linkframe>
             $<TARGET_FILE:boomlink_linkengine>
             $<TARGET_FILE:boomlink_linkframe_tool>
+            $<TARGET_FILE:boomlink_storage_port>
+            $<TARGET_FILE:boomlink_crc32_test>
   )
 
   # The encoder's compile-time output bound, in BOTH languages (see

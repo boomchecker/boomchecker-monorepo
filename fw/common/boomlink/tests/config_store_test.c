@@ -337,6 +337,29 @@ static void test_save_rejects_a_config_too_large_for_the_region(void) {
         "a config that cannot fit in the port's region must fail save(), not overrun it");
 }
 
+static void test_save_rejects_write_granularity_above_the_max(void) {
+  /* boomlink_storage_port_is_valid() only requires write_granularity to
+     evenly divide region_size - trivially true of any value against
+     itself - so a port claiming a write_granularity past
+     BOOMLINK_CONFIG_STORE_MAX_WRITE_GRANULARITY can still be "valid" by
+     that generic check. save()'s own padding arithmetic (`total_len +
+     write_granularity - 1u`) would overflow for a write_granularity near
+     SIZE_MAX and wrap to a small padded_len that slips past the
+     `sizeof(buf)` guard - this test only needs to prove save() rejects
+     BEFORE reaching that arithmetic at all, so one past the max is enough;
+     the guard is a plain `>` comparison with no separate behavior for
+     "over the line" versus "astronomically over the line". */
+  fake_flash_t             f;
+  fake_flash_init(&f);
+  boomlink_storage_port_t port = make_port(&f);
+  port.write_granularity        = BOOMLINK_CONFIG_STORE_MAX_WRITE_GRANULARITY + 1u;
+  port.region_size              = port.write_granularity; /* evenly divides itself */
+  boomlink_NodeConfig cfg       = sample_config();
+
+  CHECK(!boomlink_config_store_save(&port, &cfg),
+        "write_granularity above BOOMLINK_CONFIG_STORE_MAX_WRITE_GRANULARITY must be rejected");
+}
+
 static void test_null_arguments_are_rejected(void) {
   fake_flash_t             f;
   fake_flash_init(&f);
@@ -402,6 +425,7 @@ int main(void) {
   test_protobuf_length_past_the_region_fails_closed();
   test_region_too_small_for_even_the_header_fails_closed();
   test_save_rejects_a_config_too_large_for_the_region();
+  test_save_rejects_write_granularity_above_the_max();
   test_null_arguments_are_rejected();
   test_save_pads_the_write_to_a_full_granule();
   BOOMLINK_TEST_REPORT("config_store_test", 30);

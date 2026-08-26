@@ -285,9 +285,10 @@ that section's original sketch:
   `fw/common/boomlink/storage/boomlink_config_store.h`'s own doc for the full reasoning.
 - `App/storage/` under `bom-stm32node` is therefore not `config_store.c/.h` but
   `boomlink_flash_storage_port.c/.h` (the `boomlink_storage_port_t` seam, backed by the
-  last 16K sector of this chip's flash - `STM32H563xx_FLASH.ld`'s `FLASH` region shrank
-  from 2048K to 2032K to reserve `0x081FC000`-`0x08200000`, Bank 2's last 16K sector on
-  this dual-bank part, for exactly this). Cross-compiled as its own static library
+  last 16K of this chip's flash - `STM32H563xx_FLASH.ld`'s `FLASH` region shrank from
+  2048K to 2032K to reserve `0x081FC000`-`0x08200000`, Bank 2's last two 8K sectors
+  (126-127 of 128 per bank) on this dual-bank part, for exactly this). Cross-compiled
+  as its own static library
   (`boomlink_flash_storage_port`, defined in `fw/bom-stm32node/CMakeLists.txt` itself,
   the same isolation `radio_layer` gets) but - like `boomlink_dispatch`/
   `boomlink_command_service`/`boomlink_config_service` before it - not yet linked into the

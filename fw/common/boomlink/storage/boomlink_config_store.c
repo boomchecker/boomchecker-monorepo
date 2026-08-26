@@ -86,16 +86,25 @@ bool boomlink_config_store_load(const boomlink_storage_port_t *port, boomlink_No
 
 bool boomlink_config_store_save(const boomlink_storage_port_t *port,
                                 const boomlink_NodeConfig *config) {
-  if (!boomlink_storage_port_is_valid(port) || config == NULL) {
+  /* boomlink_storage_port_is_valid() only checks what is generic to any
+     port (see its own doc) - BOOMLINK_CONFIG_STORE_MAX_WRITE_GRANULARITY is
+     this wrapper format's own limit, so this file enforces it itself,
+     BEFORE the padding arithmetic below that it protects: a
+     write_granularity anywhere near SIZE_MAX makes `total_len +
+     write_granularity - 1u` overflow and wrap to a small value, which
+     would otherwise sail straight past the `sizeof(buf)` guard that
+     follows instead of being caught by it. */
+  if (!boomlink_storage_port_is_valid(port) || config == NULL ||
+      port->write_granularity > BOOMLINK_CONFIG_STORE_MAX_WRITE_GRANULARITY) {
     return false;
   }
 
   /* Sized for the worst case this file supports: the header, the largest a
      NodeConfig can ever encode to, and up to one full write_granularity of
      padding (BOOMLINK_CONFIG_STORE_MAX_WRITE_GRANULARITY bounds that, and
-     boomlink_storage_port_is_valid() already rejected any port claiming
-     more) - no heap, so this has to be big enough up front rather than
-     sized from the real encoded length after the fact. */
+     the check above already rejected any port claiming more) - no heap, so
+     this has to be big enough up front rather than sized from the real
+     encoded length after the fact. */
   uint8_t buf[BOOMLINK_CONFIG_STORE_HEADER_SIZE + boomlink_NodeConfig_size +
              BOOMLINK_CONFIG_STORE_MAX_WRITE_GRANULARITY] = {0};
 
