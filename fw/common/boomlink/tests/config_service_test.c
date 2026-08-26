@@ -687,15 +687,17 @@ static void test_set_restores_has_x_even_if_it_started_false(void) {
 }
 
 static void test_commit_and_revert_both_restore_has_radio(void) {
-  /* RadioConfig cannot go through the immediate-assignment block
+  /* RadioConfig's VALUE cannot go through the immediate-assignment block
      test_set_restores_has_x_even_if_it_started_false already covers - it
-     is entirely hazardous, so its real value only ever lands in
-     svc.current via boomlink_config_service_commit_pending_apply() (the
-     COMMIT path) or the WAITING-timeout revert inside
+     is entirely hazardous, so a value that actually CHANGES only ever
+     lands in svc.current via boomlink_config_service_commit_pending_apply()
+     (the COMMIT path) or the WAITING-timeout revert inside
      boomlink_config_service_poll() (the REVERT path). Both need their own
      has_radio assertion, the same way handle_set()'s immediate block needs
      one per group - this test starts has_radio false (unrealistic today;
-     see the sibling test's own doc for why) and drives each path in turn. */
+     see the sibling test's own doc for why) and drives each path in turn.
+     (An UNCHANGED RadioConfig resend is a separate case, covered by
+     test_resending_an_unchanged_radio_value_still_restores_has_radio.) */
   boomlink_config_service_t svc = make_svc(500u);
 
   boomlink_ConfigMessage req                          = {0};
@@ -719,6 +721,41 @@ static void test_commit_and_revert_both_restore_has_radio(void) {
   REQUIRE(svc.apply_state == BOOMLINK_CONFIG_APPLY_IDLE, "setup: the window boundary must revert");
   CHECK(svc.current.radio.frequency_mhz == 0.0f, "setup: revert must have restored the pre-change value");
   CHECK(svc.current.has_radio, "poll()'s WAITING-timeout revert must restore has_radio too");
+}
+
+static void test_resending_an_unchanged_radio_value_still_restores_has_radio(void) {
+  /* Found by an automated PR review, not by any of this session's own
+     review agents: a SET that includes RadioConfig with a value EQUAL to
+     current's is not hazardous (hazard_changed compares values, not
+     presence - see test_requesting_the_current_hazardous_value_is_not_a_
+     hazard_change's own doc for the node_id/magic equivalent of this same
+     rule), so it never reaches STAGED/commit_pending_apply() at all - the
+     two sites test_commit_and_revert_both_restore_has_radio covers. Nor
+     does it go through handle_set()'s immediate-assignment block the other
+     five groups use, since RadioConfig's VALUE is deliberately excluded
+     from that block. Before this test's fix, has_radio was untouched by
+     either path in exactly this one case - a real, distinct gap from the
+     one test_commit_and_revert_both_restore_has_radio covers, not the same
+     gap tested twice. */
+  boomlink_config_service_t svc  = make_svc(1000u);
+  svc.current.has_radio           = false;
+  /* current.radio defaults to all-zero - request that exact value back. */
+
+  boomlink_ConfigMessage req                      = {0};
+  req.which_message                               = boomlink_ConfigMessage_set_request_tag;
+  req.message.set_request.expected_config_version = 1u;
+  req.message.set_request.has_radio               = true;
+  req.message.set_request.radio                   = (boomlink_RadioConfig){0};
+
+  boomlink_ConfigMessage resp;
+  bool ok = handle(&svc, &req, &resp);
+
+  REQUIRE(ok, "a SET always answers");
+  CHECK(resp.message.set_response.result == boomlink_ConfigSetResult_CONFIG_SET_RESULT_OK,
+        "resending the unchanged RadioConfig value is not a hazard - must apply immediately as OK");
+  CHECK(svc.apply_state == BOOMLINK_CONFIG_APPLY_IDLE, "nothing should be pending");
+  CHECK(svc.current.has_radio,
+        "has_radio must be restored even though the value itself never changed");
 }
 
 static void test_handle_rejects_malformed_or_missing_arguments(void) {
@@ -762,6 +799,7 @@ int main(void) {
   test_get_config_is_null_tolerant();
   test_set_restores_has_x_even_if_it_started_false();
   test_commit_and_revert_both_restore_has_radio();
+  test_resending_an_unchanged_radio_value_still_restores_has_radio();
   test_handle_rejects_malformed_or_missing_arguments();
   BOOMLINK_TEST_REPORT("config_service_test", 115);
 }

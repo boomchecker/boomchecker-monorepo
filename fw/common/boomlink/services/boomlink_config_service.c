@@ -265,8 +265,22 @@ static bool handle_set(boomlink_config_service_t *svc, const boomlink_ConfigSetR
     next.telemetry     = req->telemetry;
     next.has_telemetry = true;
   }
-  /* RadioConfig is entirely hazardous - `next.radio` deliberately NOT
-     touched here, only in the staged snapshot below. */
+  /* RadioConfig is entirely hazardous - `next.radio`'s VALUE is deliberately
+     NOT touched here, only in the staged snapshot (or applied directly by
+     commit_pending_apply()/poll()'s revert, both of which assert has_radio
+     themselves - see their own comments). But has_radio still needs
+     asserting here too, on its own, for the one case neither of those
+     reaches: a SET that includes RadioConfig with a value EQUAL to
+     current's (not hazardous - hazard_changed only compares values, not
+     presence) never stages anything at all, so if nothing else in the same
+     request is hazardous either, this function returns OK having never
+     touched svc->current.radio - correctly, since the value didn't change -
+     but that is still "this group was included in the write" by the same
+     whole-group-replacement contract has_general/has_link/etc. use above,
+     and has_radio must reflect that regardless of whether the value moved. */
+  if (req->has_radio) {
+    next.has_radio = true;
+  }
 
   next.config_version = svc->current.config_version + 1u;
   svc->current         = next;
