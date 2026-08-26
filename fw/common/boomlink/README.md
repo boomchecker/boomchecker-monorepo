@@ -124,6 +124,17 @@ This directory is a CMake project that builds two different ways:
   The warning-clean half needs `-DBOOMLINK_TARGET_WERROR=ON`, which CI passes
   and a local firmware build does not (so a warning from a newer compiler than
   CI's never blocks you); without it a warning there is only log text.
+
+  PR 4's `boomlink_dispatch`, `boomlink_command_service`, `boomlink_config_service`,
+  `boomlink_storage_port` and `boomlink_config_store` went through the identical
+  cross-compiled-but-unlinked-on-purpose stage as `boomlink_linkframe`/
+  `boomlink_linkengine` above, for the same reason - and reached the same "actually
+  linked" milestone at PR 4's own Phase C: `App/protocol/protocol_service.c` wires all
+  five (plus `fw/bom-stm32node`'s own `boomlink_flash_storage_port`) onto the link
+  engine, and `Core/Src/cli.c`'s boot sequence and superloop are what exercise them.
+  CI's build workflow carries a matching "actually linked in" symbol check for this
+  group too, added at the same time.
+
   No tests here either way - a
   cross-compiled host tool makes no sense, and pytest cannot run on an
   STM32. Note this makes the host Python packages below a hard requirement

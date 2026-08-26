@@ -187,7 +187,7 @@ static void test_hazardous_magic_change_is_staged(void) {
   req.which_message                                     = boomlink_ConfigMessage_set_request_tag;
   req.message.set_request.expected_config_version       = 1u;
   req.message.set_request.has_link                      = true;
-  req.message.set_request.link.magic                    = 0xABu; /* hazardous: differs from 0 */
+  req.message.set_request.link.magic                    = 0xABu; /* hazardous: differs from the 0xB0 default */
   req.message.set_request.link.ack_timeout_margin_ms     = 300u;  /* not hazardous */
 
   boomlink_ConfigMessage resp;
@@ -195,7 +195,15 @@ static void test_hazardous_magic_change_is_staged(void) {
 
   CHECK(resp.message.set_response.result == boomlink_ConfigSetResult_CONFIG_SET_RESULT_PENDING_CONFIRMATION,
         "a magic change must be staged");
-  CHECK(svc.current.link.magic == 0u, "magic must not be in current yet");
+  /* 0xB0, not 0: boomlink_node_config_defaults() sets link.magic to
+     BOOMLINK_LINKFRAME_MAGIC_DEFAULT (link/boomlink_linkframe.h), matching
+     link_service.c's own bring-up default - not left at the struct's zero-
+     init, which is not a real magic value. This test can't include that
+     header (boomlink_config_service_test links boomlink_linkframe only
+     transitively as boomlink_config_service's PRIVATE dependency), so the
+     value is spelled out here instead. */
+  CHECK(svc.current.link.magic == 0xB0u, "magic must not be in current yet, got 0x%02X",
+        (unsigned)svc.current.link.magic);
   CHECK(svc.current.link.ack_timeout_margin_ms == 300u,
         "a non-hazardous sibling field applies immediately");
   CHECK(svc.staged.magic == 0xABu, "the new magic is held in staged");

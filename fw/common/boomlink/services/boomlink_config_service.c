@@ -35,6 +35,16 @@ void boomlink_node_config_defaults(boomlink_node_config_t *out) {
   out->has_detection    = true;
   out->has_gnss         = true;
   out->has_telemetry    = true;
+  /* Not left at the zero-init `{0}` gave it: 0 is not a real magic value,
+     it is "this field was never set" - the same distinction node_id draws
+     against BOOMLINK_ADDR_INVALID (also 0) two lines below in spirit, if
+     not in this function's own code. App/link/link_service.c's actual
+     bring-up default (before PR 4 Phase C wired NodeConfig into it at all)
+     was already BOOMLINK_LINKFRAME_MAGIC_DEFAULT, hardcoded there - a fresh
+     node with no persisted config, or one that fails to load, needs
+     defaults() to agree with what bring-up already did, or Phase C wiring
+     this in would silently change a fresh node's magic from 0xB0 to 0. */
+  out->link.magic      = BOOMLINK_LINKFRAME_MAGIC_DEFAULT;
 }
 
 void boomlink_config_service_init(boomlink_config_service_t *svc,

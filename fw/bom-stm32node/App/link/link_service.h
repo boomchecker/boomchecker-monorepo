@@ -27,6 +27,24 @@ extern "C" {
  * call rather than caching anything, so bringing this up before the radio is
  * ready would only mean every send/poll is a harmless no-op until it is.
  *
+ * configured_node_id/configured_magic come from PR 4 Phase C's boot-time
+ * NodeConfig load (protocol_service_load_config(), called before this) -
+ * boomlink_config_service.h's GeneralConfig.node_id and LinkConfig.magic,
+ * straight from `current`, not re-validated here beyond the two fallbacks
+ * below: this file trusts boomlink_config_service_t's own SET-time
+ * validation (section 7.2/7.3) to have kept anything it ever staged into
+ * `current` within range, and boomlink_node_config_defaults() to have given
+ * an unconfigured node a real magic already (see that function's own doc).
+ * These two fallbacks exist for what a config load can still hand back
+ * despite that: BOOMLINK_ADDR_INVALID (section 7.2's own "unconfigured")
+ * for a node_id that was genuinely never assigned, and out-of-range data
+ * (0, or anything past one wire byte) for a magic loaded from a config
+ * blob that predates boomlink_node_config_defaults() carrying a real
+ * default - both fall back to this file's own prior bring-up-only
+ * derivation (derive_node_id() / BOOMLINK_LINKFRAME_MAGIC_DEFAULT) rather
+ * than handing boomlink_link_init() a value it would refuse (node_id) or a
+ * meaningless one (magic).
+ *
  * on_rx/on_tx_done/their user pointers become the engine's config (see
  * boomlink_link_rx_fn/boomlink_link_tx_done_fn in boomlink_link.h); either
  * may be NULL.
@@ -37,7 +55,8 @@ extern "C" {
  *         service then stays uninitialized: no bring-up retry, matching
  *         radio_init()'s own once-at-boot contract.
  */
-bool link_service_init(boomlink_link_rx_fn on_rx, void *on_rx_user,
+bool link_service_init(uint32_t configured_node_id, uint32_t configured_magic,
+                       boomlink_link_rx_fn on_rx, void *on_rx_user,
                        boomlink_link_tx_done_fn on_tx_done, void *on_tx_done_user);
 
 /**

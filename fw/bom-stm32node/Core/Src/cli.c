@@ -10,6 +10,7 @@
 #include "link_service.h"
 #include "main.h"   /* Error_Handler */
 #include "pcm_stream.h"
+#include "protocol_service.h"
 #include "radio.h"
 
 #include <stdio.h>  /* snprintf */
@@ -440,7 +441,6 @@ static void link_on_rx(void *user, uint32_t source_id, uint32_t destination_id,
                        const uint8_t *payload, size_t payload_len, float rssi_dbm,
                        float snr_db)
 {
-  (void)user;
   if (s_cli == NULL)
   {
     return;
@@ -461,6 +461,15 @@ static void link_on_rx(void *user, uint32_t source_id, uint32_t destination_id,
            (destination_id == BOOMLINK_ADDR_BROADCAST) ? "broadcast" : "me", preview,
            (payload_len > n) ? "..." : "", (unsigned)payload_len, f1, f2);
   embeddedCliPrint(s_cli, line);
+
+  /* PR 4 Phase C: the dispatcher wiring boomlink_link_rx_fn's own doc
+     already names this exact call site for. This debug preview stays
+     first/unconditional (it does not need a successful decode - a raw
+     preview of garbage is still useful for bring-up), then the real
+     BoomProtocol dispatch runs on the same bytes and is a silent no-op if
+     they do not decode as an Envelope (see protocol_service_on_rx()'s own
+     doc). */
+  protocol_service_on_rx(user, source_id, destination_id, payload, payload_len, rssi_dbm, snr_db);
 }
 
 /* boomlink_link_tx_done_fn - prints the outcome of a `link ping`. Called
@@ -768,6 +777,15 @@ void cli_init(cli_tx_fn tx)
   };
   embeddedCliAddBinding(s_cli, link_binding);
 
+  /* PR 4 Phase C: load the persisted NodeConfig (or safe defaults - see
+     protocol_service_load_config()'s own doc) BEFORE link_service_init(),
+     so this node's configured identity (rather than only the UID-derived
+     bring-up fallback link_service_init() still falls back to on its own)
+     is what the link engine and the protocol dispatcher both come up
+     against. */
+  boomlink_node_config_t loaded_config;
+  protocol_service_load_config(&loaded_config);
+
   /* Brings the link engine up against radio.h (App/link/link_service.h).
      Safe regardless of radio_init()'s own outcome - see link_service_init()'s
      doc: its port forwards to radio.h's singleton on every call rather than
@@ -776,7 +794,15 @@ void cli_init(cli_tx_fn tx)
      file builds itself failing boomlink_link_init()'s validation would be a
      programming error to catch at review/test time, not a field condition
      to branch on - `link status` reports "not initialized" either way. */
-  (void)link_service_init(link_on_rx, NULL, link_on_tx_done, NULL);
+  (void)link_service_init(loaded_config.general.node_id, loaded_config.link.magic, link_on_rx,
+                          NULL, link_on_tx_done, NULL);
+
+  /* Wires the protocol dispatcher (command/config services) onto the link
+     engine just brought up above - see protocol_service_init()'s own doc.
+     Not checking the return value for the same reason as link_service_init()
+     just above: the only way this fails is loaded_config being NULL, which
+     the address-of-a-local-variable just taken cannot be. */
+  (void)protocol_service_init(&loaded_config);
 
   embeddedCliProcess(s_cli); /* print the initial prompt */
 }
@@ -793,6 +819,12 @@ void cli_process(void)
      finished) - a no-op unless `link enable` currently owns radio_poll_rx(),
      same arbitration print_rx_frame() below observes from the other side. */
   link_service_process();
+  /* PR 4 Phase C: drives the config service's revert-on-timeout poll and
+     performs a `reboot` command's deferred reset once armed - see
+     protocol_service_process()'s own doc. Independent of link_service_
+     process()/print_rx_frame()'s enable/disable arbitration above: this
+     does not touch the radio at all, so it runs every tick regardless. */
+  protocol_service_process();
   print_rx_frame();
   tx_flush();
 }

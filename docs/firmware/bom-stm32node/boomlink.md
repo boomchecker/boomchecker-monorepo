@@ -247,10 +247,16 @@ where it differs from this section's original sketch:
   RadioConfig to also cover `GeneralConfig.node_id`/`LinkConfig.magic` per this section's
   own "two fields need the same hazard treatment" note - a `boomlink_config_hazard_t`
   covering all three as one atomic stage/commit/confirm/revert unit.
-- `App/protocol/` and `App/services/` are therefore not yet added by any PR: Phase C
-  adds a thin call site analogous to Phase C's `App/link/link_service.c/.h` (wiring
-  `boomlink_dispatch_process()` and the two services to real RX bytes, a real send path,
-  and real command actions), not the fuller file lists this section originally sketched.
+- `App/protocol/` (not `App/services/` too - see below) is where Phase C's own thin call
+  site landed, analogous to PR 3 Phase C's `App/link/link_service.c/.h`: a single
+  `protocol_service.h/.c` wiring `boomlink_dispatch_process()` and the two services to
+  real RX bytes, a real send path, and real command actions, not the fuller file lists
+  this section originally sketched. No separate `App/services/` was added - the injected
+  `boomlink_command_ops_t` (radio.h-backed `SelfTest`/`ClearStatistics`/
+  `RequestDiagnostics`, a deferred-reset `Reboot`, `Identify`/`StartDetection`/
+  `StopDetection` left `NULL` - no LED, no detection algorithm) is small enough to live
+  directly in `protocol_service.c`; see PR 4 Phase C's own "what actually landed" note
+  for the full list of what this phase did and did not wire up.
 
 What section 10.1's persistence actually landed as (PR 4 Phase B), where it differs from
 that section's original sketch:
@@ -290,10 +296,11 @@ that section's original sketch:
   (126-127 of 128 per bank) on this dual-bank part, for exactly this). Cross-compiled
   as its own static library
   (`boomlink_flash_storage_port`, defined in `fw/bom-stm32node/CMakeLists.txt` itself,
-  the same isolation `radio_layer` gets) but - like `boomlink_dispatch`/
-  `boomlink_command_service`/`boomlink_config_service` before it - not yet linked into the
-  firmware image: nothing calls `boomlink_config_store_load()`/`_save()` at boot or on a
-  confirmed config write until the same later Phase C call site wires it in.
+  the same isolation `radio_layer` gets) and - like `boomlink_dispatch`/
+  `boomlink_command_service`/`boomlink_config_service` before it - now linked into the
+  firmware image as of PR 4's own Phase C: `protocol_service_load_config()` calls
+  `boomlink_config_store_load()` at boot, falling back to
+  `boomlink_node_config_defaults()` on a missing/invalid save.
 - TrustZone (`HAL_GTZC_MODULE_ENABLED`) is disabled on this board (`Core/Inc/
   stm32h5xx_hal_conf.h`), so `boomlink_flash_storage_port.c` uses the plain
   (non-`_NS`/`_S`) `HAL_FLASH_*`/`HAL_FLASHEx_*` calls rather than needing to pick a
@@ -361,12 +368,15 @@ fw/
 │   │   │   │                          # the four-file sketch this line used to show
 │   │   │   ├── boomlink_radio_port.h/.c   # boomlink_port_t, wired to App/radio/radio.h
 │   │   │   └── link_service.h/.c          # the boomlink_link_t instance + cli.c's call site
-│   │   ├── protocol/                  # not yet added - PR 4's later firmware-wiring
-│   │   │   │                          # phase adds a thin call site here, not the
-│   │   │   │                          # protocol_codec/protocol_dispatcher/envelope_builder
-│   │   │   │                          # split this line used to show; see PR 4 Phase A's
-│   │   │   │                          # "what actually landed" above
-│   │   ├── services/                  # not yet added - same note as protocol/ above
+│   │   ├── protocol/                  # PR 4 Phase C - see that phase's "what actually
+│   │   │   │                          # landed" note above for how this differs from
+│   │   │   │                          # the protocol_codec/protocol_dispatcher/
+│   │   │   │                          # envelope_builder split this line used to show
+│   │   │   └── protocol_service.h/.c      # dispatch + command/config services wired onto
+│   │   │                                  # link_service.c; also owns the injected
+│   │   │                                  # boomlink_command_ops_t (no separate App/
+│   │   │                                  # services/ needed - it is small enough to live
+│   │   │                                  # directly here)
 │   │   └── storage/                   # Phase B - see PR 4 Phase B's "what actually
 │   │       │                          # landed" above for how this differs from
 │   │       │                          # the config_store.c/.h sketch this line used to show
@@ -1799,9 +1809,13 @@ Scope:
   caveat — no sensor readings are wired up yet);
 - implement section 8.3's full command set — Reboot, Identify, SelfTest,
   StartDetection, StopDetection, ClearStatistics and RequestDiagnostics (Phase A:
-  dispatch plus injected `boomlink_command_ops_t` callbacks, one per command; the real
-  actions — NVIC reset, an LED, the detection subsystem — are Phase C's job, against
-  real hardware);
+  dispatch plus injected `boomlink_command_ops_t` callbacks, one per command; Phase C
+  wires the real actions this hardware actually has — a deferred NVIC reset for Reboot,
+  radio.h-backed SelfTest/ClearStatistics/RequestDiagnostics. Identify and
+  StartDetection/StopDetection are left `NULL` — answering `COMMAND_RESULT_UNSUPPORTED`
+  rather than a stub that claims to have tried — because this board has no LED to
+  identify with and no detection algorithm exists yet to start or stop; see Phase C's
+  own "what actually landed" notes below);
 - implement ConfigGet and ConfigSet (Phase A: in-memory `boomlink_config_service_t`,
   including `config_version`/`expected_config_version` conflict handling and the
   revert-on-timeout apply this section already specified for RadioConfig, generalized
@@ -1812,7 +1826,8 @@ Scope:
 - implement safe defaults when stored config is missing/corrupt (Phase B loads them;
   the `boomlink_node_config_defaults()` fallback itself already exists from Phase A);
 - support `usb_forward_enabled` gateway behaviour without a separate firmware build
-  (Phase C).
+  (originally scoped to Phase C; not delivered — see Phase C's own "what actually
+  landed" notes below).
 
 Phase A deliberately does not extend the PR 2 Python/protoc golden-vector cross-check
 (`tests/vectors_spec.py`, hardcoded to `SystemMessage.{ping,pong}` shapes) to the four
@@ -1823,13 +1838,77 @@ phase adds hand-written encode/decode logic for one of these groups, not before.
 
 Acceptance criteria:
 
-- the same binary can boot as different node IDs/roles from persistent config (Phase B);
+- the same binary can boot as different node IDs/roles from persistent config (Phase B,
+  Phase C wires the loaded identity into `link_service_init()`);
 - a detector event reaches a gateway as a typed message (Phase A carries the message;
-  Phase C generates a real one);
+  **not met** — Phase C does not generate a real one, since no detection algorithm
+  exists in this firmware to generate it from; see Phase C's own "what actually landed"
+  notes below);
 - detection parameters can be changed at runtime (Phase A) and persisted (Phase B);
 - ConfigGet reports the active configuration (Phase A, in-memory);
 - stale ConfigSet is rejected using config versioning (Phase A);
 - reboot does not require rebuilding to preserve role/identity (Phase B).
+
+### Phase C — what actually landed
+
+Phase C's own scope, decided once Phase A/B's actual APIs and this board's actual
+hardware were both in hand rather than guessed at up front (the same "decide against
+the real seam, not the sketch" approach PR 3's own Phase C took — section 4):
+
+- `App/protocol/protocol_service.c/.h` — the thin firmware call site wiring
+  `boomlink_dispatch_t` plus the command and config services onto the link engine
+  `App/link/link_service.c` already brings up, analogous to that file's own role for
+  the link engine one PR earlier;
+- boot-time config load — `protocol_service_load_config()` calls
+  `boomlink_config_store_load()` against the real flash port before
+  `link_service_init()`, falling back to `boomlink_node_config_defaults()` on a
+  missing/invalid save (section 10.1's own fallback rule);
+- `link_service_init()` extended to accept the loaded `node_id`/`magic` instead of
+  always deriving/hardcoding them, with the UID-derivation and
+  `BOOMLINK_LINKFRAME_MAGIC_DEFAULT` fallbacks it already had kept for an unconfigured
+  or out-of-range value (see that function's own doc comment);
+- a decided, documented interpretation of section 8.2's revert-on-timeout "confirmed"
+  step, which that section deliberately leaves to integration: this phase commits a
+  staged hazardous change as soon as its `PENDING_CONFIRMATION` response is queued for
+  send (not once actually on the air — see `protocol_service_on_rx()`'s own comment for
+  why), and confirms it on the next request/response exchange completed with any peer.
+  Honestly incomplete, and documented as such at the call site: this firmware has no
+  live radio/node_id/magic reconfiguration (`App/radio/radio.h` has no setter, and
+  `boomlink_link_reconfigure()` explicitly excludes node_id/magic), so a hazardous
+  change only ever takes effect on the *next* boot's config load — this phase's
+  "confirmation" proves the current, pre-change session is still reachable, not that
+  the new profile will still work after that reboot;
+- real command actions for the hardware this board actually has: `Reboot` arms a
+  deferred `HAL_NVIC_SystemReset()` (never synchronous — see
+  `boomlink_command_service.h`'s own doc on why), `SelfTest`/`ClearStatistics`/
+  `RequestDiagnostics` are backed by `App/radio/radio.h`'s existing stats/readiness API;
+- every Phase A/B library (`boomlink_dispatch`, `boomlink_command_service`,
+  `boomlink_config_service`, `boomlink_config_store`, `boomlink_flash_storage_port`,
+  and transitively `boomlink_storage_port`) is now actually linked into
+  `bom-stm32node.elf`, not merely cross-compiled — CI's build workflow gained a
+  matching "actually linked in" symbol check, the same class of check PR 3 Phase C
+  added for the link engine.
+
+Deliberately deferred, not silently dropped:
+
+- **`Identify`'s LED indication** — this board has no LED pin wired for it (checked
+  against `main.h`/`gpio.h`/`gpio.c`/the CubeMX `.ioc`); the command answers
+  `COMMAND_RESULT_UNSUPPORTED` (a `NULL` ops callback) rather than a stub pretending to
+  have tried;
+- **`StartDetection`/`StopDetection`'s real effect** — no detection algorithm exists
+  yet over the PDM/PCM audio pipeline for these to start or stop; same `NULL`/
+  `UNSUPPORTED` treatment as Identify;
+- **a real `DetectionEvent` generator** — the acceptance criterion above is explicitly
+  not met for the same reason;
+- **`usb_forward_enabled` gateway/relay behaviour** — zero existing hooks between the
+  USB CDC path and the link engine; this would be a new feature, not a wiring task, and
+  was originally scoped to this phase before that became clear;
+- **live radio/node_id/magic reconfiguration** — no such capability exists anywhere in
+  this firmware (see the "confirmed" note above); a hazardous config change is real and
+  persisted, but only takes effect on the node's next reboot;
+- **most `TelemetryReport` fields** — no hardware backs them yet (no uptime counter, no
+  ADC sampling loop, no GNSS parsing); telemetry stays schema-and-dispatch-recognition
+  only, the same state Phase A left it in.
 
 ## PR 5 — Host CLI and end-to-end tooling
 

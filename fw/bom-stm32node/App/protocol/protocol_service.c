@@ -1,0 +1,279 @@
+/**
+ ******************************************************************************
+ * @file    protocol_service.c
+ ******************************************************************************
+ */
+#include "protocol_service.h"
+
+#include <stdio.h>
+
+#include "boomlink_codec.h"
+#include "boomlink_command_service.h"
+#include "boomlink_config_store.h"
+#include "boomlink_dispatch.h"
+#include "boomlink_flash_storage_port.h"
+#include "link_service.h"
+#include "main.h" /* HAL_GetTick, HAL_NVIC_SystemReset */
+#include "radio.h"
+
+/* See boomlink_command_service.h's reboot() doc: a synchronous
+   HAL_NVIC_SystemReset() inside the command callback would reset this node
+   before its own CommandResponse - the one this exact reboot request is
+   waiting on - ever reaches the radio. This is how long cmd_reboot() below
+   instead makes the caller wait: long enough for a just-queued HIGH-
+   priority response (see protocol_service_on_rx()'s priority choice) to
+   actually clear the TX pipeline under the bring-up LoRa profile's airtime
+   plus a superloop iteration or two of scheduling slack. Not a measured
+   value - the same "reasonable by inspection, not yet tuned" caveat this
+   codebase's other bring-up-only constants carry (e.g. link_service.c's
+   LINK_* macros) - but generous enough that undershooting it would need the
+   superloop to stall for half a second, which would already be a problem
+   far bigger than a late reboot. */
+#define PROTOCOL_SERVICE_REBOOT_DELAY_MS 500u
+
+/* Section 8.2's revert-on-timeout window for a hazardous config change
+   (node_id/magic/radio) - boomlink_config_service_init()'s own doc leaves
+   this policy choice to its caller rather than picking one itself. 5
+   seconds: comfortably longer than this node's own PENDING_CONFIRMATION
+   response and a peer's next request both actually happening at LoRa
+   bring-up speeds (a few hundred ms of airtime plus retry/backoff margin -
+   see link_service.c's LINK_* constants), short enough that a change
+   nobody ever confirms does not leave the node's config half-changed for
+   long. Not tuned against real deployment traffic, the same caveat as
+   PROTOCOL_SERVICE_REBOOT_DELAY_MS above. */
+#define PROTOCOL_SERVICE_CONFIRM_WINDOW_MS 5000u
+
+static boomlink_dispatch_t       s_dispatch;
+static boomlink_config_service_t s_config_svc;
+static boomlink_command_ops_t    s_command_ops;
+static bool                      s_initialized;
+
+static bool     s_reboot_armed;
+static uint32_t s_reboot_armed_at_ms;
+
+/* boomlink_command_ops_t.reboot - arms a deferred reset for protocol_
+   service_process() to perform once PROTOCOL_SERVICE_REBOOT_DELAY_MS has
+   elapsed, rather than resetting here - see this file's macro doc and
+   boomlink_command_service.h's own doc for why a synchronous reset here
+   would be wrong. Always succeeds: arming a flag cannot fail the way a real
+   hardware action could. */
+static bool cmd_reboot(void *ctx) {
+  (void)ctx;
+  s_reboot_armed       = true;
+  s_reboot_armed_at_ms = HAL_GetTick();
+  return true;
+}
+
+/* boomlink_command_ops_t.self_test - the only hardware this bring-up
+   firmware has anything to test is the radio (App/radio/radio.h); no
+   detection algorithm or other sensor exists yet to include here (see
+   boomlink.md's Phase C notes on what this PR deliberately does not add). */
+static bool cmd_self_test(void *ctx, char *out_diagnostic, size_t out_diagnostic_cap) {
+  (void)ctx;
+  if (!radio_is_ready()) {
+    snprintf(out_diagnostic, out_diagnostic_cap, "radio not ready (err=%d)", radio_last_error());
+    return false;
+  }
+  snprintf(out_diagnostic, out_diagnostic_cap, "radio ready");
+  return true;
+}
+
+/* boomlink_command_ops_t.clear_statistics - every counter this firmware
+   actually keeps: the radio layer's own (radio_reset_stats()) and the link
+   engine's (boomlink_link_reset_stats(), which - see its own doc - zeroes
+   only counters, never the session/sequence/duplicate-cache state a live
+   link depends on). boomlink_dispatch_t's stats have no reset of their own
+   (boomlink_dispatch.h exposes no such call) and so are left alone.
+   link_service_link() returning NULL (link engine not brought up) is not a
+   failure of THIS command - the radio side still cleared - so this always
+   reports success regardless. */
+static bool cmd_clear_statistics(void *ctx) {
+  (void)ctx;
+  radio_reset_stats();
+  boomlink_link_t *link = link_service_link();
+  if (link != NULL) {
+    boomlink_link_reset_stats(link);
+  }
+  return true;
+}
+
+/* boomlink_command_ops_t.request_diagnostics - a compact one-line summary
+   of the state an operator would otherwise have to gather from `link
+   status`/`radio status` separately. Bounded by out_diagnostic_cap the same
+   as self_test() above; snprintf truncates safely rather than overflowing
+   if a future field addition makes this run long. */
+static bool cmd_request_diagnostics(void *ctx, char *out_diagnostic, size_t out_diagnostic_cap) {
+  (void)ctx;
+  boomlink_link_stats_t link_stats = {0};
+  boomlink_link_t      *link       = link_service_link();
+  if (link != NULL) {
+    boomlink_link_get_stats(link, &link_stats);
+  }
+  radio_stats_t radio_stats;
+  radio_get_stats(&radio_stats);
+  snprintf(out_diagnostic, out_diagnostic_cap,
+           "node=0x%08lX tx=%lu rx=%lu txfail=%lu rxcrc=%lu",
+           (unsigned long)link_service_node_id(), (unsigned long)link_stats.tx_envelopes,
+           (unsigned long)link_stats.rx_envelopes, (unsigned long)link_stats.tx_failures,
+           (unsigned long)radio_stats.rx_crc_errors);
+  return true;
+}
+
+void protocol_service_load_config(boomlink_node_config_t *out) {
+  boomlink_storage_port_t port;
+  boomlink_flash_storage_port_init(&port);
+  if (!boomlink_config_store_load(&port, out)) {
+    boomlink_node_config_defaults(out);
+  }
+}
+
+bool protocol_service_init(const boomlink_node_config_t *loaded_config) {
+  if (loaded_config == NULL) {
+    return false;
+  }
+
+  s_command_ops.reboot              = cmd_reboot;
+  s_command_ops.identify            = NULL; /* no LED on this board to indicate with */
+  s_command_ops.self_test           = cmd_self_test;
+  s_command_ops.start_detection     = NULL; /* no detection algorithm exists yet */
+  s_command_ops.stop_detection      = NULL; /* ditto */
+  s_command_ops.clear_statistics    = cmd_clear_statistics;
+  s_command_ops.request_diagnostics = cmd_request_diagnostics;
+  /* every action reaches its state through file-static singletons, the
+     same approach link_service.c takes - no per-instance ctx needed */
+  s_command_ops.ctx = NULL;
+
+  boomlink_config_service_init(&s_config_svc, loaded_config, PROTOCOL_SERVICE_CONFIRM_WINDOW_MS);
+
+  boomlink_dispatch_handlers_t handlers = {0};
+  handlers.on_command      = boomlink_command_service_handle;
+  handlers.on_command_user = &s_command_ops;
+  handlers.on_config       = boomlink_config_service_handle;
+  handlers.on_config_user  = &s_config_svc;
+  /* on_detection/on_telemetry/on_system left NULL: section 4's original PR 4
+     scope for detection/telemetry was recognition-only (no algorithm, no
+     sensor backing exists - see boomlink.md's Phase C notes), and nothing
+     in this protocol yet needs an automatic System/Ping responder. */
+  boomlink_dispatch_init(&s_dispatch, &handlers);
+
+  s_reboot_armed = false;
+  s_initialized  = true;
+  return true;
+}
+
+void protocol_service_on_rx(void *user, uint32_t source_id, uint32_t destination_id,
+                            const uint8_t *payload, size_t payload_len, float rssi_dbm,
+                            float snr_db) {
+  (void)user;
+  if (!s_initialized) {
+    return;
+  }
+
+  boomlink_Envelope envelope = boomlink_Envelope_init_zero;
+  if (!boomlink_decode_envelope(payload, payload_len, &envelope)) {
+    return;
+  }
+
+  boomlink_dispatch_rx_info_t rx = {
+    .source_id      = source_id,
+    .destination_id = destination_id,
+    .rssi_dbm       = rssi_dbm,
+    .snr_db         = snr_db,
+  };
+
+  boomlink_dispatch_result_t result = boomlink_dispatch_process(&s_dispatch, &rx, &envelope);
+  if (!result.has_response) {
+    return;
+  }
+
+  uint8_t buf[boomlink_Envelope_size];
+  size_t  len = 0;
+  if (!boomlink_encode_envelope(&result.response, buf, sizeof(buf), &len)) {
+    return;
+  }
+
+  boomlink_link_t *link = link_service_link();
+  if (link == NULL) {
+    return;
+  }
+
+  /* boomlink_txqueue.h's documented priority mapping: HIGH for a command
+     response, NORMAL for everything else this file ever sends (today, only
+     a config response). request_ack=true (not forced off - `source_id` is
+     always a specific requester, never BOOMLINK_ADDR_BROADCAST, since that
+     is who this replies TO, not a destination this file chose): section
+     8.3's "commands... return a correlated response" and section 8.2's
+     revert-on-timeout both depend on the requester actually receiving this,
+     which an unacknowledged best-effort send cannot promise. */
+  bool is_command_response  = result.response.which_payload == boomlink_Envelope_command_tag;
+  boomlink_tx_priority_t priority =
+      is_command_response ? BOOMLINK_TXPRIO_HIGH : BOOMLINK_TXPRIO_NORMAL;
+
+  boomlink_link_send_result_t send_rc =
+      boomlink_link_send(link, source_id, priority, true, buf, len);
+  bool queued = (send_rc == BOOMLINK_LINK_SEND_OK || send_rc == BOOMLINK_LINK_SEND_OK_EVICTED);
+  if (!queued) {
+    return;
+  }
+
+  /* section 8.2's revert-on-timeout apply, and what "the response confirming
+     the change has been transmitted" (boomlink_config_service_commit_
+     pending_apply()'s own doc) and "confirmed... actually works"
+     (boomlink_config_service_confirm_pending_apply()'s own doc) mean in
+     THIS phase - a decision that module explicitly leaves to its caller
+     rather than making itself.
+
+     Commit as soon as boomlink_link_send() reports the response QUEUED, not
+     once it is actually on the air: boomlink_link_tx_done_fn's own doc
+     rules out correlating a specific queued frame with a later on_tx_done
+     event by anything available before it fires (`sequence` "is NOT known
+     until this callback fires"), and cli.c's tx_done callback is shared
+     with unrelated traffic (`link ping`) this file has no way to
+     distinguish from its own response. The alternative - never committing
+     without that correlation - is worse: boomlink_config_service_poll()'s
+     STAGED-abandon path means an uncommitted stage times out and reverts on
+     its own anyway, silently defeating every hazardous config write. A
+     response that is queued at HIGH/NORMAL priority (at or above everything
+     else this bring-up firmware ever sends) and then never actually
+     transmits is already an unlikely failure this codebase has no better
+     tool to detect than that same abandon path.
+
+     Confirm on the next request/response exchange this file completes
+     (queues a response for) with ANY peer while WAITING - deliberately
+     loose, and honestly incomplete: no live radio/node_id/magic
+     reconfiguration exists yet (App/radio/radio.h has no setter, and
+     boomlink_link_reconfigure() explicitly excludes node_id/magic - see its
+     own doc), so a hazardous change here only ever takes effect on the NEXT
+     boot's protocol_service_load_config(), not in this running session.
+     This confirmation therefore proves the CURRENT (pre-change) session
+     remains reachable, not that the new profile will still work after that
+     next reboot - a real closed-loop check would need the pending state to
+     survive the reboot itself and be confirmed afterwards, which is out of
+     scope for this phase and not attempted here. */
+  bool is_pending_config = result.response.which_payload == boomlink_Envelope_config_tag &&
+                           result.response.payload.config.which_message ==
+                               boomlink_ConfigMessage_set_response_tag &&
+                           result.response.payload.config.message.set_response.result ==
+                               boomlink_ConfigSetResult_CONFIG_SET_RESULT_PENDING_CONFIRMATION;
+  if (is_pending_config) {
+    boomlink_config_service_commit_pending_apply(&s_config_svc, HAL_GetTick());
+  } else if (s_config_svc.apply_state == BOOMLINK_CONFIG_APPLY_WAITING) {
+    boomlink_config_service_confirm_pending_apply(&s_config_svc);
+  }
+}
+
+void protocol_service_process(void) {
+  if (!s_initialized) {
+    return;
+  }
+
+  uint32_t now_ms = HAL_GetTick();
+  boomlink_config_service_poll(&s_config_svc, now_ms);
+
+  /* Unsigned subtraction is wrap-safe for any real elapsed span - the same
+     idiom boomlink_config_service.c's own window_elapsed() uses. */
+  if (s_reboot_armed &&
+      (uint32_t)(now_ms - s_reboot_armed_at_ms) >= PROTOCOL_SERVICE_REBOOT_DELAY_MS) {
+    HAL_NVIC_SystemReset();
+  }
+}

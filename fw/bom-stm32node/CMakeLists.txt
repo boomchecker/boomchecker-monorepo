@@ -135,12 +135,9 @@ add_subdirectory(${CMAKE_SOURCE_DIR}/../common/boomlink boomlink)
 # Phase B) - a separate, STM32-specific static library rather than a source
 # added straight into ${CMAKE_PROJECT_NAME}, the same isolation radio_layer
 # gets: this is the one place HAL_FLASH_*/HAL_FLASHEx_* calls exist in this
-# firmware. NOT yet added to target_link_libraries(${CMAKE_PROJECT_NAME} ...)
-# below - cross-compiled here to catch a build break early, but unused until
-# a later phase actually calls boomlink_config_store_load()/_save() at boot
-# and on a confirmed config write, the same "wired but not yet linked"
-# state boomlink_dispatch/boomlink_command_service/boomlink_config_service
-# are already in (see fw/common/boomlink/CMakeLists.txt).
+# firmware. Linked into ${CMAKE_PROJECT_NAME} below (PR 4 Phase C): App/
+# protocol/protocol_service.c's protocol_service_load_config() is the first
+# real caller of boomlink_config_store_load() at boot.
 add_library(boomlink_flash_storage_port STATIC
     ${CMAKE_SOURCE_DIR}/App/storage/boomlink_flash_storage_port.c
 )
@@ -155,6 +152,17 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     ${CMAKE_SOURCE_DIR}/App/link/link_service.c
 )
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE ${CMAKE_SOURCE_DIR}/App/link)
+
+# The protocol dispatcher's firmware call site (App/protocol/, PR 4 Phase C) -
+# wires fw/common/boomlink's dispatch/command_service/config_service onto
+# the link engine above and the real flash-backed config store. Plain C,
+# same "no RadioLib types outside radio_layer" rule; talks to radio.h only
+# through its own public API (self_test/clear_statistics/request_
+# diagnostics), never RadioLib directly.
+target_sources(${CMAKE_PROJECT_NAME} PRIVATE
+    ${CMAKE_SOURCE_DIR}/App/protocol/protocol_service.c
+)
+target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE ${CMAKE_SOURCE_DIR}/App/protocol)
 
 # Link directories setup
 target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
@@ -193,6 +201,17 @@ target_link_libraries(${CMAKE_PROJECT_NAME}
     radio_layer
     boomlink_protocol
     boomlink_linkengine  # PUBLIC-links boomlink_linkframe too, see fw/common/boomlink/CMakeLists.txt
+
+    # PR 4 Phase C: the protocol dispatcher and its command/config services
+    # (fw/common/boomlink/CMakeLists.txt) plus the real flash-backed config
+    # store, all wired together by App/protocol/protocol_service.c above.
+    # boomlink_dispatch (PUBLIC-linked by both of the first two already,
+    # see that file) and boomlink_storage_port (PUBLIC-linked by both of
+    # the last two) do not need listing again here.
+    boomlink_command_service
+    boomlink_config_service
+    boomlink_config_store
+    boomlink_flash_storage_port
 
     # Add user defined libraries
 )
