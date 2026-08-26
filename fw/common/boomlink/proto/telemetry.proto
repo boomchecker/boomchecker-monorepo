@@ -1,0 +1,45 @@
+syntax = "proto3";
+
+package boomlink;
+
+// Telemetry application messages (boomlink.md section 8.4). Kept compact and
+// low priority by convention at the transport level (section 9.8's TX
+// queue), not by anything in this schema - the message itself just needs to
+// stay small enough that convention is easy to honour.
+message TelemetryMessage {
+  oneof message {
+    TelemetryReport report = 1;
+  }
+}
+
+// Section 8.4's candidate field list. RSSI/SNR are `float` here rather than
+// the bounded-integer treatment section 8.1 recommends for detection
+// location/direction: that recommendation is about cross-node comparability
+// of a value nodes exchange and reason about together, which does not apply
+// to a spot-reading a node reports about itself, and boomlink_link_stats_t/
+// radio_stats_t already carry these as `float` - converting to an integer
+// unit here would add a lossy round-trip for no benefit.
+message TelemetryReport {
+  uint32 uptime_s = 1;
+  // Millivolts. 0 if not measured (no ADC channel wired to a supply rail on
+  // this board revision, or not sampled yet this cycle) - not a validity
+  // flag, since a real 0 mV reading is not a value any caller could act on
+  // differently than "unmeasured" anyway.
+  uint32 supply_voltage_mv = 2;
+
+  bool temperature_valid = 3;
+  float temperature_c = 4;
+
+  bool gnss_fix_valid = 5;
+  uint32 gnss_accuracy_cm = 6; // 0 if fix invalid
+
+  // Mirrors boomlink_link_stats_t.last_rssi_dbm/last_snr_db (section 9.10).
+  float last_rssi_dbm = 7;
+  float last_snr_db = 8;
+
+  uint32 tx_packets = 9;
+  uint32 rx_packets = 10;
+  uint32 radio_errors = 11;
+  uint32 detection_count = 12;
+  uint32 reset_count = 13;
+}

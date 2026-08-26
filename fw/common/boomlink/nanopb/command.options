@@ -1,0 +1,13 @@
+# Nanopb generator options (see nanopb docs: docs/concepts.html#defining-the-options).
+#
+# CommandResponse.diagnostic is the only variable-size field PR 4 adds across
+# detection/telemetry/command/config.proto - everything else is fixed-width
+# scalars, enums or nested messages, none of which need a bound here.
+#
+# 64 bytes is a short human-readable note (section 13's "an optional bounded
+# diagnostic string... but the enum is authoritative"), not a place to put
+# anything a caller's logic depends on parsing - the enum next to it already
+# is that. See nanopb/system.options for the two build-time-enforced
+# constraints every entry in this file must satisfy (EVEN size; never shrink
+# below what a checked-in golden vector already carries).
+boomlink.CommandResponse.diagnostic  max_size:64

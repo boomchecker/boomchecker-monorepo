@@ -152,7 +152,8 @@ endif()
 # the vendored libraries.
 option(BOOMLINK_TARGET_WERROR
        "Treat warnings as errors in the libraries cross-compiled for the target - \
-boomlink_linkframe and boomlink_linkengine (CI turns this on)" OFF)
+boomlink_linkframe, boomlink_linkengine, boomlink_dispatch, boomlink_command_service \
+and boomlink_config_service (CI turns this on)" OFF)
 set(BOOMLINK_TARGET_WERROR_FLAGS "")
 if(BOOMLINK_TARGET_WERROR)
   set(BOOMLINK_TARGET_WERROR_FLAGS -Werror)
@@ -292,7 +293,7 @@ endif()
 
 set(BOOMLINK_PROTO_DIR ${CMAKE_CURRENT_SOURCE_DIR}/proto)
 set(BOOMLINK_NANOPB_OPTIONS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/nanopb)
-set(BOOMLINK_PROTO_NAMES common header system envelope)
+set(BOOMLINK_PROTO_NAMES common header system detection telemetry command config envelope)
 list(TRANSFORM BOOMLINK_PROTO_NAMES PREPEND ${BOOMLINK_PROTO_DIR}/ OUTPUT_VARIABLE BOOMLINK_PROTO_FILES)
 list(TRANSFORM BOOMLINK_PROTO_FILES APPEND .proto)
 
@@ -388,14 +389,14 @@ foreach(proto_name IN LISTS BOOMLINK_PROTO_NAMES)
   # bookkeeping.
   #
   # No explicit -f<options file>: passing one global options file to every
-  # invocation made the generator warn "did not match any fields" on the
-  # three proto files with no matching options entry, every single build -
-  # noise that buries the one thing that warning is supposed to catch (a
-  # genuinely stale/typo'd entry). Nanopb auto-discovers a same-named
-  # `<proto>.options` via its `-I`/`--options-path` search list instead
-  # (verified against the vendored generator source): only system.proto has
-  # one (nanopb/system.options, matched via the extra -I below), so the
-  # other three simply find nothing and stay silent.
+  # invocation made the generator warn "did not match any fields" on every
+  # proto file with no matching options entry, every single build - noise
+  # that buries the one thing that warning is supposed to catch (a genuinely
+  # stale/typo'd entry). Nanopb auto-discovers a same-named `<proto>.options`
+  # via its `-I`/`--options-path` search list instead (verified against the
+  # vendored generator source): only system.proto and command.proto have one
+  # (nanopb/*.options, matched via the extra -I below), so the rest simply
+  # find nothing and stay silent.
   add_custom_command(
     OUTPUT ${out_c} ${out_h}
     COMMAND ${Python3_EXECUTABLE} ${BOOMLINK_NANOPB_GENERATOR}
@@ -561,6 +562,65 @@ target_compile_features(boomlink_linkengine PUBLIC c_std_11)
 target_compile_options(boomlink_linkengine PRIVATE
   ${BOOMLINK_WARNING_FLAGS} ${BOOMLINK_WERROR_FLAGS} ${BOOMLINK_TARGET_WERROR_FLAGS})
 
+# PR 4's protocol dispatcher (boomlink.md section 4's "what actually landed"
+# for the link engine explains the precedent this follows): target-agnostic
+# C that routes a decoded Envelope by which_payload, deliberately outside
+# fw/bom-stm32node/App/protocol/ despite that being section 4's original
+# sketch location, so it is host-testable the same way the link engine is.
+#
+# Depends on boomlink_protocol (PUBLIC: this module's own header includes
+# envelope.pb.h), the opposite dependency direction from boomlink_linkframe/
+# boomlink_linkengine, which must NOT depend on Nanopb (section 9) - this
+# module's entire job is looking inside what those two deliberately never
+# do, so the same rule points the other way here.
+add_library(boomlink_dispatch STATIC
+  ${CMAKE_CURRENT_SOURCE_DIR}/dispatch/boomlink_dispatch.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/dispatch/boomlink_envelope_builder.c
+)
+target_include_directories(boomlink_dispatch PUBLIC
+  ${CMAKE_CURRENT_SOURCE_DIR}/dispatch
+)
+target_link_libraries(boomlink_dispatch PUBLIC boomlink_protocol)
+target_compile_features(boomlink_dispatch PUBLIC c_std_11)
+target_compile_options(boomlink_dispatch PRIVATE
+  ${BOOMLINK_WARNING_FLAGS} ${BOOMLINK_WERROR_FLAGS} ${BOOMLINK_TARGET_WERROR_FLAGS})
+
+# Section 8.3's command service (boomlink.md), against the dispatcher's
+# boomlink_dispatch_command_fn seam. Actions are injected (boomlink_command_
+# service.h's boomlink_command_ops_t) rather than performed here, so this
+# stays host-testable against a fake ops struct - Phase C wires the real
+# ones (NVIC reset, an LED, ...).
+add_library(boomlink_command_service STATIC
+  ${CMAKE_CURRENT_SOURCE_DIR}/services/boomlink_command_service.c
+)
+target_include_directories(boomlink_command_service PUBLIC
+  ${CMAKE_CURRENT_SOURCE_DIR}/services
+)
+target_link_libraries(boomlink_command_service PUBLIC boomlink_dispatch)
+target_compile_features(boomlink_command_service PUBLIC c_std_11)
+target_compile_options(boomlink_command_service PRIVATE
+  ${BOOMLINK_WARNING_FLAGS} ${BOOMLINK_WERROR_FLAGS} ${BOOMLINK_TARGET_WERROR_FLAGS})
+
+# Section 8.2's ConfigGet/ConfigSet over an in-memory NodeConfig, including
+# the revert-on-timeout apply that section requires for RadioConfig/magic/
+# node_id changes. Persistence to flash (section 10.1) is Phase B's job.
+add_library(boomlink_config_service STATIC
+  ${CMAKE_CURRENT_SOURCE_DIR}/services/boomlink_config_service.c
+)
+target_include_directories(boomlink_config_service PUBLIC
+  ${CMAKE_CURRENT_SOURCE_DIR}/services
+)
+# boomlink_linkframe is PRIVATE: only boomlink_config_service.c itself uses
+# it, for BOOMLINK_ADDR_INVALID/BOOMLINK_ADDR_BROADCAST (section 7.2's
+# reserved node_id values) - reused rather than duplicated as bare hex
+# literals. Header-only use (both constants are #define, not a linked
+# symbol), but declared as a real dependency rather than an extra include
+# path so it shows up in the link graph like any other real one.
+target_link_libraries(boomlink_config_service PUBLIC boomlink_dispatch PRIVATE boomlink_linkframe)
+target_compile_features(boomlink_config_service PUBLIC c_std_11)
+target_compile_options(boomlink_config_service PRIVATE
+  ${BOOMLINK_WARNING_FLAGS} ${BOOMLINK_WERROR_FLAGS} ${BOOMLINK_TARGET_WERROR_FLAGS})
+
 if(BOOMLINK_STANDALONE)
   enable_testing()
 
@@ -723,6 +783,39 @@ if(BOOMLINK_STANDALONE)
   target_compile_options(boomlink_link_tx_test PRIVATE
     ${BOOMLINK_WARNING_FLAGS} ${BOOMLINK_WERROR_FLAGS})
   add_test(NAME boomlink_link_tx_test COMMAND boomlink_link_tx_test)
+
+  # PR 4 Phase A: the Envelope router (boomlink_dispatch_process()) as a pure
+  # function over fake handlers - every which_payload branch, the response
+  # header it builds for request/response groups (never the handler's job),
+  # and the no_payload/unhandled counters that make a silently dropped
+  # message impossible to miss.
+  add_executable(boomlink_dispatch_test tests/dispatch_test.c)
+  target_link_libraries(boomlink_dispatch_test PRIVATE boomlink_dispatch)
+  target_include_directories(boomlink_dispatch_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests)
+  target_compile_options(boomlink_dispatch_test PRIVATE
+    ${BOOMLINK_WARNING_FLAGS} ${BOOMLINK_WERROR_FLAGS})
+  add_test(NAME boomlink_dispatch_test COMMAND boomlink_dispatch_test)
+
+  # PR 4 Phase A: section 8.3's command set against a fake ops struct - every
+  # CommandType reaches its own callback (or UNSUPPORTED if that slot is
+  # NULL), and a response is always built for a real CommandRequest.
+  add_executable(boomlink_command_service_test tests/command_service_test.c)
+  target_link_libraries(boomlink_command_service_test PRIVATE boomlink_command_service)
+  target_include_directories(boomlink_command_service_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests)
+  target_compile_options(boomlink_command_service_test PRIVATE
+    ${BOOMLINK_WARNING_FLAGS} ${BOOMLINK_WERROR_FLAGS})
+  add_test(NAME boomlink_command_service_test COMMAND boomlink_command_service_test)
+
+  # PR 4 Phase A: section 8.2's ConfigGet/ConfigSet, the whole-group-
+  # replacement contract, and the revert-on-timeout apply state machine -
+  # the trickiest logic in this phase, and the one most worth pinning a
+  # boundary test on (the window closing at exactly confirm_window_ms).
+  add_executable(boomlink_config_service_test tests/config_service_test.c)
+  target_link_libraries(boomlink_config_service_test PRIVATE boomlink_config_service)
+  target_include_directories(boomlink_config_service_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests)
+  target_compile_options(boomlink_config_service_test PRIVATE
+    ${BOOMLINK_WARNING_FLAGS} ${BOOMLINK_WERROR_FLAGS})
+  add_test(NAME boomlink_config_service_test COMMAND boomlink_config_service_test)
 
   # The Nanopb-free boundary (boomlink.md section 9), checked as a TEST rather
   # than only as a CI step, so `task test` runs it and a developer finds out

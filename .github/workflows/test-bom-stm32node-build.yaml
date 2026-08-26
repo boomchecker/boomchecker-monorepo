@@ -85,8 +85,9 @@ jobs:
         # here rather than defaulted ON in CMake so a developer's local firmware
         # build is never blocked by a warning from a newer compiler than this
         # runner's - the same split BOOMLINK_WERROR uses for the host build.
-        # Scoped to those two hand-written libraries; the CubeMX sources and
-        # vendored libraries are unaffected.
+        # Scoped to this package's hand-written libraries (linkframe,
+        # linkengine, dispatch, command_service, config_service); the CubeMX
+        # sources and vendored libraries are unaffected.
         run: cmake --preset Debug -DBOOMLINK_TARGET_WERROR=ON
 
       - name: Build
@@ -137,7 +138,7 @@ jobs:
         # text nobody reads.
         run: |
           status=0
-          for archive in libboomlink_linkframe.a libboomlink_linkengine.a; do
+          for archive in libboomlink_linkframe.a libboomlink_linkengine.a libboomlink_dispatch.a libboomlink_command_service.a libboomlink_config_service.a; do
             path="build/Debug/boomlink/$archive"
             if [ ! -f "$path" ]; then
               echo "❌ $path was not produced - it is no longer cross-compiled for the target"
