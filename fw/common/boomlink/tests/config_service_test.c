@@ -52,6 +52,20 @@ static bool handle(boomlink_config_service_t *svc, const boomlink_ConfigMessage 
   return boomlink_config_service_handle(svc, &rx, request, out_response);
 }
 
+/* Like handle(), but addressed to BOOMLINK_ADDR_BROADCAST (0xFFFFFFFF,
+   section 7.2 - spelled out as a literal rather than included from
+   boomlink_linkframe.h: this test target links boomlink_config_service
+   only, which pulls that header in PRIVATEly, see fw/common/boomlink/
+   CMakeLists.txt's comment on that dependency and config_service_test.c's
+   own existing magic-literal comments for the same reason elsewhere in
+   this file). */
+static bool handle_broadcast(boomlink_config_service_t *svc, const boomlink_ConfigMessage *request,
+                             boomlink_ConfigMessage *out_response) {
+  boomlink_dispatch_rx_info_t rx = {0};
+  rx.destination_id              = 0xFFFFFFFFu;
+  return boomlink_config_service_handle(svc, &rx, request, out_response);
+}
+
 static void test_get_returns_only_requested_groups(void) {
   boomlink_config_service_t svc            = make_svc(1000u);
   svc.current.general.node_id              = 100u;
@@ -74,6 +88,65 @@ static void test_get_returns_only_requested_groups(void) {
   CHECK(!gr->has_radio, "radio was not requested, even though it holds a real non-zero value");
   CHECK(!gr->has_detection, "detection was not requested");
   CHECK(!gr->has_gnss, "gnss was not requested");
+}
+
+/* Regression test for a real gap found by review, not by any test written
+   alongside Phase A's original ConfigSet implementation: a SET addressed
+   to BOOMLINK_ADDR_BROADCAST had no guard at all - boomlink.md's own PR 4
+   notes already warned "a broadcast ConfigSet must not be added casually",
+   and once PR 4 Phase C wired real flash persistence to a successful SET,
+   this became a way for one unauthenticated broadcast frame to drive every
+   reachable node to independently erase+rewrite its own flash sector at
+   once. Covers both a non-hazardous field (which would otherwise apply
+   immediately, no confirmation needed) and a hazardous one (which would
+   otherwise only stage) - neither may proceed over broadcast. */
+static void test_set_over_broadcast_is_rejected_touching_nothing(void) {
+  boomlink_config_service_t svc = make_svc(1000u);
+
+  boomlink_ConfigMessage req                          = {0};
+  req.which_message                                   = boomlink_ConfigMessage_set_request_tag;
+  req.message.set_request.expected_config_version     = 1u;
+  req.message.set_request.has_telemetry               = true;
+  req.message.set_request.telemetry.report_interval_s = 42u; /* non-hazardous */
+  req.message.set_request.has_general                 = true;
+  req.message.set_request.general.node_id             = 77u; /* hazardous */
+
+  boomlink_ConfigMessage resp;
+  bool ok = handle_broadcast(&svc, &req, &resp);
+
+  REQUIRE(ok, "a SET always answers, even one refused for its addressing");
+  CHECK(resp.message.set_response.result == boomlink_ConfigSetResult_CONFIG_SET_RESULT_INVALID,
+        "a broadcast SET must be refused outright, not staged or applied");
+  CHECK(resp.message.set_response.config_version == 1u,
+        "a refused broadcast SET must not bump the version");
+  CHECK(svc.current.telemetry.report_interval_s == 0u,
+        "the non-hazardous field must NOT have applied - a broadcast SET touches nothing");
+  CHECK(svc.current.general.node_id == 0u,
+        "the hazardous field must NOT have applied either");
+  CHECK(svc.apply_state == BOOMLINK_CONFIG_APPLY_IDLE,
+        "a refused broadcast SET must not stage anything");
+
+  /* The identical request addressed to a real unicast destination must
+     still work normally - this is a targeted rejection of broadcast, not a
+     regression in ConfigSet itself. */
+  ok = handle(&svc, &req, &resp);
+  REQUIRE(ok, "a unicast SET must still answer");
+  CHECK(resp.message.set_response.result == boomlink_ConfigSetResult_CONFIG_SET_RESULT_PENDING_CONFIRMATION,
+        "a unicast SET with a hazardous field must still stage normally");
+  CHECK(svc.current.telemetry.report_interval_s == 42u,
+        "a unicast SET's non-hazardous field must still apply immediately");
+
+  /* A GET, unlike a SET, must still answer normally over broadcast - it
+     mutates nothing, so the concern a broadcast SET raises does not apply
+     to it. */
+  boomlink_ConfigMessage get_req = get_request(false, false, false, false, false, true);
+  boomlink_ConfigMessage get_resp;
+  boomlink_dispatch_rx_info_t broadcast_rx = {0};
+  broadcast_rx.destination_id              = 0xFFFFFFFFu;
+  ok = boomlink_config_service_handle(&svc, &broadcast_rx, &get_req, &get_resp);
+  REQUIRE(ok, "a GET must still answer over broadcast");
+  CHECK(get_resp.which_message == boomlink_ConfigMessage_get_response_tag,
+        "a GET over broadcast is not refused the way a SET is");
 }
 
 static void test_set_rejects_stale_expected_version(void) {
@@ -829,6 +902,7 @@ static void test_handle_rejects_malformed_or_missing_arguments(void) {
 
 int main(void) {
   test_get_returns_only_requested_groups();
+  test_set_over_broadcast_is_rejected_touching_nothing();
   test_set_rejects_stale_expected_version();
   test_non_hazardous_set_applies_immediately_as_a_whole_group();
   test_set_leaves_omitted_groups_untouched();
@@ -854,5 +928,5 @@ int main(void) {
   test_commit_and_revert_both_restore_has_radio();
   test_resending_an_unchanged_radio_value_still_restores_has_radio();
   test_handle_rejects_malformed_or_missing_arguments();
-  BOOMLINK_TEST_REPORT("config_service_test", 117);
+  BOOMLINK_TEST_REPORT("config_service_test", 128);
 }

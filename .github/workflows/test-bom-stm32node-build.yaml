@@ -230,11 +230,19 @@ jobs:
           # keeping the dispatcher but reverting the boot-time flash load)
           # while leaving the others intact - a single dispatcher-only
           # symbol (an earlier version of this check) would stay green
-          # through exactly that kind of partial regression.
+          # through exactly that kind of partial regression. This once let
+          # exactly that happen for real: boomlink_config_store_save() had
+          # no caller anywhere in the firmware (PR 4 Phase C's own review
+          # found it) despite boomlink_config_store_load() already being
+          # checked here and passing - _load and _save share a translation
+          # unit, but -ffunction-sections/--gc-sections (see cmake/gcc-arm-
+          # none-eabi.cmake) link per-function, not per-object-file, so one
+          # being reachable proves nothing about the other. Both are listed
+          # below now for exactly that reason.
           status=0
           for symbol in boomlink_dispatch_process boomlink_command_service_handle \
                         boomlink_config_service_handle boomlink_config_store_load \
-                        boomlink_flash_storage_port_init; do
+                        boomlink_config_store_save boomlink_flash_storage_port_init; do
             if ! arm-none-eabi-nm build/Debug/bom-stm32node.elf | grep -q "$symbol"; then
               echo "❌ $symbol is not linked into bom-stm32node.elf"
               status=1

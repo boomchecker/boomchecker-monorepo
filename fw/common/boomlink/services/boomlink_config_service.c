@@ -210,8 +210,28 @@ static bool magic_is_valid(uint32_t magic) {
   return magic != 0u && magic <= 0xFFu;
 }
 
-static bool handle_set(boomlink_config_service_t *svc, const boomlink_ConfigSetRequest *req,
+static bool handle_set(boomlink_config_service_t *svc, const boomlink_dispatch_rx_info_t *rx,
+                       const boomlink_ConfigSetRequest *req,
                        boomlink_ConfigMessage *out_response) {
+  /* boomlink.md's own PR 4 notes: "a broadcast ConfigSet must not be added
+     casually because simultaneous responses and coordinated radio-profile
+     changes require a separate design [this codebase] does not have yet."
+     Rejected outright, before anything else in this function - not scoped
+     to hazardous fields only: a non-hazardous broadcast SET still provokes
+     every reachable node to answer at once on one shared channel, and (as
+     of this PR's config-persistence wiring) to independently erase+rewrite
+     its own flash sector, all from a single unauthenticated frame nothing
+     in this protocol yet authenticates. The same pattern boomlink_command_
+     service.c's command_is_dangerous_over_broadcast() uses, applied here
+     to the one remaining unguarded write path that table doesn't cover.
+     ConfigGetRequest is deliberately NOT rejected this way - handle_get()
+     mutates nothing, so this concern does not apply to it. */
+  if (rx != NULL && rx->destination_id == BOOMLINK_ADDR_BROADCAST) {
+    respond_set(out_response, boomlink_ConfigSetResult_CONFIG_SET_RESULT_INVALID,
+               svc->current.config_version);
+    return true;
+  }
+
   if (req->expected_config_version != svc->current.config_version) {
     respond_set(out_response, boomlink_ConfigSetResult_CONFIG_SET_RESULT_VERSION_CONFLICT,
                svc->current.config_version);
@@ -359,7 +379,6 @@ static bool handle_set(boomlink_config_service_t *svc, const boomlink_ConfigSetR
 bool boomlink_config_service_handle(void *user, const boomlink_dispatch_rx_info_t *rx,
                                     const boomlink_ConfigMessage *request,
                                     boomlink_ConfigMessage *out_response) {
-  (void)rx;
   boomlink_config_service_t *svc = (boomlink_config_service_t *)user;
   if (svc == NULL || out_response == NULL || request == NULL) {
     return false;
@@ -369,7 +388,7 @@ bool boomlink_config_service_handle(void *user, const boomlink_dispatch_rx_info_
     case boomlink_ConfigMessage_get_request_tag:
       return handle_get(svc, &request->message.get_request, out_response);
     case boomlink_ConfigMessage_set_request_tag:
-      return handle_set(svc, &request->message.set_request, out_response);
+      return handle_set(svc, rx, &request->message.set_request, out_response);
     default:
       return false;
   }

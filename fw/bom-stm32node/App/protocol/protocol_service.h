@@ -76,15 +76,14 @@ bool protocol_service_init(const boomlink_node_config_t *loaded_config);
  * `source_id` over the link engine (App/link/link_service.h's
  * link_service_link()).
  *
- * Also where a config change this node accepts actually reaches flash: a
- * non-hazardous ConfigSet's already-applied change is persisted here
- * (regardless of send success), and a hazardous one is persisted once its
- * revert-on-timeout window closes with a real confirmation, not before -
- * see this function's own body comments for the exact two points and why
- * not any of the others (commit/abandon/revert are all deliberately never
- * persisted).
+ * Also where a config change this node accepts actually reaches flash: any
+ * accepted ConfigSet's already-applied non-hazardous fields are persisted
+ * immediately (regardless of send success, and whether the overall result
+ * is OK or PENDING_CONFIRMATION), and a hazardous field is persisted again
+ * once its revert-on-timeout window closes with a real confirmation - see
+ * this function's own body comments for exactly which points persist and
+ * why not any of the others (commit/abandon/revert never do).
  *
-
  * A boomlink_link_rx_fn "cannot fail" (that typedef's own doc): a payload
  * that fails to decode, a dispatch that produces no response, an encode
  * that fails, or a link_service_link() not yet available are all silent

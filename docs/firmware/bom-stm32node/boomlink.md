@@ -1864,16 +1864,30 @@ the real seam, not the sketch" approach PR 3's own Phase C took — section 4):
   `link_service_init()`, falling back to `boomlink_node_config_defaults()` on a
   missing/invalid save (section 10.1's own fallback rule);
 - config persistence on an actual write — `protocol_service_on_rx()` calls
-  `boomlink_config_store_save()` at exactly the two points a change becomes this
-  node's real standing configuration: right after a non-hazardous `ConfigSet`
-  applies (independent of whether the response reaches the requester - the change
-  is already live either way), and right after a hazardous change is CONFIRMED
-  (not at commit, and not on an abandoned/reverted stage - see that function's own
-  comment for why only a confirmed change is ever written to flash). Found missing
-  entirely by review during this phase - `boomlink_config_store_save()` had no
-  caller anywhere in the firmware before this, silently contradicting this
-  section's own "persist validated NodeConfig to flash" scope item and PR 4's
-  stated acceptance criteria;
+  `boomlink_config_store_save()` immediately whenever a `ConfigSet` is accepted
+  (`OK` or `PENDING_CONFIRMATION` - both mean at least the non-hazardous fields
+  already applied to `current`, independent of whether the response reaches the
+  requester), and again once a hazardous field is CONFIRMED (not at commit, and
+  not on an abandoned/reverted stage - see that function's own comment). Persisting
+  on `PENDING_CONFIRMATION` too, not only `OK`, matters for a request that bundles a
+  non-hazardous field with a hazardous one: without it, a hazardous field that later
+  times out unconfirmed would leave the non-hazardous field applied and reported by
+  every `ConfigGet` for the rest of the session, but never actually written to
+  flash - silently lost on the next reboot with no indication to the operator (found
+  by review, not by any test written alongside the original persistence fix).
+  `boomlink_config_store_save()` had no caller anywhere in the firmware before this
+  phase's review, silently contradicting this section's own "persist validated
+  NodeConfig to flash" scope item and PR 4's stated acceptance criteria;
+- a `ConfigSet` addressed to `BOOMLINK_ADDR_BROADCAST` is refused outright
+  (`CONFIG_SET_RESULT_INVALID`, touching nothing - not even a non-hazardous field)
+  in `boomlink_config_service_handle()` itself - the twin of the command service's
+  broadcast-danger table, for the one write path that table doesn't cover. This
+  section already flagged the general risk ("a broadcast `ConfigSet` must not be
+  added casually") before this PR existed; the guard was still missing when review
+  found it, and the config-persistence wiring above turned the gap from "every node
+  updates its in-RAM config from one frame" (annoying) into "every reachable node
+  independently erases and rewrites its own flash sector from one unauthenticated
+  frame" (a real fleet-wide flash-wear vector) before this fix closed it;
 - `link_service_init()` extended to accept the loaded `node_id`/`magic` instead of
   always deriving/hardcoding them, with the UID-derivation and
   `BOOMLINK_LINKFRAME_MAGIC_DEFAULT` fallbacks it already had kept for an unconfigured
@@ -1961,6 +1975,45 @@ Deliberately deferred, not silently dropped:
   (an operator's `link ping`, a legitimate `ConfigSet` response) for several seconds.
   A real mitigation (per-peer/per-command rate limiting) is a new feature, not a
   wiring task, and is left for whichever phase first needs to defend against it.
+- **No dedup/debounce on repeated `ConfigSet`s persisting to flash** — `handle_set()`
+  answers `OK` (or `PENDING_CONFIRMATION`) for any accepted, version-matched write,
+  including one that changes nothing (every field resent identical to `current`, or
+  even a request with no groups present at all), and `protocol_service_on_rx()`
+  persists on every such acceptance; `boomlink_config_store_save()` always erases and
+  rewrites the whole reserved region, never an incremental update. The broadcast
+  guard above closes the single-frame, fleet-wide version of this risk, but a
+  legitimate (or misbehaving) unicast peer resending the same `ConfigSet` repeatedly
+  - a monitoring tool reconciling "desired state" every few seconds is a realistic,
+  non-malicious way this could happen - can still drive one node's two reserved
+  flash sectors toward their erase/program cycle limit well before the rest of the
+  board's service life, silently and with no diagnostic signal (the save's return
+  value is intentionally ignored, matching this codebase's own "no bring-up retry"
+  posture elsewhere). A real fix (comparing against the last-persisted snapshot
+  before writing) needs a field-by-field comparison to be safe (a raw `memcmp` risks
+  both false negatives from struct padding and false positives from `float`
+  representation - e.g. `+0.0f`/`-0.0f`, the exact case `boomlink_config_service.c`'s
+  own hazard-comparison logic already special-cases) - real engineering, not a
+  one-line wiring fix, and left for a phase that needs to defend against it.
+- **`persist_current_config()` blocks the superloop for the duration of a flash
+  erase+program, synchronously inside the RX path** — `boomlink_config_store_save()`
+  erases both reserved 8K sectors before writing (`App/storage/
+  boomlink_flash_storage_port.c`'s `HAL_FLASHEx_Erase()`/`HAL_FLASH_Program()`),
+  with no documented duration bound anywhere in this codebase, called from
+  `protocol_service_on_rx()` which is itself called synchronously from
+  `boomlink_link_poll()`'s RX drain. Nothing else in the firmware's superloop -
+  notably `radio_process()`, the only place that services the SX1262 - runs again
+  until that call returns, and `boomlink_link.h`'s own `ack_timeout_margin_ms` doc
+  names "superloop latency at both ends" as exactly the kind of delay it is meant to
+  budget for, which this path was never checked against. Worse during the traffic
+  pattern this design is built around (section 9.7's "several nodes detect one
+  event" burst is also when the RX ring is likeliest to hold more than one accepted
+  `ConfigSet` in a single drain, triggering more than one blocking erase before
+  `radio_process()` runs again). Not rated a blocking defect for this bring-up phase
+  - the codebase already tolerates and counts some burst loss via `rx_overruns`/retry
+  - but a real fix (deferring the actual flash write to `protocol_service_process()`
+  via a pending-save flag, rather than performing it synchronously in the RX
+  callback) is worth doing before this firmware carries real field traffic, and is
+  left for a phase that revisits the persistence path with that in mind.
 - **`PROTOCOL_SERVICE_REBOOT_DELAY_MS`'s fixed delay assumes the reboot response
   clears the TX pipeline in time** — it only accounts for the response's own airtime
   plus scheduling slack, not for an unrelated frame already occupying the

@@ -217,24 +217,46 @@ void protocol_service_on_rx(void *user, uint32_t source_id, uint32_t destination
     return;
   }
 
-  /* A non-hazardous ConfigSet already applied its change to `current`
+  /* A ConfigSet's non-hazardous fields already applied to `current`
      unconditionally, inside boomlink_dispatch_process() above - section
      8.2's own "applies non-hazardous fields right away" rule, independent
-     of whether the response below manages to reach the requester. Persist
-     it now, not gated on the send-success check further down: that gating
-     exists for the hazardous commit/confirm case, where section 8.2
-     requires waiting for send success BEFORE the change takes effect at
-     all - a non-hazardous field has no such rule, it is already live, and
-     flash must reflect that regardless of what happens to this particular
-     reply. (The hazardous case is persisted separately, on confirm - see
-     below - since only a CONFIRMED change is meant to be permanent; see
-     boomlink_config_service_confirm_pending_apply()'s own doc.) */
-  bool is_ok_config_response = result.response.which_payload == boomlink_Envelope_config_tag &&
-                               result.response.payload.config.which_message ==
-                                   boomlink_ConfigMessage_set_response_tag &&
-                               result.response.payload.config.message.set_response.result ==
-                                   boomlink_ConfigSetResult_CONFIG_SET_RESULT_OK;
-  if (is_ok_config_response) {
+     of whether the response below manages to reach the requester, and
+     independent of whether the SAME request ALSO carried a hazardous field
+     (OK and PENDING_CONFIRMATION are the two results a real, accepted
+     write can produce - see boomlink_config_service_handle()'s own doc;
+     everything else is a rejection that touched nothing). Persist now, not
+     gated on the send-success check further down: that gating exists for
+     the hazardous field ITSELF, where section 8.2 requires waiting for
+     send success BEFORE it takes effect at all - a non-hazardous field has
+     no such rule, it is already live, and flash must reflect that
+     regardless of what happens to this particular reply.
+
+     Persisting here on PENDING_CONFIRMATION too (not only OK) is what
+     keeps a bundled request honest: a single ConfigSet naming BOTH a
+     non-hazardous field (say, telemetry.report_interval_s) and a
+     hazardous one (say, GeneralConfig.node_id) answers PENDING_
+     CONFIRMATION for the whole request, even though the non-hazardous
+     field already applied. If persistence only fired on OK, and the
+     hazardous half later timed out unconfirmed, boomlink_config_service_
+     poll()'s revert only restores the hazard subset (node_id/magic/radio)
+     - never persisted at all, the non-hazardous field would still be
+     silently lost on the NEXT reboot, with `current` and flash agreeing
+     for the rest of THIS session and nothing ever telling the operator
+     otherwise. Persisting here captures exactly the safe snapshot for that
+     case too: at this point `current`'s hazard subset still holds its OLD,
+     pre-change value (commit_pending_apply() hasn't run yet - see below),
+     so this write is "old hazard fields + newly-applied non-hazard
+     fields", which is correct whether the hazardous half is later
+     confirmed (persisted again below, with the new value) or times out
+     (nothing further to persist - this snapshot is already right). */
+  bool is_accepted_config_write =
+      result.response.which_payload == boomlink_Envelope_config_tag &&
+      result.response.payload.config.which_message == boomlink_ConfigMessage_set_response_tag &&
+      (result.response.payload.config.message.set_response.result ==
+           boomlink_ConfigSetResult_CONFIG_SET_RESULT_OK ||
+       result.response.payload.config.message.set_response.result ==
+           boomlink_ConfigSetResult_CONFIG_SET_RESULT_PENDING_CONFIRMATION);
+  if (is_accepted_config_write) {
     persist_current_config();
   }
 
@@ -328,14 +350,18 @@ void protocol_service_on_rx(void *user, uint32_t source_id, uint32_t destination
   if (is_pending_config) {
     boomlink_config_service_commit_pending_apply(&s_config_svc, HAL_GetTick());
     s_confirm_eligible = false;
-    /* Deliberately NOT persisted at commit: the change is only in `current`
-       provisionally here (WAITING, still revertible on timeout - see
-       boomlink_config_service_poll()'s own doc). Persisting a value flash
-       might still have to revert moments later would need a SECOND write
-       to undo it, and a reboot landing inside that window would boot into
-       a hazardous, never-confirmed value read back as if it were settled.
-       Persisting only once truly CONFIRMED (below) means flash never holds
-       anything this node itself would not also be running. */
+    /* No persist call here, even though the block above already persisted
+       for this same response (is_accepted_config_write covers PENDING_
+       CONFIRMATION too): commit_pending_apply() just moved the hazard
+       subset from `staged` into `current`, so persisting again here would
+       write a value flash might still have to revert moments later,
+       needing a SECOND write to undo it - and a reboot landing inside that
+       window would boot into a hazardous, never-confirmed value read back
+       as if it were settled. The snapshot already on flash (old hazard
+       fields + this response's newly-applied non-hazard fields, from
+       above) stays correct until a real confirm below persists the
+       hazard subset's new value too - or, if this times out instead,
+       stays correct forever, since nothing about it was ever wrong. */
   } else if (s_confirm_eligible &&
              boomlink_config_service_apply_state(&s_config_svc) == BOOMLINK_CONFIG_APPLY_WAITING) {
     boomlink_config_service_confirm_pending_apply(&s_config_svc);

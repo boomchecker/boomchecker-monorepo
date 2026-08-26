@@ -106,13 +106,19 @@ void boomlink_config_service_init(boomlink_config_service_t *svc,
  * A boomlink_dispatch_config_fn: register with `handlers.on_config =
  * boomlink_config_service_handle` and `handlers.on_config_user = svc`.
  *
- * A GET always answers (returns true). A SET answers OK/VERSION_CONFLICT/
- * INVALID/APPLY_IN_PROGRESS immediately and applies non-hazardous fields
- * right away; a hazardous field change answers PENDING_CONFIRMATION and
- * STAGES rather than applies (see boomlink_config_service_commit_pending_
- * apply()'s doc for why applying here would be too early). Returns false
- * only if `request` carries neither a GetRequest nor a SetRequest, or
- * `user`/`out_response` is NULL.
+ * A GET always answers (returns true), regardless of `rx->destination_id` -
+ * it mutates nothing, so broadcast is not a hazard for it. A SET addressed
+ * to BOOMLINK_ADDR_BROADCAST is refused with INVALID before anything else
+ * runs, never applying or staging any field even a non-hazardous one -
+ * simultaneous responses and (for a hazardous field) a coordinated
+ * broadcast apply both need a separate design this module does not have.
+ * Otherwise a SET answers OK/VERSION_CONFLICT/INVALID/APPLY_IN_PROGRESS
+ * immediately and applies non-hazardous fields right away; a hazardous
+ * field change answers PENDING_CONFIRMATION and STAGES rather than applies
+ * (see boomlink_config_service_commit_pending_apply()'s doc for why
+ * applying here would be too early). Returns false only if `request`
+ * carries neither a GetRequest nor a SetRequest, or `user`/`out_response`
+ * is NULL.
  */
 bool boomlink_config_service_handle(void *user, const boomlink_dispatch_rx_info_t *rx,
                                     const boomlink_ConfigMessage *request,
