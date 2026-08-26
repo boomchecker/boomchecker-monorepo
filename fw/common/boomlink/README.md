@@ -54,11 +54,23 @@ linkengine/       BoomLink's link engine (section 9): boomlink_link.h/.c ties
                   priority TX queue (boomlink_txqueue.h/.c), and the radio port
                   seam (boomlink_port.h/.c) that a real radio or tests/'s fake
                   implements. No Nanopb dependency, same as linkframe/ above
+dispatch/         PR 4 Phase A: boomlink_dispatch.h/.c routes a decoded
+                  Envelope by which_payload to per-domain handlers and builds
+                  a correlated response header; boomlink_envelope_builder.h/.c
+                  builds the one-way DetectionEvent/TelemetryReport Envelopes.
+                  Nanopb-DEPENDENT, unlike linkframe/linkengine above - see
+                  boomlink_dispatch.h's own file doc for why
+services/         PR 4 Phase A: boomlink_command_service.h/.c (section 8.3's
+                  command set over an injected ops struct) and
+                  boomlink_config_service.h/.c (section 8.2's ConfigGet/
+                  ConfigSet, including the revert-on-timeout apply)
 tests/            host-native C CLI tools (codec_tool.c, linkframe_tool.c,
                   sharing tool_support.c) + the link engine's C scenario
                   binaries (port_test.c, dupcache_test.c, txqueue_test.c,
                   link_rx_test.c, link_tx_test.c, against fake_port.h/.c's
-                  deterministic fake radio) + pytest suite + golden vectors
+                  deterministic fake radio) + dispatch/services/ scenario
+                  binaries (dispatch_test.c, command_service_test.c,
+                  config_service_test.c) + pytest suite + golden vectors
                   (vectors_spec.py is their single source of truth,
                   sha256-pinned - see "Protocol compatibility rules")
 CMakeLists.txt    generation + libraries + (standalone only) test targets
