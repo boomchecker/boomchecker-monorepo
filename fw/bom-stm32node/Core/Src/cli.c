@@ -547,8 +547,9 @@ static void print_link_status(EmbeddedCli *cli)
   embeddedCliPrint(cli, line);
 }
 
-/* Parses `tok` as EXACTLY 1-8 hex digits (no sign, no "0x" prefix) into
-   `*out`. Deliberately not strtoul(): it accepts a leading '+'/'-' (so
+/* Parses `tok` as an optional "0x"/"0X" prefix followed by EXACTLY 1-8 hex
+   digits (no sign) into `*out`. Deliberately not strtoul(): it accepts a
+   leading '+'/'-' (so
    "-1" silently parses as a huge unsigned value) and reports overflow by
    returning ULONG_MAX/setting errno rather than by refusing to parse, so a
    caller checking only "did the end pointer move" - the check this file

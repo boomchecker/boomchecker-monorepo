@@ -80,9 +80,11 @@ uint32_t link_service_node_id(void);
  * The engine instance itself, for cli.c to call boomlink_link_send() and the
  * read-only diagnostics (boomlink_link_get_stats(), _tx_state(),
  * _queue_depth(), _session_id()) directly rather than this file re-wrapping
- * each one for no reason. NULL before a successful link_service_init() -
- * every one of those functions is documented NULL-tolerant except send() and
- * poll(), which cli.c does not call directly.
+ * each one for no reason. NULL before a successful link_service_init() - all
+ * four diagnostics are NULL-tolerant (three say so in their own doc comment;
+ * _queue_depth()'s doesn't mention NULL but its implementation is - checked,
+ * not assumed). send() and poll() are NOT NULL-tolerant, but cli.c never
+ * calls them without checking this accessor's result first.
  */
 boomlink_link_t *link_service_link(void);
 
