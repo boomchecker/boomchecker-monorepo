@@ -27,9 +27,18 @@ static void run_diagnostic(bool (*action)(void *, char *, size_t), void *ctx,
     *out_result = boomlink_CommandResult_COMMAND_RESULT_UNSUPPORTED;
     return;
   }
-  *out_result = action(ctx, out_diagnostic, out_diagnostic_cap)
+  /* Reserve the last byte for a NUL the callback might not think to leave
+     room for, then force it regardless of what the callback did: Nanopb's
+     string encoder requires this field be NUL-terminated within its
+     declared size, and a callback that (plausibly, if wrongly) fills the
+     buffer edge-to-edge using the full advertised capacity would otherwise
+     leave an unterminated string that fails the WHOLE response's encode
+     later - not a diagnostic-field problem, a "the command silently never
+     reaches the caller" problem. */
+  *out_result = action(ctx, out_diagnostic, out_diagnostic_cap - 1)
                     ? boomlink_CommandResult_COMMAND_RESULT_OK
                     : boomlink_CommandResult_COMMAND_RESULT_FAILED;
+  out_diagnostic[out_diagnostic_cap - 1] = '\0';
 }
 
 bool boomlink_command_service_handle(void *user, const boomlink_dispatch_rx_info_t *rx,

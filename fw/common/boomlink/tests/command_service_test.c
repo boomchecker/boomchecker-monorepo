@@ -28,6 +28,7 @@ typedef struct {
   int  calls;
   bool succeed;
   const char *diagnostic_to_write; /* NULL = the callback writes nothing */
+  bool fill_capacity_with_non_nul; /* simulate a callback that ignores the NUL convention */
 } spy_t;
 
 static spy_t g_reboot, g_identify, g_self_test, g_start_detection, g_stop_detection,
@@ -51,7 +52,12 @@ static bool clear_statistics_cb(void *ctx) { (void)ctx; return simple_cb(&g_clea
 
 static bool diagnostic_cb(spy_t *spy, char *out, size_t cap) {
   spy->calls++;
-  if (spy->diagnostic_to_write != NULL) {
+  if (spy->fill_capacity_with_non_nul) {
+    /* A plausible but wrong implementation: uses every byte it was handed,
+       leaving no room of its own for a terminator. The service must still
+       hand back something Nanopb can encode. */
+    memset(out, 'A', cap);
+  } else if (spy->diagnostic_to_write != NULL) {
     snprintf(out, cap, "%s", spy->diagnostic_to_write);
   }
   return spy->succeed;
@@ -202,6 +208,25 @@ static void test_diagnostic_buffer_is_zeroed_when_the_callback_writes_nothing(vo
         "the diagnostic buffer must start zeroed, not carry stale bytes when unwritten");
 }
 
+static void test_diagnostic_buffer_is_always_nul_terminated_even_if_the_callback_fills_it(void) {
+  reset_spies();
+  boomlink_command_ops_t ops = full_ops();
+  g_self_test.succeed                    = true;
+  g_self_test.fill_capacity_with_non_nul = true;
+
+  boomlink_CommandMessage resp;
+  run(&ops, boomlink_CommandType_COMMAND_TYPE_SELF_TEST, &resp);
+
+  size_t cap = sizeof(resp.message.response.diagnostic);
+  CHECK(resp.message.response.diagnostic[cap - 1] == '\0',
+        "the last byte of the diagnostic buffer must always be NUL, regardless of what a "
+        "callback wrote into it - Nanopb's string encoder requires this to encode at all");
+  size_t len = strlen(resp.message.response.diagnostic);
+  CHECK(len == cap - 1,
+        "a callback that fills every byte it was handed must still leave a valid string, "
+        "truncated to make room for the reserved terminator, got length %zu", len);
+}
+
 static void test_malformed_or_missing_arguments_are_rejected(void) {
   boomlink_command_ops_t ops = full_ops();
   boomlink_dispatch_rx_info_t rx = {0};
@@ -230,6 +255,7 @@ int main(void) {
   test_unspecified_type_is_unsupported_even_with_everything_wired();
   test_diagnostic_commands_fill_the_diagnostic_string();
   test_diagnostic_buffer_is_zeroed_when_the_callback_writes_nothing();
+  test_diagnostic_buffer_is_always_nul_terminated_even_if_the_callback_fills_it();
   test_malformed_or_missing_arguments_are_rejected();
-  BOOMLINK_TEST_REPORT("command_service_test", 81);
+  BOOMLINK_TEST_REPORT("command_service_test", 83);
 }

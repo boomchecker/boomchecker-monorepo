@@ -152,7 +152,8 @@ endif()
 # the vendored libraries.
 option(BOOMLINK_TARGET_WERROR
        "Treat warnings as errors in the libraries cross-compiled for the target - \
-boomlink_linkframe and boomlink_linkengine (CI turns this on)" OFF)
+boomlink_linkframe, boomlink_linkengine, boomlink_dispatch, boomlink_command_service \
+and boomlink_config_service (CI turns this on)" OFF)
 set(BOOMLINK_TARGET_WERROR_FLAGS "")
 if(BOOMLINK_TARGET_WERROR)
   set(BOOMLINK_TARGET_WERROR_FLAGS -Werror)
@@ -609,7 +610,13 @@ add_library(boomlink_config_service STATIC
 target_include_directories(boomlink_config_service PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}/services
 )
-target_link_libraries(boomlink_config_service PUBLIC boomlink_dispatch)
+# boomlink_linkframe is PRIVATE: only boomlink_config_service.c itself uses
+# it, for BOOMLINK_ADDR_INVALID/BOOMLINK_ADDR_BROADCAST (section 7.2's
+# reserved node_id values) - reused rather than duplicated as bare hex
+# literals. Header-only use (both constants are #define, not a linked
+# symbol), but declared as a real dependency rather than an extra include
+# path so it shows up in the link graph like any other real one.
+target_link_libraries(boomlink_config_service PUBLIC boomlink_dispatch PRIVATE boomlink_linkframe)
 target_compile_features(boomlink_config_service PUBLIC c_std_11)
 target_compile_options(boomlink_config_service PRIVATE
   ${BOOMLINK_WARNING_FLAGS} ${BOOMLINK_WERROR_FLAGS} ${BOOMLINK_TARGET_WERROR_FLAGS})

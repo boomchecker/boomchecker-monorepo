@@ -16,6 +16,7 @@
 #include <string.h>
 
 #include "boomlink_codec.h"
+#include "boomlink_envelope_builder.h"
 #include "c_test.h"
 
 BOOMLINK_TEST_STATE;
@@ -383,6 +384,80 @@ static void test_init_resets_stats_even_over_stale_memory(void) {
         "init must zero every counter, not just the ones this run happens to touch");
 }
 
+/* Every other test in this file drives the dispatcher on hand-built
+   in-memory structs, never through Nanopb's actual wire encoding. This is
+   the one place PR 4 Phase A's four new message groups get a real
+   boomlink_encode_envelope()+boomlink_decode_envelope() round trip -
+   catching a .proto/.options misconfiguration long before Phase C's real
+   wiring would need to. */
+static void test_new_message_groups_survive_a_real_nanopb_round_trip(void) {
+  uint8_t buf[boomlink_Envelope_size];
+  size_t  len;
+
+  boomlink_DetectionEvent event = {0};
+  event.event_id                = 99u;
+  event.type                    = boomlink_DetectionType_DETECTION_TYPE_GUNSHOT;
+  event.confidence_percent      = 87u;
+  boomlink_Envelope detection_env;
+  boomlink_build_detection_event(&detection_env, &event);
+  REQUIRE(boomlink_encode_envelope(&detection_env, buf, sizeof(buf), &len),
+          "a populated DetectionEvent must encode");
+  boomlink_Envelope decoded_detection;
+  REQUIRE(boomlink_decode_envelope(buf, len, &decoded_detection), "and decode back");
+  CHECK(decoded_detection.which_payload == boomlink_Envelope_detection_tag,
+        "the payload tag must survive the wire");
+  CHECK(decoded_detection.payload.detection.message.event.event_id == 99u,
+        "event_id must survive the wire");
+  CHECK(decoded_detection.payload.detection.message.event.type ==
+            boomlink_DetectionType_DETECTION_TYPE_GUNSHOT,
+        "type must survive the wire");
+  CHECK(decoded_detection.payload.detection.message.event.confidence_percent == 87u,
+        "confidence_percent must survive the wire");
+
+  boomlink_TelemetryReport report = {0};
+  report.uptime_s                 = 12345u;
+  report.tx_packets               = 7u;
+  boomlink_Envelope telemetry_env;
+  boomlink_build_telemetry_report(&telemetry_env, &report);
+  REQUIRE(boomlink_encode_envelope(&telemetry_env, buf, sizeof(buf), &len),
+          "a populated TelemetryReport must encode");
+  boomlink_Envelope decoded_telemetry;
+  REQUIRE(boomlink_decode_envelope(buf, len, &decoded_telemetry), "and decode back");
+  CHECK(decoded_telemetry.payload.telemetry.message.report.uptime_s == 12345u,
+        "uptime_s must survive the wire");
+  CHECK(decoded_telemetry.payload.telemetry.message.report.tx_packets == 7u,
+        "tx_packets must survive the wire");
+
+  boomlink_Envelope command_env;
+  boomlink_envelope_init(&command_env);
+  command_env.header.request_id                   = 55u;
+  command_env.which_payload                        = boomlink_Envelope_command_tag;
+  command_env.payload.command.which_message        = boomlink_CommandMessage_request_tag;
+  command_env.payload.command.message.request.type = boomlink_CommandType_COMMAND_TYPE_REBOOT;
+  REQUIRE(boomlink_encode_envelope(&command_env, buf, sizeof(buf), &len),
+          "a CommandRequest must encode");
+  boomlink_Envelope decoded_command;
+  REQUIRE(boomlink_decode_envelope(buf, len, &decoded_command), "and decode back");
+  CHECK(decoded_command.header.request_id == 55u, "request_id must survive the wire");
+  CHECK(decoded_command.payload.command.message.request.type ==
+            boomlink_CommandType_COMMAND_TYPE_REBOOT,
+        "the command type must survive the wire");
+
+  boomlink_Envelope config_env;
+  boomlink_envelope_init(&config_env);
+  config_env.which_payload                                     = boomlink_Envelope_config_tag;
+  config_env.payload.config.which_message                      = boomlink_ConfigMessage_get_request_tag;
+  config_env.payload.config.message.get_request.include_radio  = true;
+  REQUIRE(boomlink_encode_envelope(&config_env, buf, sizeof(buf), &len),
+          "a ConfigGetRequest must encode");
+  boomlink_Envelope decoded_config;
+  REQUIRE(boomlink_decode_envelope(buf, len, &decoded_config), "and decode back");
+  CHECK(decoded_config.payload.config.message.get_request.include_radio,
+        "include_radio must survive the wire");
+  CHECK(!decoded_config.payload.config.message.get_request.include_general,
+        "an unset bool field must decode back false, not leak stale memory");
+}
+
 int main(void) {
   test_detection_is_one_way_and_counted();
   test_telemetry_is_one_way_and_counted();
@@ -394,5 +469,6 @@ int main(void) {
   test_no_payload_is_a_distinct_count_from_unhandled();
   test_get_stats_is_null_tolerant();
   test_init_resets_stats_even_over_stale_memory();
-  BOOMLINK_TEST_REPORT("dispatch_test", 43);
+  test_new_message_groups_survive_a_real_nanopb_round_trip();
+  BOOMLINK_TEST_REPORT("dispatch_test", 61);
 }

@@ -5,7 +5,14 @@
  */
 #include "boomlink_config_service.h"
 
-#include <string.h>
+/* For BOOMLINK_ADDR_INVALID/BOOMLINK_ADDR_BROADCAST (boomlink.md section
+   7.2) - reused rather than duplicated as bare hex literals, the same
+   "read the real value, don't hardcode a second copy" reasoning
+   boomlink_codec.h gives for BOOMLINK_RADIO_MAX_PAYLOAD. Header-only use:
+   this pulls in no Nanopb dependency of its own (linkframe has none, by
+   section 9's rule), so it does not affect this module's own Nanopb
+   dependency in either direction. */
+#include "boomlink_linkframe.h"
 
 void boomlink_node_config_defaults(boomlink_node_config_t *out) {
   if (out == NULL) {
@@ -40,9 +47,23 @@ static boomlink_config_hazard_t hazard_snapshot(const boomlink_node_config_t *cf
   return h;
 }
 
+/* Field-by-field with `==` for the two floats, not memcmp() on the whole
+   struct: IEEE-754 equality and bit-pattern equality disagree on signed
+   zero (-0.0f == 0.0f is true; their bit patterns are not), so memcmp()
+   can misreport a numerically-unchanged resend as a hazardous change.
+   Confirmed: a RadioConfig differing only by +0.0f vs -0.0f in
+   frequency_mhz staged a PENDING_CONFIRMATION and blocked every other
+   config write until it was committed or timed out, even though nothing
+   about the profile actually changed. */
+static bool radio_config_equal(const boomlink_RadioConfig *a, const boomlink_RadioConfig *b) {
+  return a->frequency_mhz == b->frequency_mhz && a->bandwidth_khz == b->bandwidth_khz &&
+         a->spreading_factor == b->spreading_factor &&
+         a->coding_rate_denom == b->coding_rate_denom && a->tx_power_dbm == b->tx_power_dbm &&
+         a->preamble_symbols == b->preamble_symbols && a->sync_word == b->sync_word;
+}
+
 static bool hazard_equal(const boomlink_config_hazard_t *a, const boomlink_config_hazard_t *b) {
-  return a->node_id == b->node_id && a->magic == b->magic &&
-         memcmp(&a->radio, &b->radio, sizeof(a->radio)) == 0;
+  return a->node_id == b->node_id && a->magic == b->magic && radio_config_equal(&a->radio, &b->radio);
 }
 
 static bool handle_get(const boomlink_config_service_t *svc, const boomlink_ConfigGetRequest *req,
@@ -87,6 +108,20 @@ static void respond_set(boomlink_ConfigMessage *out_response, boomlink_ConfigSet
   resp->config_version             = config_version;
 }
 
+/* node_id must be outside the two reserved addresses (boomlink.md section
+   7.2: 0x00000000 is unconfigured, 0xFFFFFFFF is broadcast) to ever be a
+   node's OWN identity - the same rule boomlink_linkframe.c's
+   is_valid_node_id() enforces for the wire header this becomes at Phase C.
+   magic is one wire byte (section 7.3); config.proto's own comment already
+   flags the uint32-for-proto-ergonomics mismatch this checks. */
+static bool node_id_is_valid(uint32_t node_id) {
+  return node_id != BOOMLINK_ADDR_INVALID && node_id != BOOMLINK_ADDR_BROADCAST;
+}
+
+static bool magic_is_valid(uint32_t magic) {
+  return magic <= 0xFFu;
+}
+
 static bool handle_set(boomlink_config_service_t *svc, const boomlink_ConfigSetRequest *req,
                        boomlink_ConfigMessage *out_response) {
   if (req->expected_config_version != svc->current.config_version) {
@@ -95,8 +130,50 @@ static bool handle_set(boomlink_config_service_t *svc, const boomlink_ConfigSetR
     return true;
   }
 
-  if (svc->apply_state != BOOMLINK_CONFIG_APPLY_IDLE) {
+  /* Computed before touching anything else: both the APPLY_IN_PROGRESS gate
+     and the validation below need to know whether THIS request actually
+     asks for a hazardous change, not just whether it mentions a hazardous
+     group - see config.proto's own "whole-group replacement" doc, which is
+     exactly why has_general/has_link/has_radio alone cannot answer that. */
+  boomlink_config_hazard_t current_hazard   = hazard_snapshot(&svc->current);
+  boomlink_config_hazard_t requested_hazard = current_hazard;
+  if (req->has_general) {
+    requested_hazard.node_id = req->general.node_id;
+  }
+  if (req->has_link) {
+    requested_hazard.magic = req->link.magic;
+  }
+  if (req->has_radio) {
+    requested_hazard.radio = req->radio;
+  }
+  bool hazard_changed = !hazard_equal(&requested_hazard, &current_hazard);
+
+  /* Only a request that would ITSELF introduce or change a hazardous value
+     conflicts with one already pending - section 8.2 names no policy for
+     overlapping HAZARDOUS changes and guessing one risks a revert that
+     restores neither state, but nothing in that reasoning extends to an
+     unrelated non-hazardous write arriving in the same window (e.g. a
+     gunshot-threshold tweak while a radio-profile change is still waiting
+     on its confirmation). Rejecting those too would make one hazardous
+     change lock out all remote configuration for the whole confirm window. */
+  if (hazard_changed && svc->apply_state != BOOMLINK_CONFIG_APPLY_IDLE) {
     respond_set(out_response, boomlink_ConfigSetResult_CONFIG_SET_RESULT_APPLY_IN_PROGRESS,
+               svc->current.config_version);
+    return true;
+  }
+
+  /* Validate only the delta being requested, not a resend of an unchanged
+     value: a caller editing an unrelated field of GeneralConfig/LinkConfig
+     must resend the whole group per the whole-group-replacement contract,
+     and a node that has never been assigned an ID legitimately still has
+     node_id == BOOMLINK_ADDR_INVALID to resend untouched. Rejecting that
+     resend would make it impossible to configure anything else about a
+     freshly-provisioned node before it has an identity. */
+  bool node_id_changing = req->has_general && requested_hazard.node_id != current_hazard.node_id;
+  bool magic_changing   = req->has_link && requested_hazard.magic != current_hazard.magic;
+  if ((node_id_changing && !node_id_is_valid(requested_hazard.node_id)) ||
+      (magic_changing && !magic_is_valid(requested_hazard.magic))) {
+    respond_set(out_response, boomlink_ConfigSetResult_CONFIG_SET_RESULT_INVALID,
                svc->current.config_version);
     return true;
   }
@@ -104,7 +181,7 @@ static bool handle_set(boomlink_config_service_t *svc, const boomlink_ConfigSetR
   /* Apply every NON-hazardous field immediately - only node_id/magic/radio
      wait for confirmation. A submessage's presence (has_X) is "this group
      was included in the write", independent of whether any hazardous field
-     inside it actually changed value; the two are checked separately below.
+     inside it actually changed value; the two are checked separately above.
 
      Whole-GROUP replacement, not a per-field patch: `req->general` present
      means "this is GeneralConfig's new value, in full" - proto3 gives no
@@ -135,20 +212,6 @@ static bool handle_set(boomlink_config_service_t *svc, const boomlink_ConfigSetR
   /* RadioConfig is entirely hazardous - `next.radio` deliberately NOT
      touched here, only in the staged snapshot below. */
 
-  boomlink_config_hazard_t requested_hazard = hazard_snapshot(&svc->current);
-  if (req->has_general) {
-    requested_hazard.node_id = req->general.node_id;
-  }
-  if (req->has_link) {
-    requested_hazard.magic = req->link.magic;
-  }
-  if (req->has_radio) {
-    requested_hazard.radio = req->radio;
-  }
-
-  boomlink_config_hazard_t current_hazard = hazard_snapshot(&svc->current);
-  bool hazard_changed = !hazard_equal(&requested_hazard, &current_hazard);
-
   next.config_version = svc->current.config_version + 1u;
   svc->current         = next;
 
@@ -158,6 +221,9 @@ static bool handle_set(boomlink_config_service_t *svc, const boomlink_ConfigSetR
     return true;
   }
 
+  /* hazard_changed here implies apply_state was IDLE (the only other case
+     already returned APPLY_IN_PROGRESS above), so this can never clobber an
+     already-pending stage. */
   svc->apply_state = BOOMLINK_CONFIG_APPLY_STAGED;
   svc->staged       = requested_hazard;
   svc->revert_to    = current_hazard;

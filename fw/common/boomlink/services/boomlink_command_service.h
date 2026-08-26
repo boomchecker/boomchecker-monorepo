@@ -32,7 +32,13 @@ extern "C" {
  * `out_diagnostic_cap`, already zeroed by the caller) with a short
  * human-readable note - section 13's "an optional bounded diagnostic
  * string... but the enum is authoritative". Bounded by
- * nanopb/command.options, not by this struct.
+ * nanopb/command.options, not by this struct. `out_diagnostic_cap` already
+ * has room for a terminating NUL reserved out of it, and the byte at
+ * `out_diagnostic[out_diagnostic_cap - 1]` is forced to `'\0'` regardless of
+ * what this callback writes - Nanopb's string encoder requires
+ * NUL-termination within the field's declared size, and a callback that
+ * fills every byte it was handed must not be able to make the response
+ * fail to encode.
  *
  * **reboot() must NOT reset synchronously.** The CommandResponse this call
  * is building has not been sent yet - boomlink_command_service_handle()

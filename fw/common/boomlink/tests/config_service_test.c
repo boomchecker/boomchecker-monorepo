@@ -330,7 +330,7 @@ static void test_poll_reverts_exactly_at_the_window_boundary(void) {
         (unsigned)svc.current.general.node_id);
 }
 
-static void test_a_second_set_while_one_is_pending_is_rejected(void) {
+static void test_a_conflicting_hazardous_set_while_one_is_pending_is_rejected(void) {
   boomlink_config_service_t svc = make_svc(500u);
 
   boomlink_ConfigMessage req1                      = {0};
@@ -343,31 +343,174 @@ static void test_a_second_set_while_one_is_pending_is_rejected(void) {
   REQUIRE(resp1.message.set_response.result ==
               boomlink_ConfigSetResult_CONFIG_SET_RESULT_PENDING_CONFIRMATION,
           "setup: the first change must be pending");
+  REQUIRE(resp1.message.set_response.config_version == 2u, "setup: version bumped to 2");
 
-  /* A second SET, even a purely non-hazardous one, arriving while the first
-     is still STAGED. */
-  boomlink_ConfigMessage req2                      = {0};
-  req2.which_message                               = boomlink_ConfigMessage_set_request_tag;
-  req2.message.set_request.expected_config_version = 2u; /* the version req1 bumped to */
-  req2.message.set_request.has_telemetry           = true;
+  /* A second SET that is itself non-hazardous, arriving while the first is
+     still STAGED, must NOT be blocked - only an overlapping HAZARDOUS
+     change conflicts (config.proto's own APPLY_IN_PROGRESS doc only
+     discusses overlapping hazardous windows), and this PR's own hazard
+     design keeps a non-hazardous write from ever disturbing a pending
+     stage/revert. */
+  boomlink_ConfigMessage req2                          = {0};
+  req2.which_message                                   = boomlink_ConfigMessage_set_request_tag;
+  req2.message.set_request.expected_config_version     = 2u;
+  req2.message.set_request.has_telemetry               = true;
   req2.message.set_request.telemetry.report_interval_s = 10u;
   boomlink_ConfigMessage resp2;
   bool ok2 = handle(&svc, &req2, &resp2);
 
-  REQUIRE(ok2, "a SET always answers, even a rejected one");
-  CHECK(resp2.message.set_response.result == boomlink_ConfigSetResult_CONFIG_SET_RESULT_APPLY_IN_PROGRESS,
-        "a change must not be accepted while another is still pending");
-  CHECK(svc.current.telemetry.report_interval_s == 0u,
-        "the rejected SET must not have applied, even its non-hazardous field");
+  REQUIRE(ok2, "a SET always answers");
+  CHECK(resp2.message.set_response.result == boomlink_ConfigSetResult_CONFIG_SET_RESULT_OK,
+        "a non-hazardous SET must apply even while an unrelated hazardous change is pending");
+  CHECK(svc.current.telemetry.report_interval_s == 10u,
+        "the non-hazardous field must actually have applied");
+  CHECK(svc.apply_state == BOOMLINK_CONFIG_APPLY_STAGED,
+        "the pending hazardous change must be undisturbed - still STAGED");
   CHECK(svc.staged.node_id == 77u, "the original pending change must be untouched");
 
-  /* And still rejected once WAITING, not just while STAGED. */
-  boomlink_config_service_commit_pending_apply(&svc, 1000u);
+  /* A THIRD set that IS hazardous (a different node_id) must still be
+     rejected while the first remains pending. */
+  boomlink_ConfigMessage req3                      = {0};
+  req3.which_message                               = boomlink_ConfigMessage_set_request_tag;
+  req3.message.set_request.expected_config_version = 3u; /* req2 bumped to 3 */
+  req3.message.set_request.has_general             = true;
+  req3.message.set_request.general.node_id         = 88u;
   boomlink_ConfigMessage resp3;
-  bool ok3 = handle(&svc, &req2, &resp3); /* config_version did not move: req2 was rejected */
-  CHECK(ok3, "a SET always answers");
+  bool ok3 = handle(&svc, &req3, &resp3);
+
+  REQUIRE(ok3, "a SET always answers, even a rejected one");
   CHECK(resp3.message.set_response.result == boomlink_ConfigSetResult_CONFIG_SET_RESULT_APPLY_IN_PROGRESS,
-        "still rejected while WAITING for confirmation, not just while STAGED");
+        "a conflicting hazardous change must still be rejected while one is pending");
+  CHECK(svc.staged.node_id == 77u, "the original pending change must survive the rejected attempt");
+  CHECK(svc.current.config_version == 3u, "a rejected SET must not bump the version");
+
+  /* And the same two outcomes hold once WAITING, not just while STAGED. */
+  boomlink_config_service_commit_pending_apply(&svc, 1000u);
+  REQUIRE(svc.apply_state == BOOMLINK_CONFIG_APPLY_WAITING, "setup: now waiting for confirmation");
+
+  boomlink_ConfigMessage req4                      = {0};
+  req4.which_message                               = boomlink_ConfigMessage_set_request_tag;
+  req4.message.set_request.expected_config_version = 3u;
+  req4.message.set_request.has_gnss                = true;
+  req4.message.set_request.gnss.gnss_enabled       = true;
+  boomlink_ConfigMessage resp4;
+  handle(&svc, &req4, &resp4);
+  CHECK(resp4.message.set_response.result == boomlink_ConfigSetResult_CONFIG_SET_RESULT_OK,
+        "a non-hazardous SET must still apply while WAITING for a hazardous confirmation");
+  CHECK(svc.apply_state == BOOMLINK_CONFIG_APPLY_WAITING, "must still be waiting afterwards");
+
+  boomlink_ConfigMessage req5                      = {0};
+  req5.which_message                               = boomlink_ConfigMessage_set_request_tag;
+  req5.message.set_request.expected_config_version = 4u; /* req4 bumped to 4 */
+  req5.message.set_request.has_link                = true;
+  req5.message.set_request.link.magic              = 0xCDu;
+  boomlink_ConfigMessage resp5;
+  handle(&svc, &req5, &resp5);
+  CHECK(resp5.message.set_response.result == boomlink_ConfigSetResult_CONFIG_SET_RESULT_APPLY_IN_PROGRESS,
+        "a hazardous SET must still be rejected while WAITING, not just while STAGED");
+}
+
+static void test_set_rejects_an_attempt_to_change_node_id_to_an_invalid_value(void) {
+  boomlink_config_service_t svc = make_svc(1000u);
+
+  boomlink_ConfigMessage req                      = {0};
+  req.which_message                               = boomlink_ConfigMessage_set_request_tag;
+  req.message.set_request.expected_config_version = 1u;
+  req.message.set_request.has_general             = true;
+  req.message.set_request.general.node_id         = 0xFFFFFFFFu; /* the broadcast address */
+
+  boomlink_ConfigMessage resp;
+  bool ok = handle(&svc, &req, &resp);
+
+  REQUIRE(ok, "a SET always answers, even a rejected one");
+  CHECK(resp.message.set_response.result == boomlink_ConfigSetResult_CONFIG_SET_RESULT_INVALID,
+        "a node's own identity must never become the broadcast address");
+  CHECK(svc.current.config_version == 1u, "an invalid SET must not bump the version");
+  CHECK(svc.apply_state == BOOMLINK_CONFIG_APPLY_IDLE, "an invalid SET must not stage anything");
+
+  /* 0x00000000 (section 7.2's "unconfigured") is equally invalid as an
+     explicit CHANGE target, not just the broadcast address - starting from
+     a real, already-assigned node_id this time (55), since validation
+     checks the delta, not presence: SETting an already-0 node_id back to 0
+     is a no-op resend, covered separately by
+     test_resending_an_unchanged_but_still_unconfigured_node_id_is_not_rejected. */
+  svc.current.general.node_id             = 55u;
+  req.message.set_request.general.node_id = 0u;
+  ok                                       = handle(&svc, &req, &resp);
+  CHECK(ok, "a SET always answers");
+  CHECK(resp.message.set_response.result == boomlink_ConfigSetResult_CONFIG_SET_RESULT_INVALID,
+        "0x00000000 is unconfigured, not a value a node may CHANGE its identity to");
+  CHECK(svc.current.general.node_id == 55u,
+        "the rejected change must not have touched the real node_id");
+}
+
+static void test_set_rejects_an_attempt_to_change_magic_past_one_byte(void) {
+  boomlink_config_service_t svc = make_svc(1000u);
+
+  boomlink_ConfigMessage req                      = {0};
+  req.which_message                               = boomlink_ConfigMessage_set_request_tag;
+  req.message.set_request.expected_config_version = 1u;
+  req.message.set_request.has_link                = true;
+  req.message.set_request.link.magic              = 256u; /* one past what fits the wire byte */
+
+  boomlink_ConfigMessage resp;
+  handle(&svc, &req, &resp);
+  CHECK(resp.message.set_response.result == boomlink_ConfigSetResult_CONFIG_SET_RESULT_INVALID,
+        "magic is one wire byte (section 7.3) - 256 does not fit it");
+
+  /* The boundary itself (255) must NOT be rejected. */
+  req.message.set_request.link.magic = 255u;
+  handle(&svc, &req, &resp);
+  CHECK(resp.message.set_response.result == boomlink_ConfigSetResult_CONFIG_SET_RESULT_PENDING_CONFIRMATION,
+        "255 fits exactly in one byte and must be accepted as a real hazardous change");
+}
+
+static void test_resending_an_unchanged_but_still_unconfigured_node_id_is_not_rejected(void) {
+  /* A fresh node's node_id defaults to 0x00000000 (section 7.2's
+     "unconfigured"). A caller editing an unrelated GeneralConfig field
+     before the node has ever been assigned a real identity must be able to
+     resend that same 0 untouched, per the whole-group-replacement contract
+     - validation only concerns a CHANGE to an invalid value, not a resend
+     of one that was already there. */
+  boomlink_config_service_t svc = make_svc(1000u);
+  REQUIRE(svc.current.general.node_id == 0u, "setup: a fresh node has no identity yet");
+
+  boomlink_ConfigMessage req                              = {0};
+  req.which_message                                       = boomlink_ConfigMessage_set_request_tag;
+  req.message.set_request.expected_config_version         = 1u;
+  req.message.set_request.has_general                     = true;
+  req.message.set_request.general.node_id                 = 0u; /* unchanged */
+  req.message.set_request.general.default_destination_id  = 5u; /* the actual edit */
+
+  boomlink_ConfigMessage resp;
+  bool ok = handle(&svc, &req, &resp);
+
+  REQUIRE(ok, "a SET always answers");
+  CHECK(resp.message.set_response.result == boomlink_ConfigSetResult_CONFIG_SET_RESULT_OK,
+        "resending the same (still-invalid) node_id must not itself be rejected");
+  CHECK(svc.current.general.default_destination_id == 5u, "the actual edit must have applied");
+}
+
+static void test_radio_negative_zero_is_not_a_hazardous_change(void) {
+  /* memcmp()-based float comparison would see +0.0f and -0.0f as different
+     bit patterns and misreport this as a hazard change, even though IEEE-754
+     equality (and every real consumer of frequency_mhz) treats them as the
+     same value. */
+  boomlink_config_service_t svc   = make_svc(1000u);
+  svc.current.radio.frequency_mhz = 0.0f;
+
+  boomlink_ConfigMessage req                      = {0};
+  req.which_message                               = boomlink_ConfigMessage_set_request_tag;
+  req.message.set_request.expected_config_version = 1u;
+  req.message.set_request.has_radio               = true;
+  req.message.set_request.radio.frequency_mhz     = -0.0f;
+
+  boomlink_ConfigMessage resp;
+  handle(&svc, &req, &resp);
+
+  CHECK(resp.message.set_response.result == boomlink_ConfigSetResult_CONFIG_SET_RESULT_OK,
+        "+0.0f and -0.0f must compare equal for hazard purposes, not stage a phantom change");
+  CHECK(svc.apply_state == BOOMLINK_CONFIG_APPLY_IDLE, "nothing should be pending");
 }
 
 static void test_get_config_is_null_tolerant(void) {
@@ -411,8 +554,12 @@ int main(void) {
   test_confirm_pending_apply_requires_waiting();
   test_poll_is_a_no_op_while_staged();
   test_poll_reverts_exactly_at_the_window_boundary();
-  test_a_second_set_while_one_is_pending_is_rejected();
+  test_a_conflicting_hazardous_set_while_one_is_pending_is_rejected();
+  test_set_rejects_an_attempt_to_change_node_id_to_an_invalid_value();
+  test_set_rejects_an_attempt_to_change_magic_past_one_byte();
+  test_resending_an_unchanged_but_still_unconfigured_node_id_is_not_rejected();
+  test_radio_negative_zero_is_not_a_hazardous_change();
   test_get_config_is_null_tolerant();
   test_handle_rejects_malformed_or_missing_arguments();
-  BOOMLINK_TEST_REPORT("config_service_test", 74);
+  BOOMLINK_TEST_REPORT("config_service_test", 97);
 }

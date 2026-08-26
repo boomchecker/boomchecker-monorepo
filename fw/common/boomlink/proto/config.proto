@@ -72,6 +72,17 @@ enum ConfigSetResult {
   // with an outdated expected version is rejected instead of silently
   // overwriting newer settings."
   CONFIG_SET_RESULT_VERSION_CONFLICT = 2;
+  // A field's requested value is structurally invalid, not merely
+  // rejected for a version/timing reason - currently checked: attempting to
+  // change GeneralConfig.node_id to section 7.2's reserved 0x00000000
+  // (unconfigured) or 0xFFFFFFFF (broadcast), or LinkConfig.magic to a
+  // value that will not fit the one wire byte section 7.3 gives it.
+  // Resending a field's CURRENT value untouched is never rejected this way,
+  // even if that value happens to already be one of the above - only an
+  // attempt to CHANGE to an invalid value is. Other fields (RadioConfig's
+  // numeric ranges, for instance) are not validated yet - deferred rather
+  // than guessed, since section 6.1's band plan is the authority on what a
+  // valid range would be and nothing here has consulted it.
   CONFIG_SET_RESULT_INVALID = 3;
   // A RadioConfig/magic/node_id change was accepted and applied, but is
   // PENDING confirmation within section 8.2's revert-on-timeout window -

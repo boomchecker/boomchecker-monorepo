@@ -1743,9 +1743,11 @@ Scope:
   generation are left to whichever PR adds the first real detector);
 - implement compact telemetry (Phase A: schema and dispatch recognition only, same
   caveat — no sensor readings are wired up yet);
-- implement Reboot, Identify and SelfTest commands (Phase A: dispatch plus injected
-  `boomlink_command_ops_t` callbacks; the real actions — NVIC reset, an LED, the
-  detection subsystem — are Phase C's job, against real hardware);
+- implement section 8.3's full command set — Reboot, Identify, SelfTest,
+  StartDetection, StopDetection, ClearStatistics and RequestDiagnostics (Phase A:
+  dispatch plus injected `boomlink_command_ops_t` callbacks, one per command; the real
+  actions — NVIC reset, an LED, the detection subsystem — are Phase C's job, against
+  real hardware);
 - implement ConfigGet and ConfigSet (Phase A: in-memory `boomlink_config_service_t`,
   including `config_version`/`expected_config_version` conflict handling and the
   revert-on-timeout apply this section already specified for RadioConfig, generalized
