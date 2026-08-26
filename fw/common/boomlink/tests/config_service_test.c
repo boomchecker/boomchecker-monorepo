@@ -227,7 +227,9 @@ static void test_hazardous_radio_change_touches_nothing_until_committed(void) {
         "any RadioConfig change is entirely hazardous");
   CHECK(svc.current.radio.frequency_mhz == 868.1f,
         "RadioConfig must be completely untouched until committed, not even sibling fields");
-  CHECK(svc.current.radio.spreading_factor == 0u, "same for every other RadioConfig field");
+  CHECK(svc.current.radio.spreading_factor == 7u,
+        "same for every other RadioConfig field - 7 is boomlink_node_config_defaults()'s real "
+        "default (e22_radio.cpp's DefaultProfile()), not the struct's zero-init");
   CHECK(svc.staged.radio.frequency_mhz == 915.0f, "the new profile is held in staged");
 }
 
@@ -593,7 +595,14 @@ static void test_radio_negative_zero_is_not_a_hazardous_change(void) {
   req.which_message                               = boomlink_ConfigMessage_set_request_tag;
   req.message.set_request.expected_config_version = 1u;
   req.message.set_request.has_radio               = true;
-  req.message.set_request.radio.frequency_mhz     = -0.0f;
+  /* Every OTHER RadioConfig field must match svc.current exactly - this
+     test isolates frequency_mhz's +0.0f/-0.0f equivalence, not "any
+     RadioConfig SET is a no-op". Leaving the rest at the request's own
+     zero-initialized default would itself be a real hazardous change
+     against boomlink_node_config_defaults()'s real (non-zero, since the
+     defaults fix) values for spreading_factor/coding_rate_denom/etc. */
+  req.message.set_request.radio               = svc.current.radio;
+  req.message.set_request.radio.frequency_mhz = -0.0f;
 
   boomlink_ConfigMessage resp;
   handle(&svc, &req, &resp);
@@ -727,7 +736,9 @@ static void test_commit_and_revert_both_restore_has_radio(void) {
   svc.current.has_radio = false; /* the REVERT path under test */
   boomlink_config_service_poll(&svc, 1500u); /* elapsed exactly the 500ms confirm window */
   REQUIRE(svc.apply_state == BOOMLINK_CONFIG_APPLY_IDLE, "setup: the window boundary must revert");
-  CHECK(svc.current.radio.frequency_mhz == 0.0f, "setup: revert must have restored the pre-change value");
+  CHECK(svc.current.radio.frequency_mhz == 869.525f,
+        "setup: revert must have restored the pre-change value - boomlink_node_config_"
+        "defaults()'s real default (e22_radio.cpp's DefaultProfile()), not 0.0f");
   CHECK(svc.current.has_radio, "poll()'s WAITING-timeout revert must restore has_radio too");
 }
 
@@ -747,13 +758,16 @@ static void test_resending_an_unchanged_radio_value_still_restores_has_radio(voi
      gap tested twice. */
   boomlink_config_service_t svc  = make_svc(1000u);
   svc.current.has_radio           = false;
-  /* current.radio defaults to all-zero - request that exact value back. */
+  /* Request current.radio's exact (real, non-zero-default) value back - an
+     all-zero RadioConfig would itself be a real hazardous change against
+     boomlink_node_config_defaults()'s actual defaults, defeating this
+     test's own "unchanged value" premise. */
 
   boomlink_ConfigMessage req                      = {0};
   req.which_message                               = boomlink_ConfigMessage_set_request_tag;
   req.message.set_request.expected_config_version = 1u;
   req.message.set_request.has_radio               = true;
-  req.message.set_request.radio                   = (boomlink_RadioConfig){0};
+  req.message.set_request.radio                   = svc.current.radio;
 
   boomlink_ConfigMessage resp;
   bool ok = handle(&svc, &req, &resp);

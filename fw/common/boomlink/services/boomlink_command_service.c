@@ -7,6 +7,12 @@
 
 #include <string.h>
 
+/* For BOOMLINK_ADDR_BROADCAST (boomlink.md section 7.2) - reused rather
+   than duplicated as a bare hex literal, the same reasoning boomlink_
+   config_service.c gives for pulling in this same header. Header-only
+   use, no Nanopb dependency of its own. */
+#include "boomlink_linkframe.h"
+
 /* Calls `action` (may be NULL) and sets *out_result to UNSUPPORTED,
    FAILED or OK accordingly. Shared by every command that takes no
    diagnostic string, so the five identical branches below stay branches,
@@ -44,7 +50,6 @@ static void run_diagnostic(bool (*action)(void *, char *, size_t), void *ctx,
 bool boomlink_command_service_handle(void *user, const boomlink_dispatch_rx_info_t *rx,
                                      const boomlink_CommandMessage *request,
                                      boomlink_CommandMessage *out_response) {
-  (void)rx;
   const boomlink_command_ops_t *ops = (const boomlink_command_ops_t *)user;
   if (ops == NULL || out_response == NULL || request == NULL ||
       request->which_message != boomlink_CommandMessage_request_tag) {
@@ -58,6 +63,27 @@ bool boomlink_command_service_handle(void *user, const boomlink_dispatch_rx_info
   resp->type                            = type;
   resp->result                          = boomlink_CommandResult_COMMAND_RESULT_UNSUPPORTED;
   memset(resp->diagnostic, 0, sizeof(resp->diagnostic));
+
+  /* Section 9.9: "commands that are dangerous when broadcast should be
+     rejected by the application service unless explicitly designed for
+     broadcast." Reboot is the obvious case this names - one broadcast
+     frame resetting an entire fleet at once, mid-detection, from any
+     radio-range transmitter with no ACK/handshake required (broadcast
+     never requests or needs one). This is the first point in the chain
+     that has both `rx->destination_id` and the command type together:
+     boomlink_dispatch_process() passes `rx` through unfiltered, and
+     boomlink_command_ops_t's per-command callbacks (see that struct's own
+     doc) do not receive it at all, so nothing "closer" to the actual
+     reboot action could enforce this instead. COMMAND_RESULT_FAILED, not
+     UNSUPPORTED: this node CAN reboot (a unicast Reboot still works), it
+     is this specific broadcast request that is refused, and UNSUPPORTED
+     would misreport a capability the node genuinely has. `ops->reboot`
+     is deliberately not called at all - not even to have it decline. */
+  if (type == boomlink_CommandType_COMMAND_TYPE_REBOOT && rx != NULL &&
+      rx->destination_id == BOOMLINK_ADDR_BROADCAST) {
+    resp->result = boomlink_CommandResult_COMMAND_RESULT_FAILED;
+    return true;
+  }
 
   switch (type) {
     case boomlink_CommandType_COMMAND_TYPE_REBOOT:

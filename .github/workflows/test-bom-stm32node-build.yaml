@@ -223,13 +223,18 @@ jobs:
           # reintroduce it by removing those entries or the call site
           # (protocol_service_init()/_on_rx()/_process() in Core/Src/cli.c)
           # without anything else here noticing. This step fails the build if
-          # boomlink_dispatch_process or boomlink_config_store_load stop being
-          # present in the linked ELF, not just compiled somewhere - one
-          # symbol from the dispatcher itself and one from the flash-backed
-          # config store, since a refactor could plausibly drop the load path
-          # while leaving command/config dispatch (or vice versa) intact.
+          # any of the symbols below stop being present in the linked ELF,
+          # not just compiled somewhere - one per library this group names,
+          # since a refactor could plausibly drop one path (e.g. leaving
+          # command dispatch wired but silently dropping config dispatch, or
+          # keeping the dispatcher but reverting the boot-time flash load)
+          # while leaving the others intact - a single dispatcher-only
+          # symbol (an earlier version of this check) would stay green
+          # through exactly that kind of partial regression.
           status=0
-          for symbol in boomlink_dispatch_process boomlink_config_store_load; do
+          for symbol in boomlink_dispatch_process boomlink_command_service_handle \
+                        boomlink_config_service_handle boomlink_config_store_load \
+                        boomlink_flash_storage_port_init; do
             if ! arm-none-eabi-nm build/Debug/bom-stm32node.elf | grep -q "$symbol"; then
               echo "❌ $symbol is not linked into bom-stm32node.elf"
               status=1

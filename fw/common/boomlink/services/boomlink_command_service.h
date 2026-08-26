@@ -51,6 +51,14 @@ extern "C" {
  * gone out - which is Phase C's concern to implement against real hardware,
  * not this service's to enforce (it has no notion of "has been sent" to
  * enforce it against).
+ *
+ * **reboot() is never called for a broadcast request.** Section 9.9:
+ * "commands that are dangerous when broadcast should be rejected by the
+ * application service unless explicitly designed for broadcast" -
+ * boomlink_command_service_handle() enforces this itself for Reboot
+ * (answering COMMAND_RESULT_FAILED without invoking this callback at all),
+ * since it is the only point in this chain that sees both `rx` and the
+ * command type together.
  */
 typedef struct {
   bool (*reboot)(void *ctx);
@@ -76,6 +84,10 @@ typedef struct {
  * of one. Returns false only if `request` holds no CommandRequest at all
  * (e.g. it decoded as a CommandResponse instead - a malformed exchange this
  * service cannot answer either way) or `user` is NULL.
+ *
+ * A Reboot request addressed to BOOMLINK_ADDR_BROADCAST (via `rx->
+ * destination_id`) is answered COMMAND_RESULT_FAILED without ever calling
+ * `ops->reboot` - see that field's own doc for why.
  */
 bool boomlink_command_service_handle(void *user, const boomlink_dispatch_rx_info_t *rx,
                                      const boomlink_CommandMessage *request,

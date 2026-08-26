@@ -51,6 +51,10 @@ static bool                      s_initialized;
 static bool     s_reboot_armed;
 static uint32_t s_reboot_armed_at_ms;
 
+/* See protocol_service_on_rx()'s long comment on the commit/confirm design
+   for what this guards against. */
+static bool s_confirm_eligible;
+
 /* boomlink_command_ops_t.reboot - arms a deferred reset for protocol_
    service_process() to perform once PROTOCOL_SERVICE_REBOOT_DELAY_MS has
    elapsed, rather than resetting here - see this file's macro doc and
@@ -156,8 +160,9 @@ bool protocol_service_init(const boomlink_node_config_t *loaded_config) {
      in this protocol yet needs an automatic System/Ping responder. */
   boomlink_dispatch_init(&s_dispatch, &handlers);
 
-  s_reboot_armed = false;
-  s_initialized  = true;
+  s_reboot_armed     = false;
+  s_confirm_eligible = false;
+  s_initialized      = true;
   return true;
 }
 
@@ -249,7 +254,25 @@ void protocol_service_on_rx(void *user, uint32_t source_id, uint32_t destination
      remains reachable, not that the new profile will still work after that
      next reboot - a real closed-loop check would need the pending state to
      survive the reboot itself and be confirmed afterwards, which is out of
-     scope for this phase and not attempted here. */
+     scope for this phase and not attempted here.
+
+     `s_confirm_eligible` closes a narrower gap in "the next exchange": with
+     it, this would be reachable within the very SAME boomlink_link_poll()
+     drain that just committed - that function drains every packet the
+     radio's ring buffer holds in one call (boomlink_link.h's own doc), so
+     two frames already sitting in the ring (a hazardous ConfigSet, then
+     literally anything else that gets a response queued - even an
+     unrelated request, or a second hazardous ConfigSet this service itself
+     rejects as APPLY_IN_PROGRESS) would otherwise let the whole IDLE ->
+     STAGED -> WAITING -> IDLE cycle complete before a single bit of the
+     PENDING_CONFIRMATION response has actually reached the air, proving
+     nothing about reachability at all. Cleared false at the moment of
+     commit and only ever set true by protocol_service_process() - which
+     cli_process() calls once per tick, strictly AFTER the same tick's
+     link_service_process() (and therefore boomlink_link_poll()) has
+     already finished draining - so the earliest a confirm can fire is a
+     frame from the NEXT tick's drain, never one still sitting in the
+     current burst. */
   bool is_pending_config = result.response.which_payload == boomlink_Envelope_config_tag &&
                            result.response.payload.config.which_message ==
                                boomlink_ConfigMessage_set_response_tag &&
@@ -257,7 +280,9 @@ void protocol_service_on_rx(void *user, uint32_t source_id, uint32_t destination
                                boomlink_ConfigSetResult_CONFIG_SET_RESULT_PENDING_CONFIRMATION;
   if (is_pending_config) {
     boomlink_config_service_commit_pending_apply(&s_config_svc, HAL_GetTick());
-  } else if (s_config_svc.apply_state == BOOMLINK_CONFIG_APPLY_WAITING) {
+    s_confirm_eligible = false;
+  } else if (s_confirm_eligible &&
+             boomlink_config_service_apply_state(&s_config_svc) == BOOMLINK_CONFIG_APPLY_WAITING) {
     boomlink_config_service_confirm_pending_apply(&s_config_svc);
   }
 }
@@ -269,6 +294,14 @@ void protocol_service_process(void) {
 
   uint32_t now_ms = HAL_GetTick();
   boomlink_config_service_poll(&s_config_svc, now_ms);
+
+  /* See protocol_service_on_rx()'s long comment on `s_confirm_eligible`:
+     this runs once per superloop tick, always after that same tick's RX
+     drain has already finished, so setting this unconditionally true here
+     only ever makes a confirm eligible starting with the NEXT tick's
+     drain - never the one a commit just happened in. Harmless to set when
+     no change is WAITING at all; the read side only consults it then. */
+  s_confirm_eligible = true;
 
   /* Unsigned subtraction is wrap-safe for any real elapsed span - the same
      idiom boomlink_config_service.c's own window_elapsed() uses. */

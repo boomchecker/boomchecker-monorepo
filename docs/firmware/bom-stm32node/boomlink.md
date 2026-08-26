@@ -1871,13 +1871,18 @@ the real seam, not the sketch" approach PR 3's own Phase C took — section 4):
   step, which that section deliberately leaves to integration: this phase commits a
   staged hazardous change as soon as its `PENDING_CONFIRMATION` response is queued for
   send (not once actually on the air — see `protocol_service_on_rx()`'s own comment for
-  why), and confirms it on the next request/response exchange completed with any peer.
-  Honestly incomplete, and documented as such at the call site: this firmware has no
-  live radio/node_id/magic reconfiguration (`App/radio/radio.h` has no setter, and
-  `boomlink_link_reconfigure()` explicitly excludes node_id/magic), so a hazardous
-  change only ever takes effect on the *next* boot's config load — this phase's
-  "confirmation" proves the current, pre-change session is still reachable, not that
-  the new profile will still work after that reboot;
+  why), and confirms it on the next request/response exchange completed with any peer
+  — but never within the same `boomlink_link_poll()` RX drain the commit itself
+  happened in, so a burst of already-buffered frames can't complete the whole
+  stage→commit→confirm cycle before a single bit of the response has actually gone
+  out (a one-superloop-tick eligibility delay closes that specific gap; see that
+  comment for the mechanism). Honestly incomplete even so, and documented as such at
+  the call site: this firmware has no live radio/node_id/magic reconfiguration
+  (`App/radio/radio.h` has no setter, and `boomlink_link_reconfigure()` explicitly
+  excludes node_id/magic), so a hazardous change only ever takes effect on the *next*
+  boot's config load — this phase's "confirmation" proves the current, pre-change
+  session is still reachable, not that the new profile will still work after that
+  reboot;
 - real command actions for the hardware this board actually has: `Reboot` arms a
   deferred `HAL_NVIC_SystemReset()` (never synchronous — see
   `boomlink_command_service.h`'s own doc on why), `SelfTest`/`ClearStatistics`/
@@ -1886,8 +1891,20 @@ the real seam, not the sketch" approach PR 3's own Phase C took — section 4):
   `boomlink_config_service`, `boomlink_config_store`, `boomlink_flash_storage_port`,
   and transitively `boomlink_storage_port`) is now actually linked into
   `bom-stm32node.elf`, not merely cross-compiled — CI's build workflow gained a
-  matching "actually linked in" symbol check, the same class of check PR 3 Phase C
-  added for the link engine.
+  matching "actually linked in" symbol check (one symbol per library in the group),
+  the same class of check PR 3 Phase C added for the link engine;
+- `Reboot` is rejected (`COMMAND_RESULT_FAILED`, without ever calling the real
+  action) when addressed to the broadcast address — section 9.9's "commands that are
+  dangerous when broadcast should be rejected by the application service", enforced
+  in `boomlink_command_service_handle()` itself now that Phase C gives `Reboot` a real
+  effect to guard;
+- `boomlink_node_config_defaults()`'s magic/LinkConfig/RadioConfig values now match
+  the real hardcoded bring-up values they mirror (`link_service.c`'s `LINK_*`
+  constants, `e22_radio.cpp`'s `DefaultProfile()`), and `magic == 0` is rejected as a
+  `ConfigSet` target the same way `node_id`'s reserved values already were — closing
+  the same "defaults/validation don't agree with the real running value" gap the
+  `magic` default fix started with, for every field with a real hardcoded
+  counterpart, not just that one.
 
 Deliberately deferred, not silently dropped:
 
@@ -1909,6 +1926,36 @@ Deliberately deferred, not silently dropped:
 - **most `TelemetryReport` fields** — no hardware backs them yet (no uptime counter, no
   ADC sampling loop, no GNSS parsing); telemetry stays schema-and-dispatch-recognition
   only, the same state Phase A left it in.
+- **LinkConfig's five retry-policy fields are not applied to the live link engine** —
+  `ack_timeout_margin_ms`/`max_attempts`/`backoff_min_ms`/`backoff_max_ms`/
+  `tx_jitter_max_ms` are accepted by `ConfigSet` and reported by `ConfigGet` (their
+  defaults now match `link_service.c`'s real hardcoded values, fixed alongside the
+  `magic` default), but nothing calls `boomlink_link_reconfigure()` — a `ConfigSet`
+  touching one of them answers `OK` immediately (they are non-hazardous) while the
+  running link engine's actual retry behaviour stays unchanged. Wiring
+  `boomlink_link_reconfigure()` into the config response path is a reasonable next
+  step, not attempted here to keep this phase to wiring rather than adding a new
+  live-reconfiguration path late in review.
+- **No per-peer rate limiting on inbound requests** — a burst of `CommandRequest`s
+  (or `ConfigSet`s) from one or more peers can fill the link engine's TX queue with
+  HIGH/NORMAL-priority, ACK-requested responses, each retried up to
+  `LINK_MAX_ATTEMPTS` times with backoff if unacknowledged; with the pipeline
+  single-flight and stop-and-wait, this can starve unrelated NORMAL-priority traffic
+  (an operator's `link ping`, a legitimate `ConfigSet` response) for several seconds.
+  A real mitigation (per-peer/per-command rate limiting) is a new feature, not a
+  wiring task, and is left for whichever phase first needs to defend against it.
+- **`PROTOCOL_SERVICE_REBOOT_DELAY_MS`'s fixed delay assumes the reboot response
+  clears the TX pipeline in time** — it only accounts for the response's own airtime
+  plus scheduling slack, not for an unrelated frame already occupying the
+  single-flight pipeline when the response is queued (which can hold it for longer
+  than the fixed delay under `LINK_MAX_ATTEMPTS`/backoff). A node can therefore still
+  reset before its own Reboot response reaches the air in that case — the same race
+  the deferred-reset design exists to close, just not for every possible pipeline
+  state. Fixing this properly needs the pipeline-occupancy signal
+  `boomlink_link_tx_done_fn`'s own doc says isn't available as a per-frame
+  correlation handle before the fact (see `protocol_service_on_rx()`'s comment on the
+  identical limitation for config commit/confirm); left as a known gap rather than
+  guessed at.
 
 ## PR 5 — Host CLI and end-to-end tooling
 

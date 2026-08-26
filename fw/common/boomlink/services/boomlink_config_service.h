@@ -183,6 +183,20 @@ void boomlink_config_service_poll(boomlink_config_service_t *svc, uint32_t now_m
 void boomlink_config_service_get_config(const boomlink_config_service_t *svc,
                                         boomlink_node_config_t *out);
 
+/**
+ * The revert-on-timeout state machine's current state - for a caller that
+ * needs to know whether a hazardous change is in flight without reaching
+ * into `svc->apply_state` directly (the struct is exposed for static
+ * allocation the same reason boomlink_link_t is, not as an invitation to
+ * read its bookkeeping fields ad hoc - see boomlink_link.h's own read
+ * accessors for the pattern this follows). NULL-tolerant like the
+ * accessor above: returns BOOMLINK_CONFIG_APPLY_IDLE for a NULL `svc`, the
+ * "nothing in flight" reading a CLI/diagnostic caller should get from a
+ * missing service rather than a fault.
+ */
+boomlink_config_apply_state_t boomlink_config_service_apply_state(
+    const boomlink_config_service_t *svc);
+
 #ifdef __cplusplus
 }
 #endif

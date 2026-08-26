@@ -45,6 +45,40 @@ void boomlink_node_config_defaults(boomlink_node_config_t *out) {
      defaults() to agree with what bring-up already did, or Phase C wiring
      this in would silently change a fresh node's magic from 0xB0 to 0. */
   out->link.magic      = BOOMLINK_LINKFRAME_MAGIC_DEFAULT;
+  /* The same "defaults() must agree with the real hardcoded bring-up value"
+     reasoning as magic above, for LinkConfig's five other fields - config.
+     proto's own doc says this message "mirrors boomlink_link_config_t's
+     five runtime-reconfigurable fields", and App/link/link_service.c's
+     LINK_* macros are that mirror's real values. Left at 0 before this fix:
+     a ConfigGet on a fresh/defaulted node reported ack_timeout_margin_ms=0/
+     max_attempts=0/backoff_min_ms=0/backoff_max_ms=0/tx_jitter_max_ms=0,
+     none of which match what the link engine actually runs with - the
+     exact "reported config lies about the real bring-up value" gap this
+     function's magic fix exists to close, just for five more fields.
+     (Nothing yet applies a LATER change to these fields to the live link
+     engine either - boomlink_link_reconfigure() is never called from this
+     firmware - but that is a separate, documented gap; this fix is only
+     about the DEFAULT value matching reality.) */
+  out->link.ack_timeout_margin_ms = 50u;
+  out->link.max_attempts          = 3u;
+  out->link.backoff_min_ms        = 100u;
+  out->link.backoff_max_ms        = 400u;
+  out->link.tx_jitter_max_ms      = 50u;
+  /* Same reasoning again for RadioConfig - config.proto's own doc says it
+     "mirrors radio_profile_t", and App/radio/e22_radio.cpp's
+     DefaultProfile() is that mirror's real value (the profile radio_init()
+     actually programs into the SX1262 at boot). Pre-existing gap (not
+     introduced by this fix), but now reachable over the air for the first
+     time as of PR 4 Phase C wiring ConfigGet/ConfigSet to a real link, so
+     it gets the same treatment here rather than being left for a later
+     PR to rediscover. */
+  out->radio.frequency_mhz     = 869.525f;
+  out->radio.bandwidth_khz     = 125.0f;
+  out->radio.spreading_factor  = 7u;
+  out->radio.coding_rate_denom = 5u;
+  out->radio.tx_power_dbm      = 14;
+  out->radio.preamble_symbols  = 8u;
+  out->radio.sync_word         = 0x12u; /* RADIOLIB_SX126X_SYNC_WORD_PRIVATE */
 }
 
 void boomlink_config_service_init(boomlink_config_service_t *svc,
@@ -164,7 +198,16 @@ static bool node_id_is_valid(uint32_t node_id) {
 }
 
 static bool magic_is_valid(uint32_t magic) {
-  return magic <= 0xFFu;
+  /* 0 is rejected for the same reason node_id_is_valid() rejects
+     BOOMLINK_ADDR_INVALID (also 0): App/link/link_service.c's
+     link_service_init() treats a configured magic of 0 as "never set,
+     fall back to BOOMLINK_LINKFRAME_MAGIC_DEFAULT" (see that function's
+     own doc). Before this check, a ConfigSet could write magic=0 into
+     `current` - reported back by every later ConfigGet as the node's real,
+     committed magic - while the next reboot would silently run with
+     0xB0 instead, permanently diverging what is persisted/reported from
+     what is actually running. */
+  return magic != 0u && magic <= 0xFFu;
 }
 
 static bool handle_set(boomlink_config_service_t *svc, const boomlink_ConfigSetRequest *req,
@@ -423,4 +466,9 @@ void boomlink_config_service_get_config(const boomlink_config_service_t *svc,
     return;
   }
   *out = (svc != NULL) ? svc->current : (boomlink_node_config_t){0};
+}
+
+boomlink_config_apply_state_t boomlink_config_service_apply_state(
+    const boomlink_config_service_t *svc) {
+  return (svc != NULL) ? svc->apply_state : BOOMLINK_CONFIG_APPLY_IDLE;
 }

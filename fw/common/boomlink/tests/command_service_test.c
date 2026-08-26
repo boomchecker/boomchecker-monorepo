@@ -251,6 +251,55 @@ static void test_malformed_or_missing_arguments_are_rejected(void) {
         "a NULL out_response must be rejected");
 }
 
+/* Section 9.9: "commands that are dangerous when broadcast should be
+   rejected by the application service unless explicitly designed for
+   broadcast." Reboot is the case this names, and this service is the only
+   point in the dispatch chain that ever sees both `rx->destination_id` and
+   the command type together (boomlink_command_ops_t's per-command
+   callbacks do not receive `rx` at all - see that struct's own doc). */
+static void test_reboot_over_broadcast_is_rejected_without_calling_reboot(void) {
+  reset_spies();
+  boomlink_command_ops_t ops = full_ops();
+  g_reboot.succeed = true; /* would answer OK if called - proves it was not */
+
+  boomlink_CommandMessage request = {0};
+  request.which_message        = boomlink_CommandMessage_request_tag;
+  request.message.request.type = boomlink_CommandType_COMMAND_TYPE_REBOOT;
+
+  boomlink_dispatch_rx_info_t rx = {0};
+  /* BOOMLINK_ADDR_BROADCAST (section 7.2) spelled out as a literal rather
+     than included from boomlink_linkframe.h - this test target links
+     boomlink_command_service only, which pulls that header in PRIVATEly
+     (see fw/common/boomlink/CMakeLists.txt's comment on that dependency),
+     the same reason config_service_test.c spells out its own magic-default
+     literal instead of including it. */
+  rx.destination_id = 0xFFFFFFFFu;
+
+  boomlink_CommandMessage resp;
+  bool ok = boomlink_command_service_handle(&ops, &rx, &request, &resp);
+
+  CHECK(ok, "a response is still built for a rejected broadcast reboot");
+  CHECK(resp.message.response.result == boomlink_CommandResult_COMMAND_RESULT_FAILED,
+        "a broadcast Reboot must be refused with FAILED, not UNSUPPORTED - this node CAN "
+        "reboot, it is this specific broadcast request that is refused");
+  CHECK(g_reboot.calls == 0,
+        "ops->reboot must never be invoked for a broadcast Reboot request, got %d calls",
+        g_reboot.calls);
+
+  /* A targeted rejection of broadcast, not a regression in Reboot itself -
+     the identical request addressed to a real unicast destination must
+     still succeed normally. */
+  reset_spies();
+  g_reboot.succeed  = true;
+  rx.destination_id = 42u;
+  ok                = boomlink_command_service_handle(&ops, &rx, &request, &resp);
+  CHECK(ok, "a unicast reboot request must still get a response");
+  CHECK(resp.message.response.result == boomlink_CommandResult_COMMAND_RESULT_OK,
+        "a unicast reboot must still succeed normally");
+  CHECK(g_reboot.calls == 1, "a unicast reboot must still call ops->reboot exactly once, got %d",
+        g_reboot.calls);
+}
+
 int main(void) {
   test_every_wired_command_maps_ok_or_failed_to_its_own_callback();
   test_every_unwired_command_is_unsupported();
@@ -259,5 +308,6 @@ int main(void) {
   test_diagnostic_buffer_is_zeroed_when_the_callback_writes_nothing();
   test_diagnostic_buffer_is_always_nul_terminated_even_if_the_callback_fills_it();
   test_malformed_or_missing_arguments_are_rejected();
-  BOOMLINK_TEST_REPORT("command_service_test", 83);
+  test_reboot_over_broadcast_is_rejected_without_calling_reboot();
+  BOOMLINK_TEST_REPORT("command_service_test", 89);
 }
