@@ -797,6 +797,17 @@ void cli_init(cli_tx_fn tx)
   (void)link_service_init(loaded_config.general.node_id, loaded_config.link.magic, link_on_rx,
                           NULL, link_on_tx_done, NULL);
 
+  /* link_service_init() may have just resolved an unconfigured (0 /
+     BOOMLINK_ADDR_INVALID) node_id to its own UID-derived fallback - see
+     that function's own doc. Feed the value it actually ended up running
+     with back into loaded_config before handing it to protocol_service_
+     init() below, so ConfigGet reports the address this node is
+     demonstrably alive and answering on, not the "unconfigured" 0 every
+     never-configured node's defaults() would otherwise still show. This is
+     the canonical first thing an operator/provisioning tool asks a fresh
+     node for, so getting it wrong here is not a corner case. */
+  loaded_config.general.node_id = link_service_node_id();
+
   /* Wires the protocol dispatcher (command/config services) onto the link
      engine just brought up above - see protocol_service_init()'s own doc.
      Not checking the return value for the same reason as link_service_init()

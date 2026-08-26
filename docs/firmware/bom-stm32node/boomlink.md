@@ -1891,7 +1891,12 @@ the real seam, not the sketch" approach PR 3's own Phase C took — section 4):
 - `link_service_init()` extended to accept the loaded `node_id`/`magic` instead of
   always deriving/hardcoding them, with the UID-derivation and
   `BOOMLINK_LINKFRAME_MAGIC_DEFAULT` fallbacks it already had kept for an unconfigured
-  or out-of-range value (see that function's own doc comment);
+  or out-of-range value (see that function's own doc comment) - and `cli.c` feeds the
+  resolved `link_service_node_id()` back into `loaded_config.general.node_id` before
+  `protocol_service_init()` sees it, so `ConfigGet` reports the address a never-
+  configured node is actually alive and answering on rather than the `0x00000000`
+  `boomlink_node_config_defaults()` otherwise leaves there - the canonical first thing
+  an operator or provisioning tool asks a fresh node for, found missing by review;
 - a decided, documented interpretation of section 8.2's revert-on-timeout "confirmed"
   step, which that section deliberately leaves to integration: this phase commits a
   staged hazardous change as soon as its `PENDING_CONFIRMATION` response is queued for

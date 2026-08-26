@@ -53,8 +53,16 @@ void protocol_service_load_config(boomlink_node_config_t *out);
 /**
  * Wire the protocol dispatcher (command + config services) against
  * `loaded_config`. Call once, from cli_init(), right after link_service_
- * init() - `loaded_config` must be exactly what protocol_service_load_
- * config() returned.
+ * init() - `loaded_config` must be what protocol_service_load_config()
+ * returned, with exactly one field cli.c is expected to have corrected
+ * first: `general.node_id` set to `link_service_node_id()`'s result (the
+ * value link_service_init() actually resolved and is now running with -
+ * see that function's own doc for when this differs from what was loaded).
+ * Skipping that correction is not a wiring error this function can detect
+ * or reject; it just means ConfigGet reports 0x00000000 ("unconfigured")
+ * for the address this node is demonstrably alive and answering requests
+ * on - exactly the state every never-configured node starts in, since
+ * boomlink_node_config_defaults() leaves node_id at that same sentinel.
  *
  * Registers no callback of its own with link_service_init(): cli.c's
  * existing link_on_rx() (already link_service_init()'s on_rx) calls
