@@ -86,8 +86,11 @@ jobs:
         # build is never blocked by a warning from a newer compiler than this
         # runner's - the same split BOOMLINK_WERROR uses for the host build.
         # Scoped to this package's hand-written libraries (linkframe,
-        # linkengine, dispatch, command_service, config_service); the CubeMX
-        # sources and vendored libraries are unaffected.
+        # linkengine, dispatch, command_service, config_service,
+        # storage_port, config_store); the CubeMX sources, vendored
+        # libraries, and this repo's own App/storage/ (boomlink_flash_
+        # storage_port, defined outside fw/common/boomlink and so outside
+        # this flag's reach - same as radio_layer) are unaffected.
         run: cmake --preset Debug -DBOOMLINK_TARGET_WERROR=ON
 
       - name: Build
@@ -136,15 +139,29 @@ jobs:
         # by -DBOOMLINK_TARGET_WERROR=ON in the Configure step above, which
         # turns a warning from either target into a build failure rather than log
         # text nobody reads.
+        # PR 4 Phase B's boomlink_storage_port/boomlink_config_store (fw/common/
+        # boomlink/storage/) and boomlink_flash_storage_port (this package's own
+        # App/storage/, hence the different build/Debug path - it is a top-level
+        # target in THIS CMakeLists.txt, not add_subdirectory()'d) are in the
+        # same "cross-compiled but not yet linked into the firmware" state as
+        # dispatch/command_service/config_service above, deferred to the phase
+        # that actually calls boomlink_config_store_load()/_save() - so they
+        # belong in this list, not in the "actually linked in" checks below.
         run: |
           status=0
-          for archive in libboomlink_linkframe.a libboomlink_linkengine.a libboomlink_dispatch.a libboomlink_command_service.a libboomlink_config_service.a; do
-            path="build/Debug/boomlink/$archive"
+          for path in build/Debug/boomlink/libboomlink_linkframe.a \
+                      build/Debug/boomlink/libboomlink_linkengine.a \
+                      build/Debug/boomlink/libboomlink_dispatch.a \
+                      build/Debug/boomlink/libboomlink_command_service.a \
+                      build/Debug/boomlink/libboomlink_config_service.a \
+                      build/Debug/boomlink/libboomlink_storage_port.a \
+                      build/Debug/boomlink/libboomlink_config_store.a \
+                      build/Debug/libboomlink_flash_storage_port.a; do
             if [ ! -f "$path" ]; then
               echo "❌ $path was not produced - it is no longer cross-compiled for the target"
               status=1
             else
-              echo "✅ $archive cross-compiled for the target"
+              echo "✅ $(basename "$path") cross-compiled for the target"
             fi
           done
           exit $status

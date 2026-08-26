@@ -152,8 +152,8 @@ endif()
 # the vendored libraries.
 option(BOOMLINK_TARGET_WERROR
        "Treat warnings as errors in the libraries cross-compiled for the target - \
-boomlink_linkframe, boomlink_linkengine, boomlink_dispatch, boomlink_command_service \
-and boomlink_config_service (CI turns this on)" OFF)
+boomlink_linkframe, boomlink_linkengine, boomlink_dispatch, boomlink_command_service, \
+boomlink_config_service, boomlink_storage_port and boomlink_config_store (CI turns this on)" OFF)
 set(BOOMLINK_TARGET_WERROR_FLAGS "")
 if(BOOMLINK_TARGET_WERROR)
   set(BOOMLINK_TARGET_WERROR_FLAGS -Werror)
@@ -621,6 +621,45 @@ target_compile_features(boomlink_config_service PUBLIC c_std_11)
 target_compile_options(boomlink_config_service PRIVATE
   ${BOOMLINK_WARNING_FLAGS} ${BOOMLINK_WERROR_FLAGS} ${BOOMLINK_TARGET_WERROR_FLAGS})
 
+# PR 4 Phase B: the seam between the config storage wrapper below and
+# whatever actually holds the bytes (a real flash sector on the target, an
+# in-memory buffer in host tests) - no Nanopb dependency of its own, same
+# reasoning as linkframe/linkengine's own boundary (section 9), even though
+# nothing enforces that with a test here the way boomlink_no_nanopb_
+# dependency does for those two: this seam is new and small enough that the
+# habit has not yet been worth automating.
+#
+# boomlink_crc32.c lives in this library rather than boomlink_config_store
+# below for the same Nanopb-free reason: the checksum algorithm has no
+# dependency on the wrapper format that happens to be its only caller today.
+add_library(boomlink_storage_port STATIC
+  ${CMAKE_CURRENT_SOURCE_DIR}/storage/boomlink_storage_port.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/storage/boomlink_crc32.c
+)
+target_include_directories(boomlink_storage_port PUBLIC
+  ${CMAKE_CURRENT_SOURCE_DIR}/storage
+)
+target_compile_features(boomlink_storage_port PUBLIC c_std_11)
+target_compile_options(boomlink_storage_port PRIVATE
+  ${BOOMLINK_WARNING_FLAGS} ${BOOMLINK_WERROR_FLAGS} ${BOOMLINK_TARGET_WERROR_FLAGS})
+
+# PR 4 Phase B: persist a NodeConfig to flash with the magic/version/length/
+# CRC wrapper boomlink.md section 10.1 describes, through boomlink_storage_
+# port_t so this stays host-testable against a fake backend - Phase C's
+# firmware call site wires the real flash port in. Nanopb-dependent (unlike
+# boomlink_storage_port above): encoding/decoding the wrapped NodeConfig
+# blob is this library's whole job.
+add_library(boomlink_config_store STATIC
+  ${CMAKE_CURRENT_SOURCE_DIR}/storage/boomlink_config_store.c
+)
+target_include_directories(boomlink_config_store PUBLIC
+  ${CMAKE_CURRENT_SOURCE_DIR}/storage
+)
+target_link_libraries(boomlink_config_store PUBLIC boomlink_storage_port boomlink_protocol)
+target_compile_features(boomlink_config_store PUBLIC c_std_11)
+target_compile_options(boomlink_config_store PRIVATE
+  ${BOOMLINK_WARNING_FLAGS} ${BOOMLINK_WERROR_FLAGS} ${BOOMLINK_TARGET_WERROR_FLAGS})
+
 if(BOOMLINK_STANDALONE)
   enable_testing()
 
@@ -816,6 +855,28 @@ if(BOOMLINK_STANDALONE)
   target_compile_options(boomlink_config_service_test PRIVATE
     ${BOOMLINK_WARNING_FLAGS} ${BOOMLINK_WERROR_FLAGS})
   add_test(NAME boomlink_config_service_test COMMAND boomlink_config_service_test)
+
+  # PR 4 Phase B: the standard CRC-32 pinned against its own published test
+  # vector - see boomlink_crc32.h's own doc for why this small algorithm gets
+  # a dedicated test rather than only exercising it indirectly through
+  # config_store_test below.
+  add_executable(boomlink_crc32_test tests/crc32_test.c)
+  target_link_libraries(boomlink_crc32_test PRIVATE boomlink_storage_port)
+  target_include_directories(boomlink_crc32_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests)
+  target_compile_options(boomlink_crc32_test PRIVATE
+    ${BOOMLINK_WARNING_FLAGS} ${BOOMLINK_WERROR_FLAGS})
+  add_test(NAME boomlink_crc32_test COMMAND boomlink_crc32_test)
+
+  # PR 4 Phase B: section 10.1's magic/version/length/CRC wrapper, against a
+  # fake in-memory boomlink_storage_port_t (this test's own, not a shared
+  # fake - unlike fake_port.h/fake_radio, nothing else needs an in-memory
+  # flash yet).
+  add_executable(boomlink_config_store_test tests/config_store_test.c)
+  target_link_libraries(boomlink_config_store_test PRIVATE boomlink_config_store)
+  target_include_directories(boomlink_config_store_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests)
+  target_compile_options(boomlink_config_store_test PRIVATE
+    ${BOOMLINK_WARNING_FLAGS} ${BOOMLINK_WERROR_FLAGS})
+  add_test(NAME boomlink_config_store_test COMMAND boomlink_config_store_test)
 
   # The Nanopb-free boundary (boomlink.md section 9), checked as a TEST rather
   # than only as a CI step, so `task test` runs it and a developer finds out

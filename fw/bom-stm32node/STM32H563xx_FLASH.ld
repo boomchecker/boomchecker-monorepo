@@ -37,10 +37,19 @@ ENTRY(Reset_Handler)
 
 
 /* Memories definition */
+/* FLASH is 2032K, not the device's full 2048K: the last 16K sector
+   (0x081FC000-0x08200000, Bank 2 sector 63 of 64x16K sectors per bank on
+   this dual-bank part) is reserved for PR 4 Phase B's persisted NodeConfig
+   (boomlink.md section 10.1, fw/common/boomlink/storage/
+   boomlink_config_store.h) and must never be linked into. Shrinking FLASH's
+   LENGTH is enough on its own - every SECTIONS output below already maps to
+   >FLASH with no explicit end address, so the linker itself refuses to
+   place anything past the new top of this region; nothing else here needs
+   to change to keep code out of the reserved sector. */
 MEMORY
 {
   RAM    (xrw)    : ORIGIN = 0x20000000,   LENGTH = 640K
-  FLASH    (rx)    : ORIGIN = 0x8000000,   LENGTH = 2048K
+  FLASH    (rx)    : ORIGIN = 0x8000000,   LENGTH = 2032K
 }
 /* Highest address of the user mode stack */
 _estack = ORIGIN(RAM) + LENGTH(RAM); /* end of "RAM" Ram type memory */

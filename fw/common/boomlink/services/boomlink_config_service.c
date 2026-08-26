@@ -22,6 +22,19 @@ void boomlink_node_config_defaults(boomlink_node_config_t *out) {
   }
   *out                 = (boomlink_node_config_t){0};
   out->config_version  = 1u; /* 0 is the "nobody set this" accident value, not a real version */
+  /* Every group is always present in a real NodeConfig - has_X only means
+     "was this present" because Nanopb generates it for every message-type
+     field regardless of whether this type has any partial-presence use for
+     it (see the type's own doc). Left false here, boomlink_config_store_
+     save() would Nanopb-encode an empty message for every group instead of
+     its all-zero-but-real value - decodable, but not what a reader of the
+     stored blob would expect "the default GeneralConfig" to look like. */
+  out->has_general     = true;
+  out->has_link         = true;
+  out->has_radio        = true;
+  out->has_detection    = true;
+  out->has_gnss         = true;
+  out->has_telemetry    = true;
 }
 
 void boomlink_config_service_init(boomlink_config_service_t *svc,

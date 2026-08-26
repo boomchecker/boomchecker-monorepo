@@ -106,6 +106,27 @@ message ConfigSetResponse {
   uint32 config_version = 2;
 }
 
+// The whole persisted node configuration (boomlink.md section 10.1) - NOT an
+// Envelope payload, never sent over BoomLink itself. PR 4 Phase B's storage
+// wrapper (fw/common/boomlink/storage/) encodes exactly this message as the
+// blob it wraps in a magic/version/length/CRC header, so
+// boomlink_config_service_t's in-memory NodeConfig (services/
+// boomlink_config_service.h) is this generated struct directly rather than a
+// hand-written mirror of it - one definition of "all six groups plus a
+// version stamp" instead of two that could drift. Every group is always
+// present for a real persisted or in-memory config, unlike ConfigGetResponse
+// above where presence means "was this group requested" - there is no
+// equivalent partial case here.
+message NodeConfig {
+  uint32 config_version = 1;
+  GeneralConfig general = 2;
+  LinkConfig link = 3;
+  RadioConfig radio = 4;
+  DetectionConfig detection = 5;
+  GnssConfig gnss = 6;
+  TelemetryConfig telemetry = 7;
+}
+
 message GeneralConfig {
   uint32 node_id = 1;
   uint32 default_destination_id = 2;

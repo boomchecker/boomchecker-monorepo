@@ -252,6 +252,52 @@ where it differs from this section's original sketch:
   `boomlink_dispatch_process()` and the two services to real RX bytes, a real send path,
   and real command actions), not the fuller file lists this section originally sketched.
 
+What section 10.1's persistence actually landed as (PR 4 Phase B), where it differs from
+that section's original sketch:
+
+- The sketch put `config_store.c/.h` under `bom-stm32node/App/storage/`, STM32-target-only.
+  The wrapper format and load/save logic landed instead as `boomlink_config_store` -
+  target-agnostic C under `fw/common/boomlink/storage/`, the same shared-code split as
+  `linkframe/`/`linkengine/`/`dispatch/`/`services/` above, so the header/CRC framing and
+  the "missing/invalid -> defaults" fallback can be host-tested against a fake in-memory
+  region (`tests/config_store_test.c`) rather than only ever on real flash.
+- It is three translation units, not one: `boomlink_storage_port.h/.c` (the seam a real
+  flash port, or the tests' fake, implements - modeled on `linkengine/boomlink_port.h`'s
+  same fake-vs-real split), `boomlink_crc32.h/.c` (the wrapper's CRC-32, pulled out on its
+  own so it can be pinned against the algorithm's published test vector directly rather
+  than only indirectly through whatever happens to call it), and `boomlink_config_store.h/
+  .c` (the magic/version/length/CRC framing and `boomlink_config_store_load()`/`_save()`
+  themselves).
+- Nanopb-**dependent**, unlike `boomlink_storage_port`/`boomlink_crc32`: encoding/decoding
+  the wrapped `NodeConfig` blob is `boomlink_config_store`'s whole job, the same split
+  `dispatch/` draws against `linkframe/`/`linkengine/` above.
+- `NodeConfig` itself gained a `config.proto` message of the same name, and
+  `boomlink_config_service.h`'s `boomlink_node_config_t` became a type alias for it
+  (`typedef boomlink_NodeConfig boomlink_node_config_t;`) rather than staying the
+  hand-written struct Phase A introduced - one definition of "all six config groups plus a
+  version stamp" that `boomlink_config_store` can Nanopb-encode directly, instead of a
+  second hand-written mirror of it that could drift out of sync with `config.proto`.
+- A single fixed-size region, not the ping-pong pair a wear-levelled design might reach
+  for: section 10.1's own "missing/invalid -> load safe defaults" already absorbs a torn
+  write (power lost mid-erase/mid-program) as "invalid -> defaults" under a single region
+  exactly as it would under a double-buffered one - the section asks for "never apply a
+  corrupt config", not "never lose the most recent write". See
+  `fw/common/boomlink/storage/boomlink_config_store.h`'s own doc for the full reasoning.
+- `App/storage/` under `bom-stm32node` is therefore not `config_store.c/.h` but
+  `boomlink_flash_storage_port.c/.h` (the `boomlink_storage_port_t` seam, backed by the
+  last 16K sector of this chip's flash - `STM32H563xx_FLASH.ld`'s `FLASH` region shrank
+  from 2048K to 2032K to reserve `0x081FC000`-`0x08200000`, Bank 2's last 16K sector on
+  this dual-bank part, for exactly this). Cross-compiled as its own static library
+  (`boomlink_flash_storage_port`, defined in `fw/bom-stm32node/CMakeLists.txt` itself,
+  the same isolation `radio_layer` gets) but - like `boomlink_dispatch`/
+  `boomlink_command_service`/`boomlink_config_service` before it - not yet linked into the
+  firmware image: nothing calls `boomlink_config_store_load()`/`_save()` at boot or on a
+  confirmed config write until the same later Phase C call site wires it in.
+- TrustZone (`HAL_GTZC_MODULE_ENABLED`) is disabled on this board (`Core/Inc/
+  stm32h5xx_hal_conf.h`), so `boomlink_flash_storage_port.c` uses the plain
+  (non-`_NS`/`_S`) `HAL_FLASH_*`/`HAL_FLASHEx_*` calls rather than needing to pick a
+  secure/non-secure variant.
+
 ```text
 fw/
 ├── common/
@@ -288,6 +334,10 @@ fw/
 │       ├── services/                # PR 4 Phase A - per-domain logic behind the dispatcher
 │       │   ├── boomlink_command_service.h/.c   # section 8.3's command set, ops injected
 │       │   └── boomlink_config_service.h/.c    # section 8.2's ConfigGet/Set, in-memory only
+│       ├── storage/                 # PR 4 Phase B - section 10.1's persisted NodeConfig
+│       │   ├── boomlink_storage_port.h/.c    # flash seam - tests/'s fake implements it too
+│       │   ├── boomlink_crc32.h/.c           # the wrapper's CRC-32, pinned on its own
+│       │   └── boomlink_config_store.h/.c    # magic/version/length/CRC framing + load/save
 │       ├── tests/
 │       │   ├── test_encode_decode.py
 │       │   ├── test_compatibility.py
@@ -316,8 +366,11 @@ fw/
 │   │   │   │                          # split this line used to show; see PR 4 Phase A's
 │   │   │   │                          # "what actually landed" above
 │   │   ├── services/                  # not yet added - same note as protocol/ above
-│   │   └── storage/
-│   │       └── config_store.c/.h      # not yet added - PR 4 Phase B's job
+│   │   └── storage/                   # Phase B - see PR 4 Phase B's "what actually
+│   │       │                          # landed" above for how this differs from
+│   │       │                          # the config_store.c/.h sketch this line used to show
+│   │       └── boomlink_flash_storage_port.h/.c  # boomlink_storage_port_t, backed by
+│   │                                              # the last flash sector (STM32H563xx_FLASH.ld)
 │   ├── third_party/
 │   │   ├── embedded-cli/
 │   │   ├── RadioLib/
