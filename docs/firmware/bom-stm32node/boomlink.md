@@ -268,12 +268,11 @@ fw/
 │   │   │   ├── e22_radio.cpp
 │   │   │   ├── stm32_radiolib_hal.hpp
 │   │   │   └── stm32_radiolib_hal.cpp
-│   │   ├── link/
-│   │   │   ├── boomlink.h
-│   │   │   ├── boomlink.c
-│   │   │   ├── boomlink_tx.c
-│   │   │   ├── boomlink_rx.c
-│   │   │   └── boomlink_queue.c
+│   │   ├── link/                      # Phase C - see section 4's "what actually
+│   │   │   │                          # landed" above for how this differs from
+│   │   │   │                          # the four-file sketch this line used to show
+│   │   │   ├── boomlink_radio_port.h/.c   # boomlink_port_t, wired to App/radio/radio.h
+│   │   │   └── link_service.h/.c          # the boomlink_link_t instance + cli.c's call site
 │   │   ├── protocol/
 │   │   │   ├── protocol_codec.h
 │   │   │   ├── protocol_codec.c

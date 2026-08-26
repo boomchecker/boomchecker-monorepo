@@ -577,7 +577,7 @@ static void cmd_link(EmbeddedCli *cli, char *args, void *context)
     const char *dest_tok = embeddedCliGetToken(args, 2);
     char       *end       = NULL;
     uint32_t    dest      = (dest_tok != NULL) ? (uint32_t)strtoul(dest_tok, &end, 16) : 0;
-    if (dest_tok == NULL || end == dest_tok)
+    if (dest_tok == NULL || end == dest_tok || *end != '\0')
     {
       embeddedCliPrint(cli, "usage: link ping <node_id_hex> [text]");
       return;
