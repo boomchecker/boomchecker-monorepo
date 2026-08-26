@@ -557,12 +557,24 @@ static void print_link_status(EmbeddedCli *cli)
    typo into a real, silent, un-acked broadcast transmission (section
    9.9's "broadcast never requests link ACK" only makes that quieter).
    Capping at 8 digits makes the accumulation below incapable of
-   overflowing uint32_t in the first place - no ERANGE check needed. */
+   overflowing uint32_t in the first place - no ERANGE check needed.
+
+   Accepts an optional leading "0x"/"0X", stripped before the 1-8-digit
+   count below applies - not for strtoul() compatibility, but because
+   `link status` PRINTS every ID this way ("node 0x1234ABCD"), and section
+   15.3's own documented bring-up procedure is to read that line off one
+   board and paste it into another's `link ping`. Rejecting the exact
+   format the tool itself prints would fail this PR's own hardware
+   acceptance test on a technicality nobody would think to work around. */
 static bool parse_hex_u32(const char *tok, uint32_t *out)
 {
   if (tok == NULL)
   {
     return false;
+  }
+  if (tok[0] == '0' && (tok[1] == 'x' || tok[1] == 'X'))
+  {
+    tok += 2;
   }
   size_t len = strlen(tok);
   if (len == 0u || len > 8u)

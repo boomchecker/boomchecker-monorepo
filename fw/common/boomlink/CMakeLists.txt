@@ -489,12 +489,12 @@ endif()
 # something compile; if link-layer code needs to look inside the payload, the
 # layering is wrong.
 #
-# Built in the ARM cross build too, even though nothing in the firmware
-# references it yet - PR 3's later phases wire it in. That is deliberate, not
-# the "compiled but never linked" gap PR 2's review caught: there the ELF was
-# missing a symbol an acceptance criterion required, whereas here cross-
-# compiling it early is what proves it is free of host-isms and warning-clean
-# for the target before any firmware depends on it. The second half of that claim
+# Built in the ARM cross build, and - as of Phase C - actually linked into
+# the firmware too (fw/bom-stm32node/App/link/ is the call site; see that
+# target's own comment below for the fuller history of what this looked like
+# before Phase C landed). Cross-compiling it here, rather than only once
+# something depended on it, is what proves it free of host-isms and
+# warning-clean for the target ahead of time - the second half of that claim
 # is only true when BOOMLINK_TARGET_WERROR is on, which is why CI turns it on
 # - see that option above.
 #

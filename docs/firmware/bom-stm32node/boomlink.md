@@ -1546,8 +1546,10 @@ frame, rejected as malformed/bad-magic, and never reaches test 1's raw preview.
 Run `link disable` on the RECEIVING board first for test 1; `link enable`
 (the default) restores test 2. `link ping <node_id_hex> [text]` is test 2's
 CLI entry point - `link status` on the peer reports the `node_id` to target,
-since section 7.2's bring-up-only address (a board's unique ID XORed together;
-see `link_service.c`) has no fixed value to write down here.
+since section 7.2's bring-up-only address (a board's unique ID XORed together
+and avalanche-mixed - plain XOR alone was a real cross-board collision risk,
+fixed after review; see `link_service.c`) has no fixed value to write down
+here.
 
 ---
 

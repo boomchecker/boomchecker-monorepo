@@ -60,16 +60,33 @@ void boomlink_radio_port_init(boomlink_port_t *out) {
   }
 
   /* Seeded once, from this chip's factory-programmed 96-bit unique ID XORed
-     with the tick at call time - so two boards running IDENTICAL firmware
-     (same static seed formula) still draw different sequences, without
-     needing HAL_RNG wired up. Never re-seeded: boomlink_port.h asks for a
-     per-node sequence, not a per-call one, and xorshift32's own period
-     already covers a boot's worth of draws.
+     with the tick at call time - two boards running IDENTICAL firmware (same
+     static seed formula) then draw different sequences AS LONG AS the tick
+     differs between them, without needing HAL_RNG wired up. Never re-seeded:
+     boomlink_port.h asks for a per-node sequence, not a per-call one, and
+     xorshift32's own period already covers a boot's worth of draws.
+
+     Deliberately NOT given link_service.c's mix32() avalanche treatment
+     (added there after review found the UID's plain XOR too weak against
+     STM32's structured, non-random UID layout): the two callers have
+     different failure costs. Two nodes with the same node_id cannot address
+     each other at all - a hard failure, worth a real mixing step. Two nodes
+     that happen to draw the same backoff/jitter sequence just get worse
+     collision-avoidance for that one coincidence (boomlink_port.h's own
+     "quality requirements are low here... not cryptography") - a soft
+     degradation, not a correctness break, and this file's UID+tick mix
+     already carries the same caveat link_service.c's derive_session_id()
+     documents for the identical formula: on a board with deterministic boot
+     timing, the tick term can fail to vary, so two same-batch boards booting
+     in the same power event could plausibly draw the same seed too. Left
+     as-is rather than "fixed" here because the fix (making the tick term
+     actually vary) is section 9.3's session_id problem, tracked in issue
+     #91 - duplicating that fix's effort here without the real fix behind it
+     would just be two places pretending the same known gap is closed.
 
      xorshift32 has exactly one degenerate input - an all-zero state stays
-     zero forever - which a 96-bit UID XORed with a nonzero tick will not
-     produce in practice, but is cheap to rule out rather than trust to
-     chance. */
+     zero forever - which the UID/tick combination will not produce in
+     practice, but is cheap to rule out rather than trust to chance. */
   s_prng_state = HAL_GetUIDw0() ^ HAL_GetUIDw1() ^ HAL_GetUIDw2() ^ HAL_GetTick();
   if (s_prng_state == 0u) {
     s_prng_state = 0x9E3779B9u;
