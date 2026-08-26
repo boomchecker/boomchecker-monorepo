@@ -213,12 +213,14 @@ sketch:
   each has its own focused test binary rather than one monolith.
 - `App/link/` under `bom-stm32node` is therefore not four files but two, both added by
   Phase C: `boomlink_radio_port.c/.h` (the `boomlink_port_t` seam, wired to
-  `App/radio/radio.h`) and `link_service.c/.h` (the `boomlink_link_t` instance,
-  `cli.c`'s call site into it, and the `target_link_libraries` entry that finally links
-  both `boomlink_linkframe` and `boomlink_linkengine` into the firmware image - they
-  had only ever been cross-compiled before, on purpose, to prove them free of host-isms
-  before anything depended on them). The `link` CLI command (`link status` / `link
-  enable`/`disable` / `link ping <node_id_hex>`) is the ping/pong PR 3's scope names -
+  `App/radio/radio.h`) and `link_service.c/.h` (the `boomlink_link_t` instance and the
+  call site `Core/Src/cli.c` drives it from). Phase C also touched two files outside
+  `App/link/` itself: `fw/bom-stm32node/CMakeLists.txt` gained the `target_link_libraries`
+  entry that finally links both `boomlink_linkframe` and `boomlink_linkengine` into the
+  firmware image (they had only ever been cross-compiled before, on purpose, to prove
+  them free of host-isms before anything depended on them), and `cli.c` gained the `link`
+  command (`link status` / `link enable`/`disable` / `link ping <node_id_hex>`) - the
+  ping/pong PR 3's scope names -
   see section 15.3 for how it coexists with the pre-existing raw `radio ping` test.
 
 ```text

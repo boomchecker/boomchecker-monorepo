@@ -7,11 +7,13 @@ cmake_minimum_required(VERSION 3.21)
 #
 # 1. add_subdirectory()'d from fw/bom-stm32node/CMakeLists.txt, under that
 #    project's ARM cross toolchain - produces the `boomlink_protocol` static
-#    library (generated Nanopb codec + boomlink_codec.c), which the firmware
-#    links, and `boomlink_linkframe` (the link frame header), which is
-#    cross-compiled but not yet linked by anything - see its own comment below.
-#    No tests are built this way: cross-compiled host tooling makes no sense,
-#    and the STM32 target has no way to run pytest.
+#    library (generated Nanopb codec + boomlink_codec.c), `boomlink_linkframe`
+#    (the link frame header) and `boomlink_linkengine` (the link engine), all
+#    three now actually linked into the firmware image (`App/link/` is the
+#    link engine's call site - see its own comment below for how that came
+#    to be true only as of Phase C). No tests are built this way:
+#    cross-compiled host tooling makes no sense, and the STM32 target has no
+#    way to run pytest.
 # 2. configured standalone, with the host's native compiler - additionally
 #    builds `boomlink_codec_tool` and `boomlink_linkframe_tool` (small CLIs
 #    used by the Python tests) and registers the native/host test suite via

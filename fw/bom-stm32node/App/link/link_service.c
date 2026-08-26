@@ -35,6 +35,28 @@ static uint32_t        s_node_id;
 static bool            s_initialized;
 static bool            s_enabled = true;
 
+/* 32-bit avalanche finalizer (Chris Wellons' "lowbias32", public domain) -
+   a bijection on uint32_t with low measured bias, used below to combine the
+   UID's three words into one better than a plain XOR would.
+
+   Why a plain XOR of the three words isn't good enough: STM32's factory UID
+   is structured (wafer X/Y coordinates plus a lot number), not uniformly
+   random, so boards from the same production batch can share large spans of
+   bits in the SAME word positions - which is exactly what XOR is blind to:
+   two boards differing only in a couple of bits of one word, or differing
+   in complementary bits across two words, can XOR-cancel into identical or
+   near-identical combined values. Two boards with the same node_id cannot
+   address each other at all, so this is worth a real mixing step rather
+   than trusting three raw factory words. */
+static uint32_t mix32(uint32_t x) {
+  x ^= x >> 16;
+  x *= 0x7feb352du;
+  x ^= x >> 15;
+  x *= 0x846ca68bu;
+  x ^= x >> 16;
+  return x;
+}
+
 /* This node's address (section 7.2), derived from the chip's factory-
    programmed 96-bit unique ID rather than a compile-time constant or a
    stored config, because neither exists yet: PR 4 has not landed persistent
@@ -53,12 +75,17 @@ static bool            s_enabled = true;
 
    BOOMLINK_ADDR_INVALID (0) and BOOMLINK_ADDR_BROADCAST (0xFFFFFFFF) are
    both rejected by boomlink_link_init() (section 7.2's node_id contract) -
-   astronomically unlikely for a XOR of three 32-bit UID words to land on
-   either exact value, but cheap to guard rather than trust to chance. */
+   astronomically unlikely for a well-mixed 32-bit value to land on either
+   exact value, but cheap to guard rather than trust to chance. The two
+   fallbacks are deliberately DISTINCT constants (not one shared value): two
+   boards that separately happened to hit the two different forbidden values
+   would otherwise collapse onto the same substitute and collide anyway. */
 static uint32_t derive_node_id(void) {
-  uint32_t id = HAL_GetUIDw0() ^ HAL_GetUIDw1() ^ HAL_GetUIDw2();
-  if (id == BOOMLINK_ADDR_INVALID || id == BOOMLINK_ADDR_BROADCAST) {
+  uint32_t id = mix32(HAL_GetUIDw0() ^ HAL_GetUIDw1() ^ HAL_GetUIDw2());
+  if (id == BOOMLINK_ADDR_INVALID) {
     id = 1u;
+  } else if (id == BOOMLINK_ADDR_BROADCAST) {
+    id = 2u;
   }
   return id;
 }

@@ -334,9 +334,18 @@ static void cmd_proto(EmbeddedCli *cli, char *args, void *context)
    bytes shown as '.') into `out`, NUL-terminated. Returns the number of
    bytes actually rendered, so a caller can tell whether `len` was longer
    than what fit. Shared by the raw and BoomLink-level RX previews below -
-   both need exactly this, on payloads from two different sources. */
+   both need exactly this, on payloads from two different sources.
+
+   `cap == 0` renders nothing rather than underflowing `cap - 1u` to
+   SIZE_MAX: unreachable today (every call site passes a compile-time-sized
+   local array), but cheap to close off rather than leave as a contract only
+   its current callers happen to uphold. */
 static size_t ascii_preview(char *out, size_t cap, const uint8_t *buf, size_t len)
 {
+  if (cap == 0u)
+  {
+    return 0;
+  }
   size_t n = (len < cap - 1u) ? len : (cap - 1u);
   for (size_t i = 0; i < n; i++)
   {
@@ -500,9 +509,12 @@ static void print_link_status(EmbeddedCli *cli)
     return;
   }
 
-  /* Worst case a few dozen bytes over three lines of counters - sized
-     generously past that, same margin fmt_fixed()'s other callers use. */
-  char line[192];
+  /* Worst case (the ack/rx-rejection counters line, nine %lu fields at up
+     to 10 digits each) is 183 bytes + NUL = 184 - computed by hand, not
+     estimated, since this line reuses the same buffer for three different
+     format strings of different lengths. 224 leaves genuine margin past
+     that, rather than the 8 bytes a smaller buffer would. */
+  char line[224];
   snprintf(line, sizeof(line),
            "link: node 0x%08lX  session 0x%08lX  %s  queue %u  radio-poll: %s",
            (unsigned long)link_service_node_id(), (unsigned long)boomlink_link_session_id(link),
@@ -533,6 +545,56 @@ static void print_link_status(EmbeddedCli *cli)
            (unsigned long)stats.rx_invalid_source, (unsigned long)stats.rx_oversize,
            (unsigned long)stats.tx_dropped, (unsigned long)stats.tx_shed);
   embeddedCliPrint(cli, line);
+}
+
+/* Parses `tok` as EXACTLY 1-8 hex digits (no sign, no "0x" prefix) into
+   `*out`. Deliberately not strtoul(): it accepts a leading '+'/'-' (so
+   "-1" silently parses as a huge unsigned value) and reports overflow by
+   returning ULONG_MAX/setting errno rather than by refusing to parse, so a
+   caller checking only "did the end pointer move" - the check this file
+   used before this function existed - accepts "1FFFFFFFF" as
+   0xFFFFFFFF... which happens to be BOOMLINK_ADDR_BROADCAST, turning a
+   typo into a real, silent, un-acked broadcast transmission (section
+   9.9's "broadcast never requests link ACK" only makes that quieter).
+   Capping at 8 digits makes the accumulation below incapable of
+   overflowing uint32_t in the first place - no ERANGE check needed. */
+static bool parse_hex_u32(const char *tok, uint32_t *out)
+{
+  if (tok == NULL)
+  {
+    return false;
+  }
+  size_t len = strlen(tok);
+  if (len == 0u || len > 8u)
+  {
+    return false;
+  }
+
+  uint32_t value = 0;
+  for (size_t i = 0; i < len; i++)
+  {
+    char     c = tok[i];
+    uint32_t digit;
+    if (c >= '0' && c <= '9')
+    {
+      digit = (uint32_t)(c - '0');
+    }
+    else if (c >= 'a' && c <= 'f')
+    {
+      digit = (uint32_t)(c - 'a') + 10u;
+    }
+    else if (c >= 'A' && c <= 'F')
+    {
+      digit = (uint32_t)(c - 'A') + 10u;
+    }
+    else
+    {
+      return false;
+    }
+    value = (value << 4) | digit;
+  }
+  *out = value;
+  return true;
 }
 
 /* `link ping` is deliberately just boomlink_link_send() with an ACK
@@ -573,11 +635,22 @@ static void cmd_link(EmbeddedCli *cli, char *args, void *context)
       embeddedCliPrint(cli, "link: not initialized");
       return;
     }
+    if (!link_service_enabled())
+    {
+      /* Not a hard error - the frame WOULD queue (boomlink_link_send()
+         doesn't know about this flag) - but link_service_process() skips
+         boomlink_link_poll() entirely while disabled, so it would sit
+         queued and never transmit, with the operator watching for a
+         `link tx done` line that can never arrive. Refusing here, rather
+         than queueing something already known to be doomed, is the
+         honest answer. */
+      embeddedCliPrint(cli, "link: disabled - `link ping` would queue but never transmit "
+                            "(see `link enable`)");
+      return;
+    }
 
-    const char *dest_tok = embeddedCliGetToken(args, 2);
-    char       *end       = NULL;
-    uint32_t    dest      = (dest_tok != NULL) ? (uint32_t)strtoul(dest_tok, &end, 16) : 0;
-    if (dest_tok == NULL || end == dest_tok || *end != '\0')
+    uint32_t dest;
+    if (!parse_hex_u32(embeddedCliGetToken(args, 2), &dest))
     {
       embeddedCliPrint(cli, "usage: link ping <node_id_hex> [text]");
       return;

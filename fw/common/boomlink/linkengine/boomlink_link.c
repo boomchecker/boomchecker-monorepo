@@ -442,10 +442,11 @@ static uint32_t draw_jitter_ms(boomlink_link_t *link) {
  * boomlink_link_poll() call and the ACK isn't the last of them - the same
  * misattribution the RX callback's rssi_dbm/snr_db parameters exist to
  * prevent, just needing a burst that buries the ACK instead of a burst of
- * payloads. Invisible today only because the one real port (radio.h) is
- * single-slot (see boomlink_link_poll()'s own comment on that limit); the fake
- * port already supports a burst, which is how this would surface the moment a
- * real multi-packet port exists.
+ * payloads. Once genuinely invisible on the real target because radio.h was
+ * single-slot (see boomlink_link_poll()'s own comment on that history); not
+ * anymore - Phase C gave radio.h a real multi-packet ring, the same kind the
+ * fake port this package tests against already had, so a burst that buries
+ * an ACK is now a real, reachable path on hardware too, not just in tests.
  */
 static void finish_tx(boomlink_link_t *link, boomlink_tx_outcome_t outcome, float rssi_dbm,
                       float snr_db) {
