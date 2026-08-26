@@ -70,10 +70,24 @@ static uint32_t derive_node_id(void) {
    keeps the two from coinciding - see above), which is already guaranteed
    non-zero there for the identical reason. Deliberately NOT the same
    derivation as node_id: node_id XORs the UID alone so it stays the SAME
-   across reboots (section 7.2 wants identity stable); this also folds in
-   HAL_GetTick() so it CHANGES across reboots (section 9.3 wants a fresh
-   session each time) - reusing one formula for both would satisfy neither
-   requirement. */
+   across reboots (section 7.2 wants identity stable); this folds in
+   HAL_GetTick() too, which section 9.3 needs to CHANGE across reboots.
+
+   It does not reliably do so, and that is a known, NOT-yet-fixed gap, not a
+   theoretical one: HAL_GetTick() at this point in boot is the elapsed time
+   since reset through a fixed sequence of MX_*_Init() calls and one
+   constant-length HAL_Delay() (e22_radio::PowerUp()) - no user input, no
+   variable-length wait, on a board whose radio answers (the healthy,
+   common case). That makes this line read the SAME tick value on every
+   single reboot, not rarely, which means the SAME session_id every reboot -
+   exactly the failure boomlink_link_init()'s own doc warns against: a
+   peer's duplicate cache silently suppresses this node's post-reboot frames
+   as replays while still ACKing them, so a sender-side success (`link ping`
+   reporting BOOMLINK_TX_ACKED) does not mean the payload reached the
+   application. Flagged independently by two review passes; the fix is a
+   flash-backed monotonic boot counter (Flash HAL is already enabled on this
+   target, no new peripheral needed) rather than anything this function can
+   compute alone - tracked as follow-up work, not fixed here. */
 static uint32_t derive_session_id(void) {
   uint32_t id = HAL_GetUIDw0() ^ HAL_GetUIDw1() ^ HAL_GetUIDw2() ^ HAL_GetTick() ^
                 LINK_SESSION_ID_SALT;
