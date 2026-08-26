@@ -64,15 +64,27 @@ services/         PR 4 Phase A: boomlink_command_service.h/.c (section 8.3's
                   command set over an injected ops struct) and
                   boomlink_config_service.h/.c (section 8.2's ConfigGet/
                   ConfigSet, including the revert-on-timeout apply)
+storage/          PR 4 Phase B: boomlink_storage_port.h/.c (the flash seam a
+                  real port, or tests/'s fake, implements - same fake-vs-real
+                  split as linkengine/boomlink_port.h above), boomlink_crc32.h/
+                  .c (the wrapper's CRC-32, pinned on its own against the
+                  algorithm's published test vector), and
+                  boomlink_config_store.h/.c (section 10.1's magic/version/
+                  length/CRC wrapper and load/save). No Nanopb dependency in
+                  boomlink_storage_port/boomlink_crc32, same as linkframe/
+                  linkengine above; boomlink_config_store IS Nanopb-dependent,
+                  same as dispatch/ above - encoding/decoding the wrapped
+                  NodeConfig blob is its whole job
 tests/            host-native C CLI tools (codec_tool.c, linkframe_tool.c,
                   sharing tool_support.c) + the link engine's C scenario
                   binaries (port_test.c, dupcache_test.c, txqueue_test.c,
                   link_rx_test.c, link_tx_test.c, against fake_port.h/.c's
-                  deterministic fake radio) + dispatch/services/ scenario
-                  binaries (dispatch_test.c, command_service_test.c,
-                  config_service_test.c) + pytest suite + golden vectors
-                  (vectors_spec.py is their single source of truth,
-                  sha256-pinned - see "Protocol compatibility rules")
+                  deterministic fake radio) + dispatch/services/storage/
+                  scenario binaries (dispatch_test.c, command_service_test.c,
+                  config_service_test.c, crc32_test.c, config_store_test.c) +
+                  pytest suite + golden vectors (vectors_spec.py is their
+                  single source of truth, sha256-pinned - see "Protocol
+                  compatibility rules")
 CMakeLists.txt    generation + libraries + (standalone only) test targets
 ```
 

@@ -131,6 +131,22 @@ target_link_libraries(radio_layer PRIVATE RadioLib stm32cubemx)
 # see fw/common/boomlink/CMakeLists.txt for why.
 add_subdirectory(${CMAKE_SOURCE_DIR}/../common/boomlink boomlink)
 
+# The config storage wrapper's real flash backend (App/storage/, PR 4
+# Phase B) - a separate, STM32-specific static library rather than a source
+# added straight into ${CMAKE_PROJECT_NAME}, the same isolation radio_layer
+# gets: this is the one place HAL_FLASH_*/HAL_FLASHEx_* calls exist in this
+# firmware. NOT yet added to target_link_libraries(${CMAKE_PROJECT_NAME} ...)
+# below - cross-compiled here to catch a build break early, but unused until
+# a later phase actually calls boomlink_config_store_load()/_save() at boot
+# and on a confirmed config write, the same "wired but not yet linked"
+# state boomlink_dispatch/boomlink_command_service/boomlink_config_service
+# are already in (see fw/common/boomlink/CMakeLists.txt).
+add_library(boomlink_flash_storage_port STATIC
+    ${CMAKE_SOURCE_DIR}/App/storage/boomlink_flash_storage_port.c
+)
+target_include_directories(boomlink_flash_storage_port PUBLIC ${CMAKE_SOURCE_DIR}/App/storage)
+target_link_libraries(boomlink_flash_storage_port PUBLIC boomlink_storage_port PRIVATE stm32cubemx)
+
 # The link engine's radio port adapter + call site (App/link/, PR 3 Phase C) -
 # plain C, no RadioLib types visible here (it calls through App/radio/radio.h,
 # same rule as everything else outside radio_layer).

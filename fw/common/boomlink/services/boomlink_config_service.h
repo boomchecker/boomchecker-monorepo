@@ -21,22 +21,34 @@ extern "C" {
 #endif
 
 /** Section 8.2's NodeConfig tree, plus the version stamp optimistic
- *  concurrency needs. */
-typedef struct {
-  uint32_t                  config_version;
-  boomlink_GeneralConfig    general;
-  boomlink_LinkConfig       link;
-  boomlink_RadioConfig      radio;
-  boomlink_DetectionConfig  detection;
-  boomlink_GnssConfig       gnss;
-  boomlink_TelemetryConfig  telemetry;
-} boomlink_node_config_t;
+ *  concurrency needs - the generated Nanopb type directly (config.proto's
+ *  `NodeConfig` message), not a hand-written mirror of it: Phase B's storage
+ *  wrapper (fw/common/boomlink/storage/) needs to Nanopb-encode/decode
+ *  exactly this value to persist and restore it, and a second hand-written
+ *  struct with the same six groups would only be a second place for the
+ *  field list to drift out of sync with config.proto. `has_general`/
+ *  `has_link`/etc. exist on the generated type (Nanopb gives every
+ *  message-type field presence, proto3 `optional` or not) but carry no
+ *  meaning here - every group in a real NodeConfig is always present; see
+ *  boomlink_node_config_defaults() and Phase B's save path for where they
+ *  are forced true rather than left to chance. boomlink_config_service.c's
+ *  own mutation sites (handle_set(), boomlink_config_service_commit_
+ *  pending_apply(), and boomlink_config_service_poll()'s WAITING-timeout
+ *  revert) are equally responsible for keeping this true once a config has
+ *  been written to at runtime, not just at construction - every one of
+ *  them that assigns a group's VALUE must also assert that group's has_X,
+ *  since Nanopb skips encoding a singular message field whose has_X is
+ *  false and Phase B's storage wrapper would then silently drop that whole
+ *  group from a persisted save. */
+typedef boomlink_NodeConfig boomlink_node_config_t;
 
 /** Safe defaults (section 10.1's "missing/invalid -> load safe defaults"),
  *  for both a genuinely fresh node and Phase B's corrupt-storage fallback.
  *  `config_version` starts at 1 - 0 is reserved the same way session_id 0
  *  is elsewhere in this codebase: the value an unseeded/zeroed struct would
- *  produce by accident, not a value any real config should carry. */
+ *  produce by accident, not a value any real config should carry. Forces
+ *  every group's has_X true - see this type's own doc for why a zeroed
+ *  generated struct is not enough on its own. */
 void boomlink_node_config_defaults(boomlink_node_config_t *out);
 
 /**

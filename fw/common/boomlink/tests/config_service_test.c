@@ -647,6 +647,117 @@ static void test_get_config_is_null_tolerant(void) {
   CHECK(out.general.node_id == 42u, "a real service must be read out faithfully");
 }
 
+static void test_set_restores_has_x_even_if_it_started_false(void) {
+  /* boomlink_node_config_t (typedef'd to the generated boomlink_NodeConfig,
+     see boomlink_config_service.h's own doc) carries has_general/has_link/
+     etc. only because Nanopb generates them for every message-type field -
+     they mean nothing to this file (nothing here ever branches on
+     svc.current.has_X) but they matter to PR 4 Phase B's storage wrapper,
+     which Nanopb-encodes this exact type: a false has_X there means "skip
+     this group entirely" on the wire, so a group whose has_X went missing
+     would silently vanish from a persisted config and come back as
+     defaults on the next boot. Every real path here goes through
+     boomlink_node_config_defaults() (which forces every has_X true), so
+     this scenario cannot happen today - this test starts from a
+     deliberately-unrealistic svc.current with every has_X false anyway, to
+     prove handle_set() re-establishes it on its own rather than merely
+     preserving whatever was already there. */
+  boomlink_config_service_t svc = make_svc(1000u);
+  svc.current.has_general        = false;
+  svc.current.has_link           = false;
+  svc.current.has_detection      = false;
+  svc.current.has_gnss           = false;
+  svc.current.has_telemetry      = false;
+
+  boomlink_ConfigMessage req                          = {0};
+  req.which_message                                   = boomlink_ConfigMessage_set_request_tag;
+  req.message.set_request.expected_config_version     = 1u;
+  req.message.set_request.has_telemetry               = true;
+  req.message.set_request.telemetry.report_interval_s = 42u;
+
+  boomlink_ConfigMessage resp;
+  bool ok = handle(&svc, &req, &resp);
+
+  REQUIRE(ok, "a SET always answers");
+  CHECK(resp.message.set_response.result == boomlink_ConfigSetResult_CONFIG_SET_RESULT_OK,
+        "a non-hazardous SET must still apply as OK regardless of the pre-existing has_X state");
+  CHECK(svc.current.has_telemetry,
+        "the group actually written by this SET must have has_telemetry restored to true");
+  CHECK(!svc.current.has_general, "a group NOT written by this SET must be left exactly as it was");
+}
+
+static void test_commit_and_revert_both_restore_has_radio(void) {
+  /* RadioConfig's VALUE cannot go through the immediate-assignment block
+     test_set_restores_has_x_even_if_it_started_false already covers - it
+     is entirely hazardous, so a value that actually CHANGES only ever
+     lands in svc.current via boomlink_config_service_commit_pending_apply()
+     (the COMMIT path) or the WAITING-timeout revert inside
+     boomlink_config_service_poll() (the REVERT path). Both need their own
+     has_radio assertion, the same way handle_set()'s immediate block needs
+     one per group - this test starts has_radio false (unrealistic today;
+     see the sibling test's own doc for why) and drives each path in turn.
+     (An UNCHANGED RadioConfig resend is a separate case, covered by
+     test_resending_an_unchanged_radio_value_still_restores_has_radio.) */
+  boomlink_config_service_t svc = make_svc(500u);
+
+  boomlink_ConfigMessage req                          = {0};
+  req.which_message                                   = boomlink_ConfigMessage_set_request_tag;
+  req.message.set_request.expected_config_version     = 1u;
+  req.message.set_request.has_radio                   = true;
+  req.message.set_request.radio.frequency_mhz         = 915.0f;
+  boomlink_ConfigMessage resp;
+  REQUIRE(handle(&svc, &req, &resp), "a SET always answers");
+  REQUIRE(resp.message.set_response.result ==
+              boomlink_ConfigSetResult_CONFIG_SET_RESULT_PENDING_CONFIRMATION,
+          "setup: any RadioConfig change is entirely hazardous");
+
+  svc.current.has_radio = false; /* the COMMIT path under test */
+  boomlink_config_service_commit_pending_apply(&svc, 1000u);
+  CHECK(svc.current.radio.frequency_mhz == 915.0f, "setup: commit must have applied the staged value");
+  CHECK(svc.current.has_radio, "commit_pending_apply() must restore has_radio, not just the value");
+
+  svc.current.has_radio = false; /* the REVERT path under test */
+  boomlink_config_service_poll(&svc, 1500u); /* elapsed exactly the 500ms confirm window */
+  REQUIRE(svc.apply_state == BOOMLINK_CONFIG_APPLY_IDLE, "setup: the window boundary must revert");
+  CHECK(svc.current.radio.frequency_mhz == 0.0f, "setup: revert must have restored the pre-change value");
+  CHECK(svc.current.has_radio, "poll()'s WAITING-timeout revert must restore has_radio too");
+}
+
+static void test_resending_an_unchanged_radio_value_still_restores_has_radio(void) {
+  /* Found by an automated PR review, not by any of this session's own
+     review agents: a SET that includes RadioConfig with a value EQUAL to
+     current's is not hazardous (hazard_changed compares values, not
+     presence - see test_requesting_the_current_hazardous_value_is_not_a_
+     hazard_change's own doc for the node_id/magic equivalent of this same
+     rule), so it never reaches STAGED/commit_pending_apply() at all - the
+     two sites test_commit_and_revert_both_restore_has_radio covers. Nor
+     does it go through handle_set()'s immediate-assignment block the other
+     five groups use, since RadioConfig's VALUE is deliberately excluded
+     from that block. Before this test's fix, has_radio was untouched by
+     either path in exactly this one case - a real, distinct gap from the
+     one test_commit_and_revert_both_restore_has_radio covers, not the same
+     gap tested twice. */
+  boomlink_config_service_t svc  = make_svc(1000u);
+  svc.current.has_radio           = false;
+  /* current.radio defaults to all-zero - request that exact value back. */
+
+  boomlink_ConfigMessage req                      = {0};
+  req.which_message                               = boomlink_ConfigMessage_set_request_tag;
+  req.message.set_request.expected_config_version = 1u;
+  req.message.set_request.has_radio               = true;
+  req.message.set_request.radio                   = (boomlink_RadioConfig){0};
+
+  boomlink_ConfigMessage resp;
+  bool ok = handle(&svc, &req, &resp);
+
+  REQUIRE(ok, "a SET always answers");
+  CHECK(resp.message.set_response.result == boomlink_ConfigSetResult_CONFIG_SET_RESULT_OK,
+        "resending the unchanged RadioConfig value is not a hazard - must apply immediately as OK");
+  CHECK(svc.apply_state == BOOMLINK_CONFIG_APPLY_IDLE, "nothing should be pending");
+  CHECK(svc.current.has_radio,
+        "has_radio must be restored even though the value itself never changed");
+}
+
 static void test_handle_rejects_malformed_or_missing_arguments(void) {
   boomlink_config_service_t   svc = make_svc(1000u);
   boomlink_dispatch_rx_info_t rx  = {0};
@@ -686,6 +797,9 @@ int main(void) {
   test_radio_negative_zero_is_not_a_hazardous_change();
   test_radio_nan_does_not_permanently_break_hazard_detection();
   test_get_config_is_null_tolerant();
+  test_set_restores_has_x_even_if_it_started_false();
+  test_commit_and_revert_both_restore_has_radio();
+  test_resending_an_unchanged_radio_value_still_restores_has_radio();
   test_handle_rejects_malformed_or_missing_arguments();
   BOOMLINK_TEST_REPORT("config_service_test", 115);
 }

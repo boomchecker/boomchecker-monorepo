@@ -22,6 +22,19 @@ void boomlink_node_config_defaults(boomlink_node_config_t *out) {
   }
   *out                 = (boomlink_node_config_t){0};
   out->config_version  = 1u; /* 0 is the "nobody set this" accident value, not a real version */
+  /* Every group is always present in a real NodeConfig - has_X only means
+     "was this present" because Nanopb generates it for every message-type
+     field regardless of whether this type has any partial-presence use for
+     it (see the type's own doc). Left false here, boomlink_config_store_
+     save() would Nanopb-encode an empty message for every group instead of
+     its all-zero-but-real value - decodable, but not what a reader of the
+     stored blob would expect "the default GeneralConfig" to look like. */
+  out->has_general     = true;
+  out->has_link         = true;
+  out->has_radio        = true;
+  out->has_detection    = true;
+  out->has_gnss         = true;
+  out->has_telemetry    = true;
 }
 
 void boomlink_config_service_init(boomlink_config_service_t *svc,
@@ -213,26 +226,61 @@ static bool handle_set(boomlink_config_service_t *svc, const boomlink_ConfigSetR
      bother restating. A caller changing one field is expected to GET the
      current group first and send the whole thing back with that one field
      edited - see config.proto's ConfigSetRequest doc. */
+  /* next.has_X set alongside each next.X assignment below, not left to
+     whatever svc->current.has_X already was: `next.X = req->X` only copies
+     the submessage's VALUE, and boomlink_node_config_t's has_X only ever
+     starts true because boomlink_node_config_defaults() forces it there -
+     a future caller of boomlink_config_service_init() that ever seeded
+     svc->current from a hand-built config with some has_X false (nothing
+     today does; boomlink_config_service.h's own doc already says this is
+     the caller's responsibility) would otherwise never see it self-heal on
+     a later SET. That matters for Phase B specifically: an
+     always-true-and-forgotten-about has_X is invisible to every reader in
+     THIS file (nothing here ever branches on next.has_X), but Nanopb skips
+     encoding a singular message field whose has_X is false, so
+     boomlink_config_store_save() would silently drop that whole group from
+     the persisted blob - it would read back as all-zero defaults on the
+     next boot even though every GET in the current session answered
+     correctly. */
   boomlink_node_config_t next = svc->current;
   if (req->has_general) {
-    next.general          = req->general;
-    next.general.node_id  = svc->current.general.node_id; /* hazardous - restored below if changed */
+    next.general         = req->general;
+    next.general.node_id = svc->current.general.node_id; /* hazardous - restored below if changed */
+    next.has_general     = true;
   }
   if (req->has_link) {
     next.link       = req->link;
     next.link.magic = svc->current.link.magic; /* hazardous - restored below if changed */
+    next.has_link   = true;
   }
   if (req->has_detection) {
-    next.detection = req->detection;
+    next.detection     = req->detection;
+    next.has_detection = true;
   }
   if (req->has_gnss) {
-    next.gnss = req->gnss;
+    next.gnss     = req->gnss;
+    next.has_gnss = true;
   }
   if (req->has_telemetry) {
-    next.telemetry = req->telemetry;
+    next.telemetry     = req->telemetry;
+    next.has_telemetry = true;
   }
-  /* RadioConfig is entirely hazardous - `next.radio` deliberately NOT
-     touched here, only in the staged snapshot below. */
+  /* RadioConfig is entirely hazardous - `next.radio`'s VALUE is deliberately
+     NOT touched here, only in the staged snapshot (or applied directly by
+     commit_pending_apply()/poll()'s revert, both of which assert has_radio
+     themselves - see their own comments). But has_radio still needs
+     asserting here too, on its own, for the one case neither of those
+     reaches: a SET that includes RadioConfig with a value EQUAL to
+     current's (not hazardous - hazard_changed only compares values, not
+     presence) never stages anything at all, so if nothing else in the same
+     request is hazardous either, this function returns OK having never
+     touched svc->current.radio - correctly, since the value didn't change -
+     but that is still "this group was included in the write" by the same
+     whole-group-replacement contract has_general/has_link/etc. use above,
+     and has_radio must reflect that regardless of whether the value moved. */
+  if (req->has_radio) {
+    next.has_radio = true;
+  }
 
   next.config_version = svc->current.config_version + 1u;
   svc->current         = next;
@@ -282,6 +330,18 @@ void boomlink_config_service_commit_pending_apply(boomlink_config_service_t *svc
   svc->current.general.node_id  = svc->staged.node_id;
   svc->current.link.magic       = svc->staged.magic;
   svc->current.radio            = svc->staged.radio;
+  /* has_general/has_link are already re-asserted by handle_set()'s
+     immediate-assignment block (a hazardous node_id/magic change requires
+     has_general/has_link true to even be detected as one) - has_radio has
+     no such immediate-assignment path to ride along with, since RadioConfig
+     is entirely deferred to this function, so it is asserted here on its
+     own. Same reasoning as handle_set()'s own has_X reassignment: harmless
+     today (every real svc->current starts from boomlink_node_config_
+     defaults(), which already forces this true), but this is where
+     RadioConfig's actual value lands, so this is where its presence flag
+     must be guaranteed too - see this file's history for the five other
+     groups this exact class of gap was fixed for. */
+  svc->current.has_radio        = true;
   svc->apply_started_at_ms      = now_ms; /* overwrites any STAGED-phase latch from poll() */
   svc->apply_state              = BOOMLINK_CONFIG_APPLY_WAITING;
 }
@@ -338,6 +398,7 @@ void boomlink_config_service_poll(boomlink_config_service_t *svc, uint32_t now_m
   svc->current.general.node_id = svc->revert_to.node_id;
   svc->current.link.magic      = svc->revert_to.magic;
   svc->current.radio           = svc->revert_to.radio;
+  svc->current.has_radio       = true; /* same reasoning as commit_pending_apply()'s own assertion */
   /* The revert is itself an observable state change - a client holding the
      config_version from the earlier PENDING_CONFIRMATION response must not
      be able to treat it as still current once the hazardous fields it
