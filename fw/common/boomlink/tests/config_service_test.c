@@ -358,6 +358,29 @@ static void test_poll_eventually_abandons_a_staged_change_nobody_ever_commits(vo
         "stuck answering APPLY_IN_PROGRESS forever");
 }
 
+static void test_poll_abandons_immediately_when_confirm_window_is_zero(void) {
+  boomlink_config_service_t svc = make_svc(0u); /* degenerate but real: no grace period at all */
+
+  boomlink_ConfigMessage req                      = {0};
+  req.which_message                               = boomlink_ConfigMessage_set_request_tag;
+  req.message.set_request.expected_config_version = 1u;
+  req.message.set_request.has_general             = true;
+  req.message.set_request.general.node_id         = 77u;
+  boomlink_ConfigMessage resp;
+  handle(&svc, &req, &resp);
+  REQUIRE(svc.apply_state == BOOMLINK_CONFIG_APPLY_STAGED, "setup");
+
+  /* A zero-length window means "abandon immediately", not "abandon on the
+     NEXT poll": the latch and the elapsed check happen in the same call,
+     so this must not need a second, redundant poll just to notice a
+     window that was already zero-length from the start - the same
+     immediacy WAITING already gets on its first poll after
+     commit_pending_apply(). */
+  boomlink_config_service_poll(&svc, 5000u);
+  CHECK(svc.apply_state == BOOMLINK_CONFIG_APPLY_IDLE,
+        "a zero-length confirm window must abandon on the very first poll, not the second");
+}
+
 static void test_poll_reverts_exactly_at_the_window_boundary(void) {
   boomlink_config_service_t svc = make_svc(500u);
 
@@ -654,6 +677,7 @@ int main(void) {
   test_confirm_pending_apply_requires_waiting();
   test_poll_first_observation_of_staged_only_latches_the_clock();
   test_poll_eventually_abandons_a_staged_change_nobody_ever_commits();
+  test_poll_abandons_immediately_when_confirm_window_is_zero();
   test_poll_reverts_exactly_at_the_window_boundary();
   test_a_conflicting_hazardous_set_while_one_is_pending_is_rejected();
   test_set_rejects_an_attempt_to_change_node_id_to_an_invalid_value();
@@ -663,5 +687,5 @@ int main(void) {
   test_radio_nan_does_not_permanently_break_hazard_detection();
   test_get_config_is_null_tolerant();
   test_handle_rejects_malformed_or_missing_arguments();
-  BOOMLINK_TEST_REPORT("config_service_test", 113);
+  BOOMLINK_TEST_REPORT("config_service_test", 115);
 }

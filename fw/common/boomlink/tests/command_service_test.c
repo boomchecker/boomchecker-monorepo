@@ -218,9 +218,11 @@ static void test_diagnostic_buffer_is_always_nul_terminated_even_if_the_callback
   run(&ops, boomlink_CommandType_COMMAND_TYPE_SELF_TEST, &resp);
 
   size_t cap = sizeof(resp.message.response.diagnostic);
-  CHECK(resp.message.response.diagnostic[cap - 1] == '\0',
-        "the last byte of the diagnostic buffer must always be NUL, regardless of what a "
-        "callback wrote into it - Nanopb's string encoder requires this to encode at all");
+  REQUIRE(resp.message.response.diagnostic[cap - 1] == '\0',
+          "the last byte of the diagnostic buffer must always be NUL, regardless of what a "
+          "callback wrote into it - Nanopb's string encoder requires this to encode at all, "
+          "and the strlen() below is undefined behavior on an unterminated buffer, so this "
+          "must stop the scenario rather than continue past a real regression here");
   size_t len = strlen(resp.message.response.diagnostic);
   CHECK(len == cap - 1,
         "a callback that fills every byte it was handed must still leave a valid string, "

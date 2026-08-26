@@ -313,7 +313,13 @@ void boomlink_config_service_poll(boomlink_config_service_t *svc, uint32_t now_m
     if (!svc->staged_seen) {
       svc->apply_started_at_ms = now_ms;
       svc->staged_seen         = true;
-      return;
+      /* Falls through rather than returning: elapsed is exactly 0 right
+         after this latch, so the only way that can already satisfy
+         window_elapsed() is confirm_window_ms == 0 - and a zero-length
+         window means "abandon immediately", not "abandon on the NEXT
+         poll", the same immediacy WAITING's own timeout already gets on
+         its first poll after commit_pending_apply(). Any real (non-zero)
+         window still falls through to the same "not yet" return below. */
     }
     if (!window_elapsed(now_ms, svc->apply_started_at_ms, svc->confirm_window_ms)) {
       return;

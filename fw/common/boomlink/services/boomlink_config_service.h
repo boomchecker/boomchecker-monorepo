@@ -158,7 +158,10 @@ void boomlink_config_service_confirm_pending_apply(boomlink_config_service_t *sv
  * function itself latches `apply_started_at_ms` the FIRST time it observes
  * STAGED, then abandons the stage once confirm_window_ms has elapsed since
  * that latch - nothing in `current` was ever touched by staging alone, so
- * there is nothing to revert, only the stage itself to drop.
+ * there is nothing to revert, only the stage itself to drop. The latch and
+ * the elapsed check happen in the same call (not two calls apart), so
+ * confirm_window_ms == 0 abandons on the very first poll, matching
+ * WAITING's own immediacy on its first poll after commit.
  *
  * IDLE: no-op.
  */
