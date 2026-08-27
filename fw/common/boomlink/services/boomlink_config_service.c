@@ -35,6 +35,34 @@ void boomlink_node_config_defaults(boomlink_node_config_t *out) {
   out->has_detection    = true;
   out->has_gnss         = true;
   out->has_telemetry    = true;
+  /* Same reasoning one level deeper: DetectionConfig's own two submessages
+     (DroneDetectionConfig/GunshotDetectionConfig) are themselves singular
+     message-type fields, so Nanopb gives THEM a has_X too - and this
+     function already forces has_detection true above for exactly the
+     reason this comment gives for the outer six groups. Left false here,
+     a save() would still encode a real (if empty) DetectionConfig, but
+     silently drop both of ITS submessages instead of their all-zero-but-
+     real values - the identical gap this function exists to close, found
+     one nesting level down. */
+  out->detection.has_drone   = true;
+  out->detection.has_gunshot = true;
+  /* Same "defaults() must agree with the real hardcoded/running value"
+     reasoning as magic/link/radio below, for GeneralConfig's two link-
+     enable flags - App/link/link_service.c's s_enabled defaults true and
+     gates BOTH RX and TX together (link_service_process() skips
+     boomlink_link_poll() entirely while disabled); nothing gates
+     transmit_enabled independently at all today, so this node transmits
+     regardless of this field's value - true is what actually happens
+     either way. Left false before this fix: a fresh node's first
+     ConfigGet reported a node that can neither receive nor transmit,
+     despite demonstrably doing both to answer that very GET - and
+     boomlink.md's own canonical sensor-node and gateway example configs
+     already show both fields true, not the struct's zero-init. This is
+     PR 4 Phase C's own first-ever caller of boomlink_config_store_save()
+     - the last moment this is free to fix, before a wrong default is
+     ever actually written to a real node's flash. */
+  out->general.receive_enabled  = true;
+  out->general.transmit_enabled = true;
   /* Not left at the zero-init `{0}` gave it: 0 is not a real magic value,
      it is "this field was never set" - the same distinction node_id draws
      against BOOMLINK_ADDR_INVALID (also 0) two lines below in spirit, if
@@ -490,4 +518,21 @@ void boomlink_config_service_get_config(const boomlink_config_service_t *svc,
 boomlink_config_apply_state_t boomlink_config_service_apply_state(
     const boomlink_config_service_t *svc) {
   return (svc != NULL) ? svc->apply_state : BOOMLINK_CONFIG_APPLY_IDLE;
+}
+
+void boomlink_config_service_get_persistable_config(const boomlink_config_service_t *svc,
+                                                     boomlink_node_config_t *out) {
+  if (out == NULL) {
+    return;
+  }
+  if (svc == NULL) {
+    *out = (boomlink_node_config_t){0};
+    return;
+  }
+  *out = svc->current;
+  if (svc->apply_state == BOOMLINK_CONFIG_APPLY_WAITING) {
+    out->general.node_id = svc->revert_to.node_id;
+    out->link.magic      = svc->revert_to.magic;
+    out->radio           = svc->revert_to.radio;
+  }
 }

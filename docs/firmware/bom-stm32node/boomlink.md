@@ -1878,6 +1878,26 @@ the real seam, not the sketch" approach PR 3's own Phase C took — section 4):
   `boomlink_config_store_save()` had no caller anywhere in the firmware before this
   phase's review, silently contradicting this section's own "persist validated
   NodeConfig to flash" scope item and PR 4's stated acceptance criteria;
+- what actually gets persisted is `boomlink_config_service_get_persistable_config()`,
+  not `current` directly — a later review round found that persisting `current`
+  verbatim on *any* accepted `ConfigSet` (the bullet above), while a hazardous field
+  from an *earlier* request is still `WAITING` for confirmation, writes that earlier
+  field's in-flight, unconfirmed value to flash. If the hazard later times out,
+  `boomlink_config_service_poll()`'s revert only rewinds `current` in RAM — flash was
+  never rewritten — so the node reboots into a hazardous `node_id`/`magic`/`radio`
+  value nobody ever confirmed, with `ConfigGet` having reported the safe value the
+  whole time: exactly the "a working radio with a silent link" failure section 8.2
+  itself warns about, just reached via flash instead of RAM. The straightforward-
+  looking fix (skip the persist above whenever `apply_state != IDLE`) was tried and
+  rejected during review: it silently drops the *non-hazardous* half of a bundled
+  request instead, reintroducing the first bullet's bug in a wider form. The actual
+  fix keeps `current` as the source for persistence but overrides its hazard subset
+  (`general.node_id`/`link.magic`/`radio`) back to `revert_to`'s last-confirmed-safe
+  values for the duration of `WAITING` only — `IDLE` and `STAGED` need no override,
+  `current`'s hazard fields are already correct there. `protocol_service.c`'s
+  `persist_current_config()` is the only persistence call site and now goes through
+  this accessor exclusively, so there is no second path that could still persist
+  `current` raw;
 - a `ConfigSet` addressed to `BOOMLINK_ADDR_BROADCAST` is refused outright
   (`CONFIG_SET_RESULT_INVALID`, touching nothing - not even a non-hazardous field)
   in `boomlink_config_service_handle()` itself - the twin of the command service's
@@ -1939,7 +1959,37 @@ the real seam, not the sketch" approach PR 3's own Phase C took — section 4):
   `ConfigSet` target the same way `node_id`'s reserved values already were — closing
   the same "defaults/validation don't agree with the real running value" gap the
   `magic` default fix started with, for every field with a real hardcoded
-  counterpart, not just that one.
+  counterpart, not just that one;
+- the same defaults/reality gap, found again by a later review round in the one
+  remaining place it was still open: `boomlink_node_config_defaults()` left
+  `general.receive_enabled`/`general.transmit_enabled` at Nanopb's `false` zero
+  value, while `link_service.c` hardcodes `s_enabled = true` — so `ConfigGet` on a
+  never-configured node reported a link that looked administratively disabled when
+  it was actually up and answering. Fixed to default both to `true`, matching
+  `link_service.c`'s real value the same way the `magic`/`LinkConfig`/`RadioConfig`
+  fix above does. This PR is the first firmware ever able to write `NodeConfig` to
+  flash at all (`boomlink_config_store_save()` had zero callers before Phase C's own
+  persistence fix above), so a wrong default here would otherwise have shipped and
+  then been persisted as the fleet's baseline. `detection.has_drone`/
+  `detection.has_gunshot` — the two nested submessages' own Nanopb presence flags,
+  one level below the six top-level `has_X` flags this file already forces true —
+  got the same treatment alongside it: cosmetic today since every field in both
+  submessages is still zero either way, but the same recurring defect class this
+  file has needed patching for more than once;
+- a broadcast response no longer requests a link-layer ACK — `protocol_service_
+  on_rx()` previously passed `request_ack = true` unconditionally to
+  `boomlink_link_send()`, so even a `ConfigSet`/`CommandRequest` this same function
+  rejects for being broadcast (the two bullets above and section 9.9's danger-table
+  guard) still cost the node one ACK-requested response, retried up to
+  `LINK_MAX_ATTEMPTS` times with backoff if unacknowledged — as did a broadcast
+  `ConfigGet` legitimately answered per-peer. That directly worked against the
+  "several nodes may reply to the same broadcast at once" reasoning the broadcast
+  guards themselves give (section 9.7): the more nodes on the same broadcast, the
+  more of them independently retry an ACK nothing was ever going to send, for a
+  frame whose destination was never a single peer to begin with. Fixed by setting
+  `request_ack = destination_id != BOOMLINK_ADDR_BROADCAST` at the one call site —
+  this closes the broadcast-specific retry amplification only, not general inbound
+  rate limiting (see "no per-peer rate limiting" below, still open).
 
 Deliberately deferred, not silently dropped:
 

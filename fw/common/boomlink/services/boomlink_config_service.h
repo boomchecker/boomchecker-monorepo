@@ -190,6 +190,39 @@ void boomlink_config_service_get_config(const boomlink_config_service_t *svc,
                                         boomlink_node_config_t *out);
 
 /**
+ * `current`, except while a hazardous change is WAITING for confirmation
+ * (see boomlink_config_service_commit_pending_apply()'s doc for what that
+ * state means): in WAITING, `general.node_id`/`link.magic`/`radio` come
+ * from `revert_to` (the last CONFIRMED values) instead of from `current`
+ * (which already holds the new, still-unconfirmed ones -
+ * commit_pending_apply() moved them there before WAITING was ever
+ * reachable). Everything else - every non-hazardous field, and the hazard
+ * subset in every OTHER state (IDLE, STAGED) - is `current` unchanged.
+ *
+ * For a caller that persists a config to non-volatile storage: use this,
+ * not boomlink_config_service_get_config(), for that write.
+ * boomlink_config_store_save()'s doc has no notion of "provisional" - it
+ * persists whatever it is handed as final - so a caller that saved
+ * `current` directly during WAITING would write the unconfirmed hazard
+ * value to storage. That value is only provisional in RAM: if the confirm
+ * window later expires, boomlink_config_service_poll()'s revert restores
+ * `current`'s hazard fields in RAM, but has no way to also un-write
+ * whatever a caller already put in storage in the meantime - the exact
+ * "surviving reboot with a value nobody confirmed" failure section 8.2's
+ * revert-on-timeout design exists to prevent. This accessor is what lets a
+ * caller persist on every accepted write (including an unrelated
+ * non-hazardous one arriving during someone else's confirmation window)
+ * without that risk: while WAITING, it always reports the same hazard
+ * values `current` will fall back to if this change is never confirmed,
+ * so persisting it early is never wrong - and once IDLE again (confirmed
+ * or reverted), it is byte-identical to boomlink_config_service_get_config().
+ *
+ * NULL-tolerant, matching this codebase's other diagnostics accessors.
+ */
+void boomlink_config_service_get_persistable_config(const boomlink_config_service_t *svc,
+                                                     boomlink_node_config_t *out);
+
+/**
  * The revert-on-timeout state machine's current state - for a caller that
  * needs to know whether a hazardous change is in flight without reaching
  * into `svc->apply_state` directly (the struct is exposed for static

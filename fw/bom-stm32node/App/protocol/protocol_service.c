@@ -140,10 +140,21 @@ void protocol_service_load_config(boomlink_node_config_t *out) {
   }
 }
 
-/* Persist `s_config_svc.current` as it stands right now. Called from
-   protocol_service_on_rx() at the two points a config change actually
-   becomes this node's real, standing configuration - see those call
-   sites' own comments for exactly which two and why not any of the
+/* Persist `s_config_svc`'s PERSISTABLE snapshot as it stands right now -
+   boomlink_config_service_get_persistable_config(), not _get_config():
+   the two agree except while a hazardous change is WAITING for
+   confirmation, when this call site can run for a completely UNRELATED
+   accepted write (see protocol_service_on_rx()'s own comments on why
+   persistence isn't gated on apply_state). Using plain `current` there
+   would write that other change's still-unconfirmed node_id/magic/radio
+   to flash - exactly the "survives a reboot with a value nobody
+   confirmed" failure revert-on-timeout exists to prevent, found by
+   review: an ordinary two-request provisioning sequence (stage a
+   hazardous change, then an unrelated non-hazardous one before the first
+   is confirmed) was enough to reach it, not merely a contrived one.
+   Called from protocol_service_on_rx() at the two points a config change
+   actually becomes this node's real, standing configuration - see those
+   call sites' own comments for exactly which two and why not any of the
    others. Return value intentionally ignored: boomlink_config_store_
    save()'s own doc says a hardware failure here just means the region
    "look[s] invalid on the next load" (the same fallback path a fresh or
@@ -152,9 +163,9 @@ void protocol_service_load_config(boomlink_node_config_t *out) {
    same "not checked, no bring-up retry" posture link_service_init() and
    protocol_service_init() already take on their own failure paths. */
 static void persist_current_config(void) {
-  boomlink_node_config_t current;
-  boomlink_config_service_get_config(&s_config_svc, &current);
-  (void)boomlink_config_store_save(&s_storage_port, &current);
+  boomlink_node_config_t persistable;
+  boomlink_config_service_get_persistable_config(&s_config_svc, &persistable);
+  (void)boomlink_config_store_save(&s_storage_port, &persistable);
 }
 
 bool protocol_service_init(const boomlink_node_config_t *loaded_config) {
@@ -242,13 +253,22 @@ void protocol_service_on_rx(void *user, uint32_t source_id, uint32_t destination
      - never persisted at all, the non-hazardous field would still be
      silently lost on the NEXT reboot, with `current` and flash agreeing
      for the rest of THIS session and nothing ever telling the operator
-     otherwise. Persisting here captures exactly the safe snapshot for that
-     case too: at this point `current`'s hazard subset still holds its OLD,
-     pre-change value (commit_pending_apply() hasn't run yet - see below),
-     so this write is "old hazard fields + newly-applied non-hazard
-     fields", which is correct whether the hazardous half is later
-     confirmed (persisted again below, with the new value) or times out
-     (nothing further to persist - this snapshot is already right). */
+     otherwise.
+
+     persist_current_config() calls boomlink_config_service_get_
+     persistable_config(), not the plain current-state accessor, which is
+     what makes this call site safe not only for THIS request (whose own
+     hazard subset, if any, is still its OLD pre-commit value in `current`
+     at this exact point - commit_pending_apply() hasn't run yet, see
+     below) but also for an entirely UNRELATED accepted write arriving
+     while a DIFFERENT hazardous change from an EARLIER request is still
+     WAITING for confirmation: without that accessor, persisting `current`
+     directly in that case would write the other change's still-
+     unconfirmed hazard value to flash, surviving a reboot even after this
+     node's own later revert-on-timeout restores it in RAM only - found by
+     review as a real, reachable gap (an ordinary two-request provisioning
+     sequence, not a contrived one), not a hypothetical worth guessing
+     past. */
   bool is_accepted_config_write =
       result.response.which_payload == boomlink_Envelope_config_tag &&
       result.response.payload.config.which_message == boomlink_ConfigMessage_set_response_tag &&
@@ -273,18 +293,37 @@ void protocol_service_on_rx(void *user, uint32_t source_id, uint32_t destination
 
   /* boomlink_txqueue.h's documented priority mapping: HIGH for a command
      response, NORMAL for everything else this file ever sends (today, only
-     a config response). request_ack=true (not forced off - `source_id` is
-     always a specific requester, never BOOMLINK_ADDR_BROADCAST, since that
-     is who this replies TO, not a destination this file chose): section
-     8.3's "commands... return a correlated response" and section 8.2's
-     revert-on-timeout both depend on the requester actually receiving this,
-     which an unacknowledged best-effort send cannot promise. */
+     a config response). */
   bool is_command_response  = result.response.which_payload == boomlink_Envelope_command_tag;
   boomlink_tx_priority_t priority =
       is_command_response ? BOOMLINK_TXPRIO_HIGH : BOOMLINK_TXPRIO_NORMAL;
 
+  /* request_ack is true for an ordinary unicast requester (`source_id` is
+     always a specific address, never BOOMLINK_ADDR_BROADCAST, since that is
+     who this replies TO, not a destination this file chose): section 8.3's
+     "commands... return a correlated response" and section 8.2's
+     revert-on-timeout both depend on the requester actually receiving this,
+     which an unacknowledged best-effort send cannot promise.
+     request_ack is forced OFF when `destination_id` - the INCOMING
+     request's own addressing, not this response's - was broadcast: every
+     "dangerous over broadcast" rejection in boomlink_command_service.c/
+     boomlink_config_service.c justifies itself by "simultaneous
+     responses... need a separate design", but boomlink_dispatch_process()
+     builds and sends a response for a rejected request exactly like any
+     other (a rejection IS a response, section 8.3's own "a response is
+     always built" rule) - so without this, every reachable node still
+     answers a broadcast frame with an ACK-requested, retried-up-to-
+     LINK_MAX_ATTEMPTS-times response, which is precisely the "N
+     simultaneous responses" those rejections claim to prevent, just moved
+     from N accepted actions to N retried refusals (and, for a broadcast
+     ConfigGet - never rejected, since it mutates nothing - N legitimate
+     answers). Forcing this off is what actually closes that: a broadcast
+     requester gets one best-effort reply per reachable node, not up to
+     three each. */
+  bool request_ack = destination_id != BOOMLINK_ADDR_BROADCAST;
+
   boomlink_link_send_result_t send_rc =
-      boomlink_link_send(link, source_id, priority, true, buf, len);
+      boomlink_link_send(link, source_id, priority, request_ack, buf, len);
   bool queued = (send_rc == BOOMLINK_LINK_SEND_OK || send_rc == BOOMLINK_LINK_SEND_OK_EVICTED);
   if (!queued) {
     return;
@@ -352,18 +391,24 @@ void protocol_service_on_rx(void *user, uint32_t source_id, uint32_t destination
     s_confirm_eligible = false;
     /* No persist call here, even though the block above already persisted
        for this same response (is_accepted_config_write covers PENDING_
-       CONFIRMATION too): commit_pending_apply() just moved the hazard
-       subset from `staged` into `current`, so persisting again here would
-       write a value flash might still have to revert moments later,
-       needing a SECOND write to undo it - and a reboot landing inside that
-       window would boot into a hazardous, never-confirmed value read back
-       as if it were settled. The snapshot already on flash (old hazard
-       fields + this response's newly-applied non-hazard fields, from
-       above) stays correct until a real confirm below persists the
-       hazard subset's new value too - or, if this times out instead,
-       stays correct forever, since nothing about it was ever wrong. */
+       CONFIRMATION too): commit_pending_apply() just moved apply_state to
+       WAITING, so a persist here would report the exact same bytes the
+       earlier call already wrote (get_persistable_config() now falls back
+       to `revert_to` for the hazard subset in WAITING, the same values
+       `current` held at that earlier call) - redundant, not merely safe.
+       The snapshot already on flash (old hazard fields + this response's
+       newly-applied non-hazard fields) stays correct until a real confirm
+       below persists the hazard subset's new value too - or, if this
+       times out instead, stays correct forever, since nothing about it
+       was ever wrong. */
   } else if (s_confirm_eligible &&
              boomlink_config_service_apply_state(&s_config_svc) == BOOMLINK_CONFIG_APPLY_WAITING) {
+    /* Order matters: confirm_pending_apply() moves apply_state to IDLE
+       BEFORE this persists. get_persistable_config() only overrides the
+       hazard subset while WAITING, so persisting one statement earlier
+       (still WAITING) would write the OLD hazard values right after
+       telling the requester the change is confirmed - persist must see
+       IDLE to write the real, newly-confirmed ones. */
     boomlink_config_service_confirm_pending_apply(&s_config_svc);
     persist_current_config();
   }

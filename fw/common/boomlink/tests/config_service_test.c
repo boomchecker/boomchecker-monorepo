@@ -756,6 +756,131 @@ static void test_radio_nan_does_not_permanently_break_hazard_detection(void) {
   CHECK(svc.apply_state == BOOMLINK_CONFIG_APPLY_IDLE, "nothing should be pending");
 }
 
+/* Regression test for a real gap found by review: boomlink_node_config_
+   defaults() left general.receive_enabled/transmit_enabled at their
+   zero-init false, even though App/link/link_service.c's real hardcoded
+   default (s_enabled) is true and gates both directions together - a
+   fresh node's first ConfigGet reported a node that can neither receive
+   nor transmit, despite demonstrably doing both to answer that very GET.
+   Also covers detection.has_drone/has_gunshot, the identical has_X gap
+   this function already forces true for the six OUTER groups, found one
+   nesting level down. */
+static void test_defaults_match_real_hardcoded_values(void) {
+  boomlink_node_config_t cfg;
+  boomlink_node_config_defaults(&cfg);
+
+  CHECK(cfg.general.receive_enabled,
+        "defaults() must match link_service.c's real receive-enabled default (true)");
+  CHECK(cfg.general.transmit_enabled,
+        "defaults() must match reality - nothing gates TX independently, so this node "
+        "transmits regardless of this field's value");
+  CHECK(cfg.detection.has_drone,
+        "detection.has_drone must be forced true, the same reason has_detection is");
+  CHECK(cfg.detection.has_gunshot,
+        "detection.has_gunshot must be forced true, the same reason has_detection is");
+}
+
+/* Regression test for the P1 this function exists to close: a hazardous
+   config change that is WAITING for confirmation must never let an
+   unrelated write persist its still-unconfirmed value to storage - see
+   boomlink_config_service_get_persistable_config()'s own doc, and
+   protocol_service_on_rx()'s comments in fw/bom-stm32node/App/protocol/
+   protocol_service.c for the real firmware call site this closes a gap
+   in. Reachable with an ordinary two-request sequence (stage a hazardous
+   change, then send an unrelated non-hazardous one before the first is
+   confirmed), not a contrived one. */
+static void test_get_persistable_config_hides_unconfirmed_hazard_values(void) {
+  boomlink_config_service_t svc = make_svc(1000u);
+  svc.current.link.magic        = 0xB0u; /* the real starting value */
+
+  boomlink_ConfigMessage req                      = {0};
+  req.which_message                               = boomlink_ConfigMessage_set_request_tag;
+  req.message.set_request.expected_config_version = 1u;
+  req.message.set_request.has_link                = true;
+  req.message.set_request.link.magic              = 0xC5u; /* hazardous change */
+
+  boomlink_ConfigMessage resp;
+  REQUIRE(handle(&svc, &req, &resp), "setup: a SET always answers");
+  REQUIRE(resp.message.set_response.result ==
+              boomlink_ConfigSetResult_CONFIG_SET_RESULT_PENDING_CONFIRMATION,
+          "setup: a magic change is entirely hazardous");
+
+  boomlink_node_config_t persistable;
+  boomlink_config_service_get_persistable_config(&svc, &persistable);
+  CHECK(persistable.link.magic == 0xB0u,
+        "STAGED: current's hazard subset is still the old value, so persistable must match "
+        "it exactly - got 0x%02X", (unsigned)persistable.link.magic);
+
+  boomlink_config_service_commit_pending_apply(&svc, 1000u);
+  REQUIRE(svc.apply_state == BOOMLINK_CONFIG_APPLY_WAITING, "setup: commit moves to WAITING");
+  CHECK(svc.current.link.magic == 0xC5u,
+        "setup: commit really did move the new value into current");
+
+  /* This is the exact moment the bug lived: an UNRELATED accepted write
+     (e.g. from a different, later request) must not see the unconfirmed
+     0xC5 as what belongs in storage. */
+  boomlink_config_service_get_persistable_config(&svc, &persistable);
+  CHECK(persistable.link.magic == 0xB0u,
+        "WAITING: persistable must report the last CONFIRMED value (0xB0), not current's "
+        "unconfirmed one, got 0x%02X", (unsigned)persistable.link.magic);
+  CHECK(svc.current.link.magic == 0xC5u,
+        "get_persistable_config() must not itself modify current - only its OUTPUT differs");
+
+  /* Once confirmed, persistable and current must agree again - the new
+     value really is permanent now. */
+  boomlink_config_service_confirm_pending_apply(&svc);
+  REQUIRE(svc.apply_state == BOOMLINK_CONFIG_APPLY_IDLE, "setup: confirm moves back to IDLE");
+  boomlink_config_service_get_persistable_config(&svc, &persistable);
+  CHECK(persistable.link.magic == 0xC5u,
+        "IDLE after confirm: persistable must report the now-permanent new value, got 0x%02X",
+        (unsigned)persistable.link.magic);
+}
+
+/* Same scenario, but the hazard times out instead of being confirmed -
+   persistable must have reported the safe (old) value throughout, so
+   nothing needs to change when poll() reverts current in RAM. */
+static void test_get_persistable_config_stays_safe_through_a_timeout_revert(void) {
+  boomlink_config_service_t svc = make_svc(500u);
+  svc.current.general.node_id   = 11u;
+
+  boomlink_ConfigMessage req                      = {0};
+  req.which_message                               = boomlink_ConfigMessage_set_request_tag;
+  req.message.set_request.expected_config_version = 1u;
+  req.message.set_request.has_general             = true;
+  req.message.set_request.general.node_id         = 22u;
+
+  boomlink_ConfigMessage resp;
+  handle(&svc, &req, &resp);
+  boomlink_config_service_commit_pending_apply(&svc, 1000u);
+  REQUIRE(svc.apply_state == BOOMLINK_CONFIG_APPLY_WAITING, "setup");
+
+  boomlink_node_config_t persistable;
+  boomlink_config_service_get_persistable_config(&svc, &persistable);
+  CHECK(persistable.general.node_id == 11u,
+        "WAITING: persistable must report the pre-change node_id, not the unconfirmed 22");
+
+  boomlink_config_service_poll(&svc, 1500u); /* elapsed exactly the 500ms confirm window */
+  REQUIRE(svc.apply_state == BOOMLINK_CONFIG_APPLY_IDLE, "setup: the window boundary must revert");
+  CHECK(svc.current.general.node_id == 11u, "setup: current really did revert to 11");
+
+  boomlink_config_service_get_persistable_config(&svc, &persistable);
+  CHECK(persistable.general.node_id == 11u,
+        "IDLE after revert: persistable must still report 11 - nothing changed, since it "
+        "already reported the safe value the whole time WAITING lasted");
+}
+
+static void test_get_persistable_config_is_null_tolerant(void) {
+  boomlink_node_config_t out;
+  boomlink_config_service_get_persistable_config(NULL, &out);
+  CHECK(out.config_version == 0u, "a NULL service must yield a zeroed config, not a crash");
+
+  boomlink_config_service_t svc = make_svc(1000u);
+  svc.current.general.node_id   = 42u;
+  boomlink_config_service_get_persistable_config(&svc, &out);
+  CHECK(out.general.node_id == 42u,
+        "a real service with nothing pending must be read out faithfully");
+}
+
 static void test_get_config_is_null_tolerant(void) {
   boomlink_node_config_t out;
   boomlink_config_service_get_config(NULL, &out);
@@ -923,10 +1048,14 @@ int main(void) {
   test_resending_an_unchanged_but_still_unconfigured_node_id_is_not_rejected();
   test_radio_negative_zero_is_not_a_hazardous_change();
   test_radio_nan_does_not_permanently_break_hazard_detection();
+  test_defaults_match_real_hardcoded_values();
+  test_get_persistable_config_hides_unconfirmed_hazard_values();
+  test_get_persistable_config_stays_safe_through_a_timeout_revert();
+  test_get_persistable_config_is_null_tolerant();
   test_get_config_is_null_tolerant();
   test_set_restores_has_x_even_if_it_started_false();
   test_commit_and_revert_both_restore_has_radio();
   test_resending_an_unchanged_radio_value_still_restores_has_radio();
   test_handle_rejects_malformed_or_missing_arguments();
-  BOOMLINK_TEST_REPORT("config_service_test", 128);
+  BOOMLINK_TEST_REPORT("config_service_test", 163);
 }
