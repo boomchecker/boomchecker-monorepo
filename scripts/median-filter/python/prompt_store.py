@@ -68,12 +68,15 @@ def parse_queries(raw_text: str) -> list[str]:
             return [q for q in parsed if isinstance(q, str) and q.strip()]  
     except Exception:  
         pass  
-    # Fallback: split by newlines  
-    queries = [q.strip() for q in raw_text.splitlines() if q.strip()]  
-    if queries:  
-        return queries  
-    # Last resort: original comma splitting (deprecated, not robust)  
-    return [q for q in raw_text.replace(", ", ",").split(",") if q.strip()]  
+    # Fallback: split by newlines
+    queries = [q.strip() for q in raw_text.splitlines() if q.strip()]
+    if queries:
+        if len(queries) == 1 and "," in queries[0]:
+            # Heuristic: single-line, comma-separated list
+            return [q.strip() for q in queries[0].split(",") if q.strip()]
+        return queries
+    # Last resort: original comma splitting (deprecated, not robust)
+    return [q for q in raw_text.replace(", ", ",").split(",") if q.strip()]
 
 def ensure_files():
     """Ensure prompt and data directories exist with a default prompt."""
@@ -113,7 +116,7 @@ def get_recent_queries(limit: int = 200) -> list[str]:
     return recent
 
 
-def load_prompt(include_recent: bool = False) -> str:
+def load_prompt(include_recent: bool = False, history_limit: int = 200) -> str:
     """
     Return the stored base prompt, optionally appending recent queries so the
     model can avoid repeating them.
@@ -123,7 +126,7 @@ def load_prompt(include_recent: bool = False) -> str:
     base_prompt = ""
 
     if include_recent:
-        recent = get_recent_queries(limit=200)
+        recent = get_recent_queries(limit=history_limit)
         if recent:
             previous = "\n".join(f"- {q}" for q in recent)
             base_prompt = (
@@ -155,6 +158,7 @@ def log_openai_response(queries: list[str], model: str, prompt_id: str) -> dict:
 def generate_queries(
     model: str = "gpt-4.1-mini",
     include_previous: bool = False,
+    history_limit: int = 200,
 ) -> list[str]:
     """
     Ultra-simple helper that just sends the stored prompt to the OpenAI Chat Completions  
@@ -179,7 +183,7 @@ def generate_queries(
     if prompt_id:
         request["prompt"] = {"id": prompt_id, "version": prompt_ver}
 
-    prompt = load_prompt(include_recent=include_previous)
+    prompt = load_prompt(include_recent=include_previous, history_limit=history_limit)
     request["input"] = [
         {
             "role": "user",
@@ -208,4 +212,3 @@ def generate_queries(
 
 if __name__ == "__main__":
     print(generate_queries(include_previous=True))
-
