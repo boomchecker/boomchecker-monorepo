@@ -2189,15 +2189,28 @@ Deliberately deferred, not silently dropped:
   hazardous change costs two full erase+program cycles, the first provably
   redundant** — `protocol_service_on_rx()` persists once when the write is accepted
   (`is_accepted_config_write`) and again, moments later in the same call, once
-  `confirm_pending_apply()` finalizes it (measured: byte-identical writes both
-  times). Against the real geometry (`boomlink_flash_storage_port.c`'s two 8 K
-  sectors, a `boomlink_NodeConfig` payload of 145 bytes plus a 16-byte header,
-  nowhere near filling even one sector), that is 4 sector erases instead of the 2
-  a single write needs, doubling both the flash-wear cost of this one request and
-  the already-documented superloop-blocking window above. The natural fix
-  (coalescing both writes behind the same deferred pending-save flag the
-  superloop-blocking bullet above already proposes) closes this for free rather
-  than needing its own separate mechanism.
+  `confirm_pending_apply()` finalizes it. When the confirming write is ITSELF
+  hazardous (SAME request), the two writes are byte-identical (as originally
+  measured here) - `get_persistable_config()` already falls back to the same
+  `revert_to` values for both, so the first write is pure waste. A later review
+  round found the two writes are NOT always identical: a plain NON-hazardous
+  `ConfigSet` arriving while a DIFFERENT, earlier hazard is `WAITING` can also
+  BE the confirming exchange (any accepted write counts, not only a hazardous
+  one - see the commit/confirm design bullet above), and in that case the first
+  write persists the old, safe hazard subset (`get_persistable_config()`'s
+  `revert_to` override, correctly, since the hazard was still unconfirmed at that
+  point) while the second persists the newly-confirmed one - two DIFFERENT,
+  both individually-correct snapshots, not a redundant repeat. Either way the
+  count of erase+program cycles is the same (4 sector erases instead of the 2 a
+  single write needs, against the real geometry: `boomlink_flash_storage_port.c`'s
+  two 8 K sectors, a `boomlink_NodeConfig` payload of 145 bytes plus a 16-byte
+  header, nowhere near filling even one sector), doubling both the flash-wear cost
+  of this one request and the already-documented superloop-blocking window above -
+  only the "always redundant" framing needed correcting, not the wear/blocking
+  cost itself. The natural fix (coalescing both writes behind the same deferred
+  pending-save flag the superloop-blocking bullet above already proposes) closes
+  this for free either way, redundant repeat or two-different-correct-snapshots,
+  rather than needing its own separate mechanism.
 - **`PROTOCOL_SERVICE_REBOOT_DELAY_MS`'s fixed delay assumes the reboot response
   clears the TX pipeline in time** — it only accounts for the response's own airtime
   plus scheduling slack, not for an unrelated frame already occupying the
