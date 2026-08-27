@@ -48,19 +48,23 @@ void boomlink_node_config_defaults(boomlink_node_config_t *out) {
   out->detection.has_gunshot = true;
   /* Same "defaults() must agree with the real hardcoded/running value"
      reasoning as magic/link/radio below, for GeneralConfig's two link-
-     enable flags - App/link/link_service.c's s_enabled defaults true and
-     gates BOTH RX and TX together (link_service_process() skips
-     boomlink_link_poll() entirely while disabled); nothing gates
-     transmit_enabled independently at all today, so this node transmits
-     regardless of this field's value - true is what actually happens
-     either way. Left false before this fix: a fresh node's first
-     ConfigGet reported a node that can neither receive nor transmit,
-     despite demonstrably doing both to answer that very GET - and
-     boomlink.md's own canonical sensor-node and gateway example configs
-     already show both fields true, not the struct's zero-init. This is
-     PR 4 Phase C's own first-ever caller of boomlink_config_store_save()
-     - the last moment this is free to fix, before a wrong default is
-     ever actually written to a real node's flash. */
+     enable flags - true is what actually happens either way, regardless
+     of either field's persisted value: NEITHER receive_enabled nor
+     transmit_enabled is wired to anything today (see the deferred-list
+     item on this - App/link/link_service.c's own s_enabled, the flag that
+     actually gates RX+TX together and defaults true, is a separate
+     runtime switch reachable only from the `link enable`/`link disable`
+     CLI commands, not from this config's loaded value at all; do not read
+     this comment as "receive_enabled controls s_enabled" - it does not,
+     and wiring it naively is a documented trap, not a TODO). Left false
+     before this fix: a fresh node's first ConfigGet reported a node that
+     can neither receive nor transmit, despite demonstrably doing both to
+     answer that very GET - and boomlink.md's own canonical sensor-node
+     and gateway example configs already show both fields true, not the
+     struct's zero-init. This is PR 4 Phase C's own first-ever caller of
+     boomlink_config_store_save() - the last moment this is free to fix,
+     before a wrong default is ever actually written to a real node's
+     flash. */
   out->general.receive_enabled  = true;
   out->general.transmit_enabled = true;
   /* Not left at the zero-init `{0}` gave it: 0 is not a real magic value,
@@ -357,6 +361,26 @@ static bool handle_set(boomlink_config_service_t *svc, const boomlink_dispatch_r
   if (req->has_detection) {
     next.detection     = req->detection;
     next.has_detection = true;
+    /* Same reasoning as boomlink_node_config_defaults()'s own has_drone/
+       has_gunshot fix, one nesting level down: `next.detection = req->
+       detection` is a WHOLE-GROUP replacement, so it copies the
+       REQUESTER's has_drone/has_gunshot too - a request that includes
+       DetectionConfig but omits either nested submessage (the same
+       whole-group-replacement contract this function's own comment above
+       already applies to the six outer groups) clears that submessage's
+       presence flag, and nothing here re-asserts it the way has_general/
+       has_link/has_gnss/has_telemetry above do for themselves. Found by
+       review: a save()/load() round trip after such a SET loses both
+       nested submessages permanently (defaults() only runs on LOAD
+       FAILURE, never merges over a successful decode) - cosmetic today,
+       since every field either submessage holds is currently a real
+       all-zero value either way, but the identical defect class this
+       file has now been patched for at both the outer-group level
+       (this function) and the defaults level (boomlink_node_config_
+       defaults()) - closing it here too rather than leaving the SET path
+       as the one place it can still happen. */
+    next.detection.has_drone   = true;
+    next.detection.has_gunshot = true;
   }
   if (req->has_gnss) {
     next.gnss     = req->gnss;

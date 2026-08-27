@@ -2041,7 +2041,33 @@ the real seam, not the sketch" approach PR 3's own Phase C took — section 4):
   noticing — verified by sabotage: reverting `persist_current_config()` to call the
   plain `boomlink_config_service_get_config()` still links clean under `--gc-sections`
   with the new accessor gone from the ELF entirely, and every check that predates
-  this one still green.
+  this one still green;
+- `handle_set()` now re-asserts `detection.has_drone`/`detection.has_gunshot` the same
+  way it already does for `has_general`/`has_link`/`has_gnss`/`has_telemetry` — the
+  round 6 fix that forces both true in `boomlink_node_config_defaults()` has a twin
+  gap one call site later: `next.detection = req->detection` is a whole-group
+  replacement, so it also copies the REQUESTER's own (possibly unset) nested
+  presence flags, and unlike the four outer groups nothing re-asserted them here.
+  A `ConfigSet` naming `DetectionConfig` while omitting either nested submessage
+  cleared that flag permanently — `boomlink_node_config_defaults()` only runs on a
+  LOAD FAILURE, never merges over a successful decode, so a `save()`→`load()` round
+  trip after such a SET lost both nested submessages for good. Cosmetic today (every
+  field either submessage holds is currently all-zero regardless), but the identical
+  defect class this file has now been patched for at both the defaults level and the
+  SET level, found by review rather than by the test suite (the existing coverage
+  for this pattern, `test_set_restores_has_x_even_if_it_started_false`, only reached
+  the six outer groups — closed alongside the fix with a sibling test one nesting
+  level down);
+- `test_defaults_match_real_hardcoded_values()` now checks all ten of the
+  LinkConfig/RadioConfig fields `boomlink_node_config_defaults()` documents matching
+  real hardware, not just the four fields added when that test was first written —
+  sabotage-proven gap: zeroing all ten (`ack_timeout_margin_ms`/`max_attempts`/
+  `backoff_min_ms`/`backoff_max_ms`/`tx_jitter_max_ms`/`bandwidth_khz`/
+  `coding_rate_denom`/`tx_power_dbm`/`preamble_symbols`/`sync_word`) and rebuilding
+  still passed every test in the suite, including that one — a coverage gap only
+  (every value was still correct; nothing was reading these fields incorrectly),
+  closed alongside the two fixes above rather than left for a later round to
+  rediscover.
 
 Deliberately deferred, not silently dropped:
 
@@ -2079,6 +2105,39 @@ Deliberately deferred, not silently dropped:
   `boomlink_link_reconfigure()` into the config response path is a reasonable next
   step, not attempted here to keep this phase to wiring rather than adding a new
   live-reconfiguration path late in review.
+- **Four more `GeneralConfig` fields are accepted, persisted, and reported, but never
+  applied** — `receive_enabled`/`transmit_enabled`/`default_destination_id`/
+  `promiscuous_monitor_enabled` join `RadioConfig`'s seven and `LinkConfig`'s five
+  above in this same "wiring not yet done" state; an audit of all 21 `NodeConfig`
+  leaf fields found exactly 2 (`general.node_id`, `link.magic`) with any code path
+  that ever applies them, and only on the next boot. `receive_enabled`/
+  `transmit_enabled` are the sharper case of the four: round 6 fixed only their
+  DEFAULT (a fresh node no longer reports itself administratively deaf), but a
+  `ConfigSet` explicitly writing either still answers `OK`, persists, and is reported
+  back forever with no code path ever consulting it — `App/link/link_service.c`'s
+  `s_enabled` (the flag that actually gates RX+TX together) is a separate runtime
+  switch reachable only from the `link enable`/`link disable` CLI commands, not from
+  loaded config at all. **Do not wire `receive_enabled` to `link_service_set_enabled()`
+  at boot without a recovery path first** — this was reviewed as the obvious next fix
+  and rejected: `link_service_set_enabled(false)` makes `link_service_process()` skip
+  `boomlink_link_poll()` entirely (RX *and* TX - `link_service.h`'s own doc), so a
+  node whose loaded config has `receive_enabled=false` could never again receive
+  anything to turn it back on. Reproduced end to end: one unicast `ConfigSet{
+  receive_enabled=false}` (accepted immediately, `OK`, persisted - it is NOT in
+  `boomlink_config_hazard_t`, so there is no staging and no revert-on-timeout the way
+  `node_id`/`magic` at least get) followed by one unicast `Reboot` is enough to
+  produce a node that is permanently off-air on the very next boot, recoverable only
+  via the USB CLI's non-persistent `link enable` (needed again every boot) or an SWD
+  erase of the config region. Two unauthenticated unicast frames turning a "wiring
+  gap" into a brick is exactly the class of naive fix rounds 6 and 7 already caught
+  and rejected elsewhere in this same review process - documented here instead so a
+  future round does not rediscover the trap by implementing it. `transmit_enabled`
+  cannot be wired this way at all, independently of `receive_enabled` - `s_enabled`
+  has no separate TX gate. `default_destination_id`/`promiscuous_monitor_enabled`
+  have no consumer anywhere in this firmware to wire in the first place (the former
+  is read only by this file's own tests; the latter is named in one comment in
+  `boomlink_linkframe.h` and nowhere else) - accepted-and-unapplied is correct for
+  both today, not merely undone.
 - **No per-peer rate limiting on inbound requests** — a burst of `CommandRequest`s
   (or `ConfigSet`s) from one or more peers can fill the link engine's TX queue with
   HIGH/NORMAL-priority, ACK-requested responses, each retried up to
@@ -2150,20 +2209,30 @@ Deliberately deferred, not silently dropped:
   `boomlink_link_tx_done_fn`'s own doc says isn't available as a per-frame
   correlation handle before the fact (see `protocol_service_on_rx()`'s comment on the
   identical limitation for config commit/confirm); left as a known gap rather than
-  guessed at.
+  guessed at. One concrete, DETERMINISTIC instance of this same gap, not merely
+  probabilistic: `protocol_service_process()` runs unconditionally regardless of the
+  USB CLI's `link disable` state, so an armed Reboot still resets the node
+  `PROTOCOL_SERVICE_REBOOT_DELAY_MS` later even though `link_service_process()` can
+  no longer service TX at all while disabled — the response is guaranteed, not
+  merely likely, to never reach the air in that case;
 - **`App/protocol/protocol_service.c`'s stage→commit→confirm wiring has no automated
   regression test** — the whole file is ARM/HAL-dependent (no host-testable seam;
   `fw/bom-stm32node` has no host test directory), so `s_confirm_eligible`'s same-tick
-  race fix, the two `persist_current_config()` call sites, and the deferred-reboot
-  timer are verified only by cross-compilation succeeding plus manual/reviewer
-  tracing - a regression in any of them (e.g. dropping the line that clears
-  `s_confirm_eligible` on commit) would fail no build, no CI symbol-linkage check,
-  and no test. Confirmed by deliberately reintroducing that exact regression during
-  this phase's review: the firmware still built and linked cleanly. A minimal
-  host-testable extraction of the commit/confirm-eligibility state machine (the same
-  "keep target-specific glue thin, put the logic somewhere host-testable" split this
-  file itself follows for dispatch/command/config service) would close this; left
-  as a tracked, deliberate gap rather than a silent one.
+  race fix, the two `persist_current_config()` call sites, the deferred-reboot
+  timer, and round 7's `!s_reboot_armed` confirm guard are all verified only by
+  cross-compilation succeeding plus manual/reviewer tracing - a regression in any of
+  them (e.g. dropping the line that clears `s_confirm_eligible` on commit, or the
+  `!s_reboot_armed` clause itself) would fail no build, no CI symbol-linkage check,
+  and no test. Confirmed by deliberately reintroducing both exact regressions during
+  review, in two different rounds: the firmware still built and linked cleanly each
+  time, and for `!s_reboot_armed` specifically, the CI symbol-linkage check this
+  same round extended to cover five more `boomlink_config_service_*` entry points
+  still passed too - that check is structurally the wrong tool for this one, since
+  it can only detect a deleted call site, never a weakened condition guarding an
+  existing one. A minimal host-testable extraction of the commit/confirm-eligibility
+  state machine (the same "keep target-specific glue thin, put the logic somewhere
+  host-testable" split this file itself follows for dispatch/command/config service)
+  would close this; left as a tracked, deliberate gap rather than a silent one.
 - **When a Detection/Telemetry/System handler is ever wired** (`on_detection`/
   `on_telemetry`/`on_system` are all `NULL` today - see this phase's own "what
   actually landed" notes), **evaluate whether it needs the same dangerous-over-
@@ -2227,7 +2296,50 @@ Deliberately deferred, not silently dropped:
   to trigger the fallback) - the identical "unreachable today, same shape as an
   already-fixed reachable case" position `node_id`'s divergence was in before the
   fix that closed it - left deferred rather than fixed now since closing it needs a
-  new accessor this phase did not otherwise need to add.
+  new accessor this phase did not otherwise need to add. A later review round found
+  a sharper, unconditional version of this same gap that does not depend on the
+  fallback ever firing: this PR is the first in which `magic` can be operator-
+  written and persisted at all (a confirmed `ConfigSet{link.magic=...}`, real and
+  intentional, not a bug), and there is no local, over-USB way to see the value the
+  radio is actually keyed to before or after such a change - `link status`
+  (`cli.c`'s `print_link_status()`) prints node_id/session/tx-state/queue depth and
+  nine stat counters but not `magic`, and there is no `config` CLI command at all
+  (only `version`/`stream`/`streamtest`/`radio`/`proto`/`link`) to read, set, or
+  reset the persisted config locally. The operator does get an indirect symptom -
+  `link status`'s `bad-magic` counter climbs - but not the value, and not whether
+  the mismatch is `magic` or the on-wire protocol version (one combined counter).
+  Once a magic mismatch happens (one hex-digit typo in a `ConfigSet`, confirmed,
+  reboot), the node is unreachable over radio to every peer by design - the confirm
+  mechanism's own documented limitation, not new - and unrecoverable except by
+  physical retrieval and an SWD mass-erase of the reserved config region, which sits
+  outside the linker's `FLASH` region (`STM32H563xx_FLASH.ld`) specifically so a
+  normal firmware reflash does not touch it - meaning a routine reflash cannot
+  self-heal this the way it can most other firmware problems. A `link_service_
+  magic()` accessor plus printing it in `link status` is cheap insurance but does
+  not fix the underlying gap; the gap is the total absence of a local recovery
+  path, which needs its own scoped design (a `config` CLI command, at minimum) and
+  is left for a phase that adds one;
+- **The first accepted `ConfigSet` after a never-configured boot silently promotes
+  the UID-derived bring-up fallback into a permanently "assigned" `node_id`** — the
+  round 5 fix (`cli.c` feeding `link_service_node_id()`'s resolved value back into
+  `loaded_config.general.node_id` before `protocol_service_init()` sees it) and this
+  phase's persistence wiring compose into a gap neither one has alone:
+  `link_service.c` explicitly documents its UID fallback as "a known bring-up-only
+  limitation of the fallback path, not a design meant to carry forward", but once
+  round 5's fix puts that value into `svc.current` and ANY accepted `ConfigSet`
+  (not necessarily one naming `general` at all) persists it to flash, the
+  distinction between "an operator explicitly assigned this node_id" and "this
+  node has never been assigned one, and is only answering at its UID-derived
+  address" is gone - permanently, since `node_id_is_valid()` rejects a SET back to
+  `0` (the one value that would mean "unconfigured" again) and there is no `config`
+  CLI command to reset it locally either. No safety impact - the node keeps
+  answering at the same address either way - but a provisioning tool that relies on
+  `node_id == BOOMLINK_ADDR_INVALID` to find never-assigned nodes on a fleet loses
+  that signal the moment any other config field is ever written, not just node_id
+  itself. Neither round 5's fix nor this phase's persistence wiring is wrong in
+  isolation; closing the composition needs its own field (or its own sentinel
+  value) to track "explicitly assigned" separately from "UID-derived", which PR 5's
+  host CLI work below is a more natural place to add than a wiring-only phase.
 
 ## PR 5 — Host CLI and end-to-end tooling
 

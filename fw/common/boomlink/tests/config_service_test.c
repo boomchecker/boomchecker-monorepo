@@ -847,6 +847,35 @@ static void test_defaults_match_real_hardcoded_values(void) {
         "detection.has_drone must be forced true, the same reason has_detection is");
   CHECK(cfg.detection.has_gunshot,
         "detection.has_gunshot must be forced true, the same reason has_detection is");
+
+  /* Round 8 review: this test's name promises "defaults match real
+     hardcoded values" for the whole function, but until now only checked
+     the four fields above - the round 1/round 6 LinkConfig/RadioConfig
+     fixes this function itself documents (matching link_service.c's LINK_*
+     constants and e22_radio.cpp's DefaultProfile()) had no CHECK of their
+     own. Sabotage-proven gap: zeroing all ten of these fields still passed
+     every existing test, including this one. */
+  CHECK(cfg.link.ack_timeout_margin_ms == 50u,
+        "defaults() must match link_service.c's real LINK_ACK_TIMEOUT_MARGIN_MS");
+  CHECK(cfg.link.max_attempts == 3u,
+        "defaults() must match link_service.c's real LINK_MAX_ATTEMPTS");
+  CHECK(cfg.link.backoff_min_ms == 100u,
+        "defaults() must match link_service.c's real LINK_BACKOFF_MIN_MS");
+  CHECK(cfg.link.backoff_max_ms == 400u,
+        "defaults() must match link_service.c's real LINK_BACKOFF_MAX_MS");
+  CHECK(cfg.link.tx_jitter_max_ms == 50u,
+        "defaults() must match link_service.c's real LINK_TX_JITTER_MAX_MS");
+  CHECK(cfg.radio.bandwidth_khz == 125.0f,
+        "defaults() must match e22_radio.cpp's real DefaultProfile() bandwidth_khz");
+  CHECK(cfg.radio.coding_rate_denom == 5u,
+        "defaults() must match e22_radio.cpp's real DefaultProfile() coding_rate_denom");
+  CHECK(cfg.radio.tx_power_dbm == 14,
+        "defaults() must match e22_radio.cpp's real DefaultProfile() tx_power_dbm");
+  CHECK(cfg.radio.preamble_symbols == 8u,
+        "defaults() must match e22_radio.cpp's real DefaultProfile() preamble_symbols");
+  CHECK(cfg.radio.sync_word == 0x12u,
+        "defaults() must match e22_radio.cpp's real DefaultProfile() sync_word "
+        "(RADIOLIB_SX126X_SYNC_WORD_PRIVATE)");
 }
 
 /* Regression test for the P1 this function exists to close: a hazardous
@@ -1000,6 +1029,44 @@ static void test_set_restores_has_x_even_if_it_started_false(void) {
   CHECK(!svc.current.has_general, "a group NOT written by this SET must be left exactly as it was");
 }
 
+/* Round 8 review: the outer has_X re-assertion the sibling test above
+   covers has a twin one nesting level down that handle_set() did not have
+   until now - `next.detection = req->detection` is a whole-group
+   replacement of DetectionConfig, so it also copies the REQUESTER's
+   has_drone/has_gunshot, and unlike has_general/has_link/has_gnss/
+   has_telemetry above, nothing re-asserted them. A SET that includes
+   DetectionConfig but omits either nested submessage cleared that
+   submessage's presence flag - permanently, since boomlink_node_config_
+   defaults() only runs on a LOAD FAILURE, never merges over a successful
+   decode of a persisted blob that already lost the flag. */
+static void test_set_restores_nested_detection_has_x_even_when_omitted(void) {
+  boomlink_config_service_t svc = make_svc(1000u);
+  svc.current.detection.has_drone   = false;
+  svc.current.detection.has_gunshot = false;
+
+  boomlink_ConfigMessage req                            = {0};
+  req.which_message                                     = boomlink_ConfigMessage_set_request_tag;
+  req.message.set_request.expected_config_version       = 1u;
+  req.message.set_request.has_detection                 = true;
+  req.message.set_request.detection.detection_enabled   = true;
+  /* req.message.set_request.detection.has_drone/has_gunshot deliberately
+     left at their zero-init false - the exact shape of a real requester
+     that never mentions either submessage. */
+
+  boomlink_ConfigMessage resp;
+  bool ok = handle(&svc, &req, &resp);
+
+  REQUIRE(ok, "a SET always answers");
+  CHECK(resp.message.set_response.result == boomlink_ConfigSetResult_CONFIG_SET_RESULT_OK,
+        "DetectionConfig is entirely non-hazardous");
+  CHECK(svc.current.detection.has_drone,
+        "has_drone must be restored even though the requester's own copy left it false");
+  CHECK(svc.current.detection.has_gunshot,
+        "has_gunshot must be restored even though the requester's own copy left it false");
+  CHECK(svc.current.detection.detection_enabled,
+        "the field the requester actually set must still have applied");
+}
+
 static void test_commit_and_revert_both_restore_has_radio(void) {
   /* RadioConfig's VALUE cannot go through the immediate-assignment block
      test_set_restores_has_x_even_if_it_started_false already covers - it
@@ -1124,8 +1191,9 @@ int main(void) {
   test_get_persistable_config_is_null_tolerant();
   test_get_config_is_null_tolerant();
   test_set_restores_has_x_even_if_it_started_false();
+  test_set_restores_nested_detection_has_x_even_when_omitted();
   test_commit_and_revert_both_restore_has_radio();
   test_resending_an_unchanged_radio_value_still_restores_has_radio();
   test_handle_rejects_malformed_or_missing_arguments();
-  BOOMLINK_TEST_REPORT("config_service_test", 174);
+  BOOMLINK_TEST_REPORT("config_service_test", 189);
 }

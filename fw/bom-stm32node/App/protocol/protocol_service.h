@@ -45,8 +45,11 @@ extern "C" {
  * still applies on top of whatever this returns). Pass the SAME `out` on to
  * protocol_service_init() afterwards - this function does not cache it, and
  * loading twice would risk observing two different answers if a save
- * happened to land in between (it cannot today - nothing yet calls
- * boomlink_config_store_save() - but this function does not rely on that).
+ * happened to land in between (protocol_service_on_rx() does call
+ * boomlink_config_store_save() once this node is up and answering requests
+ * - see persist_current_config() - but nothing calls it before boot-time
+ * loading finishes, so this still cannot happen at THIS call site; this
+ * function does not rely on that either way).
  */
 void protocol_service_load_config(boomlink_node_config_t *out);
 
