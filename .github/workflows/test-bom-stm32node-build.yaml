@@ -239,10 +239,33 @@ jobs:
           # none-eabi.cmake) link per-function, not per-object-file, so one
           # being reachable proves nothing about the other. Both are listed
           # below now for exactly that reason.
+          #
+          # The five boomlink_config_service_* state-machine entry points
+          # below (get_persistable_config/commit_pending_apply/apply_state/
+          # confirm_pending_apply/poll) share that same failure mode with
+          # each other, one level up: every one of them has exactly one call
+          # site in the whole firmware, all inside protocol_service.c's
+          # stage->commit->confirm->revert->persist wiring (found by review -
+          # that file has no host test seam, see boomlink.md's own "no
+          # automated regression test" deferred item), so silently deleting
+          # any one call site - most importantly the hazard-safe persist
+          # accessor get_persistable_config(), whose fix this same review
+          # round landed - would compile and link clean and pass every
+          # existing check with nothing else here noticing. Verified by
+          # sabotage: reverting persist_current_config() to call the plain
+          # boomlink_config_service_get_config() instead still links clean
+          # and makes get_persistable_config() vanish from the ELF entirely
+          # under --gc-sections, with every check above this one still
+          # green.
           status=0
           for symbol in boomlink_dispatch_process boomlink_command_service_handle \
                         boomlink_config_service_handle boomlink_config_store_load \
-                        boomlink_config_store_save boomlink_flash_storage_port_init; do
+                        boomlink_config_store_save boomlink_flash_storage_port_init \
+                        boomlink_config_service_get_persistable_config \
+                        boomlink_config_service_commit_pending_apply \
+                        boomlink_config_service_apply_state \
+                        boomlink_config_service_confirm_pending_apply \
+                        boomlink_config_service_poll; do
             if ! arm-none-eabi-nm build/Debug/bom-stm32node.elf | grep -q "$symbol"; then
               echo "❌ $symbol is not linked into bom-stm32node.elf"
               status=1

@@ -387,6 +387,64 @@ static bool handle_set(boomlink_config_service_t *svc, const boomlink_dispatch_r
   svc->current         = next;
 
   if (!hazard_changed) {
+    /* "No delta" is not always the same claim as "already settled". While
+       WAITING, `current_hazard` above already holds the value an EARLIER
+       request's still-unconfirmed change committed into `current` (see
+       boomlink_config_service_commit_pending_apply()'s own doc) - so a
+       request that explicitly restates that exact value compares equal to
+       it and lands here having genuinely asked for no change, yet the
+       value it named is still reachable by boomlink_config_service_poll()
+       reverting it out from under both requesters PROTOCOL_SERVICE_
+       CONFIRM_WINDOW_MS later (see protocol_service.c) with no further
+       response to either. Answering OK here would tell THIS requester the
+       change is final - the strongest result this protocol has - when it
+       is exactly as unconfirmed as it was before this request arrived.
+       Found by review, reproduced within a single boomlink_link_poll()
+       drain (the same s_confirm_eligible gap protocol_service.c's own
+       comment already names for confirm) and unconditionally reachable by
+       any future caller with a looser confirm policy.
+
+       Checked against `revert_to` (the last CONFIRMED value), not against
+       current_hazard (this function's own hazard_changed baseline, which
+       is exactly the value in question here) - and only for a hazard
+       group this request actually named, not svc->apply_state alone:
+       an unrelated non-hazardous SET arriving during the same WAITING
+       window must still answer OK (see the test covering exactly that),
+       and the naive-looking alternative of comparing requested_hazard
+       against revert_to as hazard_changed's OWN baseline instead was
+       tried and rejected - it turns a plain non-hazardous resend of an
+       untouched hazard field (the mandated GET-edit-SET flow) into a
+       phantom "change" against the OLD pre-stage value, either
+       re-staging something nobody asked to change or answering
+       APPLY_IN_PROGRESS to a request with no hazardous content at all.
+       Comparing against revert_to only here, after hazard_changed has
+       already used the correct baseline to decide there is no real
+       delta, avoids that trap - this is genuinely a second, narrower
+       question ("is the thing that didn't change also unconfirmed?"),
+       not a replacement for the first.
+
+       PENDING_CONFIRMATION here re-enters protocol_service_on_rx()'s own
+       commit/confirm branch, which safely no-ops (boomlink_config_
+       service_commit_pending_apply() only acts from STAGED) but does
+       clear s_confirm_eligible again - a client that keeps restating the
+       still-pending value every tick can therefore hold its own confirm
+       off indefinitely and force a revert. That is the safe direction to
+       err in, not a new hazard: nothing here ever answers OK for a value
+       poll() can still take back. */
+    bool node_id_still_unconfirmed = svc->apply_state == BOOMLINK_CONFIG_APPLY_WAITING &&
+                                     req->has_general &&
+                                     svc->current.general.node_id != svc->revert_to.node_id;
+    bool magic_still_unconfirmed = svc->apply_state == BOOMLINK_CONFIG_APPLY_WAITING &&
+                                   req->has_link &&
+                                   svc->current.link.magic != svc->revert_to.magic;
+    bool radio_still_unconfirmed =
+        svc->apply_state == BOOMLINK_CONFIG_APPLY_WAITING && req->has_radio &&
+        !radio_config_equal(&svc->current.radio, &svc->revert_to.radio);
+    if (node_id_still_unconfirmed || magic_still_unconfirmed || radio_still_unconfirmed) {
+      respond_set(out_response, boomlink_ConfigSetResult_CONFIG_SET_RESULT_PENDING_CONFIRMATION,
+                 svc->current.config_version);
+      return true;
+    }
     respond_set(out_response, boomlink_ConfigSetResult_CONFIG_SET_RESULT_OK,
                svc->current.config_version);
     return true;

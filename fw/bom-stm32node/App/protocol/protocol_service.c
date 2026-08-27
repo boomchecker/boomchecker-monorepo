@@ -401,14 +401,40 @@ void protocol_service_on_rx(void *user, uint32_t source_id, uint32_t destination
        below persists the hazard subset's new value too - or, if this
        times out instead, stays correct forever, since nothing about it
        was ever wrong. */
-  } else if (s_confirm_eligible &&
+  } else if (!s_reboot_armed && s_confirm_eligible &&
              boomlink_config_service_apply_state(&s_config_svc) == BOOMLINK_CONFIG_APPLY_WAITING) {
     /* Order matters: confirm_pending_apply() moves apply_state to IDLE
        BEFORE this persists. get_persistable_config() only overrides the
        hazard subset while WAITING, so persisting one statement earlier
        (still WAITING) would write the OLD hazard values right after
        telling the requester the change is confirmed - persist must see
-       IDLE to write the real, newly-confirmed ones. */
+       IDLE to write the real, newly-confirmed ones.
+
+       !s_reboot_armed matters for a reason unrelated to ordering: cmd_
+       reboot() already ran (inside boomlink_dispatch_process() above) by
+       the time this else-if is reached for a Reboot request's own
+       response, so without this guard, the very "next exchange" that
+       confirms a pending hazardous change could be the Reboot command
+       that then resets the node PROTOCOL_SERVICE_REBOOT_DELAY_MS later -
+       confirming AND persisting the new value, then rebooting into it
+       before the PROTOCOL_SERVICE_CONFIRM_WINDOW_MS revert-on-timeout
+       this whole mechanism exists to provide could ever engage. Found by
+       review: whether an in-flight hazardous change survives a Reboot
+       arriving inside its confirm window would otherwise depend on pure
+       RX-drain timing (this same tick's drain vs. a later one) with
+       nothing operator-visible telling the two cases apart, reaching
+       exactly the "stranding a remote node on a profile nobody else uses"
+       failure section 8.2's own revert-on-timeout design names as the
+       reason it exists - by the one route (a real hardware reset) that
+       revert-on-timeout categorically cannot outrun once armed. Skipping
+       the confirm here is safe, not merely less bad: s_reboot_armed is
+       only ever set, never cleared, so this node is going down in
+       PROTOCOL_SERVICE_REBOOT_DELAY_MS regardless of this branch, and
+       leaving the change un-confirmed simply means it reverts to
+       `revert_to` on this same reboot - the value already on flash,
+       since persist_current_config() above never wrote the unconfirmed
+       one - the same outcome a timeout would have produced anyway, made
+       deterministic instead of a timing coin flip. */
     boomlink_config_service_confirm_pending_apply(&s_config_svc);
     persist_current_config();
   }

@@ -1989,7 +1989,59 @@ the real seam, not the sketch" approach PR 3's own Phase C took — section 4):
   frame whose destination was never a single peer to begin with. Fixed by setting
   `request_ack = destination_id != BOOMLINK_ADDR_BROADCAST` at the one call site —
   this closes the broadcast-specific retry amplification only, not general inbound
-  rate limiting (see "no per-peer rate limiting" below, still open).
+  rate limiting (see "no per-peer rate limiting" below, still open);
+- a `Reboot` can no longer confirm-and-persist a hazardous change it is about to
+  make unreachable — `cmd_reboot()` arms the deferred reset before `protocol_
+  service_on_rx()` reaches its own commit/confirm branch (the response is still
+  being built), so if a DIFFERENT, still-`WAITING` hazardous change happened to be
+  outstanding, that Reboot's own response counted as "the next exchange" the whole
+  mechanism above treats as confirmation — confirming and persisting the new,
+  unconfirmed value moments before the node reset onto it, with `PROTOCOL_SERVICE_
+  CONFIRM_WINDOW_MS`'s revert-on-timeout never getting a chance to run. Whether an
+  in-flight hazardous change survived a Reboot arriving inside its confirm window
+  depended purely on which superloop tick's RX drain the Reboot landed in, with
+  nothing operator-visible telling the two outcomes apart — reaching exactly the
+  "stranding a remote node on a profile nobody else uses" failure section 8.2's own
+  revert-on-timeout design names as the reason it exists, by the one route (a real
+  hardware reset) that mechanism categorically cannot outrun once armed. Fixed by
+  adding `!s_reboot_armed` to the confirm branch's condition: once a reboot is
+  armed, this node is resetting in `PROTOCOL_SERVICE_REBOOT_DELAY_MS` regardless, so
+  skipping the confirm simply lets the pending change revert to the value already on
+  flash — the same outcome a timeout would have produced, made deterministic instead
+  of a drain-timing coin flip;
+- restating the exact value of a hazardous field that is still `WAITING` for
+  confirmation now answers `PENDING_CONFIRMATION`, not `OK` — `handle_set()`
+  compares a request's hazard subset against `current`'s, and `current` already
+  holds an earlier request's committed-but-unconfirmed value once `WAITING` (see
+  `boomlink_config_service_commit_pending_apply()`'s own doc), so a request that
+  simply repeats that exact value — the mandated GET-edit-SET flow would produce
+  exactly this if an operator re-read the node right after the first response and
+  resent the group unedited — compared equal and fell through to `OK`: the
+  strongest result this protocol has, for a value `boomlink_config_service_poll()`
+  could still revert out from under the requester moments later with no further
+  response to say so. Fixed by checking each hazard field the request actually named
+  against `revert_to` (the last CONFIRMED value) rather than `current` in this one
+  narrower spot, once `hazard_changed` has already used the correct baseline to
+  decide there is no real delta — the naive-looking alternative of using `revert_to`
+  as `hazard_changed`'s own baseline throughout was tried and rejected, since it
+  turns a plain non-hazardous resend of an untouched hazard field into a phantom
+  "change" against the stale pre-stage value. A side effect worth naming: this
+  re-enters `protocol_service_on_rx()`'s commit/confirm branch, which safely no-ops
+  but does clear `s_confirm_eligible` again, so a client that keeps restating the
+  still-pending value every tick can hold its own confirm off indefinitely and force
+  a revert — the safe direction to err in, not a new hazard, since nothing here ever
+  answers `OK` for a value `poll()` can still take back;
+- the CI "actually linked in" symbol check (see the bullet on it below) now also
+  covers `boomlink_config_service_get_persistable_config()`/`commit_pending_apply()`/
+  `apply_state()`/`confirm_pending_apply()`/`poll()` — each has exactly one call site
+  in the whole firmware, all inside `protocol_service.c`'s stage→commit→confirm→
+  revert→persist wiring, so a silently-deleted call site (most importantly the
+  hazard-safe persist accessor the first Phase C review fix above added) would
+  otherwise compile and link clean and pass every existing check with nothing here
+  noticing — verified by sabotage: reverting `persist_current_config()` to call the
+  plain `boomlink_config_service_get_config()` still links clean under `--gc-sections`
+  with the new accessor gone from the ELF entirely, and every check that predates
+  this one still green.
 
 Deliberately deferred, not silently dropped:
 
@@ -2074,6 +2126,19 @@ Deliberately deferred, not silently dropped:
   via a pending-save flag, rather than performing it synchronously in the RX
   callback) is worth doing before this firmware carries real field traffic, and is
   left for a phase that revisits the persistence path with that in mind.
+- **A `ConfigSet` that also happens to be the confirming exchange for a pending
+  hazardous change costs two full erase+program cycles, the first provably
+  redundant** — `protocol_service_on_rx()` persists once when the write is accepted
+  (`is_accepted_config_write`) and again, moments later in the same call, once
+  `confirm_pending_apply()` finalizes it (measured: byte-identical writes both
+  times). Against the real geometry (`boomlink_flash_storage_port.c`'s two 8 K
+  sectors, a `boomlink_NodeConfig` payload of 145 bytes plus a 16-byte header,
+  nowhere near filling even one sector), that is 4 sector erases instead of the 2
+  a single write needs, doubling both the flash-wear cost of this one request and
+  the already-documented superloop-blocking window above. The natural fix
+  (coalescing both writes behind the same deferred pending-save flag the
+  superloop-blocking bullet above already proposes) closes this for free rather
+  than needing its own separate mechanism.
 - **`PROTOCOL_SERVICE_REBOOT_DELAY_MS`'s fixed delay assumes the reboot response
   clears the TX pipeline in time** — it only accounts for the response's own airtime
   plus scheduling slack, not for an unrelated frame already occupying the
@@ -2108,6 +2173,61 @@ Deliberately deferred, not silently dropped:
   flash, drives an alarm/relay), an unauthenticated broadcast frame could trigger
   that side effect fleet-wide from one packet - the identical shape of hazard this
   phase closed for `Reboot`/`ClearStatistics`/`ConfigSet`.
+- **`config_version` is not strictly monotonic across a reboot, and can briefly
+  label two different configurations at once** — section 8.2's "monotonically
+  increasing `config_version`" is only bumped in RAM by `boomlink_config_service_
+  poll()`'s revert-on-timeout (never persisted), so a version handed out just before
+  a power loss can be reissued after reboot for a DIFFERENT configuration than the
+  one a client cached it against (reproduced: RAM v=3/`node_id=A` before a revert,
+  flash still v=2/`node_id=B` after it, and a client that cached v=3 while a hazard
+  was `WAITING` was looking at a version that meant one thing in RAM and another on
+  flash for the length of that window). Investigated as a possible P1/P2 during
+  review and downgraded once actually reproduced: `config_version` is never
+  persisted AHEAD of the config it labels (only equal to or behind it), so a
+  reboot's `expected_config_version` check can only ever reject a stale-looking
+  write more often than strictly needed (a spurious `VERSION_CONFLICT`, not a
+  wrongly-accepted stale write) - the specific "a client's next write gets wrongly
+  ACCEPTED post-reboot" failure mode does not reproduce. Two fixes were proposed
+  and rejected: bumping `config_version` once at every load would turn every power
+  cycle into a fleet-wide `VERSION_CONFLICT` storm for every client with a cached
+  version; persisting the revert's version bump adds a third `persist_current_
+  config()` call site whose only job is a version bump, on the exact path the
+  flash-wear bullets above already flag. The real fix needs `ConfigGetResponse` to
+  surface `boomlink_config_service_apply_state()` on the wire, so a client can tell
+  "settled" from "provisional" apart from the version number alone - left for a
+  phase that revisits the config protocol's wire format, not attempted here as a
+  wiring-only fix;
+- **A broadcast frame can still confirm a pending hazardous change fleet-wide** —
+  the broadcast-no-ACK fix above stops a broadcast REJECTION from costing a retried
+  response, but `protocol_service_on_rx()`'s confirm-eligibility branch treats ANY
+  reply it queues as "the next exchange" that confirms a `WAITING` hazard,
+  including one this same phase's own broadcast-no-ACK reasoning already
+  established is not a correlated, acknowledged exchange with a specific peer - a
+  broadcast `ConfigGet` (never rejected, since it mutates nothing) can therefore
+  still confirm-and-persist every reachable node's pending hazardous change at
+  once. Kept below `Reboot`'s severity above and left deferred rather than fixed
+  alongside it: a broadcast confirmation cannot also trigger a reset (`Reboot` is
+  itself broadcast-guarded - section 9.9), and "any peer's next exchange confirms"
+  is section 8.2's own deliberately loose policy, not a bug this phase introduced -
+  but the same `destination_id != BOOMLINK_ADDR_BROADCAST` guard the ack fix above
+  already computes would close it if a future phase decides broadcast should not
+  count;
+- **`link.magic`'s resolved fallback is not fed back into the config service, the
+  twin of the `node_id` fix above** — `link_service_init()` has the identical
+  fallback shape for magic (`configured_magic == 0` or out of one wire byte's range
+  falls back to `BOOMLINK_LINKFRAME_MAGIC_DEFAULT`, `link_service.c`'s own doc), but
+  there is no `link_service_magic()` accessor for `cli.c` to read that resolved
+  value back from the way it does for `node_id`, so if that fallback ever fires,
+  `ConfigGet` would report `magic=0` forever while the link actually runs the
+  default - the exact "reported/persisted permanently diverges from what is
+  running" gap `magic_is_valid()` exists to prevent, self-perpetuating since a
+  client resending the reported `magic=0` unchanged is accepted as a no-op, not
+  validated. Currently unreachable (`boomlink_config_store_save()` had no caller
+  anywhere in the firmware before this PR, so no pre-Phase-C config blob can exist
+  to trigger the fallback) - the identical "unreachable today, same shape as an
+  already-fixed reachable case" position `node_id`'s divergence was in before the
+  fix that closed it - left deferred rather than fixed now since closing it needs a
+  new accessor this phase did not otherwise need to add.
 
 ## PR 5 — Host CLI and end-to-end tooling
 

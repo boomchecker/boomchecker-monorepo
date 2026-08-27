@@ -575,6 +575,75 @@ static void test_a_conflicting_hazardous_set_while_one_is_pending_is_rejected(vo
         "a hazardous SET must still be rejected while WAITING, not just while STAGED");
 }
 
+/* Round 7 review: `current_hazard` inside handle_set() already holds an
+   EARLIER request's still-unconfirmed value once WAITING (commit_pending_
+   apply() put it there) - so a request that restates that exact value
+   compares equal to it, hazard_changed correctly reports "no delta", and
+   without this fix the code fell straight through to answering OK: the
+   strongest result this protocol has, for a value boomlink_config_service_
+   poll() can still revert out from under the requester moments later with
+   no further response. This must answer PENDING_CONFIRMATION instead -
+   truthfully reporting the value is still unconfirmed - without disturbing
+   the original stage/confirmation window at all. */
+static void test_restating_a_still_unconfirmed_hazard_value_answers_pending_not_ok(void) {
+  boomlink_config_service_t svc = make_svc(500u);
+
+  boomlink_ConfigMessage req1                      = {0};
+  req1.which_message                               = boomlink_ConfigMessage_set_request_tag;
+  req1.message.set_request.expected_config_version = 1u;
+  req1.message.set_request.has_general             = true;
+  req1.message.set_request.general.node_id         = 77u;
+  boomlink_ConfigMessage resp1;
+  handle(&svc, &req1, &resp1);
+  REQUIRE(resp1.message.set_response.result ==
+              boomlink_ConfigSetResult_CONFIG_SET_RESULT_PENDING_CONFIRMATION,
+          "setup: staged");
+
+  boomlink_config_service_commit_pending_apply(&svc, 1000u);
+  REQUIRE(svc.apply_state == BOOMLINK_CONFIG_APPLY_WAITING, "setup: now waiting for confirmation");
+  REQUIRE(svc.current.general.node_id == 77u, "setup: current already holds the unconfirmed value");
+  REQUIRE(svc.revert_to.node_id == 0u, "setup: revert_to still holds the last CONFIRMED value");
+
+  /* The mandated GET-edit-SET flow would produce exactly this request if an
+     operator re-read the node right after req1's response and resent the
+     whole GeneralConfig group unedited. */
+  boomlink_ConfigMessage req2                      = {0};
+  req2.which_message                               = boomlink_ConfigMessage_set_request_tag;
+  req2.message.set_request.expected_config_version = 2u;
+  req2.message.set_request.has_general             = true;
+  req2.message.set_request.general.node_id         = 77u;
+  boomlink_ConfigMessage resp2;
+  bool ok2 = handle(&svc, &req2, &resp2);
+
+  REQUIRE(ok2, "a SET always answers");
+  CHECK(resp2.message.set_response.result ==
+            boomlink_ConfigSetResult_CONFIG_SET_RESULT_PENDING_CONFIRMATION,
+        "restating a still-unconfirmed hazard value must not answer OK - it is not settled yet");
+  CHECK(svc.apply_state == BOOMLINK_CONFIG_APPLY_WAITING,
+        "must still be waiting for the ORIGINAL confirmation - a restate is not a new stage");
+  CHECK(svc.current.general.node_id == 77u, "the unconfirmed value itself must be unchanged");
+  CHECK(svc.revert_to.node_id == 0u, "the last-confirmed value to revert to must be unchanged");
+
+  /* A genuine confirm afterward must still work normally - this fix must
+     not have left the state machine unable to ever leave WAITING. */
+  boomlink_config_service_confirm_pending_apply(&svc);
+  CHECK(svc.apply_state == BOOMLINK_CONFIG_APPLY_IDLE, "a real confirm afterward must still finalize it");
+
+  /* Restating a hazard group at its OWN already-CONFIRMED value (the
+     ordinary "editing something else" GET-edit-SET case, now while IDLE)
+     must still answer plain OK - this fix is scoped to WAITING only and
+     must not regress the settled case. */
+  boomlink_ConfigMessage req3                      = {0};
+  req3.which_message                               = boomlink_ConfigMessage_set_request_tag;
+  req3.message.set_request.expected_config_version = 3u;
+  req3.message.set_request.has_general             = true;
+  req3.message.set_request.general.node_id         = 77u;
+  boomlink_ConfigMessage resp3;
+  handle(&svc, &req3, &resp3);
+  CHECK(resp3.message.set_response.result == boomlink_ConfigSetResult_CONFIG_SET_RESULT_OK,
+        "restating an already-CONFIRMED hazard value while IDLE must still answer plain OK");
+}
+
 static void test_set_rejects_an_attempt_to_change_node_id_to_an_invalid_value(void) {
   boomlink_config_service_t svc = make_svc(1000u);
 
@@ -1042,6 +1111,7 @@ int main(void) {
   test_poll_abandons_immediately_when_confirm_window_is_zero();
   test_poll_reverts_exactly_at_the_window_boundary();
   test_a_conflicting_hazardous_set_while_one_is_pending_is_rejected();
+  test_restating_a_still_unconfirmed_hazard_value_answers_pending_not_ok();
   test_set_rejects_an_attempt_to_change_node_id_to_an_invalid_value();
   test_set_rejects_an_attempt_to_change_magic_past_one_byte();
   test_set_rejects_an_attempt_to_change_magic_to_zero();
@@ -1057,5 +1127,5 @@ int main(void) {
   test_commit_and_revert_both_restore_has_radio();
   test_resending_an_unchanged_radio_value_still_restores_has_radio();
   test_handle_rejects_malformed_or_missing_arguments();
-  BOOMLINK_TEST_REPORT("config_service_test", 163);
+  BOOMLINK_TEST_REPORT("config_service_test", 174);
 }
