@@ -1,0 +1,57 @@
+syntax = "proto3";
+
+package boomlink;
+
+// Command application messages (boomlink.md section 8.3). Configuration is
+// persistent state (config.proto); commands are immediate actions - section
+// 8.2 draws that line explicitly, and this file is entirely the latter.
+message CommandMessage {
+  oneof message {
+    CommandRequest request = 1;
+    CommandResponse response = 2;
+  }
+}
+
+// Section 8.3's initial command set, minus "optional time-sync fallback":
+// that one is explicitly optional in the spec and nothing in this PR
+// implements time sync, so its identifier is left unassigned here rather
+// than added with no behaviour behind it - the same reasoning
+// detection.proto applies to per-type detail fields.
+enum CommandType {
+  COMMAND_TYPE_UNSPECIFIED = 0;
+  COMMAND_TYPE_REBOOT = 1;
+  COMMAND_TYPE_IDENTIFY = 2;
+  COMMAND_TYPE_SELF_TEST = 3;
+  COMMAND_TYPE_START_DETECTION = 4;
+  COMMAND_TYPE_STOP_DETECTION = 5;
+  COMMAND_TYPE_CLEAR_STATISTICS = 6;
+  COMMAND_TYPE_REQUEST_DIAGNOSTICS = 7;
+}
+
+// `MessageHeader.request_id` (header.proto) already correlates a response
+// with its request at the application level, so this does not duplicate an
+// ID of its own.
+message CommandRequest {
+  CommandType type = 1;
+}
+
+// Typed result/error code (section 8.3's "return a correlated response with
+// a typed result/error code") - an enum, not free text, so a receiver's
+// decision logic never has to string-match. The same rule section 13 states
+// for error handling generally; this is its first concrete instance.
+enum CommandResult {
+  COMMAND_RESULT_UNSPECIFIED = 0;
+  COMMAND_RESULT_OK = 1;
+  COMMAND_RESULT_UNSUPPORTED = 2;
+  COMMAND_RESULT_BUSY = 3;
+  COMMAND_RESULT_FAILED = 4;
+}
+
+message CommandResponse {
+  CommandType type = 1;
+  CommandResult result = 2;
+  // Section 13's "an optional bounded diagnostic string may accompany a
+  // result for humans, but the enum is authoritative" - bound in
+  // nanopb/command.options.
+  string diagnostic = 3;
+}

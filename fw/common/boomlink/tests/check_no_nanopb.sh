@@ -20,24 +20,71 @@
 # have already pushed.
 #
 # Usage: check_no_nanopb.sh <python> <nanopb-dir> <compile-commands-json> \
-#                            <source-under-test> <artefact>...
+#            --sources <source>... --artefacts <artefact>...
+#
+# Both lists are plural, and the sources one especially. It used to take exactly
+# one source (`shift 4`), which was fine while one target had to hold this
+# property - but the link ENGINE holds it too, and it is four translation units.
+# With a single-source interface, adding the engine's archive to the artefact
+# list would have covered its symbols while leaving its includes unchecked, which
+# is the half of this check that catches a header-only dependency. Verified: with
+# the engine's sources absent, a relative include of nanopb's pb.h from
+# boomlink_link.c passed the whole suite.
 set -eu
 
-if [ "$#" -lt 5 ]; then
-  echo "usage: $0 <python> <nanopb-dir> <compile-commands-json> <source> <artefact>..." >&2
+if [ "$#" -lt 3 ]; then
+  echo "usage: $0 <python> <nanopb-dir> <compile-commands-json>" \
+       "--sources <source>... --artefacts <artefact>..." >&2
   exit 2
 fi
 
 python=$1
 nanopb_dir=$2
 compile_commands=$3
-source_under_test=$4
-shift 4
+shift 3
+
+# Parsed into two space-separated lists rather than arrays: this is /bin/sh, and
+# the paths CMake passes are build-tree paths with no spaces in them. Stated
+# because it IS a limitation - a build directory with a space in its name would
+# break this - and the alternative (re-exec under a shell with arrays) is a
+# bigger dependency than the problem.
+sources=""
+artefacts=""
+bucket=""
+for arg in "$@"; do
+  case "$arg" in
+    --sources)   bucket=sources ;;
+    --artefacts) bucket=artefacts ;;
+    *)
+      case "$bucket" in
+        sources)   sources="$sources $arg" ;;
+        artefacts) artefacts="$artefacts $arg" ;;
+        *)
+          echo "FAIL: '$arg' came before --sources or --artefacts" >&2
+          exit 2
+          ;;
+      esac
+      ;;
+  esac
+done
+
+# An empty list is the vacuous pass this whole script exists to avoid: a
+# refactor that renames a target or moves a source would otherwise leave the
+# check running happily over nothing.
+if [ -z "$sources" ]; then
+  echo "FAIL: no sources given - there would be nothing to check includes for" >&2
+  exit 2
+fi
+if [ -z "$artefacts" ]; then
+  echo "FAIL: no artefacts given - there would be nothing to check symbols in" >&2
+  exit 2
+fi
 
 status=0
 
 # 1. Symbol check on each built artefact.
-for artefact in "$@"; do
+# shellcheck disable=SC2086 # deliberate word splitting; see the note above
+for artefact in $artefacts; do
   if [ ! -f "$artefact" ]; then
     # A negative assertion is vacuously true when there is nothing to inspect,
     # so a missing artefact must fail rather than pass. Without this the check
@@ -97,24 +144,35 @@ if [ ! -f "$compile_commands" ]; then
   exit 1
 fi
 
-if ! includes=$("$python" "$(dirname "$0")/list_includes.py" \
-                  "$compile_commands" "$source_under_test"); then
-  echo "FAIL: could not determine the includes of $source_under_test" >&2
-  exit 1
-fi
-if [ -z "$includes" ]; then
-  echo "FAIL: no includes reported for $source_under_test - nothing was verified" >&2
-  exit 1
-fi
-
 nanopb_real=$(cd "$nanopb_dir" && pwd -P)
-matches=$(printf '%s\n' "$includes" | grep -F "$nanopb_real/" || true)
-if [ -n "$matches" ]; then
-  echo "FAIL: the link frame layer includes Nanopb headers:" >&2
-  printf '  %s\n' "$matches" >&2
-  status=1
-else
-  echo "ok: the link frame layer includes no Nanopb headers"
-fi
+
+# shellcheck disable=SC2086 # deliberate word splitting; see the note above
+for source_under_test in $sources; do
+  if ! includes=$("$python" "$(dirname "$0")/list_includes.py" \
+                    "$compile_commands" "$source_under_test"); then
+    echo "FAIL: could not determine the includes of $source_under_test" >&2
+    status=1
+    continue
+  fi
+  # A translation unit that reports no includes at all was not found in
+  # compile_commands.json, or is not compiled any more - either way nothing was
+  # verified, and reporting "ok" would be the vacuous pass again. Note this is
+  # per-source rather than fatal for the run: one stale path should not stop the
+  # other sources from being checked, since a partial answer plus a named failure
+  # is more useful than no answer.
+  if [ -z "$includes" ]; then
+    echo "FAIL: no includes reported for $source_under_test - nothing was verified" >&2
+    status=1
+    continue
+  fi
+  matches=$(printf '%s\n' "$includes" | grep -F "$nanopb_real/" || true)
+  if [ -n "$matches" ]; then
+    echo "FAIL: $source_under_test includes Nanopb headers:" >&2
+    printf '  %s\n' "$matches" >&2
+    status=1
+  else
+    echo "ok: $source_under_test includes no Nanopb headers"
+  fi
+done
 
 exit $status

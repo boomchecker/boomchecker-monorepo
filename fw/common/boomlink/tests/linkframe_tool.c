@@ -19,6 +19,7 @@
  *            linkframe_tool parse <in_file> [expected_magic]
  *            linkframe_tool ack <in_file> <local_node_id> <out_file> \
  *                                [expected_magic]
+ *            linkframe_tool ack_matches <pending_file> <ack_file> <local_node_id>
  *            linkframe_tool accepts <destination_id> <local_node_id>
  *
  *          Both encode subcommands take a raw flags byte rather than named
@@ -673,6 +674,56 @@ static int run_parse(int argc, char **argv) {
   return 0;
 }
 
+/* Parse one frame file into `out_header`, for a subcommand that requires the
+   input to be an ACCEPTED frame. Prints and returns nonzero on any rejection:
+   `parse` is the subcommand where a rejection is the expected output, so here it
+   can only mean the harness built a frame it did not mean to. */
+static int parse_frame_file(const char *subcommand, const char *label, const char *path,
+                          boomlink_linkframe_header_t *out_header) {
+  uint8_t *exact = NULL;
+  size_t   len   = 0u;
+  if (read_frame_exact(subcommand, path, &exact, &len) != 0) {
+    return 1;
+  }
+  size_t                            payload_len = 0u;
+  boomlink_linkframe_parse_result_t result      = boomlink_linkframe_parse(
+      exact, len, BOOMLINK_LINKFRAME_MAGIC_DEFAULT, out_header, &payload_len);
+  free(exact);
+  if (result != BOOMLINK_LINKFRAME_OK) {
+    fprintf(stderr, "%s: the %s frame '%s' does not parse (%s)\n", subcommand, label, path,
+            boomlink_linkframe_parse_result_str(result));
+    return 1;
+  }
+  return 0;
+}
+
+static int run_ack_matches(int argc, char **argv) {
+  if (argc != 5) {
+    fprintf(stderr, "usage: ack_matches <pending_file> <ack_file> <local_node_id>\n");
+    return 2;
+  }
+  uint32_t local_node_id;
+  if (!boomlink_tool_parse_u32(argv[4], &local_node_id)) {
+    fprintf(stderr, "ack_matches: '%s' is not a valid uint32 local_node_id\n", argv[4]);
+    return 2;
+  }
+
+  boomlink_linkframe_header_t pending = {0};
+  boomlink_linkframe_header_t ack     = {0};
+  if (parse_frame_file("ack_matches", "pending", argv[2], &pending) != 0 ||
+      parse_frame_file("ack_matches", "ack", argv[3], &ack) != 0) {
+    return 1;
+  }
+
+  /* Printed rather than turned into an exit code, like `accepts`: a non-match is
+     a legitimate answer, and the near-miss vectors that make this test worth
+     having are all non-matches. Conflating them with an I/O failure would let a
+     broken harness look like a correct rejection. */
+  printf("ack_matches=%u\n",
+         boomlink_linkframe_ack_matches(&pending, &ack, local_node_id) ? 1u : 0u);
+  return 0;
+}
+
 static int run_accepts(int argc, char **argv) {
   if (argc != 4) {
     fprintf(stderr, "usage: accepts <destination_id> <local_node_id>\n");
@@ -764,7 +815,8 @@ static int run_ack(int argc, char **argv) {
 int main(int argc, char **argv) {
   if (argc < 2) {
     fprintf(stderr,
-            "usage: %s <selftest|limits|encode|encode_raw|parse|ack|accepts> [args...]\n",
+            "usage: %s <selftest|limits|encode|encode_raw|parse|ack|ack_matches|accepts>"
+            " [args...]\n",
             argv[0]);
     return 2;
   }
@@ -785,6 +837,9 @@ int main(int argc, char **argv) {
   }
   if (strcmp(argv[1], "ack") == 0) {
     return run_ack(argc, argv);
+  }
+  if (strcmp(argv[1], "ack_matches") == 0) {
+    return run_ack_matches(argc, argv);
   }
   if (strcmp(argv[1], "accepts") == 0) {
     return run_accepts(argc, argv);

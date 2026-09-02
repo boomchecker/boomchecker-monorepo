@@ -4,6 +4,10 @@ package boomlink;
 
 import "header.proto";
 import "system.proto";
+import "detection.proto";
+import "config.proto";
+import "command.proto";
+import "telemetry.proto";
 
 // Every BoomProtocol application message is one Envelope (boomlink.md
 // section 7). It is the payload of a BoomLink DATA link frame (section 7.3);
@@ -12,11 +16,11 @@ message Envelope {
   MessageHeader header = 1;
 
   oneof payload {
-    // Field numbers 10-13 (DetectionMessage/ConfigMessage/CommandMessage/
-    // TelemetryMessage) are assigned by boomlink.md section 7 but not yet
-    // implemented - PR 4 adds them alongside their own .proto files. Left
-    // unnumbered here rather than `reserved`: `reserved` is for numbers that
-    // were used and then removed, not ones not yet added.
+    // Field numbers 10-14, in the order boomlink.md section 7 assigns them.
+    DetectionMessage detection = 10;
+    ConfigMessage config = 11;
+    CommandMessage command = 12;
+    TelemetryMessage telemetry = 13;
     SystemMessage system = 14;
   }
 }

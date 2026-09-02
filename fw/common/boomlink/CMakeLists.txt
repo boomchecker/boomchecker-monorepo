@@ -7,11 +7,13 @@ cmake_minimum_required(VERSION 3.21)
 #
 # 1. add_subdirectory()'d from fw/bom-stm32node/CMakeLists.txt, under that
 #    project's ARM cross toolchain - produces the `boomlink_protocol` static
-#    library (generated Nanopb codec + boomlink_codec.c), which the firmware
-#    links, and `boomlink_linkframe` (the link frame header), which is
-#    cross-compiled but not yet linked by anything - see its own comment below.
-#    No tests are built this way: cross-compiled host tooling makes no sense,
-#    and the STM32 target has no way to run pytest.
+#    library (generated Nanopb codec + boomlink_codec.c), `boomlink_linkframe`
+#    (the link frame header) and `boomlink_linkengine` (the link engine), all
+#    three now actually linked into the firmware image (`App/link/` is the
+#    link engine's call site - see its own comment below for how that came
+#    to be true only as of Phase C). No tests are built this way:
+#    cross-compiled host tooling makes no sense, and the STM32 target has no
+#    way to run pytest.
 # 2. configured standalone, with the host's native compiler - additionally
 #    builds `boomlink_codec_tool` and `boomlink_linkframe_tool` (small CLIs
 #    used by the Python tests) and registers the native/host test suite via
@@ -122,11 +124,12 @@ if(BOOMLINK_STANDALONE AND BOOMLINK_WERROR)
 endif()
 
 # One exception to all of the above, and the only warning knob declared in BOTH
-# modes: -Werror for boomlink_linkframe alone, off by default.
+# modes: -Werror for this package's TARGET-BOUND libraries - boomlink_linkframe
+# and boomlink_linkengine - off by default.
 #
 # It exists because three places (this file, README.md and
-# .github/workflows/test-bom-stm32node-build.yaml) justify cross-compiling the
-# link frame layer as proving it is "free of host-isms AND warning-clean for the
+# .github/workflows/test-bom-stm32node-build.yaml) justify cross-compiling those
+# libraries as proving they are "free of host-isms AND warning-clean for the
 # target". Only the first half was true: nothing put -Werror on the ARM build,
 # and the workflow's check only asserts the archive exists - so adding
 # `static int unused_var = 7;` to boomlink_linkframe.c left the ARM build green
@@ -136,16 +139,24 @@ endif()
 # int/long/size_t are different widths on the target, so -Wformat and
 # sign-compare diagnostics appear there and nowhere else.
 #
+# Named for what it covers rather than BOOMLINK_LINKFRAME_WERROR, which is what
+# it was called when the frame layer was the only such target. It now gates two,
+# and a knob whose name says "linkframe" while silently also governing the engine
+# is the kind of thing that gets switched off for a reason applying to only one of
+# them.
+#
 # Default OFF, ON in CI, for exactly the reason BOOMLINK_WERROR is: a developer's
 # local firmware build must never be blocked by a warning from a compiler newer
-# than CI's, least of all on code they did not touch. Scoped to this ONE
-# small hand-written target, so it cannot spread to the CubeMX-generated sources
-# or the vendored libraries.
-option(BOOMLINK_LINKFRAME_WERROR
-       "Treat warnings as errors when compiling boomlink_linkframe (CI turns this on)" OFF)
-set(BOOMLINK_LINKFRAME_WERROR_FLAGS "")
-if(BOOMLINK_LINKFRAME_WERROR)
-  set(BOOMLINK_LINKFRAME_WERROR_FLAGS -Werror)
+# than CI's, least of all on code they did not touch. Scoped to these two
+# hand-written libraries, so it cannot spread to the CubeMX-generated sources or
+# the vendored libraries.
+option(BOOMLINK_TARGET_WERROR
+       "Treat warnings as errors in the libraries cross-compiled for the target - \
+boomlink_linkframe, boomlink_linkengine, boomlink_dispatch, boomlink_command_service, \
+boomlink_config_service, boomlink_storage_port and boomlink_config_store (CI turns this on)" OFF)
+set(BOOMLINK_TARGET_WERROR_FLAGS "")
+if(BOOMLINK_TARGET_WERROR)
+  set(BOOMLINK_TARGET_WERROR_FLAGS -Werror)
 endif()
 
 # Nanopb is vendored once, under bom-stm32node/third_party/ (git submodule
@@ -282,7 +293,7 @@ endif()
 
 set(BOOMLINK_PROTO_DIR ${CMAKE_CURRENT_SOURCE_DIR}/proto)
 set(BOOMLINK_NANOPB_OPTIONS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/nanopb)
-set(BOOMLINK_PROTO_NAMES common header system envelope)
+set(BOOMLINK_PROTO_NAMES common header system detection telemetry command config envelope)
 list(TRANSFORM BOOMLINK_PROTO_NAMES PREPEND ${BOOMLINK_PROTO_DIR}/ OUTPUT_VARIABLE BOOMLINK_PROTO_FILES)
 list(TRANSFORM BOOMLINK_PROTO_FILES APPEND .proto)
 
@@ -378,14 +389,14 @@ foreach(proto_name IN LISTS BOOMLINK_PROTO_NAMES)
   # bookkeeping.
   #
   # No explicit -f<options file>: passing one global options file to every
-  # invocation made the generator warn "did not match any fields" on the
-  # three proto files with no matching options entry, every single build -
-  # noise that buries the one thing that warning is supposed to catch (a
-  # genuinely stale/typo'd entry). Nanopb auto-discovers a same-named
-  # `<proto>.options` via its `-I`/`--options-path` search list instead
-  # (verified against the vendored generator source): only system.proto has
-  # one (nanopb/system.options, matched via the extra -I below), so the
-  # other three simply find nothing and stay silent.
+  # invocation made the generator warn "did not match any fields" on every
+  # proto file with no matching options entry, every single build - noise
+  # that buries the one thing that warning is supposed to catch (a genuinely
+  # stale/typo'd entry). Nanopb auto-discovers a same-named `<proto>.options`
+  # via its `-I`/`--options-path` search list instead (verified against the
+  # vendored generator source): only system.proto and command.proto have one
+  # (nanopb/*.options, matched via the extra -I below), so the rest simply
+  # find nothing and stay silent.
   add_custom_command(
     OUTPUT ${out_c} ${out_h}
     COMMAND ${Python3_EXECUTABLE} ${BOOMLINK_NANOPB_GENERATOR}
@@ -479,21 +490,21 @@ endif()
 # something compile; if link-layer code needs to look inside the payload, the
 # layering is wrong.
 #
-# Built in the ARM cross build too, even though nothing in the firmware
-# references it yet - PR 3's later phases wire it in. That is deliberate, not
-# the "compiled but never linked" gap PR 2's review caught: there the ELF was
-# missing a symbol an acceptance criterion required, whereas here cross-
-# compiling it early is what proves it is free of host-isms and warning-clean
-# for the target before any firmware depends on it. The second half of that claim
-# is only true when BOOMLINK_LINKFRAME_WERROR is on, which is why CI turns it on
+# Built in the ARM cross build, and - as of Phase C - actually linked into
+# the firmware too (fw/bom-stm32node/App/link/ is the call site; see that
+# target's own comment below for the fuller history of what this looked like
+# before Phase C landed). Cross-compiling it here, rather than only once
+# something depended on it, is what proves it free of host-isms and
+# warning-clean for the target ahead of time - the second half of that claim
+# is only true when BOOMLINK_TARGET_WERROR is on, which is why CI turns it on
 # - see that option above.
 #
-# Precisely: the archive is BUILT but never reaches the linker at all - it is
-# not on bom-stm32node.elf's link line, because nothing links it. So Phase C
-# needs more than a call site: it must also add boomlink_linkframe to
-# fw/bom-stm32node/CMakeLists.txt's target_link_libraries. Worth stating,
-# because "the linker just drops it for now" would imply the archive is already
-# on the link line and only a reference is missing.
+# Precisely, before Phase C: the archive was BUILT but never reached the
+# linker at all - not on bom-stm32node.elf's link line, because nothing linked
+# it, which is a stronger statement than "the linker just drops it for now"
+# (that would imply the archive was already on the link line and only a
+# reference was missing). Phase C's fw/bom-stm32node/CMakeLists.txt now links
+# boomlink_linkengine, which PUBLIC-links this target too - see that file.
 add_library(boomlink_linkframe STATIC
   ${CMAKE_CURRENT_SOURCE_DIR}/linkframe/boomlink_linkframe.c
 )
@@ -503,11 +514,151 @@ target_include_directories(boomlink_linkframe PUBLIC
 # _Static_assert (C11), same self-contained reasoning as boomlink_protocol.
 target_compile_features(boomlink_linkframe PUBLIC c_std_11)
 # BOOMLINK_WERROR_FLAGS is the host-build knob (empty outside the standalone
-# branch); BOOMLINK_LINKFRAME_WERROR_FLAGS is the one that also applies under the
+# branch); BOOMLINK_TARGET_WERROR_FLAGS is the one that also applies under the
 # ARM cross build, which is what makes "warning-clean for the target" a checked
 # claim rather than a stated one. Both are listed so either can enable it.
 target_compile_options(boomlink_linkframe PRIVATE
-  ${BOOMLINK_WARNING_FLAGS} ${BOOMLINK_WERROR_FLAGS} ${BOOMLINK_LINKFRAME_WERROR_FLAGS})
+  ${BOOMLINK_WARNING_FLAGS} ${BOOMLINK_WERROR_FLAGS} ${BOOMLINK_TARGET_WERROR_FLAGS})
+
+# BoomLink's link engine (boomlink.md section 9): the stateful half of the link
+# layer - addressing, ACK/retry, duplicate suppression, TX queue - as opposed to
+# boomlink_linkframe's stateless header codec.
+#
+# A SEPARATE target from boomlink_linkframe, and the separation is the same one
+# section 9 draws: this depends on the frame layer, never the reverse. Section 9's
+# "BoomLink never decodes the Protobuf payload and has no Nanopb dependency"
+# applies to the engine at least as much as to the header codec - the engine is
+# what would be tempted to look inside a payload to make a routing or retry
+# decision.
+#
+# That property is NOT inherited from the frame layer, and an earlier version of
+# this comment claimed it was ("it links only boomlink_linkframe, so the check
+# registered below covers it too"). Linking a Nanopb-free library says nothing
+# about what this target's OWN four sources include: a relative include reaching
+# nanopb's headers needs no CMake change at all, and emits no symbol at all if it
+# only uses a macro or a typedef. Verified - such an include in boomlink_link.c
+# left every one of the twelve tests green. All four translation units are
+# therefore named explicitly in the check registered further down, alongside this
+# archive.
+#
+# Built in the ARM cross build for the same reason boomlink_linkframe is: to
+# prove it is free of host-isms and (with BOOMLINK_TARGET_WERROR) warning-clean
+# for the target. Phase C (fw/bom-stm32node/App/link/) now links it - the
+# workflow's "archive is produced" assertion below predates that and stays
+# useful anyway: it is what caught this archive never being cross-compiled at
+# all, when this target was briefly marked EXCLUDE_FROM_ALL, at a point in
+# review where nothing yet linked it and nothing else would have noticed.
+add_library(boomlink_linkengine STATIC
+  ${CMAKE_CURRENT_SOURCE_DIR}/linkengine/boomlink_port.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/linkengine/boomlink_dupcache.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/linkengine/boomlink_txqueue.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/linkengine/boomlink_link.c
+)
+target_include_directories(boomlink_linkengine PUBLIC
+  ${CMAKE_CURRENT_SOURCE_DIR}/linkengine
+)
+target_link_libraries(boomlink_linkengine PUBLIC boomlink_linkframe)
+target_compile_features(boomlink_linkengine PUBLIC c_std_11)
+target_compile_options(boomlink_linkengine PRIVATE
+  ${BOOMLINK_WARNING_FLAGS} ${BOOMLINK_WERROR_FLAGS} ${BOOMLINK_TARGET_WERROR_FLAGS})
+
+# PR 4's protocol dispatcher (boomlink.md section 4's "what actually landed"
+# for the link engine explains the precedent this follows): target-agnostic
+# C that routes a decoded Envelope by which_payload, deliberately outside
+# fw/bom-stm32node/App/protocol/ despite that being section 4's original
+# sketch location, so it is host-testable the same way the link engine is.
+#
+# Depends on boomlink_protocol (PUBLIC: this module's own header includes
+# envelope.pb.h), the opposite dependency direction from boomlink_linkframe/
+# boomlink_linkengine, which must NOT depend on Nanopb (section 9) - this
+# module's entire job is looking inside what those two deliberately never
+# do, so the same rule points the other way here.
+add_library(boomlink_dispatch STATIC
+  ${CMAKE_CURRENT_SOURCE_DIR}/dispatch/boomlink_dispatch.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/dispatch/boomlink_envelope_builder.c
+)
+target_include_directories(boomlink_dispatch PUBLIC
+  ${CMAKE_CURRENT_SOURCE_DIR}/dispatch
+)
+target_link_libraries(boomlink_dispatch PUBLIC boomlink_protocol)
+target_compile_features(boomlink_dispatch PUBLIC c_std_11)
+target_compile_options(boomlink_dispatch PRIVATE
+  ${BOOMLINK_WARNING_FLAGS} ${BOOMLINK_WERROR_FLAGS} ${BOOMLINK_TARGET_WERROR_FLAGS})
+
+# Section 8.3's command service (boomlink.md), against the dispatcher's
+# boomlink_dispatch_command_fn seam. Actions are injected (boomlink_command_
+# service.h's boomlink_command_ops_t) rather than performed here, so this
+# stays host-testable against a fake ops struct - Phase C wires the real
+# ones (NVIC reset, an LED, ...).
+add_library(boomlink_command_service STATIC
+  ${CMAKE_CURRENT_SOURCE_DIR}/services/boomlink_command_service.c
+)
+target_include_directories(boomlink_command_service PUBLIC
+  ${CMAKE_CURRENT_SOURCE_DIR}/services
+)
+target_link_libraries(boomlink_command_service PUBLIC boomlink_dispatch)
+target_compile_features(boomlink_command_service PUBLIC c_std_11)
+target_compile_options(boomlink_command_service PRIVATE
+  ${BOOMLINK_WARNING_FLAGS} ${BOOMLINK_WERROR_FLAGS} ${BOOMLINK_TARGET_WERROR_FLAGS})
+
+# Section 8.2's ConfigGet/ConfigSet over an in-memory NodeConfig, including
+# the revert-on-timeout apply that section requires for RadioConfig/magic/
+# node_id changes. Persistence to flash (section 10.1) is Phase B's job.
+add_library(boomlink_config_service STATIC
+  ${CMAKE_CURRENT_SOURCE_DIR}/services/boomlink_config_service.c
+)
+target_include_directories(boomlink_config_service PUBLIC
+  ${CMAKE_CURRENT_SOURCE_DIR}/services
+)
+# boomlink_linkframe is PRIVATE: only boomlink_config_service.c itself uses
+# it, for BOOMLINK_ADDR_INVALID/BOOMLINK_ADDR_BROADCAST (section 7.2's
+# reserved node_id values) - reused rather than duplicated as bare hex
+# literals. Header-only use (both constants are #define, not a linked
+# symbol), but declared as a real dependency rather than an extra include
+# path so it shows up in the link graph like any other real one.
+target_link_libraries(boomlink_config_service PUBLIC boomlink_dispatch PRIVATE boomlink_linkframe)
+target_compile_features(boomlink_config_service PUBLIC c_std_11)
+target_compile_options(boomlink_config_service PRIVATE
+  ${BOOMLINK_WARNING_FLAGS} ${BOOMLINK_WERROR_FLAGS} ${BOOMLINK_TARGET_WERROR_FLAGS})
+
+# PR 4 Phase B: the seam between the config storage wrapper below and
+# whatever actually holds the bytes (a real flash sector on the target, an
+# in-memory buffer in host tests) - no Nanopb dependency of its own, same
+# reasoning as linkframe/linkengine's own boundary (section 9). Enforced by
+# the same boomlink_no_nanopb_dependency test those two use, further down
+# this file - a review round that found this claim was, at first, only a
+# comment here and not actually checked.
+#
+# boomlink_crc32.c lives in this library rather than boomlink_config_store
+# below for the same Nanopb-free reason: the checksum algorithm has no
+# dependency on the wrapper format that happens to be its only caller today.
+add_library(boomlink_storage_port STATIC
+  ${CMAKE_CURRENT_SOURCE_DIR}/storage/boomlink_storage_port.c
+  ${CMAKE_CURRENT_SOURCE_DIR}/storage/boomlink_crc32.c
+)
+target_include_directories(boomlink_storage_port PUBLIC
+  ${CMAKE_CURRENT_SOURCE_DIR}/storage
+)
+target_compile_features(boomlink_storage_port PUBLIC c_std_11)
+target_compile_options(boomlink_storage_port PRIVATE
+  ${BOOMLINK_WARNING_FLAGS} ${BOOMLINK_WERROR_FLAGS} ${BOOMLINK_TARGET_WERROR_FLAGS})
+
+# PR 4 Phase B: persist a NodeConfig to flash with the magic/version/length/
+# CRC wrapper boomlink.md section 10.1 describes, through boomlink_storage_
+# port_t so this stays host-testable against a fake backend - Phase C's
+# firmware call site wires the real flash port in. Nanopb-dependent (unlike
+# boomlink_storage_port above): encoding/decoding the wrapped NodeConfig
+# blob is this library's whole job.
+add_library(boomlink_config_store STATIC
+  ${CMAKE_CURRENT_SOURCE_DIR}/storage/boomlink_config_store.c
+)
+target_include_directories(boomlink_config_store PUBLIC
+  ${CMAKE_CURRENT_SOURCE_DIR}/storage
+)
+target_link_libraries(boomlink_config_store PUBLIC boomlink_storage_port boomlink_protocol)
+target_compile_features(boomlink_config_store PUBLIC c_std_11)
+target_compile_options(boomlink_config_store PRIVATE
+  ${BOOMLINK_WARNING_FLAGS} ${BOOMLINK_WERROR_FLAGS} ${BOOMLINK_TARGET_WERROR_FLAGS})
 
 if(BOOMLINK_STANDALONE)
   enable_testing()
@@ -575,6 +726,158 @@ if(BOOMLINK_STANDALONE)
 
   add_test(NAME boomlink_linkframe_selftest COMMAND boomlink_linkframe_tool selftest)
 
+  # The link engine's tests are C scenarios, not pytest, and that is a departure
+  # from how the frame layer is tested - so the reason matters. The frame layer's
+  # subject is a WIRE FORMAT, where an independent Python implementation is worth
+  # its weight: it catches a misreading of the spec that a single implementation
+  # would happily agree with itself about. The engine's subject is a stateful
+  # SEQUENCE (send, no ACK, advance the clock, expect a retry with the same
+  # sequence number, advance again, expect final failure). Driving that through a
+  # subprocess needs either a scenario language or one subcommand per scenario,
+  # and reimplementing a retry state machine in Python would double the work
+  # while cross-checking behaviour rather than bytes.
+  #
+  # What keeps the cross-language check where it earns its keep: the engine's
+  # emitted BYTES are still compared against the Python reference, because the
+  # frames it produces are frame-layer frames - see the pytest tests that build
+  # the expected ACK with boomlink_linkframe.py's make_ack() and compare.
+  #
+  # fake_port.c is compiled into the test binary rather than shipped in the
+  # library: it is a test double, and a target that could link it is a target
+  # that could accidentally ship it.
+  add_executable(boomlink_port_test tests/port_test.c tests/fake_port.c)
+  target_link_libraries(boomlink_port_test PRIVATE boomlink_linkengine)
+  target_include_directories(boomlink_port_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests)
+  target_compile_options(boomlink_port_test PRIVATE
+    ${BOOMLINK_WARNING_FLAGS} ${BOOMLINK_WERROR_FLAGS})
+  add_test(NAME boomlink_port_test COMMAND boomlink_port_test)
+
+  # Whether the C harness can FAIL at all. c_test.h's `return 1` is the only path
+  # by which any C test here fails, and nothing exercised it - the path only runs
+  # when a test is already failing. Changing it to `return 0` made every C binary
+  # built from c_test.h exit 0 forever while printing its failures to stderr,
+  # demonstrated with two real duplicate-cache bugs green at the same time. One
+  # character, and the exact check count it would have hidden only grows as more
+  # tests are added - see each binary's own BOOMLINK_TEST_REPORT() floor below for
+  # the current number, since a count restated here would drift the moment a test
+  # was added and nobody was looking at this comment. The selfcheck binary is
+  # built but deliberately NOT registered as a test of its own: it is supposed to
+  # fail, and the script is what knows which failures are the expected ones.
+  add_executable(boomlink_c_test_selfcheck tests/c_test_selfcheck.c)
+  target_include_directories(boomlink_c_test_selfcheck PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests)
+  target_compile_options(boomlink_c_test_selfcheck PRIVATE
+    ${BOOMLINK_WARNING_FLAGS} ${BOOMLINK_WERROR_FLAGS})
+  add_test(NAME boomlink_c_test_harness
+    COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/tests/check_c_test.sh
+            $<TARGET_FILE:boomlink_c_test_selfcheck>)
+
+  # Duplicate suppression (section 9.4) as a pure data structure, so the cases
+  # that actually break it can be reached directly: a sequence wrap, both edges
+  # of the reordering window, a peer rebooting mid-conversation, and LRU
+  # eviction. Driving those through a radio would need thousands of frames and
+  # would still not reach the wrap.
+  add_executable(boomlink_dupcache_test tests/dupcache_test.c)
+  target_link_libraries(boomlink_dupcache_test PRIVATE boomlink_linkengine)
+  target_include_directories(boomlink_dupcache_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests)
+  target_compile_options(boomlink_dupcache_test PRIVATE
+    ${BOOMLINK_WARNING_FLAGS} ${BOOMLINK_WERROR_FLAGS})
+  add_test(NAME boomlink_dupcache_test COMMAND boomlink_dupcache_test)
+
+  # The priority TX queue (section 9.8) as a pure data structure. Its two
+  # requirements pull against each other - urgent traffic must not wait behind
+  # telemetry, and the drop policy must shed telemetry rather than detections -
+  # so both directions of the eviction rule need their own cases.
+  add_executable(boomlink_txqueue_test tests/txqueue_test.c)
+  target_link_libraries(boomlink_txqueue_test PRIVATE boomlink_linkengine)
+  target_include_directories(boomlink_txqueue_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests)
+  target_compile_options(boomlink_txqueue_test PRIVATE
+    ${BOOMLINK_WARNING_FLAGS} ${BOOMLINK_WERROR_FLAGS})
+  add_test(NAME boomlink_txqueue_test COMMAND boomlink_txqueue_test)
+
+  # The engine's RX pipeline (section 9.2) and the delivery it exists for. Where
+  # delivery is the subject, a scenario runs TWO engines on one fake medium, so a
+  # frame is built by one and validated by the other - a test that constructed the
+  # expected frame itself would agree with a misreading of section 7.3 as happily
+  # as the code does. The rejection scenarios cannot be shaped that way and are
+  # forged-and-injected instead: no compliant engine emits a frame from the
+  # broadcast address or an ACK addressed to a third party, so a receiver-side
+  # guard is only reachable by traffic no sender would produce. An earlier version
+  # of this comment claimed EVERY scenario ran two engines.
+  add_executable(boomlink_link_rx_test tests/link_rx_test.c tests/fake_port.c)
+  target_link_libraries(boomlink_link_rx_test PRIVATE boomlink_linkengine)
+  target_include_directories(boomlink_link_rx_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests)
+  target_compile_options(boomlink_link_rx_test PRIVATE
+    ${BOOMLINK_WARNING_FLAGS} ${BOOMLINK_WERROR_FLAGS})
+  add_test(NAME boomlink_link_rx_test COMMAND boomlink_link_rx_test)
+
+  # The TX pipeline (sections 9.1, 9.6, 9.7). A separate binary from the RX one
+  # because what it needs from the harness is different in kind: the RX scenarios
+  # present traffic and assert on classification, while these advance a clock one
+  # millisecond at a time and assert on WHEN the pipeline moves. Section 15.2 lists
+  # ACK timeout, retry count and randomized backoff bounds as fake-radio territory
+  # precisely because none of them is observable against real hardware.
+  add_executable(boomlink_link_tx_test tests/link_tx_test.c tests/fake_port.c)
+  target_link_libraries(boomlink_link_tx_test PRIVATE boomlink_linkengine)
+  target_include_directories(boomlink_link_tx_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests)
+  target_compile_options(boomlink_link_tx_test PRIVATE
+    ${BOOMLINK_WARNING_FLAGS} ${BOOMLINK_WERROR_FLAGS})
+  add_test(NAME boomlink_link_tx_test COMMAND boomlink_link_tx_test)
+
+  # PR 4 Phase A: the Envelope router (boomlink_dispatch_process()) as a pure
+  # function over fake handlers - every which_payload branch, the response
+  # header it builds for request/response groups (never the handler's job),
+  # and the no_payload/unhandled counters that make a silently dropped
+  # message impossible to miss.
+  add_executable(boomlink_dispatch_test tests/dispatch_test.c)
+  target_link_libraries(boomlink_dispatch_test PRIVATE boomlink_dispatch)
+  target_include_directories(boomlink_dispatch_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests)
+  target_compile_options(boomlink_dispatch_test PRIVATE
+    ${BOOMLINK_WARNING_FLAGS} ${BOOMLINK_WERROR_FLAGS})
+  add_test(NAME boomlink_dispatch_test COMMAND boomlink_dispatch_test)
+
+  # PR 4 Phase A: section 8.3's command set against a fake ops struct - every
+  # CommandType reaches its own callback (or UNSUPPORTED if that slot is
+  # NULL), and a response is always built for a real CommandRequest.
+  add_executable(boomlink_command_service_test tests/command_service_test.c)
+  target_link_libraries(boomlink_command_service_test PRIVATE boomlink_command_service)
+  target_include_directories(boomlink_command_service_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests)
+  target_compile_options(boomlink_command_service_test PRIVATE
+    ${BOOMLINK_WARNING_FLAGS} ${BOOMLINK_WERROR_FLAGS})
+  add_test(NAME boomlink_command_service_test COMMAND boomlink_command_service_test)
+
+  # PR 4 Phase A: section 8.2's ConfigGet/ConfigSet, the whole-group-
+  # replacement contract, and the revert-on-timeout apply state machine -
+  # the trickiest logic in this phase, and the one most worth pinning a
+  # boundary test on (the window closing at exactly confirm_window_ms).
+  add_executable(boomlink_config_service_test tests/config_service_test.c)
+  target_link_libraries(boomlink_config_service_test PRIVATE boomlink_config_service)
+  target_include_directories(boomlink_config_service_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests)
+  target_compile_options(boomlink_config_service_test PRIVATE
+    ${BOOMLINK_WARNING_FLAGS} ${BOOMLINK_WERROR_FLAGS})
+  add_test(NAME boomlink_config_service_test COMMAND boomlink_config_service_test)
+
+  # PR 4 Phase B: the standard CRC-32 pinned against its own published test
+  # vector - see boomlink_crc32.h's own doc for why this small algorithm gets
+  # a dedicated test rather than only exercising it indirectly through
+  # config_store_test below.
+  add_executable(boomlink_crc32_test tests/crc32_test.c)
+  target_link_libraries(boomlink_crc32_test PRIVATE boomlink_storage_port)
+  target_include_directories(boomlink_crc32_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests)
+  target_compile_options(boomlink_crc32_test PRIVATE
+    ${BOOMLINK_WARNING_FLAGS} ${BOOMLINK_WERROR_FLAGS})
+  add_test(NAME boomlink_crc32_test COMMAND boomlink_crc32_test)
+
+  # PR 4 Phase B: section 10.1's magic/version/length/CRC wrapper, against a
+  # fake in-memory boomlink_storage_port_t (this test's own, not a shared
+  # fake - unlike fake_port.h/fake_radio, nothing else needs an in-memory
+  # flash yet).
+  add_executable(boomlink_config_store_test tests/config_store_test.c)
+  target_link_libraries(boomlink_config_store_test PRIVATE boomlink_config_store)
+  target_include_directories(boomlink_config_store_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests)
+  target_compile_options(boomlink_config_store_test PRIVATE
+    ${BOOMLINK_WARNING_FLAGS} ${BOOMLINK_WERROR_FLAGS})
+  add_test(NAME boomlink_config_store_test COMMAND boomlink_config_store_test)
+
   # The Nanopb-free boundary (boomlink.md section 9), checked as a TEST rather
   # than only as a CI step, so `task test` runs it and a developer finds out
   # before pushing. The target structure enforces the common case at compile
@@ -584,17 +887,46 @@ if(BOOMLINK_STANDALONE)
   # only uses a macro or typedef, so an archive check cannot see it either. The
   # script checks symbols AND the compiler's own include list; see its header.
   #
-  # The artefact list is passed from here rather than hardcoded in the workflow,
-  # so a target added by a later phase (the link engine, which must hold the
-  # same property) is one line away from being covered.
+  # Both lists are passed from here rather than hardcoded in the workflow. An
+  # earlier version of this comment said a target added by a later phase would be
+  # "one line away from being covered", and that was wrong twice over: the script
+  # took exactly ONE source (`shift 4`), so the engine's four translation units
+  # could not be added at all, and the engine target's own comment claimed it
+  # inherited the property transitively. Verified: a relative
+  # `#include "../../../bom-stm32node/third_party/nanopb/pb.h"` in
+  # boomlink_link.c left all twelve tests green.
+  #
+  # So every translation unit that must hold the property is named, and so is
+  # every archive. The engine's four sources are listed individually rather than
+  # globbed: a glob silently covers a new file, which sounds good until the new
+  # file is one that legitimately needs a different rule, and there would be
+  # nothing here saying which files this claim is about.
+  # PR 4 Phase B added a third Nanopb-free target, boomlink_storage_port
+  # (storage/boomlink_storage_port.c + storage/boomlink_crc32.c) - its own
+  # CMakeLists.txt comment claims "no Nanopb dependency of its own" the same
+  # way linkframe/linkengine do, so it belongs in this same check rather
+  # than being a documented-but-unverified claim. boomlink_crc32_test is the
+  # consumer artefact for it, the same role boomlink_linkframe_tool plays
+  # for linkframe/linkengine below.
   add_test(NAME boomlink_no_nanopb_dependency
     COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/tests/check_no_nanopb.sh
             ${Python3_EXECUTABLE}
             ${BOOMLINK_NANOPB_DIR}
             ${CMAKE_CURRENT_BINARY_DIR}/compile_commands.json
+            --sources
             ${CMAKE_CURRENT_SOURCE_DIR}/linkframe/boomlink_linkframe.c
+            ${CMAKE_CURRENT_SOURCE_DIR}/linkengine/boomlink_port.c
+            ${CMAKE_CURRENT_SOURCE_DIR}/linkengine/boomlink_dupcache.c
+            ${CMAKE_CURRENT_SOURCE_DIR}/linkengine/boomlink_txqueue.c
+            ${CMAKE_CURRENT_SOURCE_DIR}/linkengine/boomlink_link.c
+            ${CMAKE_CURRENT_SOURCE_DIR}/storage/boomlink_storage_port.c
+            ${CMAKE_CURRENT_SOURCE_DIR}/storage/boomlink_crc32.c
+            --artefacts
             $<TARGET_FILE:boomlink_linkframe>
+            $<TARGET_FILE:boomlink_linkengine>
             $<TARGET_FILE:boomlink_linkframe_tool>
+            $<TARGET_FILE:boomlink_storage_port>
+            $<TARGET_FILE:boomlink_crc32_test>
   )
 
   # The encoder's compile-time output bound, in BOTH languages (see

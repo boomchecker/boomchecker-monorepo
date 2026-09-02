@@ -197,6 +197,108 @@ sketch:
   has no failure path by design. The Python reference had carried these three as dataclass
   defaults from the start, so the two implementations were not equally easy to misuse.
 
+What the link engine actually landed as, where it differs from this section's original
+sketch:
+
+- The sketch put addressing, ACK, retry and queue logic entirely under
+  `bom-stm32node/App/link/` (`boomlink.h/.c`, `boomlink_tx.c`, `boomlink_rx.c`,
+  `boomlink_queue.c`), STM32-target-only. It landed instead as `boomlink_linkengine` -
+  target-agnostic C under `fw/common/boomlink/linkengine/`, the same shared-code split as
+  `linkframe/` above, so it can run against a fake radio on the host (section 15.2)
+  rather than only ever on hardware.
+- It is four translation units, not one: `boomlink_link.h/.c` (the section 9 state
+  machine), `boomlink_dupcache.h/.c` (section 9.4's duplicate window),
+  `boomlink_txqueue.h/.c` (section 9.8's priority queue), and `boomlink_port.h/.c` (the
+  radio seam a real radio, or `fw/common/boomlink/tests/`'s fake, implements) - split so
+  each has its own focused test binary rather than one monolith.
+- `App/link/` under `bom-stm32node` is therefore not four files but two, both added by
+  Phase C: `boomlink_radio_port.c/.h` (the `boomlink_port_t` seam, wired to
+  `App/radio/radio.h`) and `link_service.c/.h` (the `boomlink_link_t` instance and the
+  call site `Core/Src/cli.c` drives it from). Phase C also touched two files outside
+  `App/link/` itself: `fw/bom-stm32node/CMakeLists.txt` gained the `target_link_libraries`
+  entry that finally links both `boomlink_linkframe` and `boomlink_linkengine` into the
+  firmware image (they had only ever been cross-compiled before, on purpose, to prove
+  them free of host-isms before anything depended on them), and `cli.c` gained the `link`
+  command (`link status` / `link enable`/`disable` / `link ping <node_id_hex>`) - the
+  ping/pong PR 3's scope names -
+  see section 15.3 for how it coexists with the pre-existing raw `radio ping` test.
+
+What the protocol dispatcher and per-domain services actually landed as (PR 4 Phase A),
+where it differs from this section's original sketch:
+
+- The sketch put the dispatcher and every domain service under
+  `bom-stm32node/App/protocol/` and `App/services/`, STM32-target-only. They landed
+  instead as `boomlink_dispatch`, `boomlink_command_service` and
+  `boomlink_config_service` - target-agnostic C under `fw/common/boomlink/dispatch/` and
+  `fw/common/boomlink/services/` - the same reasoning that moved the link engine out of
+  `App/link/` in PR 3: no HAL/RadioLib dependency, so it belongs where it can be
+  host-tested, with a thin `App/` call site wiring real actions in later.
+- Unlike `linkframe/`/`linkengine/`, this layer is Nanopb-**dependent** on purpose: its
+  whole job is decoding what those layers deliberately never look inside (see
+  `boomlink_dispatch.h`'s own file doc).
+- `detection_service`/`telemetry_service`/`system_service` from the sketch do not exist
+  yet: Phase A wires DetectionMessage/TelemetryMessage/SystemMessage only as far as the
+  dispatcher recognizing and counting them (`on_detection`/`on_telemetry`/`on_system`
+  handler slots), since there is no detection algorithm, sensor reading or automatic
+  Ping responder yet to put behind a real service.
+- `boomlink_config_service` holds `NodeConfig` **in memory only** - `App/storage/
+  config_store.c/.h` from the sketch, and loading/saving it, is Phase B's job. Section
+  10.1's revert-on-timeout apply is implemented in full even so, generalized from just
+  RadioConfig to also cover `GeneralConfig.node_id`/`LinkConfig.magic` per this section's
+  own "two fields need the same hazard treatment" note - a `boomlink_config_hazard_t`
+  covering all three as one atomic stage/commit/confirm/revert unit.
+- `App/protocol/` and `App/services/` are therefore not yet added by any PR: Phase C
+  adds a thin call site analogous to Phase C's `App/link/link_service.c/.h` (wiring
+  `boomlink_dispatch_process()` and the two services to real RX bytes, a real send path,
+  and real command actions), not the fuller file lists this section originally sketched.
+
+What section 10.1's persistence actually landed as (PR 4 Phase B), where it differs from
+that section's original sketch:
+
+- The sketch put `config_store.c/.h` under `bom-stm32node/App/storage/`, STM32-target-only.
+  The wrapper format and load/save logic landed instead as `boomlink_config_store` -
+  target-agnostic C under `fw/common/boomlink/storage/`, the same shared-code split as
+  `linkframe/`/`linkengine/`/`dispatch/`/`services/` above, so the header/CRC framing and
+  the "missing/invalid -> defaults" fallback can be host-tested against a fake in-memory
+  region (`tests/config_store_test.c`) rather than only ever on real flash.
+- It is three translation units, not one: `boomlink_storage_port.h/.c` (the seam a real
+  flash port, or the tests' fake, implements - modeled on `linkengine/boomlink_port.h`'s
+  same fake-vs-real split), `boomlink_crc32.h/.c` (the wrapper's CRC-32, pulled out on its
+  own so it can be pinned against the algorithm's published test vector directly rather
+  than only indirectly through whatever happens to call it), and `boomlink_config_store.h/
+  .c` (the magic/version/length/CRC framing and `boomlink_config_store_load()`/`_save()`
+  themselves).
+- Nanopb-**dependent**, unlike `boomlink_storage_port`/`boomlink_crc32`: encoding/decoding
+  the wrapped `NodeConfig` blob is `boomlink_config_store`'s whole job, the same split
+  `dispatch/` draws against `linkframe/`/`linkengine/` above.
+- `NodeConfig` itself gained a `config.proto` message of the same name, and
+  `boomlink_config_service.h`'s `boomlink_node_config_t` became a type alias for it
+  (`typedef boomlink_NodeConfig boomlink_node_config_t;`) rather than staying the
+  hand-written struct Phase A introduced - one definition of "all six config groups plus a
+  version stamp" that `boomlink_config_store` can Nanopb-encode directly, instead of a
+  second hand-written mirror of it that could drift out of sync with `config.proto`.
+- A single fixed-size region, not the ping-pong pair a wear-levelled design might reach
+  for: section 10.1's own "missing/invalid -> load safe defaults" already absorbs a torn
+  write (power lost mid-erase/mid-program) as "invalid -> defaults" under a single region
+  exactly as it would under a double-buffered one - the section asks for "never apply a
+  corrupt config", not "never lose the most recent write". See
+  `fw/common/boomlink/storage/boomlink_config_store.h`'s own doc for the full reasoning.
+- `App/storage/` under `bom-stm32node` is therefore not `config_store.c/.h` but
+  `boomlink_flash_storage_port.c/.h` (the `boomlink_storage_port_t` seam, backed by the
+  last 16K of this chip's flash - `STM32H563xx_FLASH.ld`'s `FLASH` region shrank from
+  2048K to 2032K to reserve `0x081FC000`-`0x08200000`, Bank 2's last two 8K sectors
+  (126-127 of 128 per bank) on this dual-bank part, for exactly this). Cross-compiled
+  as its own static library
+  (`boomlink_flash_storage_port`, defined in `fw/bom-stm32node/CMakeLists.txt` itself,
+  the same isolation `radio_layer` gets) but - like `boomlink_dispatch`/
+  `boomlink_command_service`/`boomlink_config_service` before it - not yet linked into the
+  firmware image: nothing calls `boomlink_config_store_load()`/`_save()` at boot or on a
+  confirmed config write until the same later Phase C call site wires it in.
+- TrustZone (`HAL_GTZC_MODULE_ENABLED`) is disabled on this board (`Core/Inc/
+  stm32h5xx_hal_conf.h`), so `boomlink_flash_storage_port.c` uses the plain
+  (non-`_NS`/`_S`) `HAL_FLASH_*`/`HAL_FLASHEx_*` calls rather than needing to pick a
+  secure/non-secure variant.
+
 ```text
 fw/
 ├── common/
@@ -221,6 +323,22 @@ fw/
 │       │   ├── boomlink_linkframe.h
 │       │   ├── boomlink_linkframe.c
 │       │   └── boomlink_linkframe.py  # independent host parser, not a binding
+│       ├── linkengine/              # the link engine (section 9) - NO Nanopb
+│       │   │                        # dependency, same as linkframe/ above
+│       │   ├── boomlink_link.h/.c       # section 9's TX/RX state machine
+│       │   ├── boomlink_dupcache.h/.c   # section 9.4's duplicate window
+│       │   ├── boomlink_txqueue.h/.c    # section 9.8's priority queue
+│       │   └── boomlink_port.h/.c       # radio seam - tests/'s fake implements it too
+│       ├── dispatch/                # PR 4 Phase A - Nanopb-DEPENDENT, unlike the two above
+│       │   ├── boomlink_dispatch.h/.c          # routes a decoded Envelope by which_payload
+│       │   └── boomlink_envelope_builder.h/.c  # builds one-way DetectionEvent/TelemetryReport envelopes
+│       ├── services/                # PR 4 Phase A - per-domain logic behind the dispatcher
+│       │   ├── boomlink_command_service.h/.c   # section 8.3's command set, ops injected
+│       │   └── boomlink_config_service.h/.c    # section 8.2's ConfigGet/Set, in-memory only
+│       ├── storage/                 # PR 4 Phase B - section 10.1's persisted NodeConfig
+│       │   ├── boomlink_storage_port.h/.c    # flash seam - tests/'s fake implements it too
+│       │   ├── boomlink_crc32.h/.c           # the wrapper's CRC-32, pinned on its own
+│       │   └── boomlink_config_store.h/.c    # magic/version/length/CRC framing + load/save
 │       ├── tests/
 │       │   ├── test_encode_decode.py
 │       │   ├── test_compatibility.py
@@ -238,27 +356,22 @@ fw/
 │   │   │   ├── e22_radio.cpp
 │   │   │   ├── stm32_radiolib_hal.hpp
 │   │   │   └── stm32_radiolib_hal.cpp
-│   │   ├── link/
-│   │   │   ├── boomlink.h
-│   │   │   ├── boomlink.c
-│   │   │   ├── boomlink_tx.c
-│   │   │   ├── boomlink_rx.c
-│   │   │   └── boomlink_queue.c
-│   │   ├── protocol/
-│   │   │   ├── protocol_codec.h
-│   │   │   ├── protocol_codec.c
-│   │   │   ├── protocol_dispatcher.h
-│   │   │   ├── protocol_dispatcher.c
-│   │   │   ├── envelope_builder.h
-│   │   │   └── envelope_builder.c
-│   │   ├── services/
-│   │   │   ├── detection_service.c/.h
-│   │   │   ├── telemetry_service.c/.h
-│   │   │   ├── config_service.c/.h
-│   │   │   ├── command_service.c/.h
-│   │   │   └── system_service.c/.h
-│   │   └── storage/
-│   │       └── config_store.c/.h
+│   │   ├── link/                      # Phase C - see section 4's "what actually
+│   │   │   │                          # landed" above for how this differs from
+│   │   │   │                          # the four-file sketch this line used to show
+│   │   │   ├── boomlink_radio_port.h/.c   # boomlink_port_t, wired to App/radio/radio.h
+│   │   │   └── link_service.h/.c          # the boomlink_link_t instance + cli.c's call site
+│   │   ├── protocol/                  # not yet added - PR 4's later firmware-wiring
+│   │   │   │                          # phase adds a thin call site here, not the
+│   │   │   │                          # protocol_codec/protocol_dispatcher/envelope_builder
+│   │   │   │                          # split this line used to show; see PR 4 Phase A's
+│   │   │   │                          # "what actually landed" above
+│   │   ├── services/                  # not yet added - same note as protocol/ above
+│   │   └── storage/                   # Phase B - see PR 4 Phase B's "what actually
+│   │       │                          # landed" above for how this differs from
+│   │       │                          # the config_store.c/.h sketch this line used to show
+│   │       └── boomlink_flash_storage_port.h/.c  # boomlink_storage_port_t, backed by
+│   │                                              # the last flash sectors (STM32H563xx_FLASH.ld)
 │   ├── third_party/
 │   │   ├── embedded-cli/
 │   │   ├── RadioLib/
@@ -698,6 +811,20 @@ This prevents stranding a remote node on a profile nobody else uses.
 A later implementation may add scheduled activation for coordinated network-wide radio
 profile changes.
 
+**Two fields need the same hazard treatment and are not currently assigned a home.**
+`magic` (section 7.3's network ID byte) is called "runtime-configurable" where it is
+defined, but is absent from every `GeneralConfig`/`LinkConfig` field list this section and
+section 10 give - an omission, not a decision to keep it fixed. Changing this node's own
+`magic` live is exactly the hazard this paragraph describes for a radio profile: every
+peer's magic check now rejects this node and this node's now rejects every peer, "a
+working radio with a silent link." The same applies to `node_id`, though for the opposite
+addressing failure - a node that changes its own ID live can no longer be reached at the
+old one, and it is only ever safe to leave the previous ID answering until the new one is
+confirmed. Neither field currently has anywhere in this document saying it needs
+revert-on-timeout (or an equivalent confirm-before-committing exchange); when PR 4
+implements ConfigSet handling, both belong in this paragraph's scope, not treated as
+ordinary `GeneralConfig` writes applied immediately.
+
 ### 8.3 Commands
 
 Initial command set:
@@ -847,10 +974,20 @@ Concrete initial shape:
 - LRU eviction when the table is full. A very stale retransmission from an evicted
   source may be delivered twice — acceptable at this scale and traffic rate.
 
+A frame from a source already in the table but carrying a *different* `session_id` means
+that peer rebooted (section 9.3), and its entry is **reused** rather than a second one
+added: a peer that reboots a few times would otherwise evict unrelated peers with
+sessions that are already dead. The cost is symmetrical with the eviction note above —
+a straggler still in flight across the peer's reboot resets what the current session's
+window remembers, so one already-delivered frame can be delivered twice. Both are the
+same trade, and both are preferable to letting one rebooting peer occupy two slots.
+
 If a duplicate packet is received:
 
 - do not dispatch it to the application again;
-- if it requests ACK, transmit the ACK again;
+- if it is **unicast** and requests ACK, transmit the ACK again — a broadcast frame is
+  never acknowledged at all (section 9.5's receiver-side responsibilities), so the
+  scoping here matches the rule list there rather than reading as a second, laxer one;
 - update duplicate statistics.
 
 The cache must be statically bounded. No unbounded map or dynamic allocation.
@@ -959,6 +1096,15 @@ options:
 2. Keep it in the engine, and cover the rejection cases explicitly in its own tests — a
    fake-radio test that feeds a *mismatched* ACK and asserts the frame is still pending.
 
+**Decided: option 1, and option 2 as well rather than instead.** The matcher lives in the
+frame layer as `boomlink_linkframe_ack_matches()`, pinned against near-miss vectors by
+the Python mirror, because the over-permissive failure above is invisible to any test the
+engine alone can have. The engine then *also* feeds mismatched ACKs — wrong source, wrong
+sequence, wrong session, and a DATA frame wearing the right fields — and asserts the frame
+is still pending, because pinning the predicate does not prove the engine consults it.
+The two are cheap together and neither substitutes for the other: the frame layer's tests
+say the answer is right, the engine's say the question was asked.
+
 The matching rule itself is not a new decision either way. It is the inverse of the
 mapping above, for a **unicast** pending frame — 9.6 scopes ACK waits to unicast, so
 `pending.destination_id` is always a real node: frame type ACK, `session_id` and
@@ -1018,6 +1164,30 @@ Initial policy:
 
 Do not retry forever.
 
+**What counts as an attempt.** The attempt budget counts transmissions the radio
+*accepted*, not calls to it. A driver that refuses a send — `radio_send()` reports busy
+while a transmission is in progress, and reports the same for absent hardware — radiated
+nothing, so the frame keeps its slot in the pipeline, keeps its already-assigned
+`(session_id, sequence)`, and is offered again on a later poll. Two consequences worth
+stating, because both look like bugs and neither is:
+
+- The frame is **held**, not popped and re-queued. An implementation that dequeues before
+  transmitting and drops the item on a refused send lets a busy radio silently destroy
+  queued traffic, which is the failure this paragraph exists to rule out.
+- Refusals are **not** bounded by a count. At SF12 a single frame legitimately collects
+  thousands of "busy" refusals from a superloop polling every millisecond, so any bound
+  low enough to detect a dead radio would shed live traffic constantly. A radio refusing
+  forever is a dead link however this is written; what matters is that it is visible,
+  which the *TX failures* counter (section 9.10) provides.
+
+**Final failure is not the same as no delivery.** An unacknowledged frame may well have
+arrived — the ACK is what was lost. The outcome reported to the caller therefore
+distinguishes *acknowledged* (the only outcome that means delivery), *sent* (transmitted
+with no ACK requested, so the link knows nothing more) and *no ACK* (every attempt
+transmitted, none acknowledged). Success is reported as well as failure: a caller told
+only about failures cannot tell delivery from a frame still waiting behind a retry
+sequence, which at this traffic rate can be seconds.
+
 ### 9.7 Random backoff and simultaneous detections
 
 Gunshots or other common acoustic events may be detected by several nodes at almost the
@@ -1030,6 +1200,24 @@ is not changed by radio scheduling.
 Retry backoff must also include jitter. Later MAC improvements may add CAD or time slots,
 but they are not required for the first prototype.
 
+**How "for event messages" is implemented.** The jitter is configurable per node
+(`tx_jitter_max_ms`, drawn uniformly over `[0, max]`, applied before a frame's *first*
+transmission only — a retransmission uses the backoff range instead) and it applies to
+**every queued frame**, not only to detections. The link layer cannot identify an event
+message: section 9 forbids it from decoding the payload, so a detection and a telemetry
+reading are the same opaque bytes to it. Narrowing the delay would mean either the caller
+passing a flag the link layer would only forward, or inferring intent from priority —
+both of which put an application concern into the link layer to save latency on traffic
+that is not latency-sensitive.
+
+The cost is a few tens of milliseconds on queued traffic, which this section already
+accepts for the traffic it *is* aimed at. Two things are unaffected: ACKs, which never
+pass through the queue, and the detection timestamp, which is captured before the delay
+so localization timing does not move. Setting the maximum to 0 disables the delay
+entirely, which is the right configuration for a node that is the only transmitter in its
+own conversation. If one class of traffic ever genuinely needs to skip the delay,
+per-priority jitter is the extension point.
+
 ### 9.8 Priority TX queue
 
 At minimum use three logical priorities:
@@ -1040,8 +1228,9 @@ NORMAL  detection events, configuration responses
 LOW     periodic telemetry, non-critical diagnostics
 ```
 
-The exact mapping can be adjusted, but low-priority telemetry must not block urgent
-traffic.
+The exact mapping can be adjusted, but low-priority telemetry must not be queued ahead of
+urgent traffic - see below for the precise scope of that guarantee once something has
+already left the queue.
 
 The queue is statically bounded. When full, the drop policy should prefer dropping or
 coalescing low-priority telemetry before detection or command traffic.
@@ -1049,6 +1238,19 @@ coalescing low-priority telemetry before detection or command traffic.
 Priorities reorder only the queue. Sequence numbers are assigned at dequeue (section
 9.1), so the on-air sequence remains monotonic per session regardless of priority
 reordering, and the receiver's duplicate window stays simple.
+
+**"Reorder only the queue" is not a preemption guarantee, and worth stating precisely so
+it isn't read as a stronger one.** Once a frame leaves the queue into section 9.6's single
+global pipeline slot, nothing can displace it — a `LOW`-priority frame already mid-retry
+holds that slot for the rest of its retry/backoff cycle even if a `HIGH`-priority
+detection is queued behind it, bounded by `max_attempts` and the backoff range, so single
+low digits of seconds at this deployment's traffic rate. "Low-priority telemetry must not
+be queued ahead of urgent traffic" above is about the queue's *ordering*, which this
+respects — the urgent frame is served next, not last — not about *preempting* whatever the
+pipeline is already doing. A guarantee of the second kind would need CAD or time slots (the "later MAC
+improvements" this section already defers) to interrupt an in-flight transmission or
+retry, which is a materially larger mechanism than a priority queue and is out of scope
+here.
 
 ### 9.9 Broadcast
 
@@ -1083,6 +1285,41 @@ Expose at least:
 - cumulative TX airtime (for duty-cycle verification, section 6.1);
 - last RSSI;
 - last SNR.
+
+**Additions the implementation found necessary.** Every counter in the list above
+describes something that happened *after* a frame was queued, or to a frame that parsed.
+Four drops fall outside that and would otherwise be invisible — a link discarding traffic
+with every listed counter reading zero:
+
+- **unmatched ACK** — an ACK addressed to this node that acknowledges nothing pending:
+  late (the frame already timed out and was retried) or forged. Distinct from *ACK
+  received*, which counts the useful ones. An ACK addressed to *someone else* is
+  deliberately **not** counted here: on a shared medium that arrives constantly and is
+  ordinary overheard traffic, so it belongs with *packets ignored for another
+  destination*. Conflating the two buries the interesting case in the ordinary one.
+- **invalid source** — a frame whose `source_id` is the unconfigured address, the
+  broadcast address, or *this node's own ID*. The last is a reflection, a second board
+  flashed with the same ID, or a spoof; accepting it would have the node acknowledge
+  itself and file the frame in its own duplicate cache under its own key, so its own
+  later traffic could be suppressed as a duplicate of it. Counted by neither the
+  malformed nor the wrong-destination statistic, since the frame is well-formed and
+  correctly addressed.
+- **oversize packet** — longer than the port declared it can carry, so only a prefix was
+  staged. Note this is the *active profile's* limit, not a fixed 255: on a reduced radio
+  profile a buffer-sized check would accept packets the radio could not have produced.
+- **dropped before queueing** and **shed for more urgent traffic** — a frame the send
+  call refused (full queue, oversize payload, forbidden destination), and lower-priority
+  traffic evicted under section 9.8's policy. Kept apart on purpose: the first is a node
+  generating more than the link can carry, the second is the drop policy working as
+  designed, and a node protecting detections should not read as a node in trouble.
+
+One clarification on the listed counters, since two readings are possible: *TX envelopes*
+counts each envelope's **first** transmission and *TX retries* counts retransmissions of
+one, so transmissions radiated is their sum and neither double-counts the other. *TX
+failures* covers both a frame that exhausted section 9.6's attempts unacknowledged and
+every transmission the radio itself refused — the second is not a lost frame (it stays
+queued and is retried) but it is airtime that did not happen, and a radio refusing
+constantly is what an operator needs to see.
 
 ---
 
@@ -1253,8 +1490,74 @@ Before field use, add message authentication and replay protection; encryption s
 added where confidentiality is required. The security layer should protect the serialized
 BoomProtocol payload while preserving the layering above.
 
+**"Protect the payload" is necessary but not sufficient, and PR 6 must scope itself
+accordingly rather than inherit only this sentence.** Section 14.1's duplicate-window
+poisoning, session reset, and forged-ACK risks are enacted entirely through the **link
+frame header** — precisely the fields section 9.2's ACK matcher itself trusts:
+`frame_type`, `source_id`, `destination_id`, `session_id`, `sequence` (see
+`boomlink_linkframe_ack_matches()`) — and an ACK frame carries no payload at all
+(section 7.3), so all three remain fully open no matter how strong payload-level
+authentication is. Closing them requires authenticating those header fields, not just
+the Envelope, and that is a genuinely larger task for a concrete reason: an ACK has
+nowhere to put an authentication tag today. `BOOMLINK_LINKFRAME_HEADER_SIZE` (20 bytes,
+section 7.3) is currently hardcoded as an ACK's entire on-air length in more than one
+place in the engine (the buffer `send_ack()` builds, the ACK-airtime term
+`ack_window_ms()` computes for section 9.6's timeout) - so a MAC or signature on an ACK
+needs new wire-format space that today's frames do not have, which ripples into every
+place that size is assumed rather than being purely a matter of choosing an algorithm.
+DATA frames have a payload to fold a tag into; ACKs, being pure header, do not - which is
+exactly why PR 6 cannot get away with authenticating "the Envelope" and calling section
+14.1's first three risks closed.
+
 Security is intentionally a separate implementation PR so it does not block the first
 radio bring-up, but it is a deployment requirement, not an optional polish item.
+
+### 14.1 What the unauthenticated link is knowingly open to
+
+Recorded so these are understood as deferred rather than overlooked. The first four
+require header-scoped message authentication **and** replay protection (PR 6) — not
+authentication alone, which is the distinction "and by nothing short of it" used to
+elide here until it was pointed out. Authentication proves a frame's header was not
+fabricated or altered; it says nothing about whether the frame is *fresh*. A frame that
+was genuine once and is recorded and replayed later carries a perfectly valid
+authentication tag, so each of the first three below is reachable by *replaying* a past
+frame exactly as well as by *forging* a new one — authentication closes only the forging
+path, which is why this section's opening paragraph already asks for both, and 14.1
+should not read as though authentication were sufficient on its own. The last risk is
+neither: reading a valid frame needs no forgery or replay, so only encryption closes it,
+which this section already scopes to "where confidentiality is required" rather than
+making it unconditional.
+
+- **Duplicate-window poisoning.** One forged *or replayed* frame carrying a sequence far
+  ahead of a peer's real one moves that peer's duplicate window forward, and the peer's
+  genuine frames are then discarded as stale until it changes session. Deliberately *not*
+  mitigated with a heuristic bound on how far a sequence may jump: such a bound trades a
+  certain replay hole (a jump just under the limit still works) for an uncertain liveness
+  one (a peer whose sequence legitimately advances during a radio outage goes deaf), and
+  choosing a number for it without field data would be guessing. Authentication *and*
+  replay protection together make the question moot; authentication alone does not — a
+  genuine high-sequence frame recorded once and replayed later carries a valid tag and
+  advances the window exactly as a forged one would.
+- **Session reset.** A forged *or replayed* frame from a real source carrying an
+  unfamiliar `session_id` reuses that peer's cache entry (section 9.4), discarding the
+  window it had built.
+- **Forged ACKs.** An ACK matching a pending frame's `(session_id, sequence)` and
+  addressed correctly completes that frame early, so a lost frame is reported delivered.
+  The matcher already rejects everything weaker than an exact match, which is what keeps
+  this to *guessing a live sequence* rather than *any ACK will do* — but a listener can
+  hear the sequence it needs to guess, or skip guessing altogether and replay a genuine
+  ACK recorded from an unrelated exchange that happens to carry a colliding pair.
+- **Traffic injection generally.** Any node in radio range can put a well-formed frame on
+  the air and have it accepted. The network ID (section 7.3) is a filter for accidental
+  coexistence, not a credential.
+- **Traffic observation.** Any node in radio range can read every byte of every frame,
+  including the `(session_id, sequence)` pair the forged-ACK entry above needs. This is
+  the one item authentication does not touch — it requires transmitting nothing at all —
+  and it is what makes the other four easier rather than being a consequence of them.
+
+None of the first four is reachable through malformed input: they are all *valid* frames
+from an attacker who can transmit, which is why hardening the parser further does not move
+this boundary. The fifth needs no transmission and no frame of its own.
 
 ---
 
@@ -1316,6 +1619,19 @@ At minimum keep repeatable two-board tests for:
 8. USB gateway output.
 
 Record RSSI/SNR and retry counters so RF issues can be separated from protocol issues.
+
+Tests 1 and 2 above cannot both run against the same receiving board at the same
+moment: `App/radio/radio.h`'s `radio_poll_rx()` is single-consumer, and by default
+the link engine (`App/link/link_service.h`) is that one consumer, so a raw
+(non-BoomLink-framed) packet sent to a board in that state is parsed as a link
+frame, rejected as malformed/bad-magic, and never reaches test 1's raw preview.
+Run `link disable` on the RECEIVING board first for test 1; `link enable`
+(the default) restores test 2. `link ping <node_id_hex> [text]` is test 2's
+CLI entry point - `link status` on the peer reports the `node_id` to target,
+since section 7.2's bring-up-only address (a board's unique ID XORed together
+and avalanche-mixed - plain XOR alone was a real cross-board collision risk,
+fixed after review; see `link_service.c`) has no fixed value to write down
+here.
 
 ---
 
@@ -1429,9 +1745,9 @@ Scope:
 - implement `session_id` and monotonically increasing `sequence` assigned at dequeue;
 - implement bounded duplicate suppression;
 - implement unicast ACK as a link frame type — the frame's field mapping already exists
-  as `boomlink_linkframe_make_ack()`; what remains is the delivery logic, the two
-  receiver-side responsibilities the frame layer cannot take on, and a decision on where
-  the ACK matcher lives (all three in section 9.5);
+  as `boomlink_linkframe_make_ack()`; the delivery logic, the two receiver-side
+  responsibilities the frame layer cannot take on, and where the ACK matcher lives are
+  all implemented and decided (section 9.5);
 - implement stop-and-wait delivery (single outstanding ACK-pending frame);
 - implement bounded retry and ACK timeout;
 - implement randomized retry backoff;
@@ -1439,7 +1755,11 @@ Scope:
 - implement bounded priority TX queue;
 - expose BoomLink statistics;
 - add fake-radio/native tests for all behaviours;
-- expose ping/pong over BoomLink on hardware.
+- expose ping/pong over BoomLink on hardware — `App/link/link_service.h`'s
+  `link ping <node_id_hex> [text]`, once the link engine had a firmware call site
+  to expose it from (section 4's "what actually landed" for the link engine).
+  Landed as this PR's Phase C, a following PR rather than a milestone inside
+  this one - see that PR's own description for what it covers.
 
 Acceptance criteria:
 
@@ -1459,32 +1779,57 @@ Tracked by issue [#75](https://github.com/boomchecker/boomchecker-monorepo/issue
 **Goal:** make BoomLink useful for the actual sensor-node application while keeping one
 firmware image for every node.
 
+Split into three phases for the same reason PR 3 split off its own Phase C: schema and
+dispatch logic is host-testable target-agnostic C, flash persistence needs real hardware
+to validate safely, and firmware wiring needs both of the above to exist first. Each
+scope item below is tagged with the phase that lands it.
+
 Scope:
 
-- add `detection.proto`;
-- add `telemetry.proto`;
-- add `command.proto`;
-- add `config.proto`;
-- implement protocol dispatcher and per-domain services;
+- add `detection.proto` (Phase A);
+- add `telemetry.proto` (Phase A);
+- add `command.proto` (Phase A);
+- add `config.proto` (Phase A);
+- implement protocol dispatcher and per-domain services (Phase A);
 - implement DetectionEvent with timestamp quality, type, confidence and optional compact
-  localization metadata;
-- implement compact telemetry;
-- implement Reboot, Identify and SelfTest commands;
-- implement ConfigGet and ConfigSet;
-- add `config_version` / `expected_config_version` conflict handling;
-- add runtime general/link/radio/detection/telemetry configuration;
-- persist validated NodeConfig to flash with CRC/version wrapper;
-- implement safe defaults when stored config is missing/corrupt;
-- support `usb_forward_enabled` gateway behaviour without a separate firmware build.
+  localization metadata (Phase A: schema and dispatch recognition only — no detection
+  algorithm exists in this firmware yet, so per-type detail fields and real event
+  generation are left to whichever PR adds the first real detector);
+- implement compact telemetry (Phase A: schema and dispatch recognition only, same
+  caveat — no sensor readings are wired up yet);
+- implement section 8.3's full command set — Reboot, Identify, SelfTest,
+  StartDetection, StopDetection, ClearStatistics and RequestDiagnostics (Phase A:
+  dispatch plus injected `boomlink_command_ops_t` callbacks, one per command; the real
+  actions — NVIC reset, an LED, the detection subsystem — are Phase C's job, against
+  real hardware);
+- implement ConfigGet and ConfigSet (Phase A: in-memory `boomlink_config_service_t`,
+  including `config_version`/`expected_config_version` conflict handling and the
+  revert-on-timeout apply this section already specified for RadioConfig, generalized
+  to `GeneralConfig.node_id` and `LinkConfig.magic` per this section's own "two fields
+  need the same hazard treatment" note);
+- add runtime general/link/radio/detection/telemetry configuration (Phase A, in-memory);
+- persist validated NodeConfig to flash with CRC/version wrapper (Phase B);
+- implement safe defaults when stored config is missing/corrupt (Phase B loads them;
+  the `boomlink_node_config_defaults()` fallback itself already exists from Phase A);
+- support `usb_forward_enabled` gateway behaviour without a separate firmware build
+  (Phase C).
+
+Phase A deliberately does not extend the PR 2 Python/protoc golden-vector cross-check
+(`tests/vectors_spec.py`, hardcoded to `SystemMessage.{ping,pong}` shapes) to the four
+new message groups: no new hand-written serialization code exists for them, Nanopb's
+generic mechanics handle the wire format, and the host C test suite below already
+exercises every new struct field. Extending the cross-check is worth doing if a later
+phase adds hand-written encode/decode logic for one of these groups, not before.
 
 Acceptance criteria:
 
-- the same binary can boot as different node IDs/roles from persistent config;
-- a detector event reaches a gateway as a typed message;
-- detection parameters can be changed at runtime and persisted;
-- ConfigGet reports the active configuration;
-- stale ConfigSet is rejected using config versioning;
-- reboot does not require rebuilding to preserve role/identity.
+- the same binary can boot as different node IDs/roles from persistent config (Phase B);
+- a detector event reaches a gateway as a typed message (Phase A carries the message;
+  Phase C generates a real one);
+- detection parameters can be changed at runtime (Phase A) and persisted (Phase B);
+- ConfigGet reports the active configuration (Phase A, in-memory);
+- stale ConfigSet is rejected using config versioning (Phase A);
+- reboot does not require rebuilding to preserve role/identity (Phase B).
 
 ## PR 5 — Host CLI and end-to-end tooling
 

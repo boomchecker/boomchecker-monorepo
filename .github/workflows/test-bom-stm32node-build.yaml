@@ -76,18 +76,22 @@ jobs:
 
       - name: Configure
         working-directory: ./fw/bom-stm32node
-        # BOOMLINK_LINKFRAME_WERROR makes the "warning-clean for the target" half
-        # of the reason we cross-compile the link frame layer an actual check.
-        # Without it the ARM build has no -Werror at all, so a warning from that
-        # target was just text in a log: adding `static int unused_var = 7;` to
-        # boomlink_linkframe.c left this job green (verified) while the same edit
-        # is a hard error in the host build. Passed here rather than defaulted ON
-        # in CMake so a developer's local firmware build is never blocked by a
-        # warning from a newer compiler than this runner's - the same split
-        # BOOMLINK_WERROR uses for the host build. Scoped to that one
-        # hand-written target; the CubeMX sources and vendored libraries are
-        # unaffected.
-        run: cmake --preset Debug -DBOOMLINK_LINKFRAME_WERROR=ON
+        # BOOMLINK_TARGET_WERROR makes the "warning-clean for the target" half
+        # of the reason we cross-compile the link frame layer AND the link engine
+        # an actual check. Without it the ARM build has no -Werror at all, so a
+        # warning from those targets was just text in a log: adding
+        # `static int unused_var = 7;` to boomlink_linkframe.c left this job green
+        # (verified) while the same edit is a hard error in the host build. Passed
+        # here rather than defaulted ON in CMake so a developer's local firmware
+        # build is never blocked by a warning from a newer compiler than this
+        # runner's - the same split BOOMLINK_WERROR uses for the host build.
+        # Scoped to this package's hand-written libraries (linkframe,
+        # linkengine, dispatch, command_service, config_service,
+        # storage_port, config_store); the CubeMX sources, vendored
+        # libraries, and this repo's own App/storage/ (boomlink_flash_
+        # storage_port, defined outside fw/common/boomlink and so outside
+        # this flag's reach - same as radio_layer) are unaffected.
+        run: cmake --preset Debug -DBOOMLINK_TARGET_WERROR=ON
 
       - name: Build
         working-directory: ./fw/bom-stm32node
@@ -105,29 +109,62 @@ jobs:
           echo "✅ ELF info:"
           arm-none-eabi-size build/Debug/bom-stm32node.elf
 
-      - name: Verify the link frame layer was cross-compiled
+      - name: Verify the link layer was cross-compiled
         working-directory: ./fw/bom-stm32node
-        # The whole stated reason for building boomlink_linkframe in this build
-        # is to prove it is free of host-isms and warning-clean for the target
-        # before any firmware depends on it. Nothing else asserts that: the
-        # archive is on no link line and has no dependents, so moving the target
-        # inside CMake's standalone branch, marking it EXCLUDE_FROM_ALL or
-        # renaming it would leave this workflow green and the host workflow's
-        # check unaffected (it inspects the HOST archive). The justification
-        # would quietly stop being tested - the same failure class as the gap
-        # the next step describes.
+        # Originally written when neither archive had a dependent: the whole
+        # stated reason for building boomlink_linkframe and boomlink_linkengine
+        # was to prove them free of host-isms and warning-clean for the target
+        # BEFORE any firmware used them, and nothing else asserted that they
+        # were even being produced - moving a target inside CMake's standalone
+        # branch, marking it EXCLUDE_FROM_ALL or renaming it would have left
+        # this workflow green.
+        #
+        # As of PR 3 Phase C (fw/bom-stm32node/App/link/), that has changed:
+        # both archives now DO have a dependent - see the "actually linked in"
+        # step below, added at the same time, which is the stronger check that
+        # gap-in-CI class of bug actually needs now. This step is kept anyway,
+        # narrower but still worth having on its own: it catches "stopped being
+        # cross-compiled at all" (a build failure here is easier to diagnose
+        # than a missing-symbol failure below) as a distinct, earlier signal.
+        #
+        # The ENGINE was in exactly the "compiled but nothing notices if it
+        # isn't" state this step exists to prevent, once: verified by marking
+        # boomlink_linkengine EXCLUDE_FROM_ALL, which left this job green with
+        # the engine never cross-compiled at all. Its host-ism risk is higher
+        # than the frame layer's, too - it does 64-bit arithmetic on airtime
+        # and holds a size_t-vs-uint32_t boundary at the port seam, and
+        # int/long/size_t widths differ on the target.
         #
         # This step covers only "was it built". The warning-clean half is covered
-        # by -DBOOMLINK_LINKFRAME_WERROR=ON in the Configure step above, which
-        # turns a warning from that target into a build failure rather than log
+        # by -DBOOMLINK_TARGET_WERROR=ON in the Configure step above, which
+        # turns a warning from either target into a build failure rather than log
         # text nobody reads.
+        # PR 4 Phase B's boomlink_storage_port/boomlink_config_store (fw/common/
+        # boomlink/storage/) and boomlink_flash_storage_port (this package's own
+        # App/storage/, hence the different build/Debug path - it is a top-level
+        # target in THIS CMakeLists.txt, not add_subdirectory()'d) are in the
+        # same "cross-compiled but not yet linked into the firmware" state as
+        # dispatch/command_service/config_service above, deferred to the phase
+        # that actually calls boomlink_config_store_load()/_save() - so they
+        # belong in this list, not in the "actually linked in" checks below.
         run: |
-          archive=build/Debug/boomlink/libboomlink_linkframe.a
-          if [ ! -f "$archive" ]; then
-            echo "❌ $archive was not produced - the link frame layer is no longer cross-compiled"
-            exit 1
-          fi
-          echo "✅ the link frame layer cross-compiled for the target"
+          status=0
+          for path in build/Debug/boomlink/libboomlink_linkframe.a \
+                      build/Debug/boomlink/libboomlink_linkengine.a \
+                      build/Debug/boomlink/libboomlink_dispatch.a \
+                      build/Debug/boomlink/libboomlink_command_service.a \
+                      build/Debug/boomlink/libboomlink_config_service.a \
+                      build/Debug/boomlink/libboomlink_storage_port.a \
+                      build/Debug/boomlink/libboomlink_config_store.a \
+                      build/Debug/libboomlink_flash_storage_port.a; do
+            if [ ! -f "$path" ]; then
+              echo "❌ $path was not produced - it is no longer cross-compiled for the target"
+              status=1
+            else
+              echo "✅ $(basename "$path") cross-compiled for the target"
+            fi
+          done
+          exit $status
 
       - name: Verify BoomProtocol is actually linked in, not just compiled
         working-directory: ./fw/bom-stm32node
@@ -145,6 +182,28 @@ jobs:
             exit 1
           fi
           echo "✅ BoomProtocol symbols are linked into the firmware image"
+
+      - name: Verify the link engine is actually linked in, not just compiled
+        working-directory: ./fw/bom-stm32node
+        run: |
+          # boomlink_linkframe/boomlink_linkengine previously cross-compiled
+          # for ARM without a single symbol from either being referenced
+          # anywhere in the firmware - exactly the same "compiled but not
+          # linked" gap the BoomProtocol check above exists to catch, closed
+          # for this pair by PR 3 Phase C's App/link/ call site and the
+          # target_link_libraries entry it added. A future refactor could
+          # silently reintroduce it by removing that entry or the call site
+          # (link_service_init()/_process() in Core/Src/cli.c) without
+          # anything else here noticing: the previous step only checks the
+          # archives were PRODUCED, which happens whether or not anything
+          # references them. This step fails the build if boomlink_link_init
+          # stops being present in the linked ELF, not just compiled
+          # somewhere.
+          if ! arm-none-eabi-nm build/Debug/bom-stm32node.elf | grep -q boomlink_link_init; then
+            echo "❌ boomlink_link_init is not linked into bom-stm32node.elf"
+            exit 1
+          fi
+          echo "✅ BoomLink link engine symbols are linked into the firmware image"
 
       - name: Build summary
         run: |

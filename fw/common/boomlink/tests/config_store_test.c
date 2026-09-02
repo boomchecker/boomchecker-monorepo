@@ -1,0 +1,525 @@
+/**
+ ******************************************************************************
+ * @file    config_store_test.c
+ * @brief   Tests for boomlink_config_store_load()/_save() (boomlink.md
+ *          section 10.1), against a FAKE in-memory boomlink_storage_port_t
+ *          rather than real flash - the same "test the logic, not the
+ *          hardware" split the link engine gets from its own fake radio
+ *          (tests/fake_port.h).
+ *
+ *          The guarantee under test: "valid -> validate -> apply;
+ *          missing/invalid -> load safe defaults" (section 10.1) - every
+ *          scenario here is a way the region can fail to be valid (wrong
+ *          magic, wrong format_version, a bad CRC, a corrupt or truncated
+ *          length) and confirms boomlink_config_store_load() reports it as a
+ *          clean `false` rather than a garbage decode, an out-of-bounds
+ *          read, or a partially-filled `*out`.
+ ******************************************************************************
+ */
+#include "boomlink_config_store.h"
+
+#include <string.h>
+
+#include "c_test.h"
+
+BOOMLINK_TEST_STATE;
+
+/* Mirrors boomlink_config_store.c's own put_u32_le()/get_u32_le() exactly -
+   this test pokes at the wrapper's header bytes directly to simulate
+   corruption, and the header is an explicit little-endian byte layout (not
+   a struct), so a raw memcpy of a host uint32_t here would silently assume
+   a little-endian host instead of exercising the actual documented format. */
+static void put_u32_le(uint8_t *buf, uint32_t value) {
+  buf[0] = (uint8_t)(value & 0xFFu);
+  buf[1] = (uint8_t)((value >> 8) & 0xFFu);
+  buf[2] = (uint8_t)((value >> 16) & 0xFFu);
+  buf[3] = (uint8_t)((value >> 24) & 0xFFu);
+}
+
+static uint32_t get_u32_le(const uint8_t *buf) {
+  return (uint32_t)buf[0] | ((uint32_t)buf[1] << 8) | ((uint32_t)buf[2] << 16) |
+         ((uint32_t)buf[3] << 24);
+}
+
+/* --- the fake backend ------------------------------------------------------- */
+
+#define FAKE_REGION_SIZE       256u
+#define FAKE_WRITE_GRANULARITY 16u
+
+typedef struct {
+  uint8_t bytes[FAKE_REGION_SIZE];
+  bool    fail_erase;
+  bool    fail_write;
+  /* -1 never fails a read; any other value fails ONLY the read() call at
+     that exact offset (still populating `out` with the real bytes first -
+     see fake_read()'s own comment on why). boomlink_config_store_load()
+     makes two read() calls, at offset 0 (the header) and offset
+     BOOMLINK_CONFIG_STORE_HEADER_SIZE (the blob) - a single shared
+     fail_read flag could not fail one without also failing the other, and
+     failing both leaves the SECOND read()'s own check free to mask a
+     missing check on the FIRST. */
+  int64_t fail_read_at_offset;
+  size_t  last_write_len; /* what write() was actually called with, for the padding test below */
+} fake_flash_t;
+
+static void fake_flash_init(fake_flash_t *f) {
+  /* 0xFF is what a real NOR/NAND erase leaves behind - a fresh, never-
+     written region must look the same to load() as a genuinely erased one,
+     not a lucky all-zero buffer a memset(0) would give for free. */
+  memset(f->bytes, 0xFF, sizeof(f->bytes));
+  f->fail_erase          = false;
+  f->fail_write          = false;
+  f->fail_read_at_offset = -1;
+  f->last_write_len      = 0u;
+}
+
+static bool fake_erase(void *ctx) {
+  fake_flash_t *f = (fake_flash_t *)ctx;
+  if (f->fail_erase) {
+    return false;
+  }
+  memset(f->bytes, 0xFF, sizeof(f->bytes));
+  return true;
+}
+
+static bool fake_write(void *ctx, const uint8_t *data, size_t len) {
+  fake_flash_t *f = (fake_flash_t *)ctx;
+  if (f->fail_write || len > sizeof(f->bytes)) {
+    return false;
+  }
+  memcpy(f->bytes, data, len);
+  f->last_write_len = len;
+  return true;
+}
+
+static bool fake_read(void *ctx, uint32_t offset, uint8_t *out, size_t len) {
+  fake_flash_t *f = (fake_flash_t *)ctx;
+  /* Overflow-safe, matching what boomlink_storage_port.h's own doc now
+     requires of any real read() implementation - see
+     boomlink_flash_storage_port.c's flash_read() for why a bare `offset +
+     len > sizeof(f->bytes)` would not be safe on a 32-bit size_t target
+     (this fake's own size_t is 64-bit, so it would never actually observe
+     the wrap, but a fake that used the unsafe idiom would set the wrong
+     example for what a real implementation needs). */
+  if (offset > sizeof(f->bytes) || len > sizeof(f->bytes) - offset) {
+    return false;
+  }
+  /* The memcpy happens BEFORE the fail_read_at_offset check, deliberately:
+     this models a spurious hardware error that still leaves genuinely
+     correct (previously-saved, valid) bytes in `out` - the worst case for a
+     caller that ignores this function's return value, since there is then
+     nothing else (a garbage magic, a garbage CRC) left to coincidentally
+     catch the mistake for it. A version that left `out` untouched on
+     failure would let test_load_propagates_a_header_read_failure below
+     pass for the wrong reason: uninitialized stack memory in `header`
+     almost never happens to look like a real header, so
+     boomlink_config_store_load()'s own magic check would reject it anyway
+     even with the real read() check removed, masking exactly the bug that
+     test exists to catch - confirmed by actually removing that check and
+     observing the test still pass before this comment (and the matching
+     rewrite of this function) were added. */
+  memcpy(out, &f->bytes[offset], len);
+  return (int64_t)offset != f->fail_read_at_offset;
+}
+
+static boomlink_storage_port_t make_port(fake_flash_t *f) {
+  boomlink_storage_port_t port = {0};
+  port.erase                    = fake_erase;
+  port.write                    = fake_write;
+  port.read                     = fake_read;
+  port.region_size              = FAKE_REGION_SIZE;
+  port.write_granularity        = FAKE_WRITE_GRANULARITY;
+  port.ctx                      = f;
+  return port;
+}
+
+static boomlink_NodeConfig sample_config(void) {
+  boomlink_NodeConfig cfg   = (boomlink_NodeConfig)boomlink_NodeConfig_init_zero;
+  cfg.config_version        = 7u;
+  cfg.has_general           = true;
+  cfg.general.node_id       = 0x11223344u;
+  cfg.general.receive_enabled = true;
+  cfg.has_telemetry         = true;
+  cfg.telemetry.report_interval_s = 30u;
+  return cfg;
+}
+
+/* --- boomlink_storage_port_t validity (the generic, format-agnostic half) -- */
+
+static void test_is_valid_rejects_every_missing_piece(void) {
+  fake_flash_t             f;
+  boomlink_storage_port_t good;
+  fake_flash_init(&f);
+  good = make_port(&f);
+
+  REQUIRE(boomlink_storage_port_is_valid(&good), "the fake port should be valid to begin with");
+  CHECK(!boomlink_storage_port_is_valid(NULL), "a NULL port must be rejected");
+
+  boomlink_storage_port_t bad = good;
+  bad.erase                    = NULL;
+  CHECK(!boomlink_storage_port_is_valid(&bad), "a NULL erase callback must be rejected");
+
+  bad          = good;
+  bad.write    = NULL;
+  CHECK(!boomlink_storage_port_is_valid(&bad), "a NULL write callback must be rejected");
+
+  bad         = good;
+  bad.read    = NULL;
+  CHECK(!boomlink_storage_port_is_valid(&bad), "a NULL read callback must be rejected");
+
+  bad                    = good;
+  bad.write_granularity  = 0u;
+  CHECK(!boomlink_storage_port_is_valid(&bad), "a zero write_granularity must be rejected");
+
+  bad                    = good;
+  bad.region_size        = 0u;
+  CHECK(!boomlink_storage_port_is_valid(&bad), "a zero region_size must be rejected");
+
+  bad                    = good;
+  bad.write_granularity  = 3u; /* 256 is not a multiple of 3 */
+  CHECK(!boomlink_storage_port_is_valid(&bad),
+        "a write_granularity that does not evenly divide region_size must be rejected");
+}
+
+/* --- the load()/save() wrapper format --------------------------------------- */
+
+static void test_a_fresh_erased_region_fails_to_load(void) {
+  fake_flash_t             f;
+  fake_flash_init(&f);
+  boomlink_storage_port_t port = make_port(&f);
+
+  boomlink_NodeConfig out = (boomlink_NodeConfig)boomlink_NodeConfig_init_zero;
+  bool                 ok  = boomlink_config_store_load(&port, &out);
+
+  CHECK(!ok, "an all-0xFF erased region has no valid magic and must not load");
+}
+
+static void test_save_then_load_round_trips_exactly(void) {
+  fake_flash_t             f;
+  fake_flash_init(&f);
+  boomlink_storage_port_t port = make_port(&f);
+  boomlink_NodeConfig      in  = sample_config();
+
+  REQUIRE(boomlink_config_store_save(&port, &in), "save of a valid, small config must succeed");
+
+  boomlink_NodeConfig out = (boomlink_NodeConfig)boomlink_NodeConfig_init_zero;
+  bool                 ok  = boomlink_config_store_load(&port, &out);
+
+  REQUIRE(ok, "load right after a successful save must succeed");
+  CHECK(out.config_version == 7u, "config_version must round-trip, got %u", (unsigned)out.config_version);
+  CHECK(out.has_general && out.general.node_id == 0x11223344u,
+        "GeneralConfig.node_id must round-trip, got 0x%08X", (unsigned)out.general.node_id);
+  CHECK(out.general.receive_enabled, "GeneralConfig.receive_enabled must round-trip");
+  CHECK(out.has_telemetry && out.telemetry.report_interval_s == 30u,
+        "TelemetryConfig.report_interval_s must round-trip");
+}
+
+static void test_corrupt_magic_fails_closed(void) {
+  fake_flash_t             f;
+  fake_flash_init(&f);
+  boomlink_storage_port_t port = make_port(&f);
+  boomlink_NodeConfig      in  = sample_config();
+  REQUIRE(boomlink_config_store_save(&port, &in), "setup: save must succeed");
+
+  f.bytes[0] ^= 0xFFu; /* flip the first byte of the magic */
+
+  boomlink_NodeConfig out = (boomlink_NodeConfig)boomlink_NodeConfig_init_zero;
+  CHECK(!boomlink_config_store_load(&port, &out), "a corrupted magic must fail to load");
+  CHECK(out.config_version == 0u, "*out must be left untouched on a failed load, not partially filled");
+}
+
+static void test_wrong_format_version_fails_closed(void) {
+  fake_flash_t             f;
+  fake_flash_init(&f);
+  boomlink_storage_port_t port = make_port(&f);
+  boomlink_NodeConfig      in  = sample_config();
+  REQUIRE(boomlink_config_store_save(&port, &in), "setup: save must succeed");
+
+  /* storage_format_version is header bytes [4:8), little-endian. */
+  f.bytes[4] = (uint8_t)(BOOMLINK_CONFIG_STORE_FORMAT_VERSION + 1u);
+
+  boomlink_NodeConfig out = (boomlink_NodeConfig)boomlink_NodeConfig_init_zero;
+  CHECK(!boomlink_config_store_load(&port, &out),
+        "a storage_format_version this file does not recognise must fail to load, not guess");
+}
+
+static void test_corrupt_crc_fails_closed(void) {
+  fake_flash_t             f;
+  fake_flash_init(&f);
+  boomlink_storage_port_t port = make_port(&f);
+  boomlink_NodeConfig      in  = sample_config();
+  REQUIRE(boomlink_config_store_save(&port, &in), "setup: save must succeed");
+
+  /* Corrupt the stored CRC itself (header bytes [12:16)), leaving the blob
+     bytes untouched - a flipped blob byte can ALSO make pb_decode() itself
+     fail, which would make this test pass for the wrong reason even with
+     the CRC check disabled entirely. Corrupting the CRC field instead means
+     the blob still decodes fine, so only the CRC comparison can be what
+     rejects this. */
+  f.bytes[BOOMLINK_CONFIG_STORE_HEADER_SIZE - 1u] ^= 0x01u;
+
+  boomlink_NodeConfig out = (boomlink_NodeConfig)boomlink_NodeConfig_init_zero;
+  CHECK(!boomlink_config_store_load(&port, &out),
+        "a blob that no longer matches its stored CRC must fail to load");
+}
+
+static void test_oversized_protobuf_length_fails_closed_without_oob_read(void) {
+  fake_flash_t             f;
+  fake_flash_init(&f);
+  boomlink_storage_port_t port = make_port(&f);
+  boomlink_NodeConfig      in  = sample_config();
+  REQUIRE(boomlink_config_store_save(&port, &in), "setup: save must succeed");
+
+  /* protobuf_length is header bytes [8:12), little-endian - claim a length
+     larger than boomlink_NodeConfig_size, but still well within the fake's
+     own 256-byte physical backing array (so the fake's OWN offset+len bound
+     in fake_read() cannot be what rejects this instead of the real check
+     under test). AddressSanitizer (this package's whole host build, see
+     CMakeLists.txt's own BOOMLINK_SANITIZE option near the top of the file)
+     turns the resulting stack-buffer-overflow read of `blob` (declared
+     `uint8_t blob[boomlink_NodeConfig_size]`, 145 bytes) into an immediate
+     crash of this test binary if load() ever used this claimed length to
+     size that read instead of rejecting it outright first. */
+  uint32_t huge = (uint32_t)boomlink_NodeConfig_size + 55u; /* > 145, 16+200=216 fits the fake's 256 */
+  put_u32_le(&f.bytes[8], huge);
+
+  boomlink_NodeConfig out = (boomlink_NodeConfig)boomlink_NodeConfig_init_zero;
+  CHECK(!boomlink_config_store_load(&port, &out),
+        "protobuf_length larger than boomlink_NodeConfig_size must be rejected before it is used "
+        "to size any read");
+}
+
+static void test_protobuf_length_past_the_region_fails_closed(void) {
+  fake_flash_t             f;
+  fake_flash_init(&f);
+  boomlink_storage_port_t port = make_port(&f);
+  boomlink_NodeConfig      in  = sample_config();
+  REQUIRE(boomlink_config_store_save(&port, &in), "setup: save must succeed");
+
+  /* The header, blob and CRC written by the save above are all perfectly
+     self-consistent - only the REGION this load() is told it has to work
+     with shrinks, to one byte less than the declared protobuf_length
+     actually needs once the header is added. Deliberately not corrupting
+     protobuf_length or the CRC here (test_oversized_protobuf_length_...
+     and test_corrupt_crc_fails_closed already cover those): a corrupted
+     length usually also fails the CRC check for an unrelated reason (the
+     bytes it would checksum no longer match what was written), which would
+     let this test pass even with the region bound itself disabled - the
+     same masking test_corrupt_crc_fails_closed's own doc comment warns
+     about for pb_decode(). Shrinking region_size instead leaves every other
+     check satisfied, so only the region-capacity comparison can be what
+     rejects this. write_granularity dropped to 1 so the shrunk region_size
+     still passes boomlink_storage_port_is_valid()'s evenly-divides check;
+     the fake's own physical backing array is untouched, so this only
+     changes what load() itself is willing to trust. */
+  uint32_t true_blob_len  = get_u32_le(&f.bytes[8]);
+  port.region_size        = BOOMLINK_CONFIG_STORE_HEADER_SIZE + true_blob_len - 1u;
+  port.write_granularity  = 1u;
+
+  boomlink_NodeConfig out = (boomlink_NodeConfig)boomlink_NodeConfig_init_zero;
+  CHECK(!boomlink_config_store_load(&port, &out),
+        "protobuf_length that would read past the port's own region must be rejected");
+}
+
+static void test_region_too_small_for_even_the_header_fails_closed(void) {
+  fake_flash_t             f;
+  fake_flash_init(&f);
+  boomlink_storage_port_t port = make_port(&f);
+  boomlink_NodeConfig      in  = sample_config();
+  /* A REAL, fully valid save first - correct magic, format_version, CRC,
+     and an honest protobuf_length - not a freshly-erased or corrupted
+     region. A freshly-erased region would fail the magic check regardless
+     of whether the region-size guard under test exists at all, which would
+     let this test pass for the wrong reason (exactly the masking
+     test_corrupt_crc_fails_closed's own doc comment warns about). Only
+     the REGION this second port claims to have shrinks; the underlying
+     bytes this ctx points at (and everything the header/CRC say about
+     them) are left completely genuine. */
+  REQUIRE(boomlink_config_store_save(&port, &in), "setup: save must succeed");
+
+  /* write_granularity dropped to 1 so this small region_size still passes
+     boomlink_storage_port_is_valid()'s generic evenly-divides check - this
+     test is specifically about boomlink_config_store_load()'s OWN
+     format-specific minimum. Without it, `port->region_size -
+     BOOMLINK_CONFIG_STORE_HEADER_SIZE` (both unsigned) underflows to a huge
+     value, which would make the length bound it guards accept ANY
+     protobuf_length instead of rejecting one - the real header/blob being
+     genuinely valid here means that underflow would let this load()
+     actually SUCCEED, not merely fail for an unrelated reason. */
+  port.region_size        = BOOMLINK_CONFIG_STORE_HEADER_SIZE - 1u; /* one byte too small */
+  port.write_granularity  = 1u;
+
+  boomlink_NodeConfig out = (boomlink_NodeConfig)boomlink_NodeConfig_init_zero;
+  CHECK(!boomlink_config_store_load(&port, &out),
+        "a region too small to even hold the header must fail to load, not underflow the bounds "
+        "check into accepting anything");
+}
+
+static void test_save_rejects_a_config_too_large_for_the_region(void) {
+  fake_flash_t             f;
+  fake_flash_init(&f);
+  boomlink_storage_port_t port = make_port(&f);
+  port.region_size              = BOOMLINK_CONFIG_STORE_HEADER_SIZE; /* room for a header, nothing else */
+  boomlink_NodeConfig cfg       = sample_config();
+
+  CHECK(!boomlink_config_store_save(&port, &cfg),
+        "a config that cannot fit in the port's region must fail save(), not overrun it");
+}
+
+static void test_save_rejects_write_granularity_above_the_max(void) {
+  /* boomlink_storage_port_is_valid() only requires write_granularity to
+     evenly divide region_size - trivially true of any value against
+     itself - so a port claiming a write_granularity past
+     BOOMLINK_CONFIG_STORE_MAX_WRITE_GRANULARITY can still be "valid" by
+     that generic check. save()'s own padding arithmetic (`total_len +
+     write_granularity - 1u`) would overflow for a write_granularity near
+     SIZE_MAX and wrap to a small padded_len that slips past the
+     `sizeof(buf)` guard - this test only needs to prove save() rejects
+     BEFORE reaching that arithmetic at all, so one past the max is enough;
+     the guard is a plain `>` comparison with no separate behavior for
+     "over the line" versus "astronomically over the line". */
+  fake_flash_t             f;
+  fake_flash_init(&f);
+  boomlink_storage_port_t port = make_port(&f);
+  port.write_granularity        = BOOMLINK_CONFIG_STORE_MAX_WRITE_GRANULARITY + 1u;
+  port.region_size              = port.write_granularity; /* evenly divides itself */
+  boomlink_NodeConfig cfg       = sample_config();
+
+  CHECK(!boomlink_config_store_save(&port, &cfg),
+        "write_granularity above BOOMLINK_CONFIG_STORE_MAX_WRITE_GRANULARITY must be rejected");
+}
+
+static void test_save_propagates_an_erase_failure(void) {
+  /* fail_erase/fail_write/fail_read exist on fake_flash_t specifically to
+     exercise section 10.1's "torn write / hardware error" path - a real
+     erase or program failure must fail save()/load() cleanly, not be
+     silently swallowed. */
+  fake_flash_t             f;
+  fake_flash_init(&f);
+  boomlink_storage_port_t port = make_port(&f);
+  boomlink_NodeConfig      cfg = sample_config();
+  f.fail_erase                  = true;
+
+  CHECK(!boomlink_config_store_save(&port, &cfg),
+        "save() must report false when the port's erase() reports a hardware error");
+}
+
+static void test_save_propagates_a_write_failure(void) {
+  fake_flash_t             f;
+  fake_flash_init(&f);
+  boomlink_storage_port_t port = make_port(&f);
+  boomlink_NodeConfig      cfg = sample_config();
+  f.fail_write                  = true;
+
+  CHECK(!boomlink_config_store_save(&port, &cfg),
+        "save() must report false when the port's write() reports a hardware error, even "
+        "though erase() already succeeded and may have destroyed the prior contents");
+}
+
+static void test_load_propagates_a_header_read_failure(void) {
+  fake_flash_t             f;
+  fake_flash_init(&f);
+  boomlink_storage_port_t port = make_port(&f);
+  boomlink_NodeConfig      in  = sample_config();
+  REQUIRE(boomlink_config_store_save(&port, &in), "setup: save must succeed");
+
+  f.fail_read_at_offset = 0; /* the header read only - the blob read at offset 16 still succeeds */
+
+  boomlink_NodeConfig out = (boomlink_NodeConfig)boomlink_NodeConfig_init_zero;
+  CHECK(!boomlink_config_store_load(&port, &out),
+        "load() must report false when the port's HEADER read() reports a hardware error, "
+        "even though the region genuinely holds a valid, previously-saved config and the "
+        "blob read that follows would have succeeded");
+  CHECK(out.config_version == 0u, "*out must be left untouched on a failed load");
+}
+
+static void test_load_propagates_a_blob_read_failure(void) {
+  fake_flash_t             f;
+  fake_flash_init(&f);
+  boomlink_storage_port_t port = make_port(&f);
+  boomlink_NodeConfig      in  = sample_config();
+  REQUIRE(boomlink_config_store_save(&port, &in), "setup: save must succeed");
+
+  f.fail_read_at_offset = BOOMLINK_CONFIG_STORE_HEADER_SIZE; /* the blob read only */
+
+  boomlink_NodeConfig out = (boomlink_NodeConfig)boomlink_NodeConfig_init_zero;
+  CHECK(!boomlink_config_store_load(&port, &out),
+        "load() must report false when the port's BLOB read() reports a hardware error, "
+        "even though the header read that preceded it succeeded and was genuinely valid");
+  CHECK(out.config_version == 0u, "*out must be left untouched on a failed load");
+}
+
+static void test_null_arguments_are_rejected(void) {
+  fake_flash_t             f;
+  fake_flash_init(&f);
+  boomlink_storage_port_t port = make_port(&f);
+  boomlink_NodeConfig      cfg = sample_config();
+  boomlink_NodeConfig      out;
+
+  CHECK(!boomlink_config_store_load(NULL, &out), "a NULL port must be rejected by load()");
+  CHECK(!boomlink_config_store_load(&port, NULL), "a NULL out must be rejected by load()");
+  CHECK(!boomlink_config_store_save(NULL, &cfg), "a NULL port must be rejected by save()");
+  CHECK(!boomlink_config_store_save(&port, NULL), "a NULL config must be rejected by save()");
+}
+
+static void test_save_pads_the_write_to_a_full_granule(void) {
+  fake_flash_t             f;
+  fake_flash_init(&f);
+  boomlink_storage_port_t port = make_port(&f);
+  boomlink_NodeConfig      cfg = sample_config();
+  /* One more populated group than sample_config() alone, specifically so
+     header+blob is NOT already an exact write_granularity multiple - with
+     sample_config() alone it happens to encode to exactly 16 bytes, making
+     header(16)+blob(16)=32 already a 16-byte multiple, which would let a
+     save() that rounded DOWN instead of up pass this test by accident (a
+     rounded-down and a rounded-up padded_len coincide whenever there is
+     nothing to round in the first place). Checked below with a REQUIRE
+     rather than trusted by hand, so a future proto change that happened to
+     land back on an exact multiple would fail loudly instead of silently
+     stopping to exercise the rounding this test exists for. */
+  cfg.has_gnss           = true;
+  cfg.gnss.gnss_enabled  = true;
+
+  REQUIRE(boomlink_config_store_save(&port, &cfg), "setup: save must succeed");
+
+  uint32_t protobuf_length = get_u32_le(&f.bytes[8]);
+  size_t   total_len       = (size_t)BOOMLINK_CONFIG_STORE_HEADER_SIZE + protobuf_length;
+  REQUIRE(total_len % FAKE_WRITE_GRANULARITY != 0u,
+          "setup: this test needs a header+blob length that actually requires rounding, got "
+          "%zu bytes (already a %u-byte multiple)",
+          total_len, (unsigned)FAKE_WRITE_GRANULARITY);
+
+  /* boomlink_storage_port_t's own contract (boomlink_storage_port.h) is that
+     write() is only ever called with a write_granularity multiple - checked
+     directly against what the fake actually recorded, rather than guessing
+     the exact encoded blob size and inspecting padding bytes by hand. */
+  CHECK(f.last_write_len % FAKE_WRITE_GRANULARITY == 0u,
+        "write() must be called with a write_granularity multiple, got %zu", f.last_write_len);
+
+  /* And the written length must actually cover the real header+blob, not
+     round DOWN past it - the case this test is specifically for. */
+  CHECK(f.last_write_len >= total_len,
+        "the padded write (%zu bytes) must cover the real header+blob (%zu bytes)",
+        f.last_write_len, total_len);
+}
+
+int main(void) {
+  test_is_valid_rejects_every_missing_piece();
+  test_a_fresh_erased_region_fails_to_load();
+  test_save_then_load_round_trips_exactly();
+  test_corrupt_magic_fails_closed();
+  test_wrong_format_version_fails_closed();
+  test_corrupt_crc_fails_closed();
+  test_oversized_protobuf_length_fails_closed_without_oob_read();
+  test_protobuf_length_past_the_region_fails_closed();
+  test_region_too_small_for_even_the_header_fails_closed();
+  test_save_rejects_a_config_too_large_for_the_region();
+  test_save_rejects_write_granularity_above_the_max();
+  test_save_propagates_an_erase_failure();
+  test_save_propagates_a_write_failure();
+  test_load_propagates_a_header_read_failure();
+  test_load_propagates_a_blob_read_failure();
+  test_null_arguments_are_rejected();
+  test_save_pads_the_write_to_a_full_granule();
+  BOOMLINK_TEST_REPORT("config_store_test", 30);
+}

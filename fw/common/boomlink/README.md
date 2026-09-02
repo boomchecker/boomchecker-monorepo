@@ -20,9 +20,12 @@ Both layers are cross-checked against an independent Python implementation on
 the same wire bytes: Python protobuf for the codec, `boomlink_linkframe.py` for
 the header.
 
-Not here: radio transport, and the link engine itself (addressing state, ACK
-matching, retry, duplicate suppression, TX queue) - those are the later phases
-of the roadmap's PR 3.
+Also here: `linkengine/` - the link engine itself (addressing state, ACK matching,
+retry, duplicate suppression, TX queue; section 9). Not here: radio transport, which
+stays `fw/bom-stm32node`'s own concern - `App/link/boomlink_radio_port.c` there wires
+this package's `boomlink_port_t` seam to `App/radio/radio.h` and `App/link/
+link_service.c` owns the engine instance, both cross-compiled AND linked into the
+firmware image as of that package's Phase C.
 
 ## Layout
 
@@ -46,10 +49,42 @@ linkframe/        BoomLink's fixed 20-byte link frame header (section 7.3):
                   a binding to the C, so the two can check each other (and
                   the parser PR 5's host CLI will use). No Nanopb dependency,
                   by design and by build config
+linkengine/       BoomLink's link engine (section 9): boomlink_link.h/.c ties
+                  together duplicate suppression (boomlink_dupcache.h/.c), the
+                  priority TX queue (boomlink_txqueue.h/.c), and the radio port
+                  seam (boomlink_port.h/.c) that a real radio or tests/'s fake
+                  implements. No Nanopb dependency, same as linkframe/ above
+dispatch/         PR 4 Phase A: boomlink_dispatch.h/.c routes a decoded
+                  Envelope by which_payload to per-domain handlers and builds
+                  a correlated response header; boomlink_envelope_builder.h/.c
+                  builds the one-way DetectionEvent/TelemetryReport Envelopes.
+                  Nanopb-DEPENDENT, unlike linkframe/linkengine above - see
+                  boomlink_dispatch.h's own file doc for why
+services/         PR 4 Phase A: boomlink_command_service.h/.c (section 8.3's
+                  command set over an injected ops struct) and
+                  boomlink_config_service.h/.c (section 8.2's ConfigGet/
+                  ConfigSet, including the revert-on-timeout apply)
+storage/          PR 4 Phase B: boomlink_storage_port.h/.c (the flash seam a
+                  real port, or tests/'s fake, implements - same fake-vs-real
+                  split as linkengine/boomlink_port.h above), boomlink_crc32.h/
+                  .c (the wrapper's CRC-32, pinned on its own against the
+                  algorithm's published test vector), and
+                  boomlink_config_store.h/.c (section 10.1's magic/version/
+                  length/CRC wrapper and load/save). No Nanopb dependency in
+                  boomlink_storage_port/boomlink_crc32, same as linkframe/
+                  linkengine above; boomlink_config_store IS Nanopb-dependent,
+                  same as dispatch/ above - encoding/decoding the wrapped
+                  NodeConfig blob is its whole job
 tests/            host-native C CLI tools (codec_tool.c, linkframe_tool.c,
-                  sharing tool_support.c) + pytest suite + golden vectors
-                  (vectors_spec.py is their single source of truth,
-                  sha256-pinned - see "Protocol compatibility rules")
+                  sharing tool_support.c) + the link engine's C scenario
+                  binaries (port_test.c, dupcache_test.c, txqueue_test.c,
+                  link_rx_test.c, link_tx_test.c, against fake_port.h/.c's
+                  deterministic fake radio) + dispatch/services/storage/
+                  scenario binaries (dispatch_test.c, command_service_test.c,
+                  config_service_test.c, crc32_test.c, config_store_test.c) +
+                  pytest suite + golden vectors (vectors_spec.py is their
+                  single source of truth, sha256-pinned - see "Protocol
+                  compatibility rules")
 CMakeLists.txt    generation + libraries + (standalone only) test targets
 ```
 
@@ -63,21 +98,33 @@ This directory is a CMake project that builds two different ways:
 
 - **Standalone** (this README's "building and testing" - what `task test`
   does): host-native compiler, builds `boomlink_codec_tool` and
-  `boomlink_linkframe_tool` and runs the full CTest suite (two C self-tests
-  plus the Python interop/compatibility tests).
+  `boomlink_linkframe_tool` and runs the full CTest suite - the codec and
+  link frame CLI self-tests, the link engine's C scenario binaries (port,
+  duplicate cache, TX queue, RX pipeline, TX pipeline - see `CMakeLists.txt`
+  for the current list, not restated here since it only grows), the C
+  harness's own self-check (`tests/c_test.h`'s failure path is the only way
+  any of those scenario binaries can fail at all, and this is what proves
+  that path still works - see that header's comment for why it once did not),
+  the Nanopb-free boundary and encoder-bound checks, and the Python
+  interop/compatibility suite. Run `ctest --preset Debug` for the exact count
+  and names.
 - **As a subdirectory** of `fw/bom-stm32node`'s ARM cross build: the
-  `boomlink_protocol` and `boomlink_linkframe` static libraries are built.
-  `boomlink_protocol` is linked into the firmware and actually exercised there
-  by the `proto` CLI command in `Core/Src/cli.c` (see its comment for why that
-  matters); `boomlink_linkframe` is cross-compiled but not yet referenced by
-  anything, which is deliberate - it proves the header is free of host-isms and
-  warning-clean for the target before the link engine that will use it exists.
-  The warning-clean half needs `-DBOOMLINK_LINKFRAME_WERROR=ON`, which CI passes
+  `boomlink_protocol`, `boomlink_linkframe` and `boomlink_linkengine` static
+  libraries are built AND, as of that package's Phase C, all three actually
+  linked into the firmware image - `boomlink_protocol` by the `proto` CLI
+  command (`Core/Src/cli.c`), `boomlink_linkframe`/`boomlink_linkengine` by
+  `App/link/`'s port adapter and engine call site, which the `link` CLI
+  command exercises. Before Phase C landed, the latter two were cross-compiled
+  but referenced by nothing - deliberately, to prove them free of host-isms
+  and warning-clean for the target before any firmware code used them; that
+  archive-without-a-linker-reference state was itself asserted by the
+  workflow (nothing else would have noticed one disappearing with no
+  dependents), which is a check worth keeping in mind if a similar target
+  ever needs cross-compiling ahead of its own call site again.
+  The warning-clean half needs `-DBOOMLINK_TARGET_WERROR=ON`, which CI passes
   and a local firmware build does not (so a warning from a newer compiler than
   CI's never blocks you); without it a warning there is only log text.
-  The archive is built but never reaches the linker at all (nothing links it),
-  so wiring it into the firmware will need a `target_link_libraries` entry in
-  `fw/bom-stm32node`, not merely a call site. No tests - a
+  No tests here either way - a
   cross-compiled host tool makes no sense, and pytest cannot run on an
   STM32. Note this makes the host Python packages below a hard requirement
   of building the **firmware**, not just of running these tests: code
@@ -124,6 +171,34 @@ PR. It defaults to OFF, so a stricter local compiler than CI's can't block
 an unrelated build; pass `-DBOOMLINK_WERROR=OFF` if a new compiler version
 starts flagging something mid-task.
 
+## Where boomlink.md section 15.2's list is covered
+
+Section 15.2 names sixteen things a fake radio backend has to make testable.
+Written down here because the list is a requirement and nothing enforces the
+mapping - if a target is renamed or a scenario deleted, this table goes stale
+silently. Treat it as a reading aid, not a check.
+
+| Section 15.2 item | Where |
+| --- | --- |
+| link frame header encode/parse round-trip | `tests/test_linkframe.py`, both implementations on the same bytes |
+| wrong magic/network ID or version rejected | `link_rx_test`: foreign and malformed traffic counted apart |
+| unicast delivery | `link_rx_test`: reaches its destination and nobody else |
+| wrong destination rejection | same scenario - the third node hears it and declines |
+| broadcast acceptance | `link_rx_test`: broadcast reaches everyone, asks for no ACK |
+| ACK matching | `link_tx_test`: an ACK completes the pending frame; near-miss ACKs do not. Rejection is pinned in `test_linkframe.py`, where an over-permissive matcher cannot hide |
+| ACK timeout | `link_tx_test`: measured by advancing the clock 1 ms at a time, and shown to scale with the frame rather than being fixed |
+| retry count | `link_tx_test`: three attempts, identical bytes, then final failure |
+| duplicate suppression | `link_rx_test`: delivered once; and the key is `(source, session, sequence)`, pinned field by field |
+| duplicate ACK resend | `link_rx_test`: the duplicate is acknowledged again, not delivered again |
+| sequence/session across a reboot | `link_rx_test`: the same session replays and goes deaf; a fresh one is delivered. `dupcache_test` covers the table's own side |
+| queue priority | `txqueue_test`, plus `link_rx_test` for the on-air sequence staying monotonic across reordering |
+| queue overflow policy | `txqueue_test` in both directions, plus `link_tx_test` for the statistics |
+| randomized backoff bounds | `link_tx_test`: seven measured draws, all in range and not all equal |
+| malformed packet rejection | `link_rx_test`: truncated, oversize, and a byte corrupted in flight |
+| a fake radio backend at all | `boomlink_port.h` + `tests/fake_port.h`, and `port_test` tests the fake itself - a fake that delivered a node its own frames would make duplicate suppression look like it worked without a second node involved |
+
+Section 15.3's hardware tests are out of scope for host CI by definition.
+
 ## Protocol compatibility rules (boomlink.md section 15.1)
 
 Every PR that changes anything under `proto/` or `nanopb/` must keep these
@@ -131,9 +206,11 @@ holding, and `tests/test_compatibility.py` is what enforces them:
 
 - **Never reuse a removed Protobuf field number.** Mark it `reserved` in the
   `.proto` file instead. (Numbers that were never assigned in the first
-  place - e.g. `Envelope.payload`'s 10-13, reserved by the roadmap for PR 4's
-  message groups - are not "removed" and are left as plain comments, not
-  `reserved`, since nothing needs protecting yet.)
+  place are not "removed" and are left as plain comments, not `reserved`,
+  since nothing needs protecting yet - `Envelope.payload`'s 10-13 were exactly
+  this before PR 4 Phase A assigned them to detection/config/command/telemetry;
+  `DetectionEvent`'s field 15 is the same convention, still unassigned, for
+  whichever PR adds the first real detector's per-type detail.)
 - **Bounded fields have a fixed maximum size** (`nanopb/<name>.options`),
   and exceeding it is a decode failure, not a buffer overflow, on the Nanopb
   side even when the peer's encoder (e.g. Python protobuf, which has no
@@ -199,3 +276,14 @@ holding, and `tests/test_compatibility.py` is what enforces them:
    - the one place both the Nanopb and Python generation steps read it from.
 6. Add golden vectors (`vectors_spec.py` + `generate_vectors.py`) and tests
    per the rules above.
+
+PR 4 Phase A's four new message groups (detection/telemetry/command/config)
+deliberately skipped step 6: `vectors_spec.py`/`test_compatibility.py` are
+hardcoded to `SystemMessage.{ping,pong}` shapes, extending that machinery is
+real effort, and nothing in Phase A writes hand-rolled encode/decode logic for
+these groups - Nanopb's generic mechanics are what serialize them, and the
+host C test suite (`dispatch_test`, `command_service_test`,
+`config_service_test`) already exercises every new struct field going through
+the dispatcher and services. Extend the cross-check when a later phase adds
+hand-written wire-format logic for one of these groups, not before - see
+boomlink.md's PR 4 section for the same reasoning in context.
