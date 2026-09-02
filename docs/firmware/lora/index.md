@@ -109,10 +109,12 @@ driven through RadioLib. A few things specific to this deployment:
     | Preamble | 8 symbols |
     | Sync word | private |
 
-    This profile is runtime-configurable per node via `RadioConfig` (see
-    [BoomProtocol → Configuration](boomprotocol.md#configuration)), guarded by the same
-    revert-on-timeout mechanism as a `node_id`/`magic` change, so a bad remote profile
-    change can't strand a node unreachable.
+    `RadioConfig` can be written remotely via `ConfigSet` today — validated, staged
+    through the same revert-on-timeout confirmation window as `node_id`/`magic` (see
+    [BoomProtocol → Configuration](boomprotocol.md#configuration)) — but nothing yet
+    reads the stored value back into the radio: it's brought up with this hardcoded
+    profile on every boot regardless of what's in flash. The confirm/revert state
+    machine runs correctly; it just isn't wired to anything with a real effect yet.
 
 ## In this section
 

@@ -40,10 +40,11 @@ message MessageHeader {
 | `protocol_version` | BoomProtocol compatibility version — currently `1`. |
 | `request_id` | Correlates a request with its response at the application level. Zero when unused (an unsolicited message like a broadcast `WakeupRequest` or a `DetectionEvent`). |
 
-An `Envelope` with no header at all, or `protocol_version == 0`, is malformed and
-dropped before decoding even starts. Sender identity, RSSI/SNR and similar are **not**
-duplicated in here — they're link-layer metadata delivered alongside the decoded
-`Envelope`, not inside it (see [BoomLink](boomlink.md)).
+An `Envelope` with no header at all, or `protocol_version == 0`, decodes successfully
+but is then discarded as invalid before it ever reaches a handler — the decoded result
+is zeroed and treated as a decode failure. Sender identity, RSSI/SNR and similar are
+**not** duplicated in here — they're link-layer metadata delivered alongside the
+decoded `Envelope`, not inside it (see [BoomLink](boomlink.md)).
 
 ## Implementation status
 
@@ -89,12 +90,18 @@ message CommandResponse {
 
 | Type | Implemented? | Real action |
 |---|---|---|
-| `REBOOT` | ✅ | Arms a deferred `HAL_NVIC_SystemReset()` (never synchronous, so the response reaches the requester first). Rejected outright if addressed to broadcast. |
+| `REBOOT` | ✅ | Arms a deferred `HAL_NVIC_SystemReset()` (never synchronous, so the response reaches the requester first). Rejected over broadcast[^broadcast-cmd]. |
 | `SELF_TEST` | ✅ | Reports whether the radio is ready. |
-| `CLEAR_STATISTICS` | ✅ | Resets radio and link statistics counters. |
+| `CLEAR_STATISTICS` | ✅ | Resets radio and link statistics counters. Rejected over broadcast[^broadcast-cmd]. |
 | `REQUEST_DIAGNOSTICS` | ✅ | One-line summary: node ID, TX/RX counts, TX failures, RX CRC errors. |
 | `IDENTIFY` | ❌ `COMMAND_RESULT_UNSUPPORTED` | This board has no LED to blink. |
-| `START_DETECTION` / `STOP_DETECTION` | ❌ `COMMAND_RESULT_UNSUPPORTED` | No detection algorithm exists yet to start or stop. |
+| `START_DETECTION` / `STOP_DETECTION` | ❌ `COMMAND_RESULT_UNSUPPORTED` for a unicast request | No detection algorithm exists yet to start or stop. Rejected over broadcast[^broadcast-cmd] *before* the unsupported check even runs, so a broadcast request gets `COMMAND_RESULT_FAILED` instead. |
+
+[^broadcast-cmd]: A command dangerous to run on every reachable node at once
+    (`REBOOT`, `CLEAR_STATISTICS`, `START_DETECTION`, `STOP_DETECTION`) answers
+    `COMMAND_RESULT_FAILED` — not `UNSUPPORTED` — when addressed to broadcast, without
+    the real action ever running. `SELF_TEST`/`REQUEST_DIAGNOSTICS`/`IDENTIFY` carry no
+    such restriction; they're harmless to run on every node at once.
 
 `CommandResult`: `OK`, `UNSUPPORTED`, `BUSY`, `FAILED` (plus the proto3 zero value,
 `UNSPECIFIED`, never sent for a real response).
@@ -154,18 +161,36 @@ message ConfigSetResponse {
 
 | `ConfigSetResult` | Meaning |
 |---|---|
+| `UNSPECIFIED` | proto3 zero value — never sent for a real response. |
 | `OK` | Accepted and applied immediately. |
 | `VERSION_CONFLICT` | `expected_config_version` didn't match — someone else changed the config first. |
 | `INVALID` | A field's requested value is structurally invalid (e.g. `node_id` set to the reserved `0x00000000`/`0xFFFFFFFF`, or `magic` out of its one-byte range) — or the whole request was addressed to broadcast, which is always refused outright. |
-| `PENDING_CONFIRMATION` | A hazardous field (`node_id`, `magic`, or the radio profile) was applied but not yet confirmed — see below. |
+| `PENDING_CONFIRMATION` | A hazardous field (`node_id`, `magic`, or the whole `RadioConfig` group) was staged but not yet confirmed — see below. |
 | `APPLY_IN_PROGRESS` | A previous hazardous change is still inside its own confirmation window; this request is rejected rather than merged with it. |
 
-!!! info "Revert-on-timeout for risky fields"
-    Changing `node_id`, `magic`, or the radio profile live can strand a node — it can no
-    longer be reached at the old address/profile, or a peer can no longer reach it at
-    the new one. These three fields apply immediately but only *commit* once a
-    confirmation exchange succeeds within a bounded window (a few seconds); if nothing
-    confirms in time, the change reverts automatically to the last known-good value.
+!!! warning "Revert-on-timeout for risky fields — real state machine, limited current effect"
+    `node_id`, `magic`, and the whole `RadioConfig` group are each one hazardous unit —
+    changing *any* field of any of the three stages the new value, replies
+    `PENDING_CONFIRMATION`, and waits for a confirmation exchange within a bounded
+    window (a few seconds), reverting automatically to the last known-good value if
+    nothing confirms in time. That state machine is real and tested.
+
+    What "applying" the new value actually means today is less than it sounds like,
+    though:
+
+    - **`node_id`/`magic`** take effect only from the *next* boot's config load —
+      there's no live link-address/network-ID change in the running session. The
+      confirmation exchange proves the CURRENT (pre-change) session is still
+      reachable, not that the new address/magic will work after that next reboot.
+    - **`RadioConfig`** currently has **no effect at all**, live or after reboot: the
+      radio is brought up with a hardcoded default profile regardless of what's stored
+      in flash. The confirm/revert dance still runs for a `RadioConfig` write, but it's
+      confirming a value nothing ever reads back.
+
+    `LinkConfig`'s other five fields (everything except `magic`) have the same gap in
+    an even plainer form: they aren't hazardous, aren't staged, and are simply never
+    applied to the running link engine at all — see
+    [BoomLink → Current defaults](boomlink.md#current-defaults).
 
 Config groups, in full:
 
@@ -173,34 +198,34 @@ Config groups, in full:
 
     | Field | Type | Notes |
     |---|---|---|
-    | `node_id` | `uint32` | This node's link-layer address. |
-    | `default_destination_id` | `uint32` | Where this node sends unsolicited traffic by default. |
-    | `receive_enabled` | `bool` | |
-    | `transmit_enabled` | `bool` | |
+    | `node_id` | `uint32` | This node's link-layer address. Hazardous — see the revert-on-timeout box above. |
+    | `default_destination_id` | `uint32` | Not read anywhere yet — nothing in the firmware sends unsolicited traffic to a configurable default destination today. |
+    | `receive_enabled` | `bool` | Not wired to anything yet — the link engine's own RX enable state is a separate, hardcoded flag this field doesn't touch. |
+    | `transmit_enabled` | `bool` | Same gap as `receive_enabled`. |
     | `usb_forward_enabled` | `bool` | Gateway behaviour — not yet implemented. |
-    | `promiscuous_monitor_enabled` | `bool` | Debug/monitor mode; doesn't change normal address acceptance. |
+    | `promiscuous_monitor_enabled` | `bool` | Not wired to anything yet — nothing currently reads this field to change address-acceptance or any other behavior. |
 
 === "LinkConfig"
 
     | Field | Type | Notes |
     |---|---|---|
-    | `magic` | `uint32` | Network ID — one byte on the wire (see [BoomLink](boomlink.md)). Hazardous. |
-    | `ack_timeout_margin_ms` | `uint32` | |
-    | `max_attempts` | `uint32` | |
-    | `backoff_min_ms` / `backoff_max_ms` | `uint32` | |
-    | `tx_jitter_max_ms` | `uint32` | |
+    | `magic` | `uint32` | Network ID — one byte on the wire (see [BoomLink](boomlink.md)). Hazardous, and does take effect — but only from the *next* boot, not live. |
+    | `ack_timeout_margin_ms` | `uint32` | Accepted and persisted, but never read back — the running link engine keeps its own hardcoded value regardless. |
+    | `max_attempts` | `uint32` | Same gap. |
+    | `backoff_min_ms` / `backoff_max_ms` | `uint32` | Same gap. |
+    | `tx_jitter_max_ms` | `uint32` | Same gap. |
 
 === "RadioConfig"
 
     | Field | Type | Notes |
     |---|---|---|
-    | `frequency_mhz` | `float` | Hazardous. |
-    | `bandwidth_khz` | `float` | |
-    | `spreading_factor` | `uint32` | |
-    | `coding_rate_denom` | `uint32` | |
-    | `tx_power_dbm` | `int32` | |
-    | `preamble_symbols` | `uint32` | |
-    | `sync_word` | `uint32` | |
+    | `frequency_mhz` | `float` | Hazardous — the whole group is one atomic unit, not just this field (see the revert-on-timeout box above). Currently has no effect at all, live or after reboot. |
+    | `bandwidth_khz` | `float` | Hazardous, same group. Same "no effect yet" gap. |
+    | `spreading_factor` | `uint32` | Hazardous, same group. Same "no effect yet" gap. |
+    | `coding_rate_denom` | `uint32` | Hazardous, same group. Same "no effect yet" gap. |
+    | `tx_power_dbm` | `int32` | Hazardous, same group. Same "no effect yet" gap. |
+    | `preamble_symbols` | `uint32` | Hazardous, same group. Same "no effect yet" gap. |
+    | `sync_word` | `uint32` | Hazardous, same group. Same "no effect yet" gap. |
 
 === "DetectionConfig"
 

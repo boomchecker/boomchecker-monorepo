@@ -192,13 +192,23 @@ is never affected by radio scheduling.
 
 | Priority | Traffic |
 |---|---|
-| **HIGH** | ACK, command responses, critical system messages |
+| **HIGH** | command responses, critical system messages |
 | **NORMAL** | detection events, configuration responses, Ping/Pong, fleet-discovery Wakeup |
 | **LOW** | periodic telemetry, non-critical diagnostics |
 
-The queue is statically bounded; when full, low-priority telemetry is dropped or
-coalesced before detection or command traffic. Sequence numbers are assigned at
-dequeue, so priority reordering never breaks the on-air sequence.
+!!! note "ACK never enters this queue"
+    Despite being nominally a HIGH-priority frame type, an ACK is sent synchronously
+    from the RX path the instant it's generated — it never touches the TX queue at all.
+    There's nothing to prioritize: at most one frame is ever mid-flight (see
+    [Retry](#retry)), so an ACK can't be queued behind anything.
+
+The queue is statically bounded; when full, the lowest-priority queued frame is dropped
+to make room. Sequence numbers are assigned at dequeue, so priority reordering never
+breaks the on-air sequence.
+
+**LOW** exists in code (`BOOMLINK_TXPRIO_LOW`) but nothing sends at that priority
+today — no telemetry subsystem exists yet to generate the traffic it's meant for (see
+[BoomProtocol → Telemetry](boomprotocol.md#telemetry)).
 
 !!! note "Reordering, not preemption"
     This only reorders the *queue*. Once a frame leaves the queue into the single
@@ -235,13 +245,25 @@ queueing · shed for more urgent traffic · cumulative TX airtime · last RSSI/S
 | Retry backoff range | 100–400 ms |
 | First-TX jitter range | 0–50 ms |
 
-All of the above (plus `node_id` and the radio profile) are remotely reconfigurable via
-`ConfigSet` — see [BoomProtocol → Configuration](boomprotocol.md#configuration).
+!!! warning "`ConfigSet` accepts these fields today, but most have no real effect yet"
+    `LinkConfig` (including all five defaults above) can be written via `ConfigSet` —
+    it's validated, versioned, and persisted to flash — but nothing in the firmware
+    currently reads any of these five fields back to reconfigure the running link
+    engine: `link_service_init()` hardcodes them from its own constants at boot,
+    regardless of what's in flash, and nothing calls the link engine's reconfigure
+    entry point outside of host tests. Writing a new backoff range or jitter max today
+    has no observable effect, live or after a reboot.
+
+    `node_id` and `magic` are different: a write to either **does** eventually take
+    effect — but only from `link_service_init()`'s *next* boot-time read, since there's
+    no live address/network-ID change either. See
+    [BoomProtocol → Configuration](boomprotocol.md#configuration) for the full picture,
+    including the radio profile (same "accepted but not applied" gap).
 
 ## CLI reference
 
 | Command | Effect |
 |---|---|
-| `link status` | node ID, session ID, TX state, queue depth, full statistics |
+| `link status` | node ID, session ID, TX state, queue depth, most statistics (cumulative TX airtime isn't printed today) |
 | `link enable` / `link disable` | link engine owns the radio's RX path / hands it back to raw `radio ping` |
 | `link ping <node_id_hex> [text]` | send a unicast frame with ACK requested — the ACK itself *is* the "pong" |
