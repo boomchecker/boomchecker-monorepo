@@ -2083,7 +2083,36 @@ the real seam, not the sketch" approach PR 3's own Phase C took — section 4):
   narrower than the already-deferred pipeline-occupancy race (see that item,
   below): it covers the response never reaching the queue at all, not one that
   queues fine and then loses a race with an occupied pipeline, which still needs
-  the correlation signal that item describes and remains open.
+  the correlation signal that item describes and remains open;
+- a boot-time HardFault, found on real hardware rather than by code review -
+  every board built from this PR through the first hardware bring-up attempt
+  crashed before USB ever enumerated. `Core/Src/main.c` used to enable the
+  STM32H563's instruction cache (`ICACHE`) immediately after peripheral init,
+  before `usb_cli_start()` - which reaches `link_service_init()`, which reads
+  the chip's factory UID (`HAL_GetUIDw0()`/`w1()`/`w2()`) from `UID_BASE`
+  (`0x08FFF800`) for both `App/link/link_service.c`'s `derive_node_id()`/
+  `derive_session_id()` fallbacks and `App/link/boomlink_radio_port.c`'s PRNG
+  seed - the only three call sites of those HAL functions anywhere in this
+  firmware, all reached exactly once, synchronously, at this same point in
+  boot, never again afterwards. With the cache enabled first, that read
+  HardFaulted: a precise BusFault at `BFAR == UID_BASE`, identical on two
+  independently flashed boards. SWD forensics (halting over the debug probe,
+  reading fault registers, then reading the same address directly via the
+  probe's own AHB-AP access) confirmed the address and its data are real and
+  valid - the probe's read succeeds and returns plausible UID/flash-size data
+  - so the fault is specific to the CPU's own cached access, not the address:
+  a burst line-fill transaction this OTP-style info block's controller
+  apparently does not answer the same way a debug probe's single AHB read
+  does. Fixed by moving the `ICACHE` enable to after `usb_cli_start()` rather
+  than before it - the mic-streaming path the cache exists for (see that
+  code's own comment on the PDM->PCM DSP timing budget) only ever starts
+  later, on demand, via the `stream`/`streamtest` CLI commands issued once
+  the board is already up, so deferring the enable this far costs nothing
+  that budget needs, and every UID read this firmware ever does happens
+  before it now runs. Not independently re-verified on hardware by this same
+  round of review - the fix follows directly from the reported fault
+  registers and call graph, but confirming it actually clears the HardFault
+  needs a real board.
 
 Deliberately deferred, not silently dropped:
 
