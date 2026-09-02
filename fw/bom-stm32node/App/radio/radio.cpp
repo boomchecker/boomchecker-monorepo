@@ -34,6 +34,16 @@ enum class Mode { kIdle, kReceiving, kTransmitting };
    of a reset. */
 constexpr uint32_t kTxTimeoutMs = 2000;
 
+/* How often radio_process() retries EnterReceive() while stuck in kIdle
+   (see that branch below). Bounded so a persistently wedged/disconnected
+   chip does not hammer the SPI bus every main-loop iteration forever, short
+   enough that "the radio recovers on its own" (found needed during
+   hardware bring-up - EnterReceive()'s own single retry does not always
+   clear every way this chip has been observed to wedge, and there was no
+   CLI recovery path at all short of a full reboot) reads as near-instant
+   rather than a user-noticeable stall. */
+constexpr uint32_t kIdleRetryIntervalMs = 200;
+
 SX1262       *s_radio = nullptr;
 Mode          s_mode  = Mode::kIdle;
 volatile bool s_dio1Event = false;
@@ -163,6 +173,27 @@ int radio_last_error(void) {
 
 void radio_process(void) {
   if (s_radio == nullptr) {
+    return;
+  }
+
+  if (s_mode == Mode::kIdle) {
+    /* EnterReceive() failed at some earlier point (init, a TX-completion
+       transition, or the timeout-recovery branch below) and left the radio
+       deaf with no further DIO1 events ever expected - nothing else in this
+       function would ever run again for this chip without this branch.
+       Retrying periodically here, instead of only on the next explicit
+       radio_send()/EnterReceive() call, is what makes recovery automatic:
+       found necessary during hardware bring-up because there was otherwise
+       no way back to "ready" short of a full reboot, and the class of
+       failure this recovers from (see EnterReceive()'s own comment) has
+       been observed to need more than the one retry already built into
+       EnterReceive() itself. */
+    static uint32_t s_lastRetryMs = 0;
+    uint32_t        now           = HAL_GetTick();
+    if ((now - s_lastRetryMs) >= kIdleRetryIntervalMs) {
+      s_lastRetryMs = now;
+      EnterReceive();
+    }
     return;
   }
 
