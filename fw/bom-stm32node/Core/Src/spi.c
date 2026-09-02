@@ -71,7 +71,27 @@ void MX_SPI1_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN SPI1_Init 2 */
-
+  /* Override CubeMX's /8 prescaler (15.625 MHz off the 125 MHz PLL1Q kernel
+     clock) down to /32 (~3.9 MHz). First real-hardware bring-up saw frequent,
+     intermittent SPI corruption that unified every observed radio failure -
+     `radio ping`/`startReceive` returning RADIOLIB_ERR_UNKNOWN (-1) because
+     the getPacketType() SPI read inside SX126x::stageMode() came back as an
+     unrecognised modem, plus receives decoding as "0 bytes" or garbled
+     content - all of which are corruption of a single SPI status/opcode byte.
+     15.625 MHz is only ~2.4% under the SX1262's 16 MHz absolute maximum: fine
+     on a clean PCB, but no margin at all for an E22 module wired to the board
+     over bring-up jumper leads, where reflections and ground bounce at that
+     clock push individual bit sampling over the edge intermittently. /32
+     gives a 4x margin; the transactions are a handful of bytes each, so the
+     lower clock costs nothing measurable. Done here in a USER CODE block, not
+     by editing the CubeMX-generated prescaler line above, so it survives an
+     .ioc regeneration - the .ioc itself should be updated to match (this is a
+     hardware/CubeMX-owned setting) once the value is confirmed on the bench. */
+  hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_32;
+  if (HAL_SPI_Init(&hspi1) != HAL_OK)
+  {
+    Error_Handler();
+  }
   /* USER CODE END SPI1_Init 2 */
 
 }

@@ -596,7 +596,12 @@ add_library(boomlink_command_service STATIC
 target_include_directories(boomlink_command_service PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}/services
 )
-target_link_libraries(boomlink_command_service PUBLIC boomlink_dispatch)
+# boomlink_linkframe is PRIVATE, same reasoning and same header-only use as
+# boomlink_config_service's own identical dependency below: BOOMLINK_ADDR_
+# BROADCAST (section 7.2), reused rather than duplicated as a bare hex
+# literal, for boomlink_command_service.c's own broadcast-Reboot rejection
+# (section 9.9).
+target_link_libraries(boomlink_command_service PUBLIC boomlink_dispatch PRIVATE boomlink_linkframe)
 target_compile_features(boomlink_command_service PUBLIC c_std_11)
 target_compile_options(boomlink_command_service PRIVATE
   ${BOOMLINK_WARNING_FLAGS} ${BOOMLINK_WERROR_FLAGS} ${BOOMLINK_TARGET_WERROR_FLAGS})

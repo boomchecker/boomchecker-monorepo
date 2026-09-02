@@ -23,7 +23,10 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include <stdio.h>
 
+#include "main.h" /* HAL_GetUIDw0/w1/w2 - per-chip USB serial number, see
+                      USBD_Get_String_Framework's own comment below */
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -218,7 +221,29 @@ uint8_t *USBD_Get_String_Framework(ULONG *Length)
   USBD_Desc_GetString((uint8_t *)USBD_SERIAL_NUMBER, USBD_string_framework + count, &len);
 
   /* USER CODE BEGIN String_Framework1 */
-
+  /* USBD_SERIAL_NUMBER (ux_device_descriptors.h) is the CubeMX-generated
+     placeholder "000000000001" - identical on every board built from this
+     firmware. Two boards sharing one VID:PID:iSerial identity is exactly
+     the kind of collision that made a second board fail to enumerate at
+     all when plugged in alongside a first one still known to the host
+     (found during hardware bring-up, not by review - it takes two actual
+     boards on the same host to see it). Overwritten here, in place, with a
+     per-chip string derived from the factory 96-bit UID (HAL_GetUIDw0/w1/
+     w2(), the same three words App/link/link_service.c and
+     App/link/boomlink_radio_port.c already read for node_id/session_id/PRNG
+     - reading them this early, from usb_cli_start() -> MX_USBX_Device_Init()
+     -> USBD_Get_String_Framework(), is safe for the same reason those call
+     sites are: Core/Src/main.c only enables the ICACHE *after*
+     usb_cli_start() returns, precisely to keep every UID read - USB
+     descriptor build included - ahead of the cache being on. 24 uppercase
+     hex characters (12 UID bytes), well under
+     USBD_STRING_FRAMEWORK_MAX_LENGTH's 256-byte budget for this field. */
+  {
+    char serial_str[25];
+    (void)snprintf(serial_str, sizeof(serial_str), "%08lX%08lX%08lX", (unsigned long)HAL_GetUIDw0(),
+                    (unsigned long)HAL_GetUIDw1(), (unsigned long)HAL_GetUIDw2());
+    USBD_Desc_GetString((uint8_t *)serial_str, USBD_string_framework + count, &len);
+  }
   /* USER CODE END String_Framework1 */
 
   /* Get the length of USBD_string_framework */

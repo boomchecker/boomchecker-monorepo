@@ -251,6 +251,88 @@ static void test_malformed_or_missing_arguments_are_rejected(void) {
         "a NULL out_response must be rejected");
 }
 
+/* Section 9.9: "commands that are dangerous when broadcast should be
+   rejected by the application service unless explicitly designed for
+   broadcast." boomlink_command_service.c's own command_is_dangerous_over_
+   broadcast() names exactly four commands (Reboot, ClearStatistics,
+   StartDetection, StopDetection) - Reboot was the first fixed, review found
+   ClearStatistics had the identical unguarded gap, and StartDetection/
+   StopDetection are guarded pre-emptively against the day a real detector
+   is wired behind them. This test drives every one of the seven commands
+   over both a broadcast and a unicast destination, checking the four named
+   ones are refused (FAILED, ops never called) only over broadcast, and the
+   other three (Identify/SelfTest/RequestDiagnostics - none of them change
+   persistent state or safety-relevant behavior) run normally either way.
+   This service is the only point in the dispatch chain that ever sees both
+   `rx->destination_id` and the command type together (boomlink_command_
+   ops_t's per-command callbacks do not receive `rx` at all - see that
+   struct's own doc). */
+static bool is_dangerous_over_broadcast(boomlink_CommandType type) {
+  return type == boomlink_CommandType_COMMAND_TYPE_REBOOT ||
+         type == boomlink_CommandType_COMMAND_TYPE_CLEAR_STATISTICS ||
+         type == boomlink_CommandType_COMMAND_TYPE_START_DETECTION ||
+         type == boomlink_CommandType_COMMAND_TYPE_STOP_DETECTION;
+}
+
+static void test_broadcast_danger_commands_are_rejected_others_are_not(void) {
+  boomlink_command_ops_t ops = full_ops();
+
+  for (size_t i = 0; i < SLOT_COUNT; i++) {
+    command_slot_t slot     = SLOTS[i];
+    bool           dangerous = is_dangerous_over_broadcast(slot.type);
+
+    boomlink_CommandMessage request = {0};
+    request.which_message        = boomlink_CommandMessage_request_tag;
+    request.message.request.type = slot.type;
+
+    boomlink_dispatch_rx_info_t rx = {0};
+    /* BOOMLINK_ADDR_BROADCAST (section 7.2) spelled out as a literal rather
+       than included from boomlink_linkframe.h - this test target links
+       boomlink_command_service only, which pulls that header in PRIVATEly
+       (see fw/common/boomlink/CMakeLists.txt's comment on that dependency),
+       the same reason config_service_test.c spells out its own magic-
+       default literal instead of including it. */
+    rx.destination_id = 0xFFFFFFFFu;
+
+    reset_spies();
+    slot.spy->succeed = true; /* would answer OK if called - proves whether it was */
+    boomlink_CommandMessage resp;
+    bool ok = boomlink_command_service_handle(&ops, &rx, &request, &resp);
+    CHECK(ok, "%s: a response is still built for a broadcast request", slot.name);
+
+    if (dangerous) {
+      CHECK(resp.message.response.result == boomlink_CommandResult_COMMAND_RESULT_FAILED,
+            "%s: a dangerous command over broadcast must be refused with FAILED, not "
+            "UNSUPPORTED - this node CAN do it, it is this broadcast request that is refused",
+            slot.name);
+      CHECK(slot.spy->calls == 0,
+            "%s: its ops callback must never be invoked for a broadcast request, got %d calls",
+            slot.name, slot.spy->calls);
+    } else {
+      CHECK(resp.message.response.result == boomlink_CommandResult_COMMAND_RESULT_OK,
+            "%s: a non-dangerous command must run normally over broadcast, not be refused",
+            slot.name);
+      CHECK(slot.spy->calls == 1,
+            "%s: a non-dangerous command's ops callback must still be invoked over broadcast, "
+            "got %d calls", slot.name, slot.spy->calls);
+    }
+
+    /* Every command, dangerous or not, must still work normally addressed
+       to a real unicast destination - broadcast rejection must never leak
+       into ordinary addressed traffic. */
+    reset_spies();
+    slot.spy->succeed  = true;
+    rx.destination_id  = 42u;
+    ok                 = boomlink_command_service_handle(&ops, &rx, &request, &resp);
+    CHECK(ok, "%s: a unicast request must still get a response", slot.name);
+    CHECK(resp.message.response.result == boomlink_CommandResult_COMMAND_RESULT_OK,
+          "%s: a unicast request must still succeed normally", slot.name);
+    CHECK(slot.spy->calls == 1,
+          "%s: a unicast request must still call its own callback exactly once, got %d",
+          slot.name, slot.spy->calls);
+  }
+}
+
 int main(void) {
   test_every_wired_command_maps_ok_or_failed_to_its_own_callback();
   test_every_unwired_command_is_unsupported();
@@ -259,5 +341,6 @@ int main(void) {
   test_diagnostic_buffer_is_zeroed_when_the_callback_writes_nothing();
   test_diagnostic_buffer_is_always_nul_terminated_even_if_the_callback_fills_it();
   test_malformed_or_missing_arguments_are_rejected();
-  BOOMLINK_TEST_REPORT("command_service_test", 83);
+  test_broadcast_danger_commands_are_rejected_others_are_not();
+  BOOMLINK_TEST_REPORT("command_service_test", 125);
 }

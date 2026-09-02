@@ -52,6 +52,20 @@ static bool handle(boomlink_config_service_t *svc, const boomlink_ConfigMessage 
   return boomlink_config_service_handle(svc, &rx, request, out_response);
 }
 
+/* Like handle(), but addressed to BOOMLINK_ADDR_BROADCAST (0xFFFFFFFF,
+   section 7.2 - spelled out as a literal rather than included from
+   boomlink_linkframe.h: this test target links boomlink_config_service
+   only, which pulls that header in PRIVATEly, see fw/common/boomlink/
+   CMakeLists.txt's comment on that dependency and config_service_test.c's
+   own existing magic-literal comments for the same reason elsewhere in
+   this file). */
+static bool handle_broadcast(boomlink_config_service_t *svc, const boomlink_ConfigMessage *request,
+                             boomlink_ConfigMessage *out_response) {
+  boomlink_dispatch_rx_info_t rx = {0};
+  rx.destination_id              = 0xFFFFFFFFu;
+  return boomlink_config_service_handle(svc, &rx, request, out_response);
+}
+
 static void test_get_returns_only_requested_groups(void) {
   boomlink_config_service_t svc            = make_svc(1000u);
   svc.current.general.node_id              = 100u;
@@ -74,6 +88,65 @@ static void test_get_returns_only_requested_groups(void) {
   CHECK(!gr->has_radio, "radio was not requested, even though it holds a real non-zero value");
   CHECK(!gr->has_detection, "detection was not requested");
   CHECK(!gr->has_gnss, "gnss was not requested");
+}
+
+/* Regression test for a real gap found by review, not by any test written
+   alongside Phase A's original ConfigSet implementation: a SET addressed
+   to BOOMLINK_ADDR_BROADCAST had no guard at all - boomlink.md's own PR 4
+   notes already warned "a broadcast ConfigSet must not be added casually",
+   and once PR 4 Phase C wired real flash persistence to a successful SET,
+   this became a way for one unauthenticated broadcast frame to drive every
+   reachable node to independently erase+rewrite its own flash sector at
+   once. Covers both a non-hazardous field (which would otherwise apply
+   immediately, no confirmation needed) and a hazardous one (which would
+   otherwise only stage) - neither may proceed over broadcast. */
+static void test_set_over_broadcast_is_rejected_touching_nothing(void) {
+  boomlink_config_service_t svc = make_svc(1000u);
+
+  boomlink_ConfigMessage req                          = {0};
+  req.which_message                                   = boomlink_ConfigMessage_set_request_tag;
+  req.message.set_request.expected_config_version     = 1u;
+  req.message.set_request.has_telemetry               = true;
+  req.message.set_request.telemetry.report_interval_s = 42u; /* non-hazardous */
+  req.message.set_request.has_general                 = true;
+  req.message.set_request.general.node_id             = 77u; /* hazardous */
+
+  boomlink_ConfigMessage resp;
+  bool ok = handle_broadcast(&svc, &req, &resp);
+
+  REQUIRE(ok, "a SET always answers, even one refused for its addressing");
+  CHECK(resp.message.set_response.result == boomlink_ConfigSetResult_CONFIG_SET_RESULT_INVALID,
+        "a broadcast SET must be refused outright, not staged or applied");
+  CHECK(resp.message.set_response.config_version == 1u,
+        "a refused broadcast SET must not bump the version");
+  CHECK(svc.current.telemetry.report_interval_s == 0u,
+        "the non-hazardous field must NOT have applied - a broadcast SET touches nothing");
+  CHECK(svc.current.general.node_id == 0u,
+        "the hazardous field must NOT have applied either");
+  CHECK(svc.apply_state == BOOMLINK_CONFIG_APPLY_IDLE,
+        "a refused broadcast SET must not stage anything");
+
+  /* The identical request addressed to a real unicast destination must
+     still work normally - this is a targeted rejection of broadcast, not a
+     regression in ConfigSet itself. */
+  ok = handle(&svc, &req, &resp);
+  REQUIRE(ok, "a unicast SET must still answer");
+  CHECK(resp.message.set_response.result == boomlink_ConfigSetResult_CONFIG_SET_RESULT_PENDING_CONFIRMATION,
+        "a unicast SET with a hazardous field must still stage normally");
+  CHECK(svc.current.telemetry.report_interval_s == 42u,
+        "a unicast SET's non-hazardous field must still apply immediately");
+
+  /* A GET, unlike a SET, must still answer normally over broadcast - it
+     mutates nothing, so the concern a broadcast SET raises does not apply
+     to it. */
+  boomlink_ConfigMessage get_req = get_request(false, false, false, false, false, true);
+  boomlink_ConfigMessage get_resp;
+  boomlink_dispatch_rx_info_t broadcast_rx = {0};
+  broadcast_rx.destination_id              = 0xFFFFFFFFu;
+  ok = boomlink_config_service_handle(&svc, &broadcast_rx, &get_req, &get_resp);
+  REQUIRE(ok, "a GET must still answer over broadcast");
+  CHECK(get_resp.which_message == boomlink_ConfigMessage_get_response_tag,
+        "a GET over broadcast is not refused the way a SET is");
 }
 
 static void test_set_rejects_stale_expected_version(void) {
@@ -187,7 +260,7 @@ static void test_hazardous_magic_change_is_staged(void) {
   req.which_message                                     = boomlink_ConfigMessage_set_request_tag;
   req.message.set_request.expected_config_version       = 1u;
   req.message.set_request.has_link                      = true;
-  req.message.set_request.link.magic                    = 0xABu; /* hazardous: differs from 0 */
+  req.message.set_request.link.magic                    = 0xABu; /* hazardous: differs from the 0xB0 default */
   req.message.set_request.link.ack_timeout_margin_ms     = 300u;  /* not hazardous */
 
   boomlink_ConfigMessage resp;
@@ -195,7 +268,15 @@ static void test_hazardous_magic_change_is_staged(void) {
 
   CHECK(resp.message.set_response.result == boomlink_ConfigSetResult_CONFIG_SET_RESULT_PENDING_CONFIRMATION,
         "a magic change must be staged");
-  CHECK(svc.current.link.magic == 0u, "magic must not be in current yet");
+  /* 0xB0, not 0: boomlink_node_config_defaults() sets link.magic to
+     BOOMLINK_LINKFRAME_MAGIC_DEFAULT (link/boomlink_linkframe.h), matching
+     link_service.c's own bring-up default - not left at the struct's zero-
+     init, which is not a real magic value. This test can't include that
+     header (boomlink_config_service_test links boomlink_linkframe only
+     transitively as boomlink_config_service's PRIVATE dependency), so the
+     value is spelled out here instead. */
+  CHECK(svc.current.link.magic == 0xB0u, "magic must not be in current yet, got 0x%02X",
+        (unsigned)svc.current.link.magic);
   CHECK(svc.current.link.ack_timeout_margin_ms == 300u,
         "a non-hazardous sibling field applies immediately");
   CHECK(svc.staged.magic == 0xABu, "the new magic is held in staged");
@@ -219,7 +300,9 @@ static void test_hazardous_radio_change_touches_nothing_until_committed(void) {
         "any RadioConfig change is entirely hazardous");
   CHECK(svc.current.radio.frequency_mhz == 868.1f,
         "RadioConfig must be completely untouched until committed, not even sibling fields");
-  CHECK(svc.current.radio.spreading_factor == 0u, "same for every other RadioConfig field");
+  CHECK(svc.current.radio.spreading_factor == 7u,
+        "same for every other RadioConfig field - 7 is boomlink_node_config_defaults()'s real "
+        "default (e22_radio.cpp's DefaultProfile()), not the struct's zero-init");
   CHECK(svc.staged.radio.frequency_mhz == 915.0f, "the new profile is held in staged");
 }
 
@@ -492,6 +575,75 @@ static void test_a_conflicting_hazardous_set_while_one_is_pending_is_rejected(vo
         "a hazardous SET must still be rejected while WAITING, not just while STAGED");
 }
 
+/* Round 7 review: `current_hazard` inside handle_set() already holds an
+   EARLIER request's still-unconfirmed value once WAITING (commit_pending_
+   apply() put it there) - so a request that restates that exact value
+   compares equal to it, hazard_changed correctly reports "no delta", and
+   without this fix the code fell straight through to answering OK: the
+   strongest result this protocol has, for a value boomlink_config_service_
+   poll() can still revert out from under the requester moments later with
+   no further response. This must answer PENDING_CONFIRMATION instead -
+   truthfully reporting the value is still unconfirmed - without disturbing
+   the original stage/confirmation window at all. */
+static void test_restating_a_still_unconfirmed_hazard_value_answers_pending_not_ok(void) {
+  boomlink_config_service_t svc = make_svc(500u);
+
+  boomlink_ConfigMessage req1                      = {0};
+  req1.which_message                               = boomlink_ConfigMessage_set_request_tag;
+  req1.message.set_request.expected_config_version = 1u;
+  req1.message.set_request.has_general             = true;
+  req1.message.set_request.general.node_id         = 77u;
+  boomlink_ConfigMessage resp1;
+  handle(&svc, &req1, &resp1);
+  REQUIRE(resp1.message.set_response.result ==
+              boomlink_ConfigSetResult_CONFIG_SET_RESULT_PENDING_CONFIRMATION,
+          "setup: staged");
+
+  boomlink_config_service_commit_pending_apply(&svc, 1000u);
+  REQUIRE(svc.apply_state == BOOMLINK_CONFIG_APPLY_WAITING, "setup: now waiting for confirmation");
+  REQUIRE(svc.current.general.node_id == 77u, "setup: current already holds the unconfirmed value");
+  REQUIRE(svc.revert_to.node_id == 0u, "setup: revert_to still holds the last CONFIRMED value");
+
+  /* The mandated GET-edit-SET flow would produce exactly this request if an
+     operator re-read the node right after req1's response and resent the
+     whole GeneralConfig group unedited. */
+  boomlink_ConfigMessage req2                      = {0};
+  req2.which_message                               = boomlink_ConfigMessage_set_request_tag;
+  req2.message.set_request.expected_config_version = 2u;
+  req2.message.set_request.has_general             = true;
+  req2.message.set_request.general.node_id         = 77u;
+  boomlink_ConfigMessage resp2;
+  bool ok2 = handle(&svc, &req2, &resp2);
+
+  REQUIRE(ok2, "a SET always answers");
+  CHECK(resp2.message.set_response.result ==
+            boomlink_ConfigSetResult_CONFIG_SET_RESULT_PENDING_CONFIRMATION,
+        "restating a still-unconfirmed hazard value must not answer OK - it is not settled yet");
+  CHECK(svc.apply_state == BOOMLINK_CONFIG_APPLY_WAITING,
+        "must still be waiting for the ORIGINAL confirmation - a restate is not a new stage");
+  CHECK(svc.current.general.node_id == 77u, "the unconfirmed value itself must be unchanged");
+  CHECK(svc.revert_to.node_id == 0u, "the last-confirmed value to revert to must be unchanged");
+
+  /* A genuine confirm afterward must still work normally - this fix must
+     not have left the state machine unable to ever leave WAITING. */
+  boomlink_config_service_confirm_pending_apply(&svc);
+  CHECK(svc.apply_state == BOOMLINK_CONFIG_APPLY_IDLE, "a real confirm afterward must still finalize it");
+
+  /* Restating a hazard group at its OWN already-CONFIRMED value (the
+     ordinary "editing something else" GET-edit-SET case, now while IDLE)
+     must still answer plain OK - this fix is scoped to WAITING only and
+     must not regress the settled case. */
+  boomlink_ConfigMessage req3                      = {0};
+  req3.which_message                               = boomlink_ConfigMessage_set_request_tag;
+  req3.message.set_request.expected_config_version = 3u;
+  req3.message.set_request.has_general             = true;
+  req3.message.set_request.general.node_id         = 77u;
+  boomlink_ConfigMessage resp3;
+  handle(&svc, &req3, &resp3);
+  CHECK(resp3.message.set_response.result == boomlink_ConfigSetResult_CONFIG_SET_RESULT_OK,
+        "restating an already-CONFIRMED hazard value while IDLE must still answer plain OK");
+}
+
 static void test_set_rejects_an_attempt_to_change_node_id_to_an_invalid_value(void) {
   boomlink_config_service_t svc = make_svc(1000u);
 
@@ -547,6 +699,36 @@ static void test_set_rejects_an_attempt_to_change_magic_past_one_byte(void) {
         "255 fits exactly in one byte and must be accepted as a real hazardous change");
 }
 
+/* Regression test for a real bug found by review, not by any test written
+   alongside the original fix: magic_is_valid() once accepted 0 as a valid
+   CHANGE target even though App/link/link_service.c's link_service_init()
+   treats a configured magic of 0 as "never set, fall back to
+   BOOMLINK_LINKFRAME_MAGIC_DEFAULT" (see that function's own doc). A
+   ConfigSet could commit magic=0 into `current` - reported by every later
+   ConfigGet as the node's real, permanent magic - while the very next
+   reboot silently ran with 0xB0 instead, permanently diverging what is
+   persisted/reported from what actually runs. Sabotage-verified: reverting
+   magic_is_valid() to its pre-fix `return magic <= 0xFFu;` form made this
+   test (and only this test) fail before it existed. */
+static void test_set_rejects_an_attempt_to_change_magic_to_zero(void) {
+  boomlink_config_service_t svc = make_svc(1000u);
+
+  boomlink_ConfigMessage req                      = {0};
+  req.which_message                               = boomlink_ConfigMessage_set_request_tag;
+  req.message.set_request.expected_config_version = 1u;
+  req.message.set_request.has_link                = true;
+  req.message.set_request.link.magic              = 0u; /* the "unconfigured" sentinel */
+
+  boomlink_ConfigMessage resp;
+  handle(&svc, &req, &resp);
+  CHECK(resp.message.set_response.result == boomlink_ConfigSetResult_CONFIG_SET_RESULT_INVALID,
+        "0 is link_service_init()'s own fallback sentinel, not a real magic value a node may "
+        "CHANGE its identity to");
+  /* 0xB0 = BOOMLINK_LINKFRAME_MAGIC_DEFAULT (spelled out as a literal for
+     the same reason test_hazardous_magic_change_is_staged does, above). */
+  CHECK(svc.current.link.magic == 0xB0u, "a rejected change must not have touched the real magic");
+}
+
 static void test_resending_an_unchanged_but_still_unconfigured_node_id_is_not_rejected(void) {
   /* A fresh node's node_id defaults to 0x00000000 (section 7.2's
      "unconfigured"). A caller editing an unrelated GeneralConfig field
@@ -585,7 +767,14 @@ static void test_radio_negative_zero_is_not_a_hazardous_change(void) {
   req.which_message                               = boomlink_ConfigMessage_set_request_tag;
   req.message.set_request.expected_config_version = 1u;
   req.message.set_request.has_radio               = true;
-  req.message.set_request.radio.frequency_mhz     = -0.0f;
+  /* Every OTHER RadioConfig field must match svc.current exactly - this
+     test isolates frequency_mhz's +0.0f/-0.0f equivalence, not "any
+     RadioConfig SET is a no-op". Leaving the rest at the request's own
+     zero-initialized default would itself be a real hazardous change
+     against boomlink_node_config_defaults()'s real (non-zero, since the
+     defaults fix) values for spreading_factor/coding_rate_denom/etc. */
+  req.message.set_request.radio               = svc.current.radio;
+  req.message.set_request.radio.frequency_mhz = -0.0f;
 
   boomlink_ConfigMessage resp;
   handle(&svc, &req, &resp);
@@ -634,6 +823,160 @@ static void test_radio_nan_does_not_permanently_break_hazard_detection(void) {
   CHECK(resp2.message.set_response.result == boomlink_ConfigSetResult_CONFIG_SET_RESULT_OK,
         "a NaN sitting in current.radio must not misreport every later SET as hazardous");
   CHECK(svc.apply_state == BOOMLINK_CONFIG_APPLY_IDLE, "nothing should be pending");
+}
+
+/* Regression test for a real gap found by review: boomlink_node_config_
+   defaults() left general.receive_enabled/transmit_enabled at their
+   zero-init false, even though App/link/link_service.c's real hardcoded
+   default (s_enabled) is true and gates both directions together - a
+   fresh node's first ConfigGet reported a node that can neither receive
+   nor transmit, despite demonstrably doing both to answer that very GET.
+   Also covers detection.has_drone/has_gunshot, the identical has_X gap
+   this function already forces true for the six OUTER groups, found one
+   nesting level down. */
+static void test_defaults_match_real_hardcoded_values(void) {
+  boomlink_node_config_t cfg;
+  boomlink_node_config_defaults(&cfg);
+
+  CHECK(cfg.general.receive_enabled,
+        "defaults() must match link_service.c's real receive-enabled default (true)");
+  CHECK(cfg.general.transmit_enabled,
+        "defaults() must match reality - nothing gates TX independently, so this node "
+        "transmits regardless of this field's value");
+  CHECK(cfg.detection.has_drone,
+        "detection.has_drone must be forced true, the same reason has_detection is");
+  CHECK(cfg.detection.has_gunshot,
+        "detection.has_gunshot must be forced true, the same reason has_detection is");
+
+  /* Round 8 review: this test's name promises "defaults match real
+     hardcoded values" for the whole function, but until now only checked
+     the four fields above - the round 1/round 6 LinkConfig/RadioConfig
+     fixes this function itself documents (matching link_service.c's LINK_*
+     constants and e22_radio.cpp's DefaultProfile()) had no CHECK of their
+     own. Sabotage-proven gap: zeroing all ten of these fields still passed
+     every existing test, including this one. */
+  CHECK(cfg.link.ack_timeout_margin_ms == 50u,
+        "defaults() must match link_service.c's real LINK_ACK_TIMEOUT_MARGIN_MS");
+  CHECK(cfg.link.max_attempts == 3u,
+        "defaults() must match link_service.c's real LINK_MAX_ATTEMPTS");
+  CHECK(cfg.link.backoff_min_ms == 100u,
+        "defaults() must match link_service.c's real LINK_BACKOFF_MIN_MS");
+  CHECK(cfg.link.backoff_max_ms == 400u,
+        "defaults() must match link_service.c's real LINK_BACKOFF_MAX_MS");
+  CHECK(cfg.link.tx_jitter_max_ms == 50u,
+        "defaults() must match link_service.c's real LINK_TX_JITTER_MAX_MS");
+  CHECK(cfg.radio.bandwidth_khz == 125.0f,
+        "defaults() must match e22_radio.cpp's real DefaultProfile() bandwidth_khz");
+  CHECK(cfg.radio.coding_rate_denom == 5u,
+        "defaults() must match e22_radio.cpp's real DefaultProfile() coding_rate_denom");
+  CHECK(cfg.radio.tx_power_dbm == 14,
+        "defaults() must match e22_radio.cpp's real DefaultProfile() tx_power_dbm");
+  CHECK(cfg.radio.preamble_symbols == 8u,
+        "defaults() must match e22_radio.cpp's real DefaultProfile() preamble_symbols");
+  CHECK(cfg.radio.sync_word == 0x12u,
+        "defaults() must match e22_radio.cpp's real DefaultProfile() sync_word "
+        "(RADIOLIB_SX126X_SYNC_WORD_PRIVATE)");
+}
+
+/* Regression test for the P1 this function exists to close: a hazardous
+   config change that is WAITING for confirmation must never let an
+   unrelated write persist its still-unconfirmed value to storage - see
+   boomlink_config_service_get_persistable_config()'s own doc, and
+   protocol_service_on_rx()'s comments in fw/bom-stm32node/App/protocol/
+   protocol_service.c for the real firmware call site this closes a gap
+   in. Reachable with an ordinary two-request sequence (stage a hazardous
+   change, then send an unrelated non-hazardous one before the first is
+   confirmed), not a contrived one. */
+static void test_get_persistable_config_hides_unconfirmed_hazard_values(void) {
+  boomlink_config_service_t svc = make_svc(1000u);
+  svc.current.link.magic        = 0xB0u; /* the real starting value */
+
+  boomlink_ConfigMessage req                      = {0};
+  req.which_message                               = boomlink_ConfigMessage_set_request_tag;
+  req.message.set_request.expected_config_version = 1u;
+  req.message.set_request.has_link                = true;
+  req.message.set_request.link.magic              = 0xC5u; /* hazardous change */
+
+  boomlink_ConfigMessage resp;
+  REQUIRE(handle(&svc, &req, &resp), "setup: a SET always answers");
+  REQUIRE(resp.message.set_response.result ==
+              boomlink_ConfigSetResult_CONFIG_SET_RESULT_PENDING_CONFIRMATION,
+          "setup: a magic change is entirely hazardous");
+
+  boomlink_node_config_t persistable;
+  boomlink_config_service_get_persistable_config(&svc, &persistable);
+  CHECK(persistable.link.magic == 0xB0u,
+        "STAGED: current's hazard subset is still the old value, so persistable must match "
+        "it exactly - got 0x%02X", (unsigned)persistable.link.magic);
+
+  boomlink_config_service_commit_pending_apply(&svc, 1000u);
+  REQUIRE(svc.apply_state == BOOMLINK_CONFIG_APPLY_WAITING, "setup: commit moves to WAITING");
+  CHECK(svc.current.link.magic == 0xC5u,
+        "setup: commit really did move the new value into current");
+
+  /* This is the exact moment the bug lived: an UNRELATED accepted write
+     (e.g. from a different, later request) must not see the unconfirmed
+     0xC5 as what belongs in storage. */
+  boomlink_config_service_get_persistable_config(&svc, &persistable);
+  CHECK(persistable.link.magic == 0xB0u,
+        "WAITING: persistable must report the last CONFIRMED value (0xB0), not current's "
+        "unconfirmed one, got 0x%02X", (unsigned)persistable.link.magic);
+  CHECK(svc.current.link.magic == 0xC5u,
+        "get_persistable_config() must not itself modify current - only its OUTPUT differs");
+
+  /* Once confirmed, persistable and current must agree again - the new
+     value really is permanent now. */
+  boomlink_config_service_confirm_pending_apply(&svc);
+  REQUIRE(svc.apply_state == BOOMLINK_CONFIG_APPLY_IDLE, "setup: confirm moves back to IDLE");
+  boomlink_config_service_get_persistable_config(&svc, &persistable);
+  CHECK(persistable.link.magic == 0xC5u,
+        "IDLE after confirm: persistable must report the now-permanent new value, got 0x%02X",
+        (unsigned)persistable.link.magic);
+}
+
+/* Same scenario, but the hazard times out instead of being confirmed -
+   persistable must have reported the safe (old) value throughout, so
+   nothing needs to change when poll() reverts current in RAM. */
+static void test_get_persistable_config_stays_safe_through_a_timeout_revert(void) {
+  boomlink_config_service_t svc = make_svc(500u);
+  svc.current.general.node_id   = 11u;
+
+  boomlink_ConfigMessage req                      = {0};
+  req.which_message                               = boomlink_ConfigMessage_set_request_tag;
+  req.message.set_request.expected_config_version = 1u;
+  req.message.set_request.has_general             = true;
+  req.message.set_request.general.node_id         = 22u;
+
+  boomlink_ConfigMessage resp;
+  handle(&svc, &req, &resp);
+  boomlink_config_service_commit_pending_apply(&svc, 1000u);
+  REQUIRE(svc.apply_state == BOOMLINK_CONFIG_APPLY_WAITING, "setup");
+
+  boomlink_node_config_t persistable;
+  boomlink_config_service_get_persistable_config(&svc, &persistable);
+  CHECK(persistable.general.node_id == 11u,
+        "WAITING: persistable must report the pre-change node_id, not the unconfirmed 22");
+
+  boomlink_config_service_poll(&svc, 1500u); /* elapsed exactly the 500ms confirm window */
+  REQUIRE(svc.apply_state == BOOMLINK_CONFIG_APPLY_IDLE, "setup: the window boundary must revert");
+  CHECK(svc.current.general.node_id == 11u, "setup: current really did revert to 11");
+
+  boomlink_config_service_get_persistable_config(&svc, &persistable);
+  CHECK(persistable.general.node_id == 11u,
+        "IDLE after revert: persistable must still report 11 - nothing changed, since it "
+        "already reported the safe value the whole time WAITING lasted");
+}
+
+static void test_get_persistable_config_is_null_tolerant(void) {
+  boomlink_node_config_t out;
+  boomlink_config_service_get_persistable_config(NULL, &out);
+  CHECK(out.config_version == 0u, "a NULL service must yield a zeroed config, not a crash");
+
+  boomlink_config_service_t svc = make_svc(1000u);
+  svc.current.general.node_id   = 42u;
+  boomlink_config_service_get_persistable_config(&svc, &out);
+  CHECK(out.general.node_id == 42u,
+        "a real service with nothing pending must be read out faithfully");
 }
 
 static void test_get_config_is_null_tolerant(void) {
@@ -686,6 +1029,44 @@ static void test_set_restores_has_x_even_if_it_started_false(void) {
   CHECK(!svc.current.has_general, "a group NOT written by this SET must be left exactly as it was");
 }
 
+/* Round 8 review: the outer has_X re-assertion the sibling test above
+   covers has a twin one nesting level down that handle_set() did not have
+   until now - `next.detection = req->detection` is a whole-group
+   replacement of DetectionConfig, so it also copies the REQUESTER's
+   has_drone/has_gunshot, and unlike has_general/has_link/has_gnss/
+   has_telemetry above, nothing re-asserted them. A SET that includes
+   DetectionConfig but omits either nested submessage cleared that
+   submessage's presence flag - permanently, since boomlink_node_config_
+   defaults() only runs on a LOAD FAILURE, never merges over a successful
+   decode of a persisted blob that already lost the flag. */
+static void test_set_restores_nested_detection_has_x_even_when_omitted(void) {
+  boomlink_config_service_t svc = make_svc(1000u);
+  svc.current.detection.has_drone   = false;
+  svc.current.detection.has_gunshot = false;
+
+  boomlink_ConfigMessage req                            = {0};
+  req.which_message                                     = boomlink_ConfigMessage_set_request_tag;
+  req.message.set_request.expected_config_version       = 1u;
+  req.message.set_request.has_detection                 = true;
+  req.message.set_request.detection.detection_enabled   = true;
+  /* req.message.set_request.detection.has_drone/has_gunshot deliberately
+     left at their zero-init false - the exact shape of a real requester
+     that never mentions either submessage. */
+
+  boomlink_ConfigMessage resp;
+  bool ok = handle(&svc, &req, &resp);
+
+  REQUIRE(ok, "a SET always answers");
+  CHECK(resp.message.set_response.result == boomlink_ConfigSetResult_CONFIG_SET_RESULT_OK,
+        "DetectionConfig is entirely non-hazardous");
+  CHECK(svc.current.detection.has_drone,
+        "has_drone must be restored even though the requester's own copy left it false");
+  CHECK(svc.current.detection.has_gunshot,
+        "has_gunshot must be restored even though the requester's own copy left it false");
+  CHECK(svc.current.detection.detection_enabled,
+        "the field the requester actually set must still have applied");
+}
+
 static void test_commit_and_revert_both_restore_has_radio(void) {
   /* RadioConfig's VALUE cannot go through the immediate-assignment block
      test_set_restores_has_x_even_if_it_started_false already covers - it
@@ -719,7 +1100,9 @@ static void test_commit_and_revert_both_restore_has_radio(void) {
   svc.current.has_radio = false; /* the REVERT path under test */
   boomlink_config_service_poll(&svc, 1500u); /* elapsed exactly the 500ms confirm window */
   REQUIRE(svc.apply_state == BOOMLINK_CONFIG_APPLY_IDLE, "setup: the window boundary must revert");
-  CHECK(svc.current.radio.frequency_mhz == 0.0f, "setup: revert must have restored the pre-change value");
+  CHECK(svc.current.radio.frequency_mhz == 869.525f,
+        "setup: revert must have restored the pre-change value - boomlink_node_config_"
+        "defaults()'s real default (e22_radio.cpp's DefaultProfile()), not 0.0f");
   CHECK(svc.current.has_radio, "poll()'s WAITING-timeout revert must restore has_radio too");
 }
 
@@ -739,13 +1122,16 @@ static void test_resending_an_unchanged_radio_value_still_restores_has_radio(voi
      gap tested twice. */
   boomlink_config_service_t svc  = make_svc(1000u);
   svc.current.has_radio           = false;
-  /* current.radio defaults to all-zero - request that exact value back. */
+  /* Request current.radio's exact (real, non-zero-default) value back - an
+     all-zero RadioConfig would itself be a real hazardous change against
+     boomlink_node_config_defaults()'s actual defaults, defeating this
+     test's own "unchanged value" premise. */
 
   boomlink_ConfigMessage req                      = {0};
   req.which_message                               = boomlink_ConfigMessage_set_request_tag;
   req.message.set_request.expected_config_version = 1u;
   req.message.set_request.has_radio               = true;
-  req.message.set_request.radio                   = (boomlink_RadioConfig){0};
+  req.message.set_request.radio                   = svc.current.radio;
 
   boomlink_ConfigMessage resp;
   bool ok = handle(&svc, &req, &resp);
@@ -777,6 +1163,7 @@ static void test_handle_rejects_malformed_or_missing_arguments(void) {
 
 int main(void) {
   test_get_returns_only_requested_groups();
+  test_set_over_broadcast_is_rejected_touching_nothing();
   test_set_rejects_stale_expected_version();
   test_non_hazardous_set_applies_immediately_as_a_whole_group();
   test_set_leaves_omitted_groups_untouched();
@@ -791,15 +1178,22 @@ int main(void) {
   test_poll_abandons_immediately_when_confirm_window_is_zero();
   test_poll_reverts_exactly_at_the_window_boundary();
   test_a_conflicting_hazardous_set_while_one_is_pending_is_rejected();
+  test_restating_a_still_unconfirmed_hazard_value_answers_pending_not_ok();
   test_set_rejects_an_attempt_to_change_node_id_to_an_invalid_value();
   test_set_rejects_an_attempt_to_change_magic_past_one_byte();
+  test_set_rejects_an_attempt_to_change_magic_to_zero();
   test_resending_an_unchanged_but_still_unconfigured_node_id_is_not_rejected();
   test_radio_negative_zero_is_not_a_hazardous_change();
   test_radio_nan_does_not_permanently_break_hazard_detection();
+  test_defaults_match_real_hardcoded_values();
+  test_get_persistable_config_hides_unconfirmed_hazard_values();
+  test_get_persistable_config_stays_safe_through_a_timeout_revert();
+  test_get_persistable_config_is_null_tolerant();
   test_get_config_is_null_tolerant();
   test_set_restores_has_x_even_if_it_started_false();
+  test_set_restores_nested_detection_has_x_even_when_omitted();
   test_commit_and_revert_both_restore_has_radio();
   test_resending_an_unchanged_radio_value_still_restores_has_radio();
   test_handle_rejects_malformed_or_missing_arguments();
-  BOOMLINK_TEST_REPORT("config_service_test", 115);
+  BOOMLINK_TEST_REPORT("config_service_test", 189);
 }

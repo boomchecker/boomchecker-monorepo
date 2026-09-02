@@ -35,6 +35,82 @@ void boomlink_node_config_defaults(boomlink_node_config_t *out) {
   out->has_detection    = true;
   out->has_gnss         = true;
   out->has_telemetry    = true;
+  /* Same reasoning one level deeper: DetectionConfig's own two submessages
+     (DroneDetectionConfig/GunshotDetectionConfig) are themselves singular
+     message-type fields, so Nanopb gives THEM a has_X too - and this
+     function already forces has_detection true above for exactly the
+     reason this comment gives for the outer six groups. Left false here,
+     a save() would still encode a real (if empty) DetectionConfig, but
+     silently drop both of ITS submessages instead of their all-zero-but-
+     real values - the identical gap this function exists to close, found
+     one nesting level down. */
+  out->detection.has_drone   = true;
+  out->detection.has_gunshot = true;
+  /* Same "defaults() must agree with the real hardcoded/running value"
+     reasoning as magic/link/radio below, for GeneralConfig's two link-
+     enable flags - true is what actually happens either way, regardless
+     of either field's persisted value: NEITHER receive_enabled nor
+     transmit_enabled is wired to anything today (see the deferred-list
+     item on this - App/link/link_service.c's own s_enabled, the flag that
+     actually gates RX+TX together and defaults true, is a separate
+     runtime switch reachable only from the `link enable`/`link disable`
+     CLI commands, not from this config's loaded value at all; do not read
+     this comment as "receive_enabled controls s_enabled" - it does not,
+     and wiring it naively is a documented trap, not a TODO). Left false
+     before this fix: a fresh node's first ConfigGet reported a node that
+     can neither receive nor transmit, despite demonstrably doing both to
+     answer that very GET - and boomlink.md's own canonical sensor-node
+     and gateway example configs already show both fields true, not the
+     struct's zero-init. This is PR 4 Phase C's own first-ever caller of
+     boomlink_config_store_save() - the last moment this is free to fix,
+     before a wrong default is ever actually written to a real node's
+     flash. */
+  out->general.receive_enabled  = true;
+  out->general.transmit_enabled = true;
+  /* Not left at the zero-init `{0}` gave it: 0 is not a real magic value,
+     it is "this field was never set" - the same distinction node_id draws
+     against BOOMLINK_ADDR_INVALID (also 0) two lines below in spirit, if
+     not in this function's own code. App/link/link_service.c's actual
+     bring-up default (before PR 4 Phase C wired NodeConfig into it at all)
+     was already BOOMLINK_LINKFRAME_MAGIC_DEFAULT, hardcoded there - a fresh
+     node with no persisted config, or one that fails to load, needs
+     defaults() to agree with what bring-up already did, or Phase C wiring
+     this in would silently change a fresh node's magic from 0xB0 to 0. */
+  out->link.magic      = BOOMLINK_LINKFRAME_MAGIC_DEFAULT;
+  /* The same "defaults() must agree with the real hardcoded bring-up value"
+     reasoning as magic above, for LinkConfig's five other fields - config.
+     proto's own doc says this message "mirrors boomlink_link_config_t's
+     five runtime-reconfigurable fields", and App/link/link_service.c's
+     LINK_* macros are that mirror's real values. Left at 0 before this fix:
+     a ConfigGet on a fresh/defaulted node reported ack_timeout_margin_ms=0/
+     max_attempts=0/backoff_min_ms=0/backoff_max_ms=0/tx_jitter_max_ms=0,
+     none of which match what the link engine actually runs with - the
+     exact "reported config lies about the real bring-up value" gap this
+     function's magic fix exists to close, just for five more fields.
+     (Nothing yet applies a LATER change to these fields to the live link
+     engine either - boomlink_link_reconfigure() is never called from this
+     firmware - but that is a separate, documented gap; this fix is only
+     about the DEFAULT value matching reality.) */
+  out->link.ack_timeout_margin_ms = 50u;
+  out->link.max_attempts          = 3u;
+  out->link.backoff_min_ms        = 100u;
+  out->link.backoff_max_ms        = 400u;
+  out->link.tx_jitter_max_ms      = 50u;
+  /* Same reasoning again for RadioConfig - config.proto's own doc says it
+     "mirrors radio_profile_t", and App/radio/e22_radio.cpp's
+     DefaultProfile() is that mirror's real value (the profile radio_init()
+     actually programs into the SX1262 at boot). Pre-existing gap (not
+     introduced by this fix), but now reachable over the air for the first
+     time as of PR 4 Phase C wiring ConfigGet/ConfigSet to a real link, so
+     it gets the same treatment here rather than being left for a later
+     PR to rediscover. */
+  out->radio.frequency_mhz     = 869.525f;
+  out->radio.bandwidth_khz     = 125.0f;
+  out->radio.spreading_factor  = 7u;
+  out->radio.coding_rate_denom = 5u;
+  out->radio.tx_power_dbm      = 14;
+  out->radio.preamble_symbols  = 8u;
+  out->radio.sync_word         = 0x12u; /* RADIOLIB_SX126X_SYNC_WORD_PRIVATE */
 }
 
 void boomlink_config_service_init(boomlink_config_service_t *svc,
@@ -154,11 +230,40 @@ static bool node_id_is_valid(uint32_t node_id) {
 }
 
 static bool magic_is_valid(uint32_t magic) {
-  return magic <= 0xFFu;
+  /* 0 is rejected for the same reason node_id_is_valid() rejects
+     BOOMLINK_ADDR_INVALID (also 0): App/link/link_service.c's
+     link_service_init() treats a configured magic of 0 as "never set,
+     fall back to BOOMLINK_LINKFRAME_MAGIC_DEFAULT" (see that function's
+     own doc). Before this check, a ConfigSet could write magic=0 into
+     `current` - reported back by every later ConfigGet as the node's real,
+     committed magic - while the next reboot would silently run with
+     0xB0 instead, permanently diverging what is persisted/reported from
+     what is actually running. */
+  return magic != 0u && magic <= 0xFFu;
 }
 
-static bool handle_set(boomlink_config_service_t *svc, const boomlink_ConfigSetRequest *req,
+static bool handle_set(boomlink_config_service_t *svc, const boomlink_dispatch_rx_info_t *rx,
+                       const boomlink_ConfigSetRequest *req,
                        boomlink_ConfigMessage *out_response) {
+  /* boomlink.md's own PR 4 notes: "a broadcast ConfigSet must not be added
+     casually because simultaneous responses and coordinated radio-profile
+     changes require a separate design [this codebase] does not have yet."
+     Rejected outright, before anything else in this function - not scoped
+     to hazardous fields only: a non-hazardous broadcast SET still provokes
+     every reachable node to answer at once on one shared channel, and (as
+     of this PR's config-persistence wiring) to independently erase+rewrite
+     its own flash sector, all from a single unauthenticated frame nothing
+     in this protocol yet authenticates. The same pattern boomlink_command_
+     service.c's command_is_dangerous_over_broadcast() uses, applied here
+     to the one remaining unguarded write path that table doesn't cover.
+     ConfigGetRequest is deliberately NOT rejected this way - handle_get()
+     mutates nothing, so this concern does not apply to it. */
+  if (rx != NULL && rx->destination_id == BOOMLINK_ADDR_BROADCAST) {
+    respond_set(out_response, boomlink_ConfigSetResult_CONFIG_SET_RESULT_INVALID,
+               svc->current.config_version);
+    return true;
+  }
+
   if (req->expected_config_version != svc->current.config_version) {
     respond_set(out_response, boomlink_ConfigSetResult_CONFIG_SET_RESULT_VERSION_CONFLICT,
                svc->current.config_version);
@@ -256,6 +361,26 @@ static bool handle_set(boomlink_config_service_t *svc, const boomlink_ConfigSetR
   if (req->has_detection) {
     next.detection     = req->detection;
     next.has_detection = true;
+    /* Same reasoning as boomlink_node_config_defaults()'s own has_drone/
+       has_gunshot fix, one nesting level down: `next.detection = req->
+       detection` is a WHOLE-GROUP replacement, so it copies the
+       REQUESTER's has_drone/has_gunshot too - a request that includes
+       DetectionConfig but omits either nested submessage (the same
+       whole-group-replacement contract this function's own comment above
+       already applies to the six outer groups) clears that submessage's
+       presence flag, and nothing here re-asserts it the way has_general/
+       has_link/has_gnss/has_telemetry above do for themselves. Found by
+       review: a save()/load() round trip after such a SET loses both
+       nested submessages permanently (defaults() only runs on LOAD
+       FAILURE, never merges over a successful decode) - cosmetic today,
+       since every field either submessage holds is currently a real
+       all-zero value either way, but the identical defect class this
+       file has now been patched for at both the outer-group level
+       (this function) and the defaults level (boomlink_node_config_
+       defaults()) - closing it here too rather than leaving the SET path
+       as the one place it can still happen. */
+    next.detection.has_drone   = true;
+    next.detection.has_gunshot = true;
   }
   if (req->has_gnss) {
     next.gnss     = req->gnss;
@@ -286,6 +411,64 @@ static bool handle_set(boomlink_config_service_t *svc, const boomlink_ConfigSetR
   svc->current         = next;
 
   if (!hazard_changed) {
+    /* "No delta" is not always the same claim as "already settled". While
+       WAITING, `current_hazard` above already holds the value an EARLIER
+       request's still-unconfirmed change committed into `current` (see
+       boomlink_config_service_commit_pending_apply()'s own doc) - so a
+       request that explicitly restates that exact value compares equal to
+       it and lands here having genuinely asked for no change, yet the
+       value it named is still reachable by boomlink_config_service_poll()
+       reverting it out from under both requesters PROTOCOL_SERVICE_
+       CONFIRM_WINDOW_MS later (see protocol_service.c) with no further
+       response to either. Answering OK here would tell THIS requester the
+       change is final - the strongest result this protocol has - when it
+       is exactly as unconfirmed as it was before this request arrived.
+       Found by review, reproduced within a single boomlink_link_poll()
+       drain (the same s_confirm_eligible gap protocol_service.c's own
+       comment already names for confirm) and unconditionally reachable by
+       any future caller with a looser confirm policy.
+
+       Checked against `revert_to` (the last CONFIRMED value), not against
+       current_hazard (this function's own hazard_changed baseline, which
+       is exactly the value in question here) - and only for a hazard
+       group this request actually named, not svc->apply_state alone:
+       an unrelated non-hazardous SET arriving during the same WAITING
+       window must still answer OK (see the test covering exactly that),
+       and the naive-looking alternative of comparing requested_hazard
+       against revert_to as hazard_changed's OWN baseline instead was
+       tried and rejected - it turns a plain non-hazardous resend of an
+       untouched hazard field (the mandated GET-edit-SET flow) into a
+       phantom "change" against the OLD pre-stage value, either
+       re-staging something nobody asked to change or answering
+       APPLY_IN_PROGRESS to a request with no hazardous content at all.
+       Comparing against revert_to only here, after hazard_changed has
+       already used the correct baseline to decide there is no real
+       delta, avoids that trap - this is genuinely a second, narrower
+       question ("is the thing that didn't change also unconfirmed?"),
+       not a replacement for the first.
+
+       PENDING_CONFIRMATION here re-enters protocol_service_on_rx()'s own
+       commit/confirm branch, which safely no-ops (boomlink_config_
+       service_commit_pending_apply() only acts from STAGED) but does
+       clear s_confirm_eligible again - a client that keeps restating the
+       still-pending value every tick can therefore hold its own confirm
+       off indefinitely and force a revert. That is the safe direction to
+       err in, not a new hazard: nothing here ever answers OK for a value
+       poll() can still take back. */
+    bool node_id_still_unconfirmed = svc->apply_state == BOOMLINK_CONFIG_APPLY_WAITING &&
+                                     req->has_general &&
+                                     svc->current.general.node_id != svc->revert_to.node_id;
+    bool magic_still_unconfirmed = svc->apply_state == BOOMLINK_CONFIG_APPLY_WAITING &&
+                                   req->has_link &&
+                                   svc->current.link.magic != svc->revert_to.magic;
+    bool radio_still_unconfirmed =
+        svc->apply_state == BOOMLINK_CONFIG_APPLY_WAITING && req->has_radio &&
+        !radio_config_equal(&svc->current.radio, &svc->revert_to.radio);
+    if (node_id_still_unconfirmed || magic_still_unconfirmed || radio_still_unconfirmed) {
+      respond_set(out_response, boomlink_ConfigSetResult_CONFIG_SET_RESULT_PENDING_CONFIRMATION,
+                 svc->current.config_version);
+      return true;
+    }
     respond_set(out_response, boomlink_ConfigSetResult_CONFIG_SET_RESULT_OK,
                svc->current.config_version);
     return true;
@@ -306,7 +489,6 @@ static bool handle_set(boomlink_config_service_t *svc, const boomlink_ConfigSetR
 bool boomlink_config_service_handle(void *user, const boomlink_dispatch_rx_info_t *rx,
                                     const boomlink_ConfigMessage *request,
                                     boomlink_ConfigMessage *out_response) {
-  (void)rx;
   boomlink_config_service_t *svc = (boomlink_config_service_t *)user;
   if (svc == NULL || out_response == NULL || request == NULL) {
     return false;
@@ -316,7 +498,7 @@ bool boomlink_config_service_handle(void *user, const boomlink_dispatch_rx_info_
     case boomlink_ConfigMessage_get_request_tag:
       return handle_get(svc, &request->message.get_request, out_response);
     case boomlink_ConfigMessage_set_request_tag:
-      return handle_set(svc, &request->message.set_request, out_response);
+      return handle_set(svc, rx, &request->message.set_request, out_response);
     default:
       return false;
   }
@@ -413,4 +595,26 @@ void boomlink_config_service_get_config(const boomlink_config_service_t *svc,
     return;
   }
   *out = (svc != NULL) ? svc->current : (boomlink_node_config_t){0};
+}
+
+boomlink_config_apply_state_t boomlink_config_service_apply_state(
+    const boomlink_config_service_t *svc) {
+  return (svc != NULL) ? svc->apply_state : BOOMLINK_CONFIG_APPLY_IDLE;
+}
+
+void boomlink_config_service_get_persistable_config(const boomlink_config_service_t *svc,
+                                                     boomlink_node_config_t *out) {
+  if (out == NULL) {
+    return;
+  }
+  if (svc == NULL) {
+    *out = (boomlink_node_config_t){0};
+    return;
+  }
+  *out = svc->current;
+  if (svc->apply_state == BOOMLINK_CONFIG_APPLY_WAITING) {
+    out->general.node_id = svc->revert_to.node_id;
+    out->link.magic      = svc->revert_to.magic;
+    out->radio           = svc->revert_to.radio;
+  }
 }

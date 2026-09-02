@@ -247,10 +247,16 @@ where it differs from this section's original sketch:
   RadioConfig to also cover `GeneralConfig.node_id`/`LinkConfig.magic` per this section's
   own "two fields need the same hazard treatment" note - a `boomlink_config_hazard_t`
   covering all three as one atomic stage/commit/confirm/revert unit.
-- `App/protocol/` and `App/services/` are therefore not yet added by any PR: Phase C
-  adds a thin call site analogous to Phase C's `App/link/link_service.c/.h` (wiring
-  `boomlink_dispatch_process()` and the two services to real RX bytes, a real send path,
-  and real command actions), not the fuller file lists this section originally sketched.
+- `App/protocol/` (not `App/services/` too - see below) is where Phase C's own thin call
+  site landed, analogous to PR 3 Phase C's `App/link/link_service.c/.h`: a single
+  `protocol_service.h/.c` wiring `boomlink_dispatch_process()` and the two services to
+  real RX bytes, a real send path, and real command actions, not the fuller file lists
+  this section originally sketched. No separate `App/services/` was added - the injected
+  `boomlink_command_ops_t` (radio.h-backed `SelfTest`/`ClearStatistics`/
+  `RequestDiagnostics`, a deferred-reset `Reboot`, `Identify`/`StartDetection`/
+  `StopDetection` left `NULL` - no LED, no detection algorithm) is small enough to live
+  directly in `protocol_service.c`; see PR 4 Phase C's own "what actually landed" note
+  for the full list of what this phase did and did not wire up.
 
 What section 10.1's persistence actually landed as (PR 4 Phase B), where it differs from
 that section's original sketch:
@@ -290,10 +296,11 @@ that section's original sketch:
   (126-127 of 128 per bank) on this dual-bank part, for exactly this). Cross-compiled
   as its own static library
   (`boomlink_flash_storage_port`, defined in `fw/bom-stm32node/CMakeLists.txt` itself,
-  the same isolation `radio_layer` gets) but - like `boomlink_dispatch`/
-  `boomlink_command_service`/`boomlink_config_service` before it - not yet linked into the
-  firmware image: nothing calls `boomlink_config_store_load()`/`_save()` at boot or on a
-  confirmed config write until the same later Phase C call site wires it in.
+  the same isolation `radio_layer` gets) and - like `boomlink_dispatch`/
+  `boomlink_command_service`/`boomlink_config_service` before it - now linked into the
+  firmware image as of PR 4's own Phase C: `protocol_service_load_config()` calls
+  `boomlink_config_store_load()` at boot, falling back to
+  `boomlink_node_config_defaults()` on a missing/invalid save.
 - TrustZone (`HAL_GTZC_MODULE_ENABLED`) is disabled on this board (`Core/Inc/
   stm32h5xx_hal_conf.h`), so `boomlink_flash_storage_port.c` uses the plain
   (non-`_NS`/`_S`) `HAL_FLASH_*`/`HAL_FLASHEx_*` calls rather than needing to pick a
@@ -361,12 +368,15 @@ fw/
 │   │   │   │                          # the four-file sketch this line used to show
 │   │   │   ├── boomlink_radio_port.h/.c   # boomlink_port_t, wired to App/radio/radio.h
 │   │   │   └── link_service.h/.c          # the boomlink_link_t instance + cli.c's call site
-│   │   ├── protocol/                  # not yet added - PR 4's later firmware-wiring
-│   │   │   │                          # phase adds a thin call site here, not the
-│   │   │   │                          # protocol_codec/protocol_dispatcher/envelope_builder
-│   │   │   │                          # split this line used to show; see PR 4 Phase A's
-│   │   │   │                          # "what actually landed" above
-│   │   ├── services/                  # not yet added - same note as protocol/ above
+│   │   ├── protocol/                  # PR 4 Phase C - see that phase's "what actually
+│   │   │   │                          # landed" note above for how this differs from
+│   │   │   │                          # the protocol_codec/protocol_dispatcher/
+│   │   │   │                          # envelope_builder split this line used to show
+│   │   │   └── protocol_service.h/.c      # dispatch + command/config services wired onto
+│   │   │                                  # link_service.c; also owns the injected
+│   │   │                                  # boomlink_command_ops_t (no separate App/
+│   │   │                                  # services/ needed - it is small enough to live
+│   │   │                                  # directly here)
 │   │   └── storage/                   # Phase B - see PR 4 Phase B's "what actually
 │   │       │                          # landed" above for how this differs from
 │   │       │                          # the config_store.c/.h sketch this line used to show
@@ -1799,9 +1809,13 @@ Scope:
   caveat — no sensor readings are wired up yet);
 - implement section 8.3's full command set — Reboot, Identify, SelfTest,
   StartDetection, StopDetection, ClearStatistics and RequestDiagnostics (Phase A:
-  dispatch plus injected `boomlink_command_ops_t` callbacks, one per command; the real
-  actions — NVIC reset, an LED, the detection subsystem — are Phase C's job, against
-  real hardware);
+  dispatch plus injected `boomlink_command_ops_t` callbacks, one per command; Phase C
+  wires the real actions this hardware actually has — a deferred NVIC reset for Reboot,
+  radio.h-backed SelfTest/ClearStatistics/RequestDiagnostics. Identify and
+  StartDetection/StopDetection are left `NULL` — answering `COMMAND_RESULT_UNSUPPORTED`
+  rather than a stub that claims to have tried — because this board has no LED to
+  identify with and no detection algorithm exists yet to start or stop; see Phase C's
+  own "what actually landed" notes below);
 - implement ConfigGet and ConfigSet (Phase A: in-memory `boomlink_config_service_t`,
   including `config_version`/`expected_config_version` conflict handling and the
   revert-on-timeout apply this section already specified for RadioConfig, generalized
@@ -1812,7 +1826,8 @@ Scope:
 - implement safe defaults when stored config is missing/corrupt (Phase B loads them;
   the `boomlink_node_config_defaults()` fallback itself already exists from Phase A);
 - support `usb_forward_enabled` gateway behaviour without a separate firmware build
-  (Phase C).
+  (originally scoped to Phase C; not delivered — see Phase C's own "what actually
+  landed" notes below).
 
 Phase A deliberately does not extend the PR 2 Python/protoc golden-vector cross-check
 (`tests/vectors_spec.py`, hardcoded to `SystemMessage.{ping,pong}` shapes) to the four
@@ -1823,13 +1838,577 @@ phase adds hand-written encode/decode logic for one of these groups, not before.
 
 Acceptance criteria:
 
-- the same binary can boot as different node IDs/roles from persistent config (Phase B);
+- the same binary can boot as different node IDs/roles from persistent config (Phase B,
+  Phase C wires the loaded identity into `link_service_init()`);
 - a detector event reaches a gateway as a typed message (Phase A carries the message;
-  Phase C generates a real one);
+  **not met** — Phase C does not generate a real one, since no detection algorithm
+  exists in this firmware to generate it from; see Phase C's own "what actually landed"
+  notes below);
 - detection parameters can be changed at runtime (Phase A) and persisted (Phase B);
 - ConfigGet reports the active configuration (Phase A, in-memory);
 - stale ConfigSet is rejected using config versioning (Phase A);
 - reboot does not require rebuilding to preserve role/identity (Phase B).
+
+### Phase C — what actually landed
+
+Phase C's own scope, decided once Phase A/B's actual APIs and this board's actual
+hardware were both in hand rather than guessed at up front (the same "decide against
+the real seam, not the sketch" approach PR 3's own Phase C took — section 4):
+
+- `App/protocol/protocol_service.c/.h` — the thin firmware call site wiring
+  `boomlink_dispatch_t` plus the command and config services onto the link engine
+  `App/link/link_service.c` already brings up, analogous to that file's own role for
+  the link engine one PR earlier;
+- boot-time config load — `protocol_service_load_config()` calls
+  `boomlink_config_store_load()` against the real flash port before
+  `link_service_init()`, falling back to `boomlink_node_config_defaults()` on a
+  missing/invalid save (section 10.1's own fallback rule);
+- config persistence on an actual write — `protocol_service_on_rx()` calls
+  `boomlink_config_store_save()` immediately whenever a `ConfigSet` is accepted
+  (`OK` or `PENDING_CONFIRMATION` - both mean at least the non-hazardous fields
+  already applied to `current`, independent of whether the response reaches the
+  requester), and again once a hazardous field is CONFIRMED (not at commit, and
+  not on an abandoned/reverted stage - see that function's own comment). Persisting
+  on `PENDING_CONFIRMATION` too, not only `OK`, matters for a request that bundles a
+  non-hazardous field with a hazardous one: without it, a hazardous field that later
+  times out unconfirmed would leave the non-hazardous field applied and reported by
+  every `ConfigGet` for the rest of the session, but never actually written to
+  flash - silently lost on the next reboot with no indication to the operator (found
+  by review, not by any test written alongside the original persistence fix).
+  `boomlink_config_store_save()` had no caller anywhere in the firmware before this
+  phase's review, silently contradicting this section's own "persist validated
+  NodeConfig to flash" scope item and PR 4's stated acceptance criteria;
+- what actually gets persisted is `boomlink_config_service_get_persistable_config()`,
+  not `current` directly — a later review round found that persisting `current`
+  verbatim on *any* accepted `ConfigSet` (the bullet above), while a hazardous field
+  from an *earlier* request is still `WAITING` for confirmation, writes that earlier
+  field's in-flight, unconfirmed value to flash. If the hazard later times out,
+  `boomlink_config_service_poll()`'s revert only rewinds `current` in RAM — flash was
+  never rewritten — so the node reboots into a hazardous `node_id`/`magic`/`radio`
+  value nobody ever confirmed, with `ConfigGet` having reported the safe value the
+  whole time: exactly the "a working radio with a silent link" failure section 8.2
+  itself warns about, just reached via flash instead of RAM. The straightforward-
+  looking fix (skip the persist above whenever `apply_state != IDLE`) was tried and
+  rejected during review: it silently drops the *non-hazardous* half of a bundled
+  request instead, reintroducing the first bullet's bug in a wider form. The actual
+  fix keeps `current` as the source for persistence but overrides its hazard subset
+  (`general.node_id`/`link.magic`/`radio`) back to `revert_to`'s last-confirmed-safe
+  values for the duration of `WAITING` only — `IDLE` and `STAGED` need no override,
+  `current`'s hazard fields are already correct there. `protocol_service.c`'s
+  `persist_current_config()` is the only persistence call site and now goes through
+  this accessor exclusively, so there is no second path that could still persist
+  `current` raw;
+- a `ConfigSet` addressed to `BOOMLINK_ADDR_BROADCAST` is refused outright
+  (`CONFIG_SET_RESULT_INVALID`, touching nothing - not even a non-hazardous field)
+  in `boomlink_config_service_handle()` itself - the twin of the command service's
+  broadcast-danger table, for the one write path that table doesn't cover. This
+  section already flagged the general risk ("a broadcast `ConfigSet` must not be
+  added casually") before this PR existed; the guard was still missing when review
+  found it, and the config-persistence wiring above turned the gap from "every node
+  updates its in-RAM config from one frame" (annoying) into "every reachable node
+  independently erases and rewrites its own flash sector from one unauthenticated
+  frame" (a real fleet-wide flash-wear vector) before this fix closed it;
+- `link_service_init()` extended to accept the loaded `node_id`/`magic` instead of
+  always deriving/hardcoding them, with the UID-derivation and
+  `BOOMLINK_LINKFRAME_MAGIC_DEFAULT` fallbacks it already had kept for an unconfigured
+  or out-of-range value (see that function's own doc comment) - and `cli.c` feeds the
+  resolved `link_service_node_id()` back into `loaded_config.general.node_id` before
+  `protocol_service_init()` sees it, so `ConfigGet` reports the address a never-
+  configured node is actually alive and answering on rather than the `0x00000000`
+  `boomlink_node_config_defaults()` otherwise leaves there - the canonical first thing
+  an operator or provisioning tool asks a fresh node for, found missing by review;
+- a decided, documented interpretation of section 8.2's revert-on-timeout "confirmed"
+  step, which that section deliberately leaves to integration: this phase commits a
+  staged hazardous change as soon as its `PENDING_CONFIRMATION` response is queued for
+  send (not once actually on the air — see `protocol_service_on_rx()`'s own comment for
+  why), and confirms it on the next request/response exchange completed with any peer
+  — but never within the same `boomlink_link_poll()` RX drain the commit itself
+  happened in, so a burst of already-buffered frames can't complete the whole
+  stage→commit→confirm cycle before a single bit of the response has actually gone
+  out (a one-superloop-tick eligibility delay closes that specific gap; see that
+  comment for the mechanism). Honestly incomplete even so, and documented as such at
+  the call site: this firmware has no live radio/node_id/magic reconfiguration
+  (`App/radio/radio.h` has no setter, and `boomlink_link_reconfigure()` explicitly
+  excludes node_id/magic), so a hazardous change only ever takes effect on the *next*
+  boot's config load — this phase's "confirmation" proves the current, pre-change
+  session is still reachable, not that the new profile will still work after that
+  reboot;
+- real command actions for the hardware this board actually has: `Reboot` arms a
+  deferred `HAL_NVIC_SystemReset()` (never synchronous — see
+  `boomlink_command_service.h`'s own doc on why), `SelfTest`/`ClearStatistics`/
+  `RequestDiagnostics` are backed by `App/radio/radio.h`'s existing stats/readiness API;
+- every Phase A/B library (`boomlink_dispatch`, `boomlink_command_service`,
+  `boomlink_config_service`, `boomlink_config_store`, `boomlink_flash_storage_port`,
+  and transitively `boomlink_storage_port`) is now actually linked into
+  `bom-stm32node.elf`, not merely cross-compiled — CI's build workflow gained a
+  matching "actually linked in" symbol check - six symbols for the five libraries
+  (`boomlink_config_store` gets two, `_load` and `_save`, since `_save` having no
+  caller anywhere in the firmware is exactly the gap this phase's review found and
+  fixed - `_load` alone being linked proved nothing about `_save`, the two do not
+  share a translation-unit-level linker guarantee under this target's
+  `-ffunction-sections`/`--gc-sections` build), the same class of check PR 3 Phase C
+  added for the link engine;
+- `Reboot` is rejected (`COMMAND_RESULT_FAILED`, without ever calling the real
+  action) when addressed to the broadcast address — section 9.9's "commands that are
+  dangerous when broadcast should be rejected by the application service", enforced
+  in `boomlink_command_service_handle()` itself now that Phase C gives `Reboot` a real
+  effect to guard;
+- `boomlink_node_config_defaults()`'s magic/LinkConfig/RadioConfig values now match
+  the real hardcoded bring-up values they mirror (`link_service.c`'s `LINK_*`
+  constants, `e22_radio.cpp`'s `DefaultProfile()`), and `magic == 0` is rejected as a
+  `ConfigSet` target the same way `node_id`'s reserved values already were — closing
+  the same "defaults/validation don't agree with the real running value" gap the
+  `magic` default fix started with, for every field with a real hardcoded
+  counterpart, not just that one;
+- the same defaults/reality gap, found again by a later review round in the one
+  remaining place it was still open: `boomlink_node_config_defaults()` left
+  `general.receive_enabled`/`general.transmit_enabled` at Nanopb's `false` zero
+  value, while `link_service.c` hardcodes `s_enabled = true` — so `ConfigGet` on a
+  never-configured node reported a link that looked administratively disabled when
+  it was actually up and answering. Fixed to default both to `true`, matching
+  `link_service.c`'s real value the same way the `magic`/`LinkConfig`/`RadioConfig`
+  fix above does. This PR is the first firmware ever able to write `NodeConfig` to
+  flash at all (`boomlink_config_store_save()` had zero callers before Phase C's own
+  persistence fix above), so a wrong default here would otherwise have shipped and
+  then been persisted as the fleet's baseline. `detection.has_drone`/
+  `detection.has_gunshot` — the two nested submessages' own Nanopb presence flags,
+  one level below the six top-level `has_X` flags this file already forces true —
+  got the same treatment alongside it: cosmetic today since every field in both
+  submessages is still zero either way, but the same recurring defect class this
+  file has needed patching for more than once;
+- a broadcast response no longer requests a link-layer ACK — `protocol_service_
+  on_rx()` previously passed `request_ack = true` unconditionally to
+  `boomlink_link_send()`, so even a `ConfigSet`/`CommandRequest` this same function
+  rejects for being broadcast (the two bullets above and section 9.9's danger-table
+  guard) still cost the node one ACK-requested response, retried up to
+  `LINK_MAX_ATTEMPTS` times with backoff if unacknowledged — as did a broadcast
+  `ConfigGet` legitimately answered per-peer. That directly worked against the
+  "several nodes may reply to the same broadcast at once" reasoning the broadcast
+  guards themselves give (section 9.7): the more nodes on the same broadcast, the
+  more of them independently retry an ACK nothing was ever going to send, for a
+  frame whose destination was never a single peer to begin with. Fixed by setting
+  `request_ack = destination_id != BOOMLINK_ADDR_BROADCAST` at the one call site —
+  this closes the broadcast-specific retry amplification only, not general inbound
+  rate limiting (see "no per-peer rate limiting" below, still open);
+- a `Reboot` can no longer confirm-and-persist a hazardous change it is about to
+  make unreachable — `cmd_reboot()` arms the deferred reset before `protocol_
+  service_on_rx()` reaches its own commit/confirm branch (the response is still
+  being built), so if a DIFFERENT, still-`WAITING` hazardous change happened to be
+  outstanding, that Reboot's own response counted as "the next exchange" the whole
+  mechanism above treats as confirmation — confirming and persisting the new,
+  unconfirmed value moments before the node reset onto it, with `PROTOCOL_SERVICE_
+  CONFIRM_WINDOW_MS`'s revert-on-timeout never getting a chance to run. Whether an
+  in-flight hazardous change survived a Reboot arriving inside its confirm window
+  depended purely on which superloop tick's RX drain the Reboot landed in, with
+  nothing operator-visible telling the two outcomes apart — reaching exactly the
+  "stranding a remote node on a profile nobody else uses" failure section 8.2's own
+  revert-on-timeout design names as the reason it exists, by the one route (a real
+  hardware reset) that mechanism categorically cannot outrun once armed. Fixed by
+  adding `!s_reboot_armed` to the confirm branch's condition: once a reboot is
+  armed, this node is resetting in `PROTOCOL_SERVICE_REBOOT_DELAY_MS` regardless, so
+  skipping the confirm simply lets the pending change revert to the value already on
+  flash — the same outcome a timeout would have produced, made deterministic instead
+  of a drain-timing coin flip;
+- restating the exact value of a hazardous field that is still `WAITING` for
+  confirmation now answers `PENDING_CONFIRMATION`, not `OK` — `handle_set()`
+  compares a request's hazard subset against `current`'s, and `current` already
+  holds an earlier request's committed-but-unconfirmed value once `WAITING` (see
+  `boomlink_config_service_commit_pending_apply()`'s own doc), so a request that
+  simply repeats that exact value — the mandated GET-edit-SET flow would produce
+  exactly this if an operator re-read the node right after the first response and
+  resent the group unedited — compared equal and fell through to `OK`: the
+  strongest result this protocol has, for a value `boomlink_config_service_poll()`
+  could still revert out from under the requester moments later with no further
+  response to say so. Fixed by checking each hazard field the request actually named
+  against `revert_to` (the last CONFIRMED value) rather than `current` in this one
+  narrower spot, once `hazard_changed` has already used the correct baseline to
+  decide there is no real delta — the naive-looking alternative of using `revert_to`
+  as `hazard_changed`'s own baseline throughout was tried and rejected, since it
+  turns a plain non-hazardous resend of an untouched hazard field into a phantom
+  "change" against the stale pre-stage value. A side effect worth naming: this
+  re-enters `protocol_service_on_rx()`'s commit/confirm branch, which safely no-ops
+  but does clear `s_confirm_eligible` again, so a client that keeps restating the
+  still-pending value every tick can hold its own confirm off indefinitely and force
+  a revert — the safe direction to err in, not a new hazard, since nothing here ever
+  answers `OK` for a value `poll()` can still take back;
+- the CI "actually linked in" symbol check (see the bullet on it below) now also
+  covers `boomlink_config_service_get_persistable_config()`/`commit_pending_apply()`/
+  `apply_state()`/`confirm_pending_apply()`/`poll()` — each has exactly one call site
+  in the whole firmware, all inside `protocol_service.c`'s stage→commit→confirm→
+  revert→persist wiring, so a silently-deleted call site (most importantly the
+  hazard-safe persist accessor the first Phase C review fix above added) would
+  otherwise compile and link clean and pass every existing check with nothing here
+  noticing — verified by sabotage: reverting `persist_current_config()` to call the
+  plain `boomlink_config_service_get_config()` still links clean under `--gc-sections`
+  with the new accessor gone from the ELF entirely, and every check that predates
+  this one still green;
+- `handle_set()` now re-asserts `detection.has_drone`/`detection.has_gunshot` the same
+  way it already does for `has_general`/`has_link`/`has_gnss`/`has_telemetry` — the
+  round 6 fix that forces both true in `boomlink_node_config_defaults()` has a twin
+  gap one call site later: `next.detection = req->detection` is a whole-group
+  replacement, so it also copies the REQUESTER's own (possibly unset) nested
+  presence flags, and unlike the four outer groups nothing re-asserted them here.
+  A `ConfigSet` naming `DetectionConfig` while omitting either nested submessage
+  cleared that flag permanently — `boomlink_node_config_defaults()` only runs on a
+  LOAD FAILURE, never merges over a successful decode, so a `save()`→`load()` round
+  trip after such a SET lost both nested submessages for good. Cosmetic today (every
+  field either submessage holds is currently all-zero regardless), but the identical
+  defect class this file has now been patched for at both the defaults level and the
+  SET level, found by review rather than by the test suite (the existing coverage
+  for this pattern, `test_set_restores_has_x_even_if_it_started_false`, only reached
+  the six outer groups — closed alongside the fix with a sibling test one nesting
+  level down);
+- `test_defaults_match_real_hardcoded_values()` now checks all ten of the
+  LinkConfig/RadioConfig fields `boomlink_node_config_defaults()` documents matching
+  real hardware, not just the four fields added when that test was first written —
+  sabotage-proven gap: zeroing all ten (`ack_timeout_margin_ms`/`max_attempts`/
+  `backoff_min_ms`/`backoff_max_ms`/`tx_jitter_max_ms`/`bandwidth_khz`/
+  `coding_rate_denom`/`tx_power_dbm`/`preamble_symbols`/`sync_word`) and rebuilding
+  still passed every test in the suite, including that one — a coverage gap only
+  (every value was still correct; nothing was reading these fields incorrectly),
+  closed alongside the two fixes above rather than left for a later round to
+  rediscover;
+- a `Reboot` whose own response fails to even reach the TX queue no longer resets
+  the node anyway — found by an external automated PR reviewer, not one of this
+  PR's own review rounds. `cmd_reboot()` runs synchronously deep inside
+  `boomlink_dispatch_process()`, before `protocol_service_on_rx()` has tried to
+  encode or queue that same request's own response, so it has no way to know
+  whether that will succeed - an encode failure, no link, or the send itself being
+  rejected outright used to still leave the deferred reset armed, resetting the
+  node `PROTOCOL_SERVICE_REBOOT_DELAY_MS` later with the requester never told a
+  Reboot happened at all. Fixed with `disarm_reboot_if_just_armed()`, called from
+  each of those three failure paths with the value `s_reboot_armed` held BEFORE
+  dispatch ran, so it only ever un-arms THIS call's own Reboot request, never a
+  different, legitimately still-pending one an earlier request armed. This is
+  narrower than the already-deferred pipeline-occupancy race (see that item,
+  below): it covers the response never reaching the queue at all, not one that
+  queues fine and then loses a race with an occupied pipeline, which still needs
+  the correlation signal that item describes and remains open;
+- a boot-time HardFault, found on real hardware rather than by code review -
+  every board built from this PR through the first hardware bring-up attempt
+  crashed before USB ever enumerated. `Core/Src/main.c` used to enable the
+  STM32H563's instruction cache (`ICACHE`) immediately after peripheral init,
+  before `usb_cli_start()` - which reaches `link_service_init()`, which reads
+  the chip's factory UID (`HAL_GetUIDw0()`/`w1()`/`w2()`) from `UID_BASE`
+  (`0x08FFF800`) for both `App/link/link_service.c`'s `derive_node_id()`/
+  `derive_session_id()` fallbacks and `App/link/boomlink_radio_port.c`'s PRNG
+  seed - the only three call sites of those HAL functions anywhere in this
+  firmware, all reached exactly once, synchronously, at this same point in
+  boot, never again afterwards. With the cache enabled first, that read
+  HardFaulted: a precise BusFault at `BFAR == UID_BASE`, identical on two
+  independently flashed boards. SWD forensics (halting over the debug probe,
+  reading fault registers, then reading the same address directly via the
+  probe's own AHB-AP access) confirmed the address and its data are real and
+  valid - the probe's read succeeds and returns plausible UID/flash-size data
+  - so the fault is specific to the CPU's own cached access, not the address:
+  a burst line-fill transaction this OTP-style info block's controller
+  apparently does not answer the same way a debug probe's single AHB read
+  does. Fixed by moving the `ICACHE` enable to after `usb_cli_start()` rather
+  than before it - the mic-streaming path the cache exists for (see that
+  code's own comment on the PDM->PCM DSP timing budget) only ever starts
+  later, on demand, via the `stream`/`streamtest` CLI commands issued once
+  the board is already up, so deferring the enable this far costs nothing
+  that budget needs, and every UID read this firmware ever does happens
+  before it now runs. Not independently re-verified on hardware by this same
+  round of review - the fix follows directly from the reported fault
+  registers and call graph, but confirming it actually clears the HardFault
+  needs a real board.
+
+Deliberately deferred, not silently dropped:
+
+- **`Identify`'s LED indication** — this board has no LED pin wired for it (checked
+  against `main.h`/`gpio.h`/`gpio.c`/the CubeMX `.ioc`); the command answers
+  `COMMAND_RESULT_UNSUPPORTED` (a `NULL` ops callback) rather than a stub pretending to
+  have tried;
+- **`StartDetection`/`StopDetection`'s real effect** — no detection algorithm exists
+  yet over the PDM/PCM audio pipeline for these to start or stop; same `NULL`/
+  `UNSUPPORTED` treatment as Identify;
+- **a real `DetectionEvent` generator** — the acceptance criterion above is explicitly
+  not met for the same reason;
+- **`usb_forward_enabled` gateway/relay behaviour** — zero existing hooks between the
+  USB CDC path and the link engine; this would be a new feature, not a wiring task, and
+  was originally scoped to this phase before that became clear;
+- **live node_id/magic reconfiguration** — no such capability exists anywhere in this
+  firmware (see the "confirmed" note above); a hazardous change to either is real and
+  persisted, but only takes effect on the node's next reboot, via `protocol_service_
+  load_config()` feeding the new value into `link_service_init()`;
+- **RadioConfig reconfiguration at all, live or on reboot** — a stricter gap than
+  node_id/magic's: `radio_init()` (`App/radio/radio.h`) takes no parameters and always
+  programs `e22_radio::DefaultProfile()`'s fixed values, so a persisted RadioConfig
+  change is real and reported by `ConfigGet`, but has no code path that ever applies it
+  to the actual radio, on this boot or any future one, until a later PR adds a setter;
+- **most `TelemetryReport` fields** — no hardware backs them yet (no uptime counter, no
+  ADC sampling loop, no GNSS parsing); telemetry stays schema-and-dispatch-recognition
+  only, the same state Phase A left it in.
+- **LinkConfig's five retry-policy fields are not applied to the live link engine** —
+  `ack_timeout_margin_ms`/`max_attempts`/`backoff_min_ms`/`backoff_max_ms`/
+  `tx_jitter_max_ms` are accepted by `ConfigSet` and reported by `ConfigGet` (their
+  defaults now match `link_service.c`'s real hardcoded values, fixed alongside the
+  `magic` default), but nothing calls `boomlink_link_reconfigure()` — a `ConfigSet`
+  touching one of them answers `OK` immediately (they are non-hazardous) while the
+  running link engine's actual retry behaviour stays unchanged. Wiring
+  `boomlink_link_reconfigure()` into the config response path is a reasonable next
+  step, not attempted here to keep this phase to wiring rather than adding a new
+  live-reconfiguration path late in review.
+- **Four more `GeneralConfig` fields are accepted, persisted, and reported, but never
+  applied** — `receive_enabled`/`transmit_enabled`/`default_destination_id`/
+  `promiscuous_monitor_enabled` join `RadioConfig`'s seven and `LinkConfig`'s five
+  above in this same "wiring not yet done" state; an audit of all 21 `NodeConfig`
+  leaf fields found exactly 2 (`general.node_id`, `link.magic`) with any code path
+  that ever applies them, and only on the next boot. `receive_enabled`/
+  `transmit_enabled` are the sharper case of the four: round 6 fixed only their
+  DEFAULT (a fresh node no longer reports itself administratively deaf), but a
+  `ConfigSet` explicitly writing either still answers `OK`, persists, and is reported
+  back forever with no code path ever consulting it — `App/link/link_service.c`'s
+  `s_enabled` (the flag that actually gates RX+TX together) is a separate runtime
+  switch reachable only from the `link enable`/`link disable` CLI commands, not from
+  loaded config at all. **Do not wire `receive_enabled` to `link_service_set_enabled()`
+  at boot without a recovery path first** — this was reviewed as the obvious next fix
+  and rejected: `link_service_set_enabled(false)` makes `link_service_process()` skip
+  `boomlink_link_poll()` entirely (RX *and* TX - `link_service.h`'s own doc), so a
+  node whose loaded config has `receive_enabled=false` could never again receive
+  anything to turn it back on. Reproduced end to end: one unicast `ConfigSet{
+  receive_enabled=false}` (accepted immediately, `OK`, persisted - it is NOT in
+  `boomlink_config_hazard_t`, so there is no staging and no revert-on-timeout the way
+  `node_id`/`magic` at least get) followed by one unicast `Reboot` is enough to
+  produce a node that is permanently off-air on the very next boot, recoverable only
+  via the USB CLI's non-persistent `link enable` (needed again every boot) or an SWD
+  erase of the config region. Two unauthenticated unicast frames turning a "wiring
+  gap" into a brick is exactly the class of naive fix rounds 6 and 7 already caught
+  and rejected elsewhere in this same review process - documented here instead so a
+  future round does not rediscover the trap by implementing it. `transmit_enabled`
+  cannot be wired this way at all, independently of `receive_enabled` - `s_enabled`
+  has no separate TX gate. `default_destination_id`/`promiscuous_monitor_enabled`
+  have no consumer anywhere in this firmware to wire in the first place (the former
+  is read only by this file's own tests; the latter is named in one comment in
+  `boomlink_linkframe.h` and nowhere else) - accepted-and-unapplied is correct for
+  both today, not merely undone.
+- **No per-peer rate limiting on inbound requests** — a burst of `CommandRequest`s
+  (or `ConfigSet`s) from one or more peers can fill the link engine's TX queue with
+  HIGH/NORMAL-priority, ACK-requested responses, each retried up to
+  `LINK_MAX_ATTEMPTS` times with backoff if unacknowledged; with the pipeline
+  single-flight and stop-and-wait, this can starve unrelated NORMAL-priority traffic
+  (an operator's `link ping`, a legitimate `ConfigSet` response) for several seconds.
+  A real mitigation (per-peer/per-command rate limiting) is a new feature, not a
+  wiring task, and is left for whichever phase first needs to defend against it.
+- **No dedup/debounce on repeated `ConfigSet`s persisting to flash** — `handle_set()`
+  answers `OK` (or `PENDING_CONFIRMATION`) for any accepted, version-matched write,
+  including one that changes nothing (every field resent identical to `current`, or
+  even a request with no groups present at all), and `protocol_service_on_rx()`
+  persists on every such acceptance; `boomlink_config_store_save()` always erases and
+  rewrites the whole reserved region, never an incremental update. The broadcast
+  guard above closes the single-frame, fleet-wide version of this risk, but a
+  legitimate (or misbehaving) unicast peer resending the same `ConfigSet` repeatedly
+  - a monitoring tool reconciling "desired state" every few seconds is a realistic,
+  non-malicious way this could happen - can still drive one node's two reserved
+  flash sectors toward their erase/program cycle limit well before the rest of the
+  board's service life, silently and with no diagnostic signal (the save's return
+  value is intentionally ignored, matching this codebase's own "no bring-up retry"
+  posture elsewhere). A real fix (comparing against the last-persisted snapshot
+  before writing) needs a field-by-field comparison to be safe (a raw `memcmp` risks
+  both false negatives from struct padding and false positives from `float`
+  representation - e.g. `+0.0f`/`-0.0f`, the exact case `boomlink_config_service.c`'s
+  own hazard-comparison logic already special-cases) - real engineering, not a
+  one-line wiring fix, and left for a phase that needs to defend against it.
+- **`persist_current_config()` blocks the superloop for the duration of a flash
+  erase+program, synchronously inside the RX path** — `boomlink_config_store_save()`
+  erases both reserved 8K sectors before writing (`App/storage/
+  boomlink_flash_storage_port.c`'s `HAL_FLASHEx_Erase()`/`HAL_FLASH_Program()`),
+  with no documented duration bound anywhere in this codebase, called from
+  `protocol_service_on_rx()` which is itself called synchronously from
+  `boomlink_link_poll()`'s RX drain. Nothing else in the firmware's superloop -
+  notably `radio_process()`, the only place that services the SX1262 - runs again
+  until that call returns, and `boomlink_link.h`'s own `ack_timeout_margin_ms` doc
+  names "superloop latency at both ends" as exactly the kind of delay it is meant to
+  budget for, which this path was never checked against. Worse during the traffic
+  pattern this design is built around (section 9.7's "several nodes detect one
+  event" burst is also when the RX ring is likeliest to hold more than one accepted
+  `ConfigSet` in a single drain, triggering more than one blocking erase before
+  `radio_process()` runs again). Not rated a blocking defect for this bring-up phase
+  - the codebase already tolerates and counts some burst loss via `rx_overruns`/retry
+  - but a real fix (deferring the actual flash write to `protocol_service_process()`
+  via a pending-save flag, rather than performing it synchronously in the RX
+  callback) is worth doing before this firmware carries real field traffic, and is
+  left for a phase that revisits the persistence path with that in mind.
+- **A `ConfigSet` that also happens to be the confirming exchange for a pending
+  hazardous change costs two full erase+program cycles, the first provably
+  redundant** — `protocol_service_on_rx()` persists once when the write is accepted
+  (`is_accepted_config_write`) and again, moments later in the same call, once
+  `confirm_pending_apply()` finalizes it. When the confirming write is ITSELF
+  hazardous (SAME request), the two writes are byte-identical (as originally
+  measured here) - `get_persistable_config()` already falls back to the same
+  `revert_to` values for both, so the first write is pure waste. A later review
+  round found the two writes are NOT always identical: a plain NON-hazardous
+  `ConfigSet` arriving while a DIFFERENT, earlier hazard is `WAITING` can also
+  BE the confirming exchange (any accepted write counts, not only a hazardous
+  one - see the commit/confirm design bullet above), and in that case the first
+  write persists the old, safe hazard subset (`get_persistable_config()`'s
+  `revert_to` override, correctly, since the hazard was still unconfirmed at that
+  point) while the second persists the newly-confirmed one - two DIFFERENT,
+  both individually-correct snapshots, not a redundant repeat. Either way the
+  count of erase+program cycles is the same (4 sector erases instead of the 2 a
+  single write needs, against the real geometry: `boomlink_flash_storage_port.c`'s
+  two 8 K sectors, a `boomlink_NodeConfig` payload of 145 bytes plus a 16-byte
+  header, nowhere near filling even one sector), doubling both the flash-wear cost
+  of this one request and the already-documented superloop-blocking window above -
+  only the "always redundant" framing needed correcting, not the wear/blocking
+  cost itself. The natural fix (coalescing both writes behind the same deferred
+  pending-save flag the superloop-blocking bullet above already proposes) closes
+  this for free either way, redundant repeat or two-different-correct-snapshots,
+  rather than needing its own separate mechanism.
+- **`PROTOCOL_SERVICE_REBOOT_DELAY_MS`'s fixed delay assumes the reboot response
+  clears the TX pipeline in time** — it only accounts for the response's own airtime
+  plus scheduling slack, not for an unrelated frame already occupying the
+  single-flight pipeline when the response is queued (which can hold it for longer
+  than the fixed delay under `LINK_MAX_ATTEMPTS`/backoff). A node can therefore still
+  reset before its own Reboot response reaches the air in that case — the same race
+  the deferred-reset design exists to close, just not for every possible pipeline
+  state. Fixing this properly needs the pipeline-occupancy signal
+  `boomlink_link_tx_done_fn`'s own doc says isn't available as a per-frame
+  correlation handle before the fact (see `protocol_service_on_rx()`'s comment on the
+  identical limitation for config commit/confirm); left as a known gap rather than
+  guessed at. One concrete, DETERMINISTIC instance of this same gap, not merely
+  probabilistic: `protocol_service_process()` runs unconditionally regardless of the
+  USB CLI's `link disable` state, so an armed Reboot still resets the node
+  `PROTOCOL_SERVICE_REBOOT_DELAY_MS` later even though `link_service_process()` can
+  no longer service TX at all while disabled — the response is guaranteed, not
+  merely likely, to never reach the air in that case. A narrower, sharper failure
+  mode in the same family - the response failing to reach the TX queue AT ALL
+  (encode failure, no link, or the send itself rejected outright, as opposed to
+  queuing fine and then racing the pipeline) - is fixed: `cmd_reboot()` arms the
+  reset before `protocol_service_on_rx()` has even tried to encode or queue that
+  same request's own response, with no way to know whether that will succeed, so
+  every one of those failure paths used to still reset the node with the requester
+  never told a Reboot happened at all. `disarm_reboot_if_just_armed()`, called from
+  each such path with the pre-dispatch value of `s_reboot_armed` to tell "this
+  call's own Reboot" apart from an unrelated one an earlier request legitimately
+  armed, un-arms it in exactly that case. The pipeline-occupancy race above - queued
+  successfully, then delayed - remains open for the reason already given;
+- **`App/protocol/protocol_service.c`'s stage→commit→confirm wiring has no automated
+  regression test** — the whole file is ARM/HAL-dependent (no host-testable seam;
+  `fw/bom-stm32node` has no host test directory), so `s_confirm_eligible`'s same-tick
+  race fix, the two `persist_current_config()` call sites, the deferred-reboot
+  timer, and round 7's `!s_reboot_armed` confirm guard are all verified only by
+  cross-compilation succeeding plus manual/reviewer tracing - a regression in any of
+  them (e.g. dropping the line that clears `s_confirm_eligible` on commit, or the
+  `!s_reboot_armed` clause itself) would fail no build, no CI symbol-linkage check,
+  and no test. Confirmed by deliberately reintroducing both exact regressions during
+  review, in two different rounds: the firmware still built and linked cleanly each
+  time, and for `!s_reboot_armed` specifically, the CI symbol-linkage check this
+  same round extended to cover five more `boomlink_config_service_*` entry points
+  still passed too - that check is structurally the wrong tool for this one, since
+  it can only detect a deleted call site, never a weakened condition guarding an
+  existing one. A minimal host-testable extraction of the commit/confirm-eligibility
+  state machine (the same "keep target-specific glue thin, put the logic somewhere
+  host-testable" split this file itself follows for dispatch/command/config service)
+  would close this; left as a tracked, deliberate gap rather than a silent one.
+- **When a Detection/Telemetry/System handler is ever wired** (`on_detection`/
+  `on_telemetry`/`on_system` are all `NULL` today - see this phase's own "what
+  actually landed" notes), **evaluate whether it needs the same dangerous-over-
+  broadcast treatment Command/Config now have** - nothing today is at risk (a `NULL`
+  handler only counts the message, per `boomlink_dispatch_process()`'s own doc), but
+  the day a Detection or Telemetry handler does more than count on receipt (logs to
+  flash, drives an alarm/relay), an unauthenticated broadcast frame could trigger
+  that side effect fleet-wide from one packet - the identical shape of hazard this
+  phase closed for `Reboot`/`ClearStatistics`/`ConfigSet`.
+- **`config_version` is not strictly monotonic across a reboot, and can briefly
+  label two different configurations at once** — section 8.2's "monotonically
+  increasing `config_version`" is only bumped in RAM by `boomlink_config_service_
+  poll()`'s revert-on-timeout (never persisted), so a version handed out just before
+  a power loss can be reissued after reboot for a DIFFERENT configuration than the
+  one a client cached it against (reproduced: RAM v=3/`node_id=A` before a revert,
+  flash still v=2/`node_id=B` after it, and a client that cached v=3 while a hazard
+  was `WAITING` was looking at a version that meant one thing in RAM and another on
+  flash for the length of that window). Investigated as a possible P1/P2 during
+  review and downgraded once actually reproduced: `config_version` is never
+  persisted AHEAD of the config it labels (only equal to or behind it), so a
+  reboot's `expected_config_version` check can only ever reject a stale-looking
+  write more often than strictly needed (a spurious `VERSION_CONFLICT`, not a
+  wrongly-accepted stale write) - the specific "a client's next write gets wrongly
+  ACCEPTED post-reboot" failure mode does not reproduce. Two fixes were proposed
+  and rejected: bumping `config_version` once at every load would turn every power
+  cycle into a fleet-wide `VERSION_CONFLICT` storm for every client with a cached
+  version; persisting the revert's version bump adds a third `persist_current_
+  config()` call site whose only job is a version bump, on the exact path the
+  flash-wear bullets above already flag. The real fix needs `ConfigGetResponse` to
+  surface `boomlink_config_service_apply_state()` on the wire, so a client can tell
+  "settled" from "provisional" apart from the version number alone - left for a
+  phase that revisits the config protocol's wire format, not attempted here as a
+  wiring-only fix;
+- **A broadcast frame can still confirm a pending hazardous change fleet-wide** —
+  the broadcast-no-ACK fix above stops a broadcast REJECTION from costing a retried
+  response, but `protocol_service_on_rx()`'s confirm-eligibility branch treats ANY
+  reply it queues as "the next exchange" that confirms a `WAITING` hazard,
+  including one this same phase's own broadcast-no-ACK reasoning already
+  established is not a correlated, acknowledged exchange with a specific peer - a
+  broadcast `ConfigGet` (never rejected, since it mutates nothing) can therefore
+  still confirm-and-persist every reachable node's pending hazardous change at
+  once. Kept below `Reboot`'s severity above and left deferred rather than fixed
+  alongside it: a broadcast confirmation cannot also trigger a reset (`Reboot` is
+  itself broadcast-guarded - section 9.9), and "any peer's next exchange confirms"
+  is section 8.2's own deliberately loose policy, not a bug this phase introduced -
+  but the same `destination_id != BOOMLINK_ADDR_BROADCAST` guard the ack fix above
+  already computes would close it if a future phase decides broadcast should not
+  count;
+- **`link.magic`'s resolved fallback is not fed back into the config service, the
+  twin of the `node_id` fix above** — `link_service_init()` has the identical
+  fallback shape for magic (`configured_magic == 0` or out of one wire byte's range
+  falls back to `BOOMLINK_LINKFRAME_MAGIC_DEFAULT`, `link_service.c`'s own doc), but
+  there is no `link_service_magic()` accessor for `cli.c` to read that resolved
+  value back from the way it does for `node_id`, so if that fallback ever fires,
+  `ConfigGet` would report `magic=0` forever while the link actually runs the
+  default - the exact "reported/persisted permanently diverges from what is
+  running" gap `magic_is_valid()` exists to prevent, self-perpetuating since a
+  client resending the reported `magic=0` unchanged is accepted as a no-op, not
+  validated. Currently unreachable (`boomlink_config_store_save()` had no caller
+  anywhere in the firmware before this PR, so no pre-Phase-C config blob can exist
+  to trigger the fallback) - the identical "unreachable today, same shape as an
+  already-fixed reachable case" position `node_id`'s divergence was in before the
+  fix that closed it - left deferred rather than fixed now since closing it needs a
+  new accessor this phase did not otherwise need to add. A later review round found
+  a sharper, unconditional version of this same gap that does not depend on the
+  fallback ever firing: this PR is the first in which `magic` can be operator-
+  written and persisted at all (a confirmed `ConfigSet{link.magic=...}`, real and
+  intentional, not a bug), and there is no local, over-USB way to see the value the
+  radio is actually keyed to before or after such a change - `link status`
+  (`cli.c`'s `print_link_status()`) prints node_id/session/tx-state/queue depth and
+  nine stat counters but not `magic`, and there is no `config` CLI command at all
+  (only `version`/`stream`/`streamtest`/`radio`/`proto`/`link`) to read, set, or
+  reset the persisted config locally. The operator does get an indirect symptom -
+  `link status`'s `bad-magic` counter climbs - but not the value, and not whether
+  the mismatch is `magic` or the on-wire protocol version (one combined counter).
+  Once a magic mismatch happens (one hex-digit typo in a `ConfigSet`, confirmed,
+  reboot), the node is unreachable over radio to every peer by design - the confirm
+  mechanism's own documented limitation, not new - and unrecoverable except by
+  physical retrieval and an SWD mass-erase of the reserved config region, which sits
+  outside the linker's `FLASH` region (`STM32H563xx_FLASH.ld`) specifically so a
+  normal firmware reflash does not touch it - meaning a routine reflash cannot
+  self-heal this the way it can most other firmware problems. A `link_service_
+  magic()` accessor plus printing it in `link status` is cheap insurance but does
+  not fix the underlying gap; the gap is the total absence of a local recovery
+  path, which needs its own scoped design (a `config` CLI command, at minimum) and
+  is left for a phase that adds one;
+- **The first accepted `ConfigSet` after a never-configured boot silently promotes
+  the UID-derived bring-up fallback into a permanently "assigned" `node_id`** — the
+  round 5 fix (`cli.c` feeding `link_service_node_id()`'s resolved value back into
+  `loaded_config.general.node_id` before `protocol_service_init()` sees it) and this
+  phase's persistence wiring compose into a gap neither one has alone:
+  `link_service.c` explicitly documents its UID fallback as "a known bring-up-only
+  limitation of the fallback path, not a design meant to carry forward", but once
+  round 5's fix puts that value into `svc.current` and ANY accepted `ConfigSet`
+  (not necessarily one naming `general` at all) persists it to flash, the
+  distinction between "an operator explicitly assigned this node_id" and "this
+  node has never been assigned one, and is only answering at its UID-derived
+  address" is gone - permanently, since `node_id_is_valid()` rejects a SET back to
+  `0` (the one value that would mean "unconfigured" again) and there is no `config`
+  CLI command to reset it locally either. No safety impact - the node keeps
+  answering at the same address either way - but a provisioning tool that relies on
+  `node_id == BOOMLINK_ADDR_INVALID` to find never-assigned nodes on a fleet loses
+  that signal the moment any other config field is ever written, not just node_id
+  itself. Neither round 5's fix nor this phase's persistence wiring is wrong in
+  isolation; closing the composition needs its own field (or its own sentinel
+  value) to track "explicitly assigned" separately from "UID-derived", which PR 5's
+  host CLI work below is a more natural place to add than a wiring-only phase.
 
 ## PR 5 — Host CLI and end-to-end tooling
 

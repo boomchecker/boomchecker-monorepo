@@ -57,21 +57,25 @@ static uint32_t mix32(uint32_t x) {
   return x;
 }
 
-/* This node's address (section 7.2), derived from the chip's factory-
-   programmed 96-bit unique ID rather than a compile-time constant or a
-   stored config, because neither exists yet: PR 4 has not landed persistent
-   NodeConfig, and a fixed constant would make every board running this
+/* This node's FALLBACK address (section 7.2), derived from the chip's
+   factory-programmed 96-bit unique ID, for when link_service_init()'s
+   configured_node_id is BOOMLINK_ADDR_INVALID/BOOMLINK_ADDR_BROADCAST -
+   i.e. no persisted NodeConfig has ever assigned this node a real address.
+   Before PR 4 Phase C wired NodeConfig into this file at all, this was the
+   ONLY source of node_id, unconditionally, because no persisted config
+   existed yet; a fixed constant would have made every board running this
    firmware the SAME node, unable to address each other at all. The UID
-   gives every board a distinct address with zero configuration, matching
-   this codebase's "compliant-by-default" bring-up ethos elsewhere
-   (e22_radio::DefaultProfile()). `link status` is how an operator reads it
-   back to hand to a peer's `link ping <node_id>`.
+   still gives every board a distinct address with zero configuration for
+   that unconfigured case, matching this codebase's "compliant-by-default"
+   bring-up ethos elsewhere (e22_radio::DefaultProfile()). `link status` is
+   how an operator reads the address actually in use back, whichever source
+   it came from, to hand to a peer's `link ping <node_id>`.
 
-   A real deployment replaces this with PR 4's persistent NodeConfig, which
-   lets a ROLE (not a chip) own an address - the UID ties identity to a
-   specific board, which is wrong the moment a board is swapped in the
-   field. Recorded here as a known bring-up-only limitation, not a design
-   meant to carry forward.
+   A real deployment assigns a persisted node_id through NodeConfig instead,
+   which lets a ROLE (not a chip) own an address - the UID ties this
+   fallback's identity to a specific board, which is wrong the moment a
+   board is swapped in the field. Recorded here as a known bring-up-only
+   limitation of the fallback path, not a design meant to carry forward.
 
    BOOMLINK_ADDR_INVALID (0) and BOOMLINK_ADDR_BROADCAST (0xFFFFFFFF) are
    both rejected by boomlink_link_init() (section 7.2's node_id contract) -
@@ -124,14 +128,37 @@ static uint32_t derive_session_id(void) {
   return id;
 }
 
-bool link_service_init(boomlink_link_rx_fn on_rx, void *on_rx_user,
+bool link_service_init(uint32_t configured_node_id, uint32_t configured_magic,
+                       boomlink_link_rx_fn on_rx, void *on_rx_user,
                        boomlink_link_tx_done_fn on_tx_done, void *on_tx_done_user) {
   boomlink_radio_port_init(&s_port);
-  s_node_id = derive_node_id();
+
+  /* BOOMLINK_ADDR_BROADCAST is included here defensively, not because a
+     valid config can ever reach it: boomlink_config_service.c already
+     rejects a SET attempting to CHANGE node_id to broadcast (section 7.2),
+     so no config this file loads should legitimately carry it. Guarded
+     anyway rather than trusted, for the same reason derive_node_id() below
+     guards its own mixed value against both reserved constants instead of
+     assuming a well-behaved input. */
+  s_node_id = (configured_node_id == BOOMLINK_ADDR_INVALID ||
+               configured_node_id == BOOMLINK_ADDR_BROADCAST)
+                  ? derive_node_id()
+                  : configured_node_id;
+
+  /* configured_magic > 0xFFu cannot come from a config this file's own
+     caller ever staged (boomlink_config_service.c rejects that at SET
+     time too - section 7.3's one wire byte), but CAN come from a config
+     blob written to flash before boomlink_node_config_defaults() carried
+     a real default here - back when it left this field at its struct's
+     zero-init. Falling back rather than truncating: a truncated value is
+     still a real, silently-wrong magic two boards could disagree on. */
+  uint8_t magic = (configured_magic == 0u || configured_magic > 0xFFu)
+                      ? BOOMLINK_LINKFRAME_MAGIC_DEFAULT
+                      : (uint8_t)configured_magic;
 
   boomlink_link_config_t config = {
     .node_id               = s_node_id,
-    .magic                 = BOOMLINK_LINKFRAME_MAGIC_DEFAULT,
+    .magic                 = magic,
     .ack_timeout_margin_ms = LINK_ACK_TIMEOUT_MARGIN_MS,
     .max_attempts          = LINK_MAX_ATTEMPTS,
     .backoff_min_ms        = LINK_BACKOFF_MIN_MS,

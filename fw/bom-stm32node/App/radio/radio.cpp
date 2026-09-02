@@ -34,6 +34,16 @@ enum class Mode { kIdle, kReceiving, kTransmitting };
    of a reset. */
 constexpr uint32_t kTxTimeoutMs = 2000;
 
+/* How often radio_process() retries EnterReceive() while stuck in kIdle
+   (see that branch below). Bounded so a persistently wedged/disconnected
+   chip does not hammer the SPI bus every main-loop iteration forever, short
+   enough that "the radio recovers on its own" (found needed during
+   hardware bring-up - EnterReceive()'s own single retry does not always
+   clear every way this chip has been observed to wedge, and there was no
+   CLI recovery path at all short of a full reboot) reads as near-instant
+   rather than a user-noticeable stall. */
+constexpr uint32_t kIdleRetryIntervalMs = 200;
+
 SX1262       *s_radio = nullptr;
 Mode          s_mode  = Mode::kIdle;
 volatile bool s_dio1Event = false;
@@ -83,9 +93,31 @@ void OnDio1() {
    forced recovery. Leaves the radio idle (no further DIO1 events expected)
    and records the failure if startReceive() itself fails - a bad SPI link
    would otherwise spin retrying forever while radio_is_ready() kept
-   claiming the radio was healthy. */
+   claiming the radio was healthy.
+
+   First real-hardware bring-up found startReceive() reliably failing
+   (RADIOLIB_ERR_UNKNOWN) the very first time this runs after a TX
+   completion - 100% reproducible on both test boards, immediately after a
+   single `radio ping` from a freshly booted, otherwise-healthy radio
+   (`radio status` clean beforehand). The identical call succeeds every time
+   from radio_init()'s own first EnterReceive(), right after
+   SX1262::begin() - so this is specific to the TX-then-RX transition, not
+   startReceive() being broken outright. finishTransmit() (called just
+   before this, in radio_process()'s kTransmitting case) already puts the
+   chip in standby, but this profile drives the SX1262 from an external TCXO
+   (e22_radio::DefaultProfile()'s 1.8 V DIO3 reference) - the most likely
+   mechanism is that reference not being given time to restabilize before
+   the next RX needs its PLL locked again, since standby() alone does not
+   wait for that. A retry with an explicit standby() and a short settle
+   delay first covers that without needing to know exactly which internal
+   SPI step loses the race. */
 void EnterReceive() {
   int16_t state = s_radio->startReceive();
+  if (state != RADIOLIB_ERR_NONE) {
+    (void)s_radio->standby();
+    HAL_Delay(2);
+    state = s_radio->startReceive();
+  }
   if (state == RADIOLIB_ERR_NONE) {
     s_mode = Mode::kReceiving;
   } else {
@@ -144,6 +176,27 @@ void radio_process(void) {
     return;
   }
 
+  if (s_mode == Mode::kIdle) {
+    /* EnterReceive() failed at some earlier point (init, a TX-completion
+       transition, or the timeout-recovery branch below) and left the radio
+       deaf with no further DIO1 events ever expected - nothing else in this
+       function would ever run again for this chip without this branch.
+       Retrying periodically here, instead of only on the next explicit
+       radio_send()/EnterReceive() call, is what makes recovery automatic:
+       found necessary during hardware bring-up because there was otherwise
+       no way back to "ready" short of a full reboot, and the class of
+       failure this recovers from (see EnterReceive()'s own comment) has
+       been observed to need more than the one retry already built into
+       EnterReceive() itself. */
+    static uint32_t s_lastRetryMs = 0;
+    uint32_t        now           = HAL_GetTick();
+    if ((now - s_lastRetryMs) >= kIdleRetryIntervalMs) {
+      s_lastRetryMs = now;
+      EnterReceive();
+    }
+    return;
+  }
+
   if (s_mode == Mode::kTransmitting && !s_dio1Event &&
       (HAL_GetTick() - s_txStartMs) > kTxTimeoutMs) {
     /* DIO1 never fired for this transmission - force the chip back to a
@@ -174,10 +227,6 @@ void radio_process(void) {
       break;
     }
     case Mode::kReceiving: {
-      size_t len = s_radio->getPacketLength();
-      if (len > RADIO_MAX_PAYLOAD) {
-        len = RADIO_MAX_PAYLOAD;
-      }
       float rssi = s_radio->getRSSI();
       float snr  = s_radio->getSNR();
       s_stats.last_rssi_dbm = rssi;
@@ -188,26 +237,46 @@ void radio_process(void) {
            radio_poll_rx() hasn't drained yet - the already-buffered packets
            are legitimate traffic waiting for their turn, not stale data to
            discard. Still must read it off the chip (readData() is also what
-           clears the chip's own RX state), the bytes just go nowhere. */
+           clears the chip's own RX state), the bytes just go nowhere.
+           RADIO_MAX_PAYLOAD (not a pre-fetched length - see the real read
+           below for why) is the hard cap on how much this can ever write
+           into `discard`, which is all that matters when the bytes are
+           being thrown away anyway. */
         uint8_t discard[RADIO_MAX_PAYLOAD];
-        (void)s_radio->readData(discard, len);
+        (void)s_radio->readData(discard, RADIO_MAX_PAYLOAD);
         s_stats.rx_overruns++;
         EnterReceive();
         break;
       }
 
       RxSlot &slot = s_rxRing[s_rxHead];
-      /* readData()'s `len` is not "read at most this many bytes and nothing
-         else": SX126x::readData treats len==0 as "I don't know the length,
-         figure it out yourself" rather than "read zero bytes". That only
-         coincides with "this was a genuinely empty packet" by accident here
-         because getPacketLength() also returns 0 for one - it stops being
-         equivalent the moment a future PR shrinks RADIO_MAX_PAYLOAD (e.g.
-         to leave room for BoomLink's link-frame header) enough that this
-         clamp could itself produce 0. The static_assert above only checks
-         the upper bound, not this. */
-      int16_t state = s_radio->readData(slot.buf, len);
+      /* Used to call getPacketLength() here, BEFORE readData(), and trust
+         that value for slot.len. First real-hardware bring-up found that
+         racy: getPacketLength() queries the chip's RxBufferStatus over SPI,
+         and called this early - right on DIO1, before the RSSI/SNR reads
+         above - it intermittently read back 0 for a real, non-empty packet
+         (reproduced repeatedly on real hardware: valid RSSI/SNR every time,
+         but most receives coming back "(0 bytes)"). SX126x::readData()
+         (RadioLib) already re-derives the correct length itself via its own,
+         later-timed GetRxBufferStatus call - by the time that runs, the
+         RSSI/SNR SPI transactions above have given the chip's status
+         register time to settle. The bug was trusting OUR early, racy read
+         for slot.len instead of the length readData() actually used.
+         Fixed by passing the fixed RADIO_MAX_PAYLOAD cap (never 0) as
+         readData()'s `len` - RadioLib only uses a nonzero `len` to clamp
+         ITS OWN correctly-timed length DOWNWARD (SX126x::readData: `if(len
+         != 0 && len < length) length = len`), so this can only shrink an
+         oversized read, never enable the "len==0 means auto-detect with no
+         cap" path this bug depended on - then re-querying getPacketLength()
+         AFTER readData() succeeds for the actual length to store, since by
+         then the chip has had every SPI transaction above plus readData()
+         itself to settle. */
+      int16_t state = s_radio->readData(slot.buf, RADIO_MAX_PAYLOAD);
       if (state == RADIOLIB_ERR_NONE) {
+        size_t len = s_radio->getPacketLength();
+        if (len > RADIO_MAX_PAYLOAD) {
+          len = RADIO_MAX_PAYLOAD;
+        }
         slot.len      = len;
         slot.rssi_dbm = rssi;
         slot.snr_db   = snr;

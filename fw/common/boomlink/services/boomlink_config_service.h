@@ -106,13 +106,19 @@ void boomlink_config_service_init(boomlink_config_service_t *svc,
  * A boomlink_dispatch_config_fn: register with `handlers.on_config =
  * boomlink_config_service_handle` and `handlers.on_config_user = svc`.
  *
- * A GET always answers (returns true). A SET answers OK/VERSION_CONFLICT/
- * INVALID/APPLY_IN_PROGRESS immediately and applies non-hazardous fields
- * right away; a hazardous field change answers PENDING_CONFIRMATION and
- * STAGES rather than applies (see boomlink_config_service_commit_pending_
- * apply()'s doc for why applying here would be too early). Returns false
- * only if `request` carries neither a GetRequest nor a SetRequest, or
- * `user`/`out_response` is NULL.
+ * A GET always answers (returns true), regardless of `rx->destination_id` -
+ * it mutates nothing, so broadcast is not a hazard for it. A SET addressed
+ * to BOOMLINK_ADDR_BROADCAST is refused with INVALID before anything else
+ * runs, never applying or staging any field even a non-hazardous one -
+ * simultaneous responses and (for a hazardous field) a coordinated
+ * broadcast apply both need a separate design this module does not have.
+ * Otherwise a SET answers OK/VERSION_CONFLICT/INVALID/APPLY_IN_PROGRESS
+ * immediately and applies non-hazardous fields right away; a hazardous
+ * field change answers PENDING_CONFIRMATION and STAGES rather than applies
+ * (see boomlink_config_service_commit_pending_apply()'s doc for why
+ * applying here would be too early). Returns false only if `request`
+ * carries neither a GetRequest nor a SetRequest, or `user`/`out_response`
+ * is NULL.
  */
 bool boomlink_config_service_handle(void *user, const boomlink_dispatch_rx_info_t *rx,
                                     const boomlink_ConfigMessage *request,
@@ -182,6 +188,53 @@ void boomlink_config_service_poll(boomlink_config_service_t *svc, uint32_t now_m
 /** NULL-tolerant, matching this codebase's other diagnostics accessors. */
 void boomlink_config_service_get_config(const boomlink_config_service_t *svc,
                                         boomlink_node_config_t *out);
+
+/**
+ * `current`, except while a hazardous change is WAITING for confirmation
+ * (see boomlink_config_service_commit_pending_apply()'s doc for what that
+ * state means): in WAITING, `general.node_id`/`link.magic`/`radio` come
+ * from `revert_to` (the last CONFIRMED values) instead of from `current`
+ * (which already holds the new, still-unconfirmed ones -
+ * commit_pending_apply() moved them there before WAITING was ever
+ * reachable). Everything else - every non-hazardous field, and the hazard
+ * subset in every OTHER state (IDLE, STAGED) - is `current` unchanged.
+ *
+ * For a caller that persists a config to non-volatile storage: use this,
+ * not boomlink_config_service_get_config(), for that write.
+ * boomlink_config_store_save()'s doc has no notion of "provisional" - it
+ * persists whatever it is handed as final - so a caller that saved
+ * `current` directly during WAITING would write the unconfirmed hazard
+ * value to storage. That value is only provisional in RAM: if the confirm
+ * window later expires, boomlink_config_service_poll()'s revert restores
+ * `current`'s hazard fields in RAM, but has no way to also un-write
+ * whatever a caller already put in storage in the meantime - the exact
+ * "surviving reboot with a value nobody confirmed" failure section 8.2's
+ * revert-on-timeout design exists to prevent. This accessor is what lets a
+ * caller persist on every accepted write (including an unrelated
+ * non-hazardous one arriving during someone else's confirmation window)
+ * without that risk: while WAITING, it always reports the same hazard
+ * values `current` will fall back to if this change is never confirmed,
+ * so persisting it early is never wrong - and once IDLE again (confirmed
+ * or reverted), it is byte-identical to boomlink_config_service_get_config().
+ *
+ * NULL-tolerant, matching this codebase's other diagnostics accessors.
+ */
+void boomlink_config_service_get_persistable_config(const boomlink_config_service_t *svc,
+                                                     boomlink_node_config_t *out);
+
+/**
+ * The revert-on-timeout state machine's current state - for a caller that
+ * needs to know whether a hazardous change is in flight without reaching
+ * into `svc->apply_state` directly (the struct is exposed for static
+ * allocation the same reason boomlink_link_t is, not as an invitation to
+ * read its bookkeeping fields ad hoc - see boomlink_link.h's own read
+ * accessors for the pattern this follows). NULL-tolerant like the
+ * accessor above: returns BOOMLINK_CONFIG_APPLY_IDLE for a NULL `svc`, the
+ * "nothing in flight" reading a CLI/diagnostic caller should get from a
+ * missing service rather than a fault.
+ */
+boomlink_config_apply_state_t boomlink_config_service_apply_state(
+    const boomlink_config_service_t *svc);
 
 #ifdef __cplusplus
 }
