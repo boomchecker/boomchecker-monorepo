@@ -344,30 +344,86 @@ static void cmd_proto(EmbeddedCli *cli, char *args, void *context)
    received/counted, just truncated for the debug print. */
 #define RADIO_RX_PREVIEW_MAX 64u
 
-/* Render up to `cap - 1` bytes of `buf` as printable ASCII (unprintable
-   bytes shown as '.') into `out`, NUL-terminated. Returns the number of
-   bytes actually rendered, so a caller can tell whether `len` was longer
-   than what fit. Shared by the raw and BoomLink-level RX previews below -
-   both need exactly this, on payloads from two different sources.
-
-   `cap == 0` renders nothing rather than underflowing `cap - 1u` to
-   SIZE_MAX: unreachable today (every call site passes a compile-time-sized
-   local array), but cheap to close off rather than leave as a contract only
-   its current callers happen to uphold. */
-static size_t ascii_preview(char *out, size_t cap, const uint8_t *buf, size_t len)
+/* Render an opaque received payload for a human console preview, picking the
+   representation from the bytes themselves so a binary frame is not shown as
+   noise:
+     - every byte printable ASCII -> the text in double quotes, e.g. "hello"
+       (a raw `radio ping`/`link ping` text payload);
+     - anything else -> an uppercase hex dump in brackets, e.g.
+       hex[12 08 96 01], because a binary protobuf Envelope - a section 8.6
+       WakeupResponse, say - rendered as text is just a row of dots
+       ("....r."...) that tells the operator nothing.
+   Writes at most `cap - 1` chars plus a NUL and returns the number of
+   payload BYTES represented (not chars written), so the caller can still
+   append a "..." marker when the payload was longer than what fit. `cap == 0`
+   renders nothing rather than underflowing the size math; an empty payload
+   renders as "". Shared by the raw and BoomLink-level RX previews below -
+   both need exactly this, on payloads from two different sources. */
+static size_t payload_preview(char *out, size_t cap, const uint8_t *buf, size_t len)
 {
   if (cap == 0u)
   {
     return 0;
   }
-  size_t n = (len < cap - 1u) ? len : (cap - 1u);
-  for (size_t i = 0; i < n; i++)
+  out[0] = '\0';
+
+  /* An all-printable payload (and the empty payload) is text; a single
+     non-printable byte makes the whole thing binary and flips it to hex. */
+  bool is_text = true;
+  for (size_t i = 0; i < len; i++)
   {
     char c = (char)buf[i];
-    out[i] = (c >= 0x20 && c < 0x7f) ? c : '.';
+    if (!(c >= 0x20 && c < 0x7f))
+    {
+      is_text = false;
+      break;
+    }
   }
-  out[n] = '\0';
-  return n;
+
+  size_t used = 0u;
+  if (is_text)
+  {
+    /* Fixed overhead: opening quote + closing quote + NUL = 3 chars. */
+    if (cap < 3u)
+    {
+      return 0;
+    }
+    out[used++] = '"';
+    size_t i = 0u;
+    while (i < len && used < cap - 2u)
+    {
+      out[used++] = (char)buf[i++];
+    }
+    out[used++] = '"';
+    out[used]   = '\0';
+    return i;
+  }
+
+  /* hex[...] : "hex[" (4) + "]" + NUL (2) fixed, then "XX " (3) per byte. */
+  static const char kHexDigits[] = "0123456789ABCDEF";
+  if (cap < 6u)
+  {
+    return 0;
+  }
+  out[used++] = 'h';
+  out[used++] = 'e';
+  out[used++] = 'x';
+  out[used++] = '[';
+  size_t i = 0u;
+  while (i < len && used + 3u <= cap - 2u)
+  {
+    out[used++] = kHexDigits[(buf[i] >> 4) & 0x0Fu];
+    out[used++] = kHexDigits[buf[i] & 0x0Fu];
+    out[used++] = ' ';
+    i++;
+  }
+  if (i > 0u && out[used - 1u] == ' ')
+  {
+    used--; /* trim the trailing separator before the closing bracket */
+  }
+  out[used++] = ']';
+  out[used]   = '\0';
+  return i;
 }
 
 /* Auto-print any packet radio_process() has finished receiving since the
@@ -393,8 +449,8 @@ static void print_rx_frame(void)
   }
 
   /* Best-effort debug view of a raw bring-up payload (no BoomProtocol yet). */
-  char preview[RADIO_RX_PREVIEW_MAX + 1];
-  ascii_preview(preview, sizeof(preview), buf, len);
+  char   preview[RADIO_RX_PREVIEW_MAX + 1];
+  size_t shown = payload_preview(preview, sizeof(preview), buf, len);
 
   char f1[16];
   char f2[16];
@@ -402,8 +458,8 @@ static void print_rx_frame(void)
   fmt_fixed(f2, sizeof(f2), snr, 1);
 
   char line[RADIO_RX_PREVIEW_MAX + 96];
-  snprintf(line, sizeof(line), "radio rx: \"%s\"%s (%u bytes, RSSI %s dBm, SNR %s dB)",
-           preview, (len > sizeof(buf)) ? "..." : "", (unsigned)len, f1, f2);
+  snprintf(line, sizeof(line), "radio rx: %s%s (%u bytes, RSSI %s dBm, SNR %s dB)",
+           preview, (len > shown) ? " ..." : "", (unsigned)len, f1, f2);
   embeddedCliPrint(s_cli, line);
 }
 
@@ -459,8 +515,8 @@ static void link_on_rx(void *user, uint32_t source_id, uint32_t destination_id,
     return;
   }
 
-  char preview[RADIO_RX_PREVIEW_MAX + 1];
-  size_t n = ascii_preview(preview, sizeof(preview), payload, payload_len);
+  char   preview[RADIO_RX_PREVIEW_MAX + 1];
+  size_t shown = payload_preview(preview, sizeof(preview), payload, payload_len);
 
   char f1[16];
   char f2[16];
@@ -469,10 +525,10 @@ static void link_on_rx(void *user, uint32_t source_id, uint32_t destination_id,
 
   char line[RADIO_RX_PREVIEW_MAX + 128];
   snprintf(line, sizeof(line),
-           "link rx: from 0x%08lX to %s \"%s\"%s (%u bytes, RSSI %s dBm, SNR %s dB)",
+           "link rx: from 0x%08lX to %s %s%s (%u bytes, RSSI %s dBm, SNR %s dB)",
            (unsigned long)source_id,
            (destination_id == BOOMLINK_ADDR_BROADCAST) ? "broadcast" : "me", preview,
-           (payload_len > n) ? "..." : "", (unsigned)payload_len, f1, f2);
+           (payload_len > shown) ? " ..." : "", (unsigned)payload_len, f1, f2);
   embeddedCliPrint(s_cli, line);
 
   /* PR 4 Phase C: the dispatcher wiring boomlink_link_rx_fn's own doc
