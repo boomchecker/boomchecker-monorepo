@@ -168,6 +168,26 @@ static void persist_current_config(void) {
   (void)boomlink_config_store_save(&s_storage_port, &persistable);
 }
 
+/* cmd_reboot() runs synchronously deep inside boomlink_dispatch_process(),
+   before protocol_service_on_rx() has even tried to encode or queue that
+   same request's own response - it has no way to know whether that will
+   ever succeed. If it does not (encode failure, no link, or the send
+   itself rejected outright - as opposed to queuing fine and then racing
+   the TX pipeline, which PROTOCOL_SERVICE_REBOOT_DELAY_MS's own doc
+   already covers as a known, harder gap), the node would otherwise still
+   reset PROTOCOL_SERVICE_REBOOT_DELAY_MS later with the requester never
+   told a Reboot happened at all - found by review. Called from every
+   "the response did not reach the TX queue" return path below with
+   `was_armed_before` captured BEFORE boomlink_dispatch_process() runs, so
+   this only ever disarms a reset THIS exact call's own Reboot request
+   just armed - never a different, legitimately still-pending one an
+   earlier request armed. */
+static void disarm_reboot_if_just_armed(bool was_armed_before) {
+  if (!was_armed_before && s_reboot_armed) {
+    s_reboot_armed = false;
+  }
+}
+
 bool protocol_service_init(const boomlink_node_config_t *loaded_config) {
   if (loaded_config == NULL) {
     return false;
@@ -222,6 +242,11 @@ void protocol_service_on_rx(void *user, uint32_t source_id, uint32_t destination
     .rssi_dbm       = rssi_dbm,
     .snr_db         = snr_db,
   };
+
+  /* Captured BEFORE dispatch, not after: see disarm_reboot_if_just_armed()'s
+     own doc for why this exact ordering is what lets it tell "this call's
+     own Reboot request" apart from an unrelated one armed earlier. */
+  bool reboot_was_armed_before_dispatch = s_reboot_armed;
 
   boomlink_dispatch_result_t result = boomlink_dispatch_process(&s_dispatch, &rx, &envelope);
   if (!result.has_response) {
@@ -283,11 +308,13 @@ void protocol_service_on_rx(void *user, uint32_t source_id, uint32_t destination
   uint8_t buf[boomlink_Envelope_size];
   size_t  len = 0;
   if (!boomlink_encode_envelope(&result.response, buf, sizeof(buf), &len)) {
+    disarm_reboot_if_just_armed(reboot_was_armed_before_dispatch);
     return;
   }
 
   boomlink_link_t *link = link_service_link();
   if (link == NULL) {
+    disarm_reboot_if_just_armed(reboot_was_armed_before_dispatch);
     return;
   }
 
@@ -326,6 +353,7 @@ void protocol_service_on_rx(void *user, uint32_t source_id, uint32_t destination
       boomlink_link_send(link, source_id, priority, request_ack, buf, len);
   bool queued = (send_rc == BOOMLINK_LINK_SEND_OK || send_rc == BOOMLINK_LINK_SEND_OK_EVICTED);
   if (!queued) {
+    disarm_reboot_if_just_armed(reboot_was_armed_before_dispatch);
     return;
   }
 

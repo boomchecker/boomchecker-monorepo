@@ -2067,7 +2067,23 @@ the real seam, not the sketch" approach PR 3's own Phase C took — section 4):
   still passed every test in the suite, including that one — a coverage gap only
   (every value was still correct; nothing was reading these fields incorrectly),
   closed alongside the two fixes above rather than left for a later round to
-  rediscover.
+  rediscover;
+- a `Reboot` whose own response fails to even reach the TX queue no longer resets
+  the node anyway — found by an external automated PR reviewer, not one of this
+  PR's own review rounds. `cmd_reboot()` runs synchronously deep inside
+  `boomlink_dispatch_process()`, before `protocol_service_on_rx()` has tried to
+  encode or queue that same request's own response, so it has no way to know
+  whether that will succeed - an encode failure, no link, or the send itself being
+  rejected outright used to still leave the deferred reset armed, resetting the
+  node `PROTOCOL_SERVICE_REBOOT_DELAY_MS` later with the requester never told a
+  Reboot happened at all. Fixed with `disarm_reboot_if_just_armed()`, called from
+  each of those three failure paths with the value `s_reboot_armed` held BEFORE
+  dispatch ran, so it only ever un-arms THIS call's own Reboot request, never a
+  different, legitimately still-pending one an earlier request armed. This is
+  narrower than the already-deferred pipeline-occupancy race (see that item,
+  below): it covers the response never reaching the queue at all, not one that
+  queues fine and then loses a race with an occupied pipeline, which still needs
+  the correlation signal that item describes and remains open.
 
 Deliberately deferred, not silently dropped:
 
@@ -2227,7 +2243,18 @@ Deliberately deferred, not silently dropped:
   USB CLI's `link disable` state, so an armed Reboot still resets the node
   `PROTOCOL_SERVICE_REBOOT_DELAY_MS` later even though `link_service_process()` can
   no longer service TX at all while disabled — the response is guaranteed, not
-  merely likely, to never reach the air in that case;
+  merely likely, to never reach the air in that case. A narrower, sharper failure
+  mode in the same family - the response failing to reach the TX queue AT ALL
+  (encode failure, no link, or the send itself rejected outright, as opposed to
+  queuing fine and then racing the pipeline) - is fixed: `cmd_reboot()` arms the
+  reset before `protocol_service_on_rx()` has even tried to encode or queue that
+  same request's own response, with no way to know whether that will succeed, so
+  every one of those failure paths used to still reset the node with the requester
+  never told a Reboot happened at all. `disarm_reboot_if_just_armed()`, called from
+  each such path with the pre-dispatch value of `s_reboot_armed` to tell "this
+  call's own Reboot" apart from an unrelated one an earlier request legitimately
+  armed, un-arms it in exactly that case. The pipeline-occupancy race above - queued
+  successfully, then delayed - remains open for the reason already given;
 - **`App/protocol/protocol_service.c`'s stage→commit→confirm wiring has no automated
   regression test** — the whole file is ARM/HAL-dependent (no host-testable seam;
   `fw/bom-stm32node` has no host test directory), so `s_confirm_eligible`'s same-tick

@@ -276,9 +276,11 @@ jobs:
 
       - name: Build summary
         run: |
-          echo "### ✅ Build Successful!" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- STM32H563 + RadioLib/SX1262 firmware compiled (Debug) ✓" >> $GITHUB_STEP_SUMMARY
-          echo "- ELF produced ✓" >> $GITHUB_STEP_SUMMARY
-          echo "- BoomProtocol linked and referenced (not just compiled) ✓" >> $GITHUB_STEP_SUMMARY
-          echo "- Protocol dispatcher linked and referenced (not just compiled) ✓" >> $GITHUB_STEP_SUMMARY
+          {
+            echo "### ✅ Build Successful!"
+            echo ""
+            echo "- STM32H563 + RadioLib/SX1262 firmware compiled (Debug) ✓"
+            echo "- ELF produced ✓"
+            echo "- BoomProtocol linked and referenced (not just compiled) ✓"
+            echo "- Protocol dispatcher linked and referenced (not just compiled) ✓"
+          } >> "$GITHUB_STEP_SUMMARY"
