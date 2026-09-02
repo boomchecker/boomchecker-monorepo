@@ -15,6 +15,7 @@ The board integrates GNSS, LoRa, an IMU + magnetometer, and PDM microphones.
 - **[Microphone & recording](microphone.md)** — record PDM-microphone audio to a WAV
   over USB with the `stm32node-cli` host tool (USB setup, commands, protocol,
   troubleshooting).
-- **[BoomLink radio architecture](boomlink.md)** — RadioLib + Nanopb architecture,
-  BoomProtocol message contract, P2P addressing/ACK/retry behaviour, runtime
-  configuration and the implementation roadmap for the E22/SX1262 radio network.
+
+See **[LoRa](../lora/index.md)** for the E22/SX1262 radio stack — BoomLink (the link
+layer: addressing, ACK/retry, duplicate suppression) and BoomProtocol (the message
+layer: commands, configuration, discovery, detection, telemetry).
