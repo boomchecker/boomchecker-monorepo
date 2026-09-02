@@ -90,7 +90,7 @@ message CommandResponse {
 
 | Type | Implemented? | Real action |
 |---|---|---|
-| `REBOOT` | ✅ | Arms a deferred `HAL_NVIC_SystemReset()` (never synchronous, so the response reaches the requester first). Rejected over broadcast[^broadcast-cmd]. |
+| `REBOOT` | ✅ | Arms a deferred `HAL_NVIC_SystemReset()` (never synchronous — the reset waits 500 ms so the response usually reaches the requester first, though a busy TX pipeline can still race it — a known, documented gap). Rejected over broadcast[^broadcast-cmd]. |
 | `SELF_TEST` | ✅ | Reports whether the radio is ready. |
 | `CLEAR_STATISTICS` | ✅ | Resets radio and link statistics counters. Rejected over broadcast[^broadcast-cmd]. |
 | `REQUEST_DIAGNOSTICS` | ✅ | One-line summary: node ID, TX/RX counts, TX failures, RX CRC errors. |

@@ -66,6 +66,17 @@ answering on behalf of the whole network.
 
 There is no special "master" address — see [LoRa → Naming](index.md#naming).
 
+!!! danger "No sender authentication — trusted-network design, for now"
+    `source_id` is whatever the sender put in its own frame header — nothing checks it
+    against the radio identity that actually transmitted the packet. A frame with valid
+    magic/version and a forged `source_id` is dispatched exactly like a genuine one,
+    which means state-changing traffic (a `Command`, a `ConfigSet`) can be spoofed by
+    anything sharing the network's magic byte and radio parameters. This is a
+    deliberate, documented, current limitation — not an oversight left in by accident —
+    tracked for a future authentication baseline in issue
+    [#77](https://github.com/boomchecker/boomchecker-monorepo/issues/77). Until that
+    lands, treat every node on a given `magic` as mutually trusted.
+
 ## TX pipeline
 
 ```mermaid
@@ -104,9 +115,21 @@ Protobuf decode one layer up — and neither class ever reaches an application h
 
 Each node keeps a `session_id` generated once per boot and a `sequence` counter
 incremented per transmitted envelope. A packet's link-level identity is
-`(source_id, session_id, sequence)`. A fresh `session_id` on every reboot makes reboot
-behaviour explicit to peers — their duplicate cache re-keys on the new session rather
-than treating a restarted sequence counter as a wave of duplicates.
+`(source_id, session_id, sequence)`. A new `session_id` after a reboot is what lets a
+peer's duplicate cache re-key instead of treating a restarted sequence counter as a
+wave of duplicates.
+
+!!! warning "That new session_id isn't reliably new"
+    `session_id` is derived from this chip's fixed UID XORed with the boot-time tick
+    count. On a healthy board, every step from reset to this derivation is either
+    straight-line code or a fixed-length delay — no variable-length wait — so the tick
+    term reads the *same* value on every single reboot, making an identical
+    `session_id` the common case, not a rare one. A peer's duplicate cache then sees a
+    session it already knows, with a sequence counter that just restarted from 0, and
+    silently suppresses the rebooted node's early post-boot frames as replays **while
+    still ACKing them** — so an ACKed send doesn't actually mean the payload reached
+    the peer's application. A real, known gap, not yet fixed — tracked in issue
+    [#91](https://github.com/boomchecker/boomchecker-monorepo/issues/91).
 
 ## Duplicate suppression
 

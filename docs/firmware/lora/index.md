@@ -94,9 +94,15 @@ driven through RadioLib. A few things specific to this deployment:
   one — foreign LoRa traffic is mostly rejected at the PHY level before it ever reaches
   BoomLink.
 - **Czech/EU regulatory band**: the E22 module covers 850–930 MHz at up to +22 dBm,
-  which is wider and stronger than legal here. BoomLink stays inside the
+  which is wider and stronger than legal here. The default profile below targets the
   **869.4–869.65 MHz** sub-band (ERC 70-03's most permissive allocation: up to 500 mW
-  ERP, 10 % duty cycle).
+  ERP, 10 % duty cycle) — but that's a frequency/power *setting*, not a compliance
+  guarantee: actual radiated ERP depends on the antenna actually fitted (module output
+  plus antenna gain, unverified here), and **nothing in the firmware enforces the 10 %
+  duty cycle automatically** — there's a cumulative TX-airtime counter (see
+  [BoomLink → Statistics](boomlink.md#statistics)) for checking it by hand, but no
+  code path that refuses a transmission for exceeding it. Treat the profile below as a
+  bring-up default, not a certified deployment configuration.
 - **Default radio profile**, as currently flashed:
 
     | Parameter | Value |
