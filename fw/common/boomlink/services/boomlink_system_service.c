@@ -7,6 +7,20 @@
 
 #include <string.h>
 
+/* boomlink_Ping_payload_t and boomlink_Pong_payload_t are structurally
+   identical (both PB_BYTES_ARRAY_T(192) today, per nanopb/system.options)
+   but Nanopb generates them as distinct types, one per field - see
+   handle_ping()'s own comment for why that forces an explicit memcpy below
+   instead of a plain struct assignment. This guards the assumption behind
+   that memcpy: a future system.options change that gives Pong less room
+   than Ping would make it a silent stack buffer overflow on every echoed
+   Ping, caught by nothing else here - decoded input can never make
+   ping->payload.size exceed Ping's OWN capacity, but nothing stops it
+   exceeding Pong's if the two ever diverge. Cli.c's proto_selftest carries
+   the identical guard for the same two types, for the same reason. */
+_Static_assert(sizeof(((boomlink_Pong *)0)->payload.bytes) >= sizeof(((boomlink_Ping *)0)->payload.bytes),
+               "Pong payload capacity must cover Ping's for handle_ping()'s echo to stay memory-safe");
+
 void boomlink_system_service_init(boomlink_system_service_t *svc, const boomlink_system_identity_t *identity,
                                   const boomlink_system_ops_t *ops) {
   if (svc == NULL) {
@@ -80,16 +94,29 @@ void boomlink_system_service_arm_wakeup(boomlink_system_service_t *svc, uint32_t
   if (svc == NULL || !svc->wakeup_staged) {
     return;
   }
+  /* Clamped BEFORE the *1000 below, not after: an unclamped window_s above
+     ~4,294,967 overflows a 32-bit `window_s * 1000u`, and review found this
+     was reachable straight off an unauthenticated broadcast frame's
+     window_s field with no CLI in between to have already range-checked it
+     (a raw WakeupRequest, not just `wakeup <window_s>`, can carry any
+     uint32_t). BOOMLINK_SYSTEM_WAKEUP_MAX_WINDOW_S's own doc has the full
+     reasoning for the specific bound. */
+  uint32_t window_s = (svc->staged_window_s > BOOMLINK_SYSTEM_WAKEUP_MAX_WINDOW_S)
+                          ? BOOMLINK_SYSTEM_WAKEUP_MAX_WINDOW_S
+                          : svc->staged_window_s;
   /* +1 so a window_s of 0 still has exactly one possible outcome (delay 0,
      "respond immediately" - see WakeupRequest.window_s's own doc) rather than
-     a modulo by zero. */
-  uint32_t window_ms = svc->staged_window_s * 1000u + 1u;
+     a modulo by zero. Cannot overflow now that window_s is clamped above:
+     the largest possible window_ms is
+     BOOMLINK_SYSTEM_WAKEUP_MAX_WINDOW_S * 1000u + 1u, far under UINT32_MAX. */
+  uint32_t window_ms = window_s * 1000u + 1u;
   uint32_t delay_ms  = random_u32 % window_ms;
 
-  svc->wakeup_staged    = false;
-  svc->wakeup_armed     = true;
-  svc->wakeup_fire_at_ms = now_ms + delay_ms;
-  svc->wakeup_reply_to  = svc->staged_reply_to;
+  svc->wakeup_staged      = false;
+  svc->wakeup_armed       = true;
+  svc->wakeup_armed_at_ms = now_ms;
+  svc->wakeup_delay_ms    = delay_ms;
+  svc->wakeup_reply_to    = svc->staged_reply_to;
 }
 
 bool boomlink_system_service_poll(boomlink_system_service_t *svc, uint32_t now_ms,
@@ -97,13 +124,22 @@ bool boomlink_system_service_poll(boomlink_system_service_t *svc, uint32_t now_m
   if (svc == NULL || out_message == NULL || out_reply_to == NULL || !svc->wakeup_armed) {
     return false;
   }
-  /* Wrap-safe the same way boomlink_config_service.c's window_elapsed() is -
-     see that function's own comment for the full reasoning. */
-  if ((uint32_t)(now_ms - svc->wakeup_fire_at_ms) > 0x7FFFFFFFu) {
-    return false; /* fire_at_ms is still in the future */
+  /* Elapsed-since-armed, wrap-safe the same way boomlink_config_service.c's
+     window_elapsed() actually is: `(uint32_t)(now_ms - started_at_ms) >=
+     window_ms`, exact for any real span under 2^32 ms (boomlink_port.h's
+     boomlink_elapsed_ms() doc) - a fundamentally different (and correct for
+     the FULL range) technique from this function's original
+     "store an absolute fire_at_ms, compare against a fixed 0x7FFFFFFF half-
+     range" version, which review found was only correct for delay_ms below
+     2^31: with window_s clamped to BOOMLINK_SYSTEM_WAKEUP_MAX_WINDOW_S above,
+     delay_ms can never approach that limit regardless, but this form needs
+     no such limit to already be correct. */
+  if ((uint32_t)(now_ms - svc->wakeup_armed_at_ms) < svc->wakeup_delay_ms) {
+    return false; /* the drawn delay has not elapsed yet */
   }
 
-  out_message->which_message              = boomlink_SystemMessage_wakeup_response_tag;
+  *out_message                             = (boomlink_SystemMessage){0};
+  out_message->which_message               = boomlink_SystemMessage_wakeup_response_tag;
   boomlink_WakeupResponse *resp            = &out_message->message.wakeup_response;
   resp->node_id                            = 0u; /* filled by the caller - see this
                                                      function's own header doc: this

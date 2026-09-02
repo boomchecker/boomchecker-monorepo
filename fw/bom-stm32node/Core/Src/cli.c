@@ -6,6 +6,7 @@
  */
 #include "cli.h"
 #include "boomlink_codec.h"
+#include "boomlink_system_service.h" /* BOOMLINK_SYSTEM_WAKEUP_MAX_WINDOW_S */
 #include "embedded_cli.h"
 #include "link_service.h"
 #include "main.h"   /* Error_Handler */
@@ -94,7 +95,12 @@ static void cmd_version(EmbeddedCli *cli, char *args, void *context)
      same build version a section 8.6 WakeupResponse reports of this node -
      rather than a separately-maintained literal here that could drift from
      it. */
-  char line[48];
+  /* Worst case ~19 bytes of fixed text + up to 30 bytes for three %u fields
+     at 10 digits each + NUL = 50 - sized generously past that, the same
+     "hand-computed, not eyeballed" convention print_radio_status() already
+     documents, since the three macros are plain uint32_t and nothing here
+     assumes they stay single-digit forever. */
+  char line[64];
   snprintf(line, sizeof(line), "bom-stm32node CLI v%u.%u.%u", PROTOCOL_SERVICE_FW_VERSION_MAJOR,
            PROTOCOL_SERVICE_FW_VERSION_MINOR, PROTOCOL_SERVICE_FW_VERSION_PATCH);
   embeddedCliPrint(cli, line);
@@ -748,22 +754,50 @@ static void cmd_wakeup(EmbeddedCli *cli, char *args, void *context)
   (void)context;
   if (embeddedCliGetTokenCount(args) < 1)
   {
-    embeddedCliPrint(cli, "usage: wakeup <window_s>");
+    embeddedCliPrint(cli, "usage: wakeup <window_s> (0..3600)");
     return;
   }
   const char   *tok      = embeddedCliGetToken(args, 1);
   char         *end      = NULL;
   unsigned long window_s = strtoul(tok, &end, 10);
-  if (end == tok)
+  /* The upper bound doubles as the strtoul-accepts-a-leading-'-' guard
+     parse_hex_u32()'s own comment warns about elsewhere in this file: a
+     negative window_s wraps to a huge unsigned value well past this check,
+     not a small one, so it is rejected by the SAME range check rather than
+     needing its own sign detection. BOOMLINK_SYSTEM_WAKEUP_MAX_WINDOW_S is
+     the identical ceiling boomlink_system_service_arm_wakeup() clamps to
+     anyway (review found window_s reaching that clamp unvalidated could
+     overflow its internal *1000 arithmetic) - rejecting it here instead of
+     silently letting it through and clamping tells the operator what
+     actually happened, rather than a window quietly shorter than what they
+     typed. */
+  if (end == tok || window_s > BOOMLINK_SYSTEM_WAKEUP_MAX_WINDOW_S)
   {
-    embeddedCliPrint(cli, "usage: wakeup <window_s>");
+    embeddedCliPrint(cli, "usage: wakeup <window_s> (0..3600)");
     return;
   }
 
-  protocol_service_send_wakeup_request((uint32_t)window_s);
+  if (!link_service_enabled())
+  {
+    /* Same reasoning as `link ping` above: boomlink_link_send() would still
+       queue the frame, but link_service_process() skips boomlink_link_poll()
+       entirely while disabled, so it would sit queued and never transmit -
+       refusing here is the honest answer, not queueing something already
+       known to be doomed. */
+    embeddedCliPrint(cli, "link: disabled - `wakeup` would queue but never transmit "
+                          "(see `link enable`)");
+    return;
+  }
 
   char line[64];
-  snprintf(line, sizeof(line), "wakeup: broadcast sent (window %lu s)", window_s);
+  if (protocol_service_send_wakeup_request((uint32_t)window_s))
+  {
+    snprintf(line, sizeof(line), "wakeup: broadcast sent (window %lu s)", window_s);
+  }
+  else
+  {
+    snprintf(line, sizeof(line), "wakeup: failed to send (window %lu s)", window_s);
+  }
   embeddedCliPrint(cli, line);
 }
 

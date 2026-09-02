@@ -293,9 +293,21 @@ jobs:
           # compile and link clean under --gc-sections with nothing else
           # here noticing. Listed individually rather than as one archive
           # check for exactly that reason.
+          #
+          # boomlink_radio_port_random_u32 (App/link/boomlink_radio_port.c)
+          # and boomlink_build_system_message (fw/common/boomlink/dispatch/
+          # boomlink_envelope_builder.c) share the identical one-call-site
+          # risk from the other direction: replace the random draw with a
+          # constant, or drop the envelope-builder call, and every check
+          # above (including the three _system_service symbols themselves,
+          # which stay perfectly reachable either way) stays green while
+          # Wakeup silently stops actually working - every node fires at
+          # the same instant with no jitter, or no WakeupRequest/
+          # WakeupResponse frame is ever built at all.
           status=0
           for symbol in boomlink_system_service_handle boomlink_system_service_arm_wakeup \
-                        boomlink_system_service_poll; do
+                        boomlink_system_service_poll boomlink_radio_port_random_u32 \
+                        boomlink_build_system_message; do
             if ! arm-none-eabi-nm build/Debug/bom-stm32node.elf | grep -q "$symbol"; then
               echo "❌ $symbol is not linked into bom-stm32node.elf"
               status=1

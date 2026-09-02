@@ -156,15 +156,24 @@ void protocol_service_set_wakeup_response_callback(protocol_service_wakeup_respo
  * Broadcast a section 8.6 WakeupRequest asking every reachable node to
  * answer within `window_s` seconds, each after its own randomly-drawn
  * delay - see boomlink.md section 8.6 and boomlink_system_service.h for the
- * full mechanism this triggers. No-op if protocol_service_init() has not
- * succeeded. Broadcast with no ACK requested, the same
+ * full mechanism this triggers (including the BOOMLINK_SYSTEM_WAKEUP_MAX_
+ * WINDOW_S clamp a too-large `window_s` is silently subject to once a
+ * receiving node arms it - this function does not itself validate
+ * `window_s`, though cli.c's `wakeup` command does before ever calling
+ * this). Broadcast with no ACK requested, the same
  * `destination_id != BOOMLINK_ADDR_BROADCAST` reasoning
  * protocol_service_on_rx() already applies to every broadcast-addressed
  * reply it sends - an ACK from every reachable node at once is exactly the
  * "N simultaneous responses" problem that reasoning already exists to
  * avoid, and nothing here waits for one anyway.
+ *
+ * @return false if protocol_service_init() has not succeeded (a no-op), or
+ *         if the frame did not reach the TX queue (encode failure, no link
+ *         yet, or boomlink_link_send() itself rejected it) - NOT a
+ *         guarantee the frame was actually transmitted, only that it left
+ *         this call's hands. `true` otherwise.
  */
-void protocol_service_send_wakeup_request(uint32_t window_s);
+bool protocol_service_send_wakeup_request(uint32_t window_s);
 
 #ifdef __cplusplus
 }

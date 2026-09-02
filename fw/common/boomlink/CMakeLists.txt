@@ -153,7 +153,8 @@ endif()
 option(BOOMLINK_TARGET_WERROR
        "Treat warnings as errors in the libraries cross-compiled for the target - \
 boomlink_linkframe, boomlink_linkengine, boomlink_dispatch, boomlink_command_service, \
-boomlink_config_service, boomlink_storage_port and boomlink_config_store (CI turns this on)" OFF)
+boomlink_config_service, boomlink_system_service, boomlink_storage_port and \
+boomlink_config_store (CI turns this on)" OFF)
 set(BOOMLINK_TARGET_WERROR_FLAGS "")
 if(BOOMLINK_TARGET_WERROR)
   set(BOOMLINK_TARGET_WERROR_FLAGS -Werror)

@@ -47,6 +47,15 @@ void boomlink_radio_port_init(boomlink_port_t *out);
  * draw from the unseeded, deterministic zero-initialized state, the same
  * "pointless, not wrong" caveat boomlink_radio_port_init()'s own doc gives
  * for calling before radio_init().
+ *
+ * NOT ISR-safe: next_u32() (the .c file) is a plain, non-atomic read-modify-
+ * write on file-static state, safe today only because every caller - the
+ * link engine's own port callback and this function's callers alike - runs
+ * from the main superloop (boomlink_link_poll()/_process(), never an
+ * interrupt handler). This accessor's whole purpose is inviting callers
+ * OUTSIDE the link engine to reach the same PRNG, so this is worth stating
+ * explicitly rather than leaving it as an assumption only the link engine's
+ * own call site happened to already satisfy.
  */
 uint32_t boomlink_radio_port_random_u32(void);
 

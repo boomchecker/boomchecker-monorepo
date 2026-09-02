@@ -240,7 +240,10 @@ where it differs from this section's original sketch:
   yet: Phase A wires DetectionMessage/TelemetryMessage/SystemMessage only as far as the
   dispatcher recognizing and counting them (`on_detection`/`on_telemetry`/`on_system`
   handler slots), since there is no detection algorithm, sensor reading or automatic
-  Ping responder yet to put behind a real service.
+  Ping responder yet to put behind a real service. (Updated by Phase D, below:
+  `boomlink_system_service` now exists and `on_system` is wired - `detection_service`/
+  `telemetry_service` still do not, for the same reason as when this bullet was
+  written: no detection algorithm or sensor reading exists in this firmware yet.)
 - `boomlink_config_service` holds `NodeConfig` **in memory only** - `App/storage/
   config_store.c/.h` from the sketch, and loading/saving it, is Phase B's job. Section
   10.1's revert-on-timeout apply is implemented in full even so, generalized from just
@@ -2515,8 +2518,8 @@ plumbing every earlier phase left unwired — `on_system` was `NULL` through Pha
   `WakeupRequest` always takes that path); `protocol_service_process()` polls every
   tick and, once a response is due, fills in `node_id` (the one field the service
   itself has no way to know — it holds no link engine handle) from
-  `link_service_node_id()` before sending it back, unicast with an ACK requested, to
-  the original requester;
+  `link_service_node_id()` before sending it back, unicast but with NO ACK requested
+  (see the review-findings bullet below for why not), to the original requester;
 - `protocol_service_send_wakeup_request()` broadcasts the `WakeupRequest`, and
   `protocol_service_set_wakeup_response_callback()` lets `Core/Src/cli.c` learn about
   each `WakeupResponse` this node collects — the same "the protocol layer owns the
@@ -2540,6 +2543,54 @@ plumbing every earlier phase left unwired — `on_system` was `NULL` through Pha
   delay armed) would otherwise compile and link clean under `--gc-sections` — verified
   by sabotage: removing the `_arm_wakeup()` call site left every earlier check green
   while that one symbol alone dropped out of the linked ELF;
+- **found by two independent review passes, both fixed**: `window_s` arrives verbatim
+  off an unauthenticated `WakeupRequest` frame, and `arm_wakeup()`'s original
+  `staged_window_s * 1000u` overflowed for any value above ~4,294,967 - one specific
+  overflow (`window_s = 4,294,968`) was shown to wrap the computed window down to
+  705&nbsp;ms, an arbitrary, much-too-short window nothing about "clamp to a sane
+  bound" would produce. Separately, `poll()`'s original wrap-safety check (an absolute
+  `fire_at_ms` compared against a fixed `0x7FFFFFFF` half-range, wrongly credited in
+  its own comment to `boomlink_config_service.c`'s `window_elapsed()`, which actually
+  uses a different technique) was only correct for a drawn delay under 2^31&nbsp;ms - a
+  large enough `window_s` could make a still-future deadline compare as already past,
+  firing on the very first `poll()` after arming. Fixed with two changes: `arm_wakeup()`
+  now clamps `window_s` to a new `BOOMLINK_SYSTEM_WAKEUP_MAX_WINDOW_S` (3600&nbsp;s)
+  before the multiply, provably ruling out the overflow; and `poll()` now stores
+  `wakeup_armed_at_ms`/`wakeup_delay_ms` and compares elapsed time the same way
+  `window_elapsed()` actually does, which needs no half-range ceiling at all and stays
+  correct for any real delay under 2^32&nbsp;ms. `cli.c`'s `wakeup` command also
+  range-checks `window_s` against the same bound before ever calling
+  `protocol_service_send_wakeup_request()`, so a mistyped or negative value (which
+  `strtoul` would otherwise silently turn into a huge unsigned one - the same footgun
+  `parse_hex_u32()`'s own comment already warns about for link addresses) is refused
+  with a usage message instead of quietly clamped;
+- **also found by review, fixed**: the `WakeupResponse` send above originally requested
+  a link ACK. That reintroduces the exact "N simultaneous responses" problem this
+  file's own broadcast-reply reasoning (`protocol_service_on_rx()`'s `request_ack`
+  comment) already exists to avoid - several nodes drawing delays close together (most
+  starkly at `window_s == 0`, which section 8.6 explicitly permits) each transmit an
+  ACK-requested, retried-up-to-`LINK_MAX_ATTEMPTS`-times frame in the same burst, and
+  the collector is deaf to every other node's reply while it transmits an ACK for one
+  of them - a single half-duplex radio cannot receive and transmit at once. Fixed by
+  requesting no ACK, matching the fire-and-forget posture `boomlink_system_service_
+  poll()`'s own doc already commits to ("does not get a second chance at the identical
+  response");
+- **also found by review, fixed**: `protocol_service_send_wakeup_request()` originally
+  returned `void` and silently dropped every failure (encode failure, no link yet, or
+  `boomlink_link_send()` itself rejecting the frame), so `wakeup` printed "broadcast
+  sent" even with `link disable` in effect and the frame never actually transmitting -
+  the one dishonesty `link ping` (`cli.c`) already refuses to commit for the identical
+  reason. Both `send_system_message()` and `protocol_service_send_wakeup_request()` now
+  return whether the frame actually reached the TX queue, `cmd_wakeup()` reports it
+  accordingly, and it checks `link_service_enabled()` first, the same guard `link ping`
+  already applies;
+- wiring `on_system` means a `Ping` (or a broadcast one) can now also satisfy
+  `protocol_service_on_rx()`'s "confirm a pending hazardous config change on the next
+  request/response exchange completed with any peer" condition - review confirmed this
+  is within that mechanism's own already-documented "with ANY peer... deliberately
+  loose" scope, not a narrowing or a new hole, and nothing in this firmware currently
+  sends a protobuf `Ping` on hardware (`link ping` sends raw text) - but it is worth
+  keeping in mind once PR 5's host tooling makes `Ping` a routine frame;
 - known gap, left open: nothing calls `boomlink_config_store_save()`-style persistence
   for anything Wakeup does, deliberately — a `WakeupResponse` recipient (an operator's
   console today, PR 5's host tooling later) is where any notion of "known fleet

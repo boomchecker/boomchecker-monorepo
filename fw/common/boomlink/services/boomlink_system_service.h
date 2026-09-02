@@ -90,6 +90,22 @@ typedef struct {
   uint32_t            fw_version_patch;
 } boomlink_system_identity_t;
 
+/**
+ * Ceiling `boomlink_system_service_arm_wakeup()` clamps `staged_window_s` to
+ * before doing anything else with it. window_s arrives verbatim off an
+ * unauthenticated WakeupRequest frame - review found that a large enough
+ * value (window_s above ~4,294,967) overflows the `window_s * 1000u` this
+ * file computes internally, and a value that overflows JUST the right way
+ * used to make the deadline compare as already-past on the very first
+ * poll() after arming - the exact "every node replies at the same instant"
+ * collision this whole feature exists to prevent, from a single malformed
+ * or malicious frame. 3600 s (one hour) is far past any plausible discovery
+ * round's actual `window_s` (section 8.6's own bring-up examples are tens of
+ * seconds) while leaving the arithmetic nowhere near 32-bit overflow
+ * (3600 * 1000 + 1, three orders of magnitude under UINT32_MAX).
+ */
+#define BOOMLINK_SYSTEM_WAKEUP_MAX_WINDOW_S 3600u
+
 typedef struct {
   boomlink_system_identity_t   identity;
   const boomlink_system_ops_t *ops; /* may be NULL - see boomlink_system_ops_t's own doc */
@@ -103,9 +119,16 @@ typedef struct {
   uint32_t staged_reply_to;
 
   /* Set by boomlink_system_service_arm_wakeup(), consumed and cleared by
-     boomlink_system_service_poll() once due. */
+     boomlink_system_service_poll() once due. The deadline is stored as
+     armed-at plus a delay, not as a precomputed absolute fire time: it is
+     what lets poll() reuse boomlink_config_service.c's window_elapsed()
+     elapsed-since-start idiom (exact for any real span under 2^32 ms)
+     rather than the fixed-half-range absolute-deadline comparison an
+     earlier version of this file used, which was only correct for delays
+     under 2^31 ms - see boomlink_system_service_poll()'s own comment. */
   bool     wakeup_armed;
-  uint32_t wakeup_fire_at_ms;
+  uint32_t wakeup_armed_at_ms;
+  uint32_t wakeup_delay_ms;
   uint32_t wakeup_reply_to;
 } boomlink_system_service_t;
 
@@ -152,15 +175,16 @@ bool boomlink_system_service_handle(void *user, const boomlink_dispatch_rx_info_
 
 /**
  * Turns a staged WakeupRequest (see boomlink_system_service_t's own doc)
- * into an armed deadline: `now_ms + (random_u32 % (staged_window_s * 1000 +
- * 1))` milliseconds - a plain modulo, not rejection-sampled, for the same
- * reason section 9.7's own tx_jitter_max_ms draw is: this is collision
- * avoidance among a handful of nodes, not cryptography, and the bias a
- * modulo introduces against a 32-bit source is not measurable at these
- * window sizes. `random_u32` is a single caller-supplied draw, not a
- * generator this file calls itself - it has no random source of its own,
- * the same "caller owns randomness" split described in this file's own
- * header doc.
+ * into an armed deadline: `staged_window_s` is first clamped to
+ * BOOMLINK_SYSTEM_WAKEUP_MAX_WINDOW_S (see that macro's own doc for why),
+ * then a delay of `random_u32 % (clamped_window_s * 1000 + 1)` milliseconds
+ * is drawn - a plain modulo, not rejection-sampled, for the same reason
+ * section 9.7's own tx_jitter_max_ms draw is: this is collision avoidance
+ * among a handful of nodes, not cryptography, and the bias a modulo
+ * introduces against a 32-bit source is not measurable at these window
+ * sizes. `random_u32` is a single caller-supplied draw, not a generator
+ * this file calls itself - it has no random source of its own, the same
+ * "caller owns randomness" split described in this file's own header doc.
  *
  * A no-op if nothing is staged (`svc->wakeup_staged` false) - safe to call
  * unconditionally after every boomlink_system_service_handle() invocation
@@ -171,10 +195,13 @@ void boomlink_system_service_arm_wakeup(boomlink_system_service_t *svc, uint32_t
                                         uint32_t random_u32);
 
 /**
- * True exactly once an armed wakeup's deadline has passed - `now_ms >=
- * boomlink_system_service_t`'s own `wakeup_fire_at_ms` - and every time
- * called again after that, until a NEW WakeupRequest re-arms one, at which
- * point it goes back to reporting false until the new deadline passes.
+ * True exactly once an armed wakeup's drawn delay has elapsed since
+ * boomlink_system_service_arm_wakeup() ran - see boomlink_system_service_t's
+ * own doc for exactly how that elapsed-time check works. Reports false on
+ * every call before that (whether or not anything is armed yet) and on
+ * every call after the one that fired, until a NEW WakeupRequest stages and
+ * arms a fresh one - it does NOT keep reporting true once fired; see the
+ * "clears the armed state" paragraph below for why not.
  *
  * On a `true` return, fills `*out_message` with a WakeupResponse built from
  * `svc`'s own stored identity (see boomlink_system_identity_t) - EXCEPT

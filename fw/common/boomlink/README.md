@@ -63,7 +63,10 @@ dispatch/         PR 4 Phase A: boomlink_dispatch.h/.c routes a decoded
 services/         PR 4 Phase A: boomlink_command_service.h/.c (section 8.3's
                   command set over an injected ops struct) and
                   boomlink_config_service.h/.c (section 8.2's ConfigGet/
-                  ConfigSet, including the revert-on-timeout apply)
+                  ConfigSet, including the revert-on-timeout apply).
+                  PR 4 Phase D: boomlink_system_service.h/.c (section 8.5's
+                  Ping/Pong echo and section 8.6's fleet discovery Wakeup/
+                  WakeupResponse, the on_system handler no earlier phase wired)
 storage/          PR 4 Phase B: boomlink_storage_port.h/.c (the flash seam a
                   real port, or tests/'s fake, implements - same fake-vs-real
                   split as linkengine/boomlink_port.h above), boomlink_crc32.h/
@@ -81,7 +84,8 @@ tests/            host-native C CLI tools (codec_tool.c, linkframe_tool.c,
                   link_rx_test.c, link_tx_test.c, against fake_port.h/.c's
                   deterministic fake radio) + dispatch/services/storage/
                   scenario binaries (dispatch_test.c, command_service_test.c,
-                  config_service_test.c, crc32_test.c, config_store_test.c) +
+                  config_service_test.c, system_service_test.c, crc32_test.c,
+                  config_store_test.c) +
                   pytest suite + golden vectors (vectors_spec.py is their
                   single source of truth, sha256-pinned - see "Protocol
                   compatibility rules")
@@ -134,6 +138,12 @@ This directory is a CMake project that builds two different ways:
   engine, and `Core/Src/cli.c`'s boot sequence and superloop are what exercise them.
   CI's build workflow carries a matching "actually linked in" symbol check for this
   group too, added at the same time.
+
+  `boomlink_system_service` (Phase D, above) reached the same milestone immediately -
+  `protocol_service.c` wires it as `boomlink_dispatch_handlers_t.on_system` from the
+  start, unlike the earlier group which spent a phase cross-compiled with no caller -
+  and CI's symbol check covers each of its three entry points individually, for the
+  reason that check's own comment gives.
 
   No tests here either way - a
   cross-compiled host tool makes no sense, and pytest cannot run on an
