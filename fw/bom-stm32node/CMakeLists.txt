@@ -213,5 +213,9 @@ target_link_libraries(${CMAKE_PROJECT_NAME}
     boomlink_config_store
     boomlink_flash_storage_port
 
+    # Fleet discovery (boomlink.md section 8.6) - Ping/Pong and Wakeup/
+    # WakeupResponse, wired the same way as the two services above.
+    boomlink_system_service
+
     # Add user defined libraries
 )

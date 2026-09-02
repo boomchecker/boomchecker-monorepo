@@ -6,6 +6,7 @@
  */
 #include "cli.h"
 #include "boomlink_codec.h"
+#include "boomlink_system_service.h" /* BOOMLINK_SYSTEM_WAKEUP_MAX_WINDOW_S */
 #include "embedded_cli.h"
 #include "link_service.h"
 #include "main.h"   /* Error_Handler */
@@ -90,7 +91,19 @@ static void cmd_version(EmbeddedCli *cli, char *args, void *context)
 {
   (void)args;
   (void)context;
-  embeddedCliPrint(cli, "bom-stm32node CLI v0.1");
+  /* PROTOCOL_SERVICE_FW_VERSION_MAJOR/MINOR/PATCH (protocol_service.h) - the
+     same build version a section 8.6 WakeupResponse reports of this node -
+     rather than a separately-maintained literal here that could drift from
+     it. */
+  /* Worst case ~19 bytes of fixed text + up to 30 bytes for three %u fields
+     at 10 digits each + NUL = 50 - sized generously past that, the same
+     "hand-computed, not eyeballed" convention print_radio_status() already
+     documents, since the three macros are plain uint32_t and nothing here
+     assumes they stay single-digit forever. */
+  char line[64];
+  snprintf(line, sizeof(line), "bom-stm32node CLI v%u.%u.%u", PROTOCOL_SERVICE_FW_VERSION_MAJOR,
+           PROTOCOL_SERVICE_FW_VERSION_MINOR, PROTOCOL_SERVICE_FW_VERSION_PATCH);
+  embeddedCliPrint(cli, line);
 }
 
 /* Parse "<sec>" and run a PCM stream from the given source. Shared by the
@@ -331,30 +344,86 @@ static void cmd_proto(EmbeddedCli *cli, char *args, void *context)
    received/counted, just truncated for the debug print. */
 #define RADIO_RX_PREVIEW_MAX 64u
 
-/* Render up to `cap - 1` bytes of `buf` as printable ASCII (unprintable
-   bytes shown as '.') into `out`, NUL-terminated. Returns the number of
-   bytes actually rendered, so a caller can tell whether `len` was longer
-   than what fit. Shared by the raw and BoomLink-level RX previews below -
-   both need exactly this, on payloads from two different sources.
-
-   `cap == 0` renders nothing rather than underflowing `cap - 1u` to
-   SIZE_MAX: unreachable today (every call site passes a compile-time-sized
-   local array), but cheap to close off rather than leave as a contract only
-   its current callers happen to uphold. */
-static size_t ascii_preview(char *out, size_t cap, const uint8_t *buf, size_t len)
+/* Render an opaque received payload for a human console preview, picking the
+   representation from the bytes themselves so a binary frame is not shown as
+   noise:
+     - every byte printable ASCII -> the text in double quotes, e.g. "hello"
+       (a raw `radio ping`/`link ping` text payload);
+     - anything else -> an uppercase hex dump in brackets, e.g.
+       hex[12 08 96 01], because a binary protobuf Envelope - a section 8.6
+       WakeupResponse, say - rendered as text is just a row of dots
+       ("....r."...) that tells the operator nothing.
+   Writes at most `cap - 1` chars plus a NUL and returns the number of
+   payload BYTES represented (not chars written), so the caller can still
+   append a "..." marker when the payload was longer than what fit. `cap == 0`
+   renders nothing rather than underflowing the size math; an empty payload
+   renders as "". Shared by the raw and BoomLink-level RX previews below -
+   both need exactly this, on payloads from two different sources. */
+static size_t payload_preview(char *out, size_t cap, const uint8_t *buf, size_t len)
 {
   if (cap == 0u)
   {
     return 0;
   }
-  size_t n = (len < cap - 1u) ? len : (cap - 1u);
-  for (size_t i = 0; i < n; i++)
+  out[0] = '\0';
+
+  /* An all-printable payload (and the empty payload) is text; a single
+     non-printable byte makes the whole thing binary and flips it to hex. */
+  bool is_text = true;
+  for (size_t i = 0; i < len; i++)
   {
     char c = (char)buf[i];
-    out[i] = (c >= 0x20 && c < 0x7f) ? c : '.';
+    if (!(c >= 0x20 && c < 0x7f))
+    {
+      is_text = false;
+      break;
+    }
   }
-  out[n] = '\0';
-  return n;
+
+  size_t used = 0u;
+  if (is_text)
+  {
+    /* Fixed overhead: opening quote + closing quote + NUL = 3 chars. */
+    if (cap < 3u)
+    {
+      return 0;
+    }
+    out[used++] = '"';
+    size_t i = 0u;
+    while (i < len && used < cap - 2u)
+    {
+      out[used++] = (char)buf[i++];
+    }
+    out[used++] = '"';
+    out[used]   = '\0';
+    return i;
+  }
+
+  /* hex[...] : "hex[" (4) + "]" + NUL (2) fixed, then "XX " (3) per byte. */
+  static const char kHexDigits[] = "0123456789ABCDEF";
+  if (cap < 6u)
+  {
+    return 0;
+  }
+  out[used++] = 'h';
+  out[used++] = 'e';
+  out[used++] = 'x';
+  out[used++] = '[';
+  size_t i = 0u;
+  while (i < len && used + 3u <= cap - 2u)
+  {
+    out[used++] = kHexDigits[(buf[i] >> 4) & 0x0Fu];
+    out[used++] = kHexDigits[buf[i] & 0x0Fu];
+    out[used++] = ' ';
+    i++;
+  }
+  if (i > 0u && out[used - 1u] == ' ')
+  {
+    used--; /* trim the trailing separator before the closing bracket */
+  }
+  out[used++] = ']';
+  out[used]   = '\0';
+  return i;
 }
 
 /* Auto-print any packet radio_process() has finished receiving since the
@@ -380,8 +449,8 @@ static void print_rx_frame(void)
   }
 
   /* Best-effort debug view of a raw bring-up payload (no BoomProtocol yet). */
-  char preview[RADIO_RX_PREVIEW_MAX + 1];
-  ascii_preview(preview, sizeof(preview), buf, len);
+  char   preview[RADIO_RX_PREVIEW_MAX + 1];
+  size_t shown = payload_preview(preview, sizeof(preview), buf, len);
 
   char f1[16];
   char f2[16];
@@ -389,8 +458,8 @@ static void print_rx_frame(void)
   fmt_fixed(f2, sizeof(f2), snr, 1);
 
   char line[RADIO_RX_PREVIEW_MAX + 96];
-  snprintf(line, sizeof(line), "radio rx: \"%s\"%s (%u bytes, RSSI %s dBm, SNR %s dB)",
-           preview, (len > sizeof(buf)) ? "..." : "", (unsigned)len, f1, f2);
+  snprintf(line, sizeof(line), "radio rx: %s%s (%u bytes, RSSI %s dBm, SNR %s dB)",
+           preview, (len > shown) ? " ..." : "", (unsigned)len, f1, f2);
   embeddedCliPrint(s_cli, line);
 }
 
@@ -446,8 +515,8 @@ static void link_on_rx(void *user, uint32_t source_id, uint32_t destination_id,
     return;
   }
 
-  char preview[RADIO_RX_PREVIEW_MAX + 1];
-  size_t n = ascii_preview(preview, sizeof(preview), payload, payload_len);
+  char   preview[RADIO_RX_PREVIEW_MAX + 1];
+  size_t shown = payload_preview(preview, sizeof(preview), payload, payload_len);
 
   char f1[16];
   char f2[16];
@@ -456,10 +525,10 @@ static void link_on_rx(void *user, uint32_t source_id, uint32_t destination_id,
 
   char line[RADIO_RX_PREVIEW_MAX + 128];
   snprintf(line, sizeof(line),
-           "link rx: from 0x%08lX to %s \"%s\"%s (%u bytes, RSSI %s dBm, SNR %s dB)",
+           "link rx: from 0x%08lX to %s %s%s (%u bytes, RSSI %s dBm, SNR %s dB)",
            (unsigned long)source_id,
            (destination_id == BOOMLINK_ADDR_BROADCAST) ? "broadcast" : "me", preview,
-           (payload_len > n) ? "..." : "", (unsigned)payload_len, f1, f2);
+           (payload_len > shown) ? " ..." : "", (unsigned)payload_len, f1, f2);
   embeddedCliPrint(s_cli, line);
 
   /* PR 4 Phase C: the dispatcher wiring boomlink_link_rx_fn's own doc
@@ -697,6 +766,97 @@ static void cmd_link(EmbeddedCli *cli, char *args, void *context)
   embeddedCliPrint(cli, "usage: link status | link enable | link disable | link ping <node_id_hex> [text]");
 }
 
+static const char *device_type_name(boomlink_DeviceType type)
+{
+  switch (type)
+  {
+    case boomlink_DeviceType_DEVICE_TYPE_STMNODE: return "stmnode";
+    default:                                      return "unspecified";
+  }
+}
+
+/* protocol_service_wakeup_response_fn - prints each section 8.6
+   WakeupResponse this node collects after `wakeup <window_s>` below
+   broadcasts a WakeupRequest. Registered once from cli_init(), after
+   protocol_service_init() - see protocol_service_set_wakeup_response_
+   callback()'s own doc for why this file, not protocol_service.c, owns the
+   actual printing (the same reason link_on_rx()/link_on_tx_done() above do). */
+static void wakeup_on_response(uint32_t source_id, const boomlink_WakeupResponse *response)
+{
+  if (s_cli == NULL || response == NULL)
+  {
+    return;
+  }
+
+  char line[96];
+  snprintf(line, sizeof(line), "wakeup: 0x%08lX responded (%s, fw v%lu.%lu.%lu)",
+           (unsigned long)source_id, device_type_name(response->device_type),
+           (unsigned long)response->fw_version_major, (unsigned long)response->fw_version_minor,
+           (unsigned long)response->fw_version_patch);
+  embeddedCliPrint(s_cli, line);
+}
+
+/* Broadcasts a section 8.6 WakeupRequest asking every reachable node to
+   report in within `window_s` seconds, each after its own randomly-drawn
+   delay (ALOHA-style collision avoidance - see boomlink.md section 8.6).
+   Each reply prints via wakeup_on_response() above as it arrives, not
+   collected into a list here - there is no fixed count of nodes to wait
+   for, and `window_s` is only how long the responding nodes wait, not a
+   deadline this command itself blocks on. `wakeup 0` is valid (every node
+   fires back immediately, with no random spread to avoid collisions) - just
+   not useful for that purpose with more than one reachable node. */
+static void cmd_wakeup(EmbeddedCli *cli, char *args, void *context)
+{
+  (void)context;
+  if (embeddedCliGetTokenCount(args) < 1)
+  {
+    embeddedCliPrint(cli, "usage: wakeup <window_s> (0..3600)");
+    return;
+  }
+  const char   *tok      = embeddedCliGetToken(args, 1);
+  char         *end      = NULL;
+  unsigned long window_s = strtoul(tok, &end, 10);
+  /* The upper bound doubles as the strtoul-accepts-a-leading-'-' guard
+     parse_hex_u32()'s own comment warns about elsewhere in this file: a
+     negative window_s wraps to a huge unsigned value well past this check,
+     not a small one, so it is rejected by the SAME range check rather than
+     needing its own sign detection. BOOMLINK_SYSTEM_WAKEUP_MAX_WINDOW_S is
+     the identical ceiling boomlink_system_service_arm_wakeup() clamps to
+     anyway (review found window_s reaching that clamp unvalidated could
+     overflow its internal *1000 arithmetic) - rejecting it here instead of
+     silently letting it through and clamping tells the operator what
+     actually happened, rather than a window quietly shorter than what they
+     typed. */
+  if (end == tok || window_s > BOOMLINK_SYSTEM_WAKEUP_MAX_WINDOW_S)
+  {
+    embeddedCliPrint(cli, "usage: wakeup <window_s> (0..3600)");
+    return;
+  }
+
+  if (!link_service_enabled())
+  {
+    /* Same reasoning as `link ping` above: boomlink_link_send() would still
+       queue the frame, but link_service_process() skips boomlink_link_poll()
+       entirely while disabled, so it would sit queued and never transmit -
+       refusing here is the honest answer, not queueing something already
+       known to be doomed. */
+    embeddedCliPrint(cli, "link: disabled - `wakeup` would queue but never transmit "
+                          "(see `link enable`)");
+    return;
+  }
+
+  char line[64];
+  if (protocol_service_send_wakeup_request((uint32_t)window_s))
+  {
+    snprintf(line, sizeof(line), "wakeup: broadcast sent (window %lu s)", window_s);
+  }
+  else
+  {
+    snprintf(line, sizeof(line), "wakeup: failed to send (window %lu s)", window_s);
+  }
+  embeddedCliPrint(cli, line);
+}
+
 void cli_init(cli_tx_fn tx)
 {
   s_tx      = tx;
@@ -777,6 +937,15 @@ void cli_init(cli_tx_fn tx)
   };
   embeddedCliAddBinding(s_cli, link_binding);
 
+  CliCommandBinding wakeup_binding = {
+    .name         = "wakeup",
+    .help         = "wakeup <window_s> - broadcast a fleet discovery request (section 8.6)",
+    .tokenizeArgs = true,
+    .context      = NULL,
+    .binding      = cmd_wakeup,
+  };
+  embeddedCliAddBinding(s_cli, wakeup_binding);
+
   /* PR 4 Phase C: load the persisted NodeConfig (or safe defaults - see
      protocol_service_load_config()'s own doc) BEFORE link_service_init(),
      so this node's configured identity (rather than only the UID-derived
@@ -814,6 +983,11 @@ void cli_init(cli_tx_fn tx)
      just above: the only way this fails is loaded_config being NULL, which
      the address-of-a-local-variable just taken cannot be. */
   (void)protocol_service_init(&loaded_config);
+
+  /* Registered after protocol_service_init() - see protocol_service_set_
+     wakeup_response_callback()'s own doc for why this ordering, and
+     wakeup_on_response() above for what it prints. */
+  protocol_service_set_wakeup_response_callback(wakeup_on_response);
 
   embeddedCliProcess(s_cli); /* print the initial prompt */
 }

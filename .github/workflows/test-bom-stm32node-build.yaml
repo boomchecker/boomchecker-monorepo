@@ -157,6 +157,7 @@ jobs:
                       build/Debug/boomlink/libboomlink_dispatch.a \
                       build/Debug/boomlink/libboomlink_command_service.a \
                       build/Debug/boomlink/libboomlink_config_service.a \
+                      build/Debug/boomlink/libboomlink_system_service.a \
                       build/Debug/boomlink/libboomlink_storage_port.a \
                       build/Debug/boomlink/libboomlink_config_store.a \
                       build/Debug/libboomlink_flash_storage_port.a; do
@@ -274,6 +275,47 @@ jobs:
           [ $status -eq 0 ] && echo "✅ Protocol dispatcher symbols are linked into the firmware image"
           exit $status
 
+      - name: Verify fleet discovery (Wakeup) is actually linked in, not just compiled
+        working-directory: ./fw/bom-stm32node
+        run: |
+          # boomlink_system_service (boomlink.md section 8.6 - Ping/Pong and
+          # Wakeup/WakeupResponse) has three distinct entry points, each with
+          # exactly one call site in protocol_service.c: _handle (the
+          # dispatch handler, wired into boomlink_dispatch_handlers_t in
+          # protocol_service_init()), _arm_wakeup (protocol_service_on_rx(),
+          # right after boomlink_dispatch_process()), and _poll
+          # (protocol_service_process()). The same one-call-site-per-symbol
+          # gap the config service group above documents (and was once
+          # caught by) applies here just as directly: a refactor dropping
+          # any one of these three - most easily _arm_wakeup, since nothing
+          # about section 8.6's flow LOOKS incomplete without it until a
+          # WakeupRequest silently never gets a random delay armed - would
+          # compile and link clean under --gc-sections with nothing else
+          # here noticing. Listed individually rather than as one archive
+          # check for exactly that reason.
+          #
+          # boomlink_radio_port_random_u32 (App/link/boomlink_radio_port.c)
+          # and boomlink_build_system_message (fw/common/boomlink/dispatch/
+          # boomlink_envelope_builder.c) share the identical one-call-site
+          # risk from the other direction: replace the random draw with a
+          # constant, or drop the envelope-builder call, and every check
+          # above (including the three _system_service symbols themselves,
+          # which stay perfectly reachable either way) stays green while
+          # Wakeup silently stops actually working - every node fires at
+          # the same instant with no jitter, or no WakeupRequest/
+          # WakeupResponse frame is ever built at all.
+          status=0
+          for symbol in boomlink_system_service_handle boomlink_system_service_arm_wakeup \
+                        boomlink_system_service_poll boomlink_radio_port_random_u32 \
+                        boomlink_build_system_message; do
+            if ! arm-none-eabi-nm build/Debug/bom-stm32node.elf | grep -q "$symbol"; then
+              echo "❌ $symbol is not linked into bom-stm32node.elf"
+              status=1
+            fi
+          done
+          [ $status -eq 0 ] && echo "✅ Fleet discovery (Wakeup) symbols are linked into the firmware image"
+          exit $status
+
       - name: Build summary
         run: |
           {
@@ -283,4 +325,5 @@ jobs:
             echo "- ELF produced ✓"
             echo "- BoomProtocol linked and referenced (not just compiled) ✓"
             echo "- Protocol dispatcher linked and referenced (not just compiled) ✓"
+            echo "- Fleet discovery (Wakeup) linked and referenced (not just compiled) ✓"
           } >> "$GITHUB_STEP_SUMMARY"

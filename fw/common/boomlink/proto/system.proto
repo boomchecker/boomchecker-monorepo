@@ -3,15 +3,19 @@ syntax = "proto3";
 package boomlink;
 
 // Protocol housekeeping and node state (boomlink.md section 8.5). PR 2 only
-// implements the Ping/Pong pair; boot/ready status, protocol error and
-// firmware/hardware version reporting are added by a later PR once something
-// in the firmware actually needs to send them - field numbers 3+ are simply
-// unused until then, not `reserved` (that keyword is for numbers that were
-// used and then removed, which none of these have been).
+// implemented the Ping/Pong pair; boot/ready status and protocol error are
+// still added by a later PR once something in the firmware actually needs to
+// send them - field numbers 5+ are simply unused until then, not `reserved`
+// (that keyword is for numbers that were used and then removed, which none
+// of these have been). Wakeup/discovery (below) is firmware/hardware version
+// reporting's first real use, filling fields 3-4 this comment already
+// reserved for exactly that purpose.
 message SystemMessage {
   oneof message {
     Ping ping = 1;
     Pong pong = 2;
+    WakeupRequest wakeup_request = 3;
+    WakeupResponse wakeup_response = 4;
   }
 }
 
@@ -32,4 +36,49 @@ message Pong {
   // Echoed back verbatim from the triggering Ping so a caller can confirm the
   // round trip carried the exact bytes it sent.
   bytes payload = 1;
+}
+
+// boomlink.md section 8.6 - fleet discovery. Broadcast by whichever node is
+// acting as the operator's collection point for a session (there is no
+// special "master" address - section 7.2 - so this is a role, not a wire
+// concept); every receiving node answers WakeupResponse after a delay drawn
+// uniformly from [0, window_s], spreading the responses out instead of every
+// node on the same magic replying to the same instant broadcast at once -
+// the identical "several nodes at almost the same time" collision shape
+// section 9.7's tx_jitter_max_ms already exists for, just several orders of
+// magnitude larger (seconds, not tens of milliseconds), so it needs its own
+// window rather than reusing that per-node constant.
+message WakeupRequest {
+  // 0 is a legitimate value (see this field's own handling doc) - respond
+  // immediately, no jitter - not "unset"; there is no sentinel to reserve.
+  uint32 window_s = 1;
+}
+
+// DeviceType's WHY, not its WHAT: this schema is shared across every board
+// BoomLink ever runs on (section 3's layering - fw/common/boomlink knows
+// nothing about which target links it in), so a WakeupResponse from a future
+// non-STM32 or non-sensor-node board needs its own value here rather than
+// every listener assuming STMNODE. Exactly one real value exists today
+// because exactly one firmware exists to answer with it.
+enum DeviceType {
+  DEVICE_TYPE_UNSPECIFIED = 0;
+  DEVICE_TYPE_STMNODE = 1;
+}
+
+// Deliberately NOT a synchronous, immediate reply the way Ping/Pong or a
+// Command response are (boomlink_dispatch_t's own on_system contract still
+// answers `has_response = false` for a WakeupRequest for exactly this
+// reason - see boomlink_system_service.h) - the whole point of the random
+// delay above is that this does NOT go out inside the same RX handling that
+// received the request. fw_version as three plain integers, not a string:
+// nothing else in this schema encodes structured data as text (`Command
+// Response.diagnostic` is free-form human text, a different job), and a
+// numeric major/minor/patch triple is directly comparable by a host tool
+// without parsing.
+message WakeupResponse {
+  uint32 node_id           = 1;
+  DeviceType device_type   = 2;
+  uint32 fw_version_major  = 3;
+  uint32 fw_version_minor  = 4;
+  uint32 fw_version_patch  = 5;
 }

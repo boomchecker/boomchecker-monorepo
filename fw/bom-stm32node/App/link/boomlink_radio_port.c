@@ -100,3 +100,7 @@ void boomlink_radio_port_init(boomlink_port_t *out) {
   out->max_packet = RADIO_MAX_PAYLOAD;
   out->ctx        = NULL;
 }
+
+uint32_t boomlink_radio_port_random_u32(void) {
+  return next_u32();
+}

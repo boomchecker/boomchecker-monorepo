@@ -11,7 +11,10 @@
 #include "boomlink_command_service.h"
 #include "boomlink_config_store.h"
 #include "boomlink_dispatch.h"
+#include "boomlink_envelope_builder.h"
 #include "boomlink_flash_storage_port.h"
+#include "boomlink_radio_port.h" /* boomlink_radio_port_random_u32() - wakeup delay draw */
+#include "boomlink_system_service.h"
 #include "link_service.h"
 #include "main.h" /* HAL_GetTick, HAL_NVIC_SystemReset */
 #include "radio.h"
@@ -46,7 +49,14 @@
 static boomlink_dispatch_t       s_dispatch;
 static boomlink_config_service_t s_config_svc;
 static boomlink_command_ops_t    s_command_ops;
+static boomlink_system_service_t s_system_svc;
+static boomlink_system_ops_t     s_system_ops;
 static bool                      s_initialized;
+
+/* Set only via protocol_service_set_wakeup_response_callback() - see that
+   function's own doc for why cli.c, not this file, owns the actual
+   printing. NULL (the default) is a valid, documented choice. */
+static protocol_service_wakeup_response_fn s_wakeup_response_cb;
 
 /* Initialized once by protocol_service_load_config() (always called before
    anything else in this file can run - see cli.c's boot sequence) and
@@ -133,6 +143,84 @@ static bool cmd_request_diagnostics(void *ctx, char *out_diagnostic, size_t out_
   return true;
 }
 
+/* boomlink_system_ops_t.on_wakeup_response - forwards to whatever cli.c
+   registered via protocol_service_set_wakeup_response_callback(), or does
+   nothing if that is still NULL (the default - see that function's own
+   doc). `ctx` is unused: this file has exactly one system service instance,
+   not one per caller, so there is nothing per-instance to recover from it. */
+static void system_on_wakeup_response(void *ctx, uint32_t source_id,
+                                      const boomlink_WakeupResponse *response) {
+  (void)ctx;
+  if (s_wakeup_response_cb != NULL) {
+    s_wakeup_response_cb(source_id, response);
+  }
+}
+
+/* Builds, encodes and sends a SystemMessage this node originates itself,
+   outside the ordinary synchronous dispatch response path - section 8.6's
+   WakeupRequest (this file's protocol_service_send_wakeup_request()) and
+   Ping/Pong (section 8.5) and WakeupResponse (protocol_service_process()'s
+   poll below).
+
+   Returns true if the frame reached the TX queue (boomlink_link_send()
+   returned OK or OK_EVICTED) - NOT that it was actually transmitted or
+   acknowledged, only that it left this function's hands, the same
+   "queued" boolean protocol_service_on_rx()'s own send path already
+   computes for itself before deciding whether to disarm a reboot. Returns
+   false on an encode failure, no link yet, or boomlink_link_send() itself
+   rejecting the frame (queue full, too long, bad destination) - review
+   found the original version of this function silently dropped all three
+   and returned nothing, so `wakeup <window_s>` printed "broadcast sent"
+   even with `link disable` in effect and the frame never actually
+   transmitting - the same dishonesty `link ping` (cli.c) already refuses to
+   commit for the identical reason.
+
+   NORMAL priority, not HIGH: section 9.8 reserves HIGH for "ACK, command
+   response, critical system message" - none of what this function sends
+   (Pong, WakeupRequest, WakeupResponse) is critical or as time-sensitive as
+   a command response, so all three sit with configuration responses
+   instead. */
+static bool send_system_message(const boomlink_SystemMessage *msg, uint32_t destination_id,
+                                bool request_ack) {
+  boomlink_Envelope envelope;
+  boomlink_build_system_message(&envelope, msg);
+
+  uint8_t buf[boomlink_Envelope_size];
+  size_t  len = 0;
+  if (!boomlink_encode_envelope(&envelope, buf, sizeof(buf), &len)) {
+    return false;
+  }
+
+  boomlink_link_t *link = link_service_link();
+  if (link == NULL) {
+    return false;
+  }
+  boomlink_link_send_result_t rc =
+      boomlink_link_send(link, destination_id, BOOMLINK_TXPRIO_NORMAL, request_ack, buf, len);
+  return rc == BOOMLINK_LINK_SEND_OK || rc == BOOMLINK_LINK_SEND_OK_EVICTED;
+}
+
+void protocol_service_set_wakeup_response_callback(protocol_service_wakeup_response_fn cb) {
+  s_wakeup_response_cb = cb;
+}
+
+bool protocol_service_send_wakeup_request(uint32_t window_s) {
+  if (!s_initialized) {
+    return false;
+  }
+  boomlink_SystemMessage msg          = boomlink_SystemMessage_init_zero;
+  msg.which_message                   = boomlink_SystemMessage_wakeup_request_tag;
+  msg.message.wakeup_request.window_s = window_s;
+  /* Broadcast, no ACK requested - the identical destination_id ==
+     BOOMLINK_ADDR_BROADCAST reasoning protocol_service_on_rx() already
+     applies to its own broadcast-addressed replies: an ACK from every
+     reachable node at once is the "N simultaneous responses" problem that
+     reasoning exists to avoid, and this function has no correlated
+     exchange to wait for one against anyway - the real replies are the
+     WakeupResponses this triggers, each its own separate exchange. */
+  return send_system_message(&msg, BOOMLINK_ADDR_BROADCAST, false);
+}
+
 void protocol_service_load_config(boomlink_node_config_t *out) {
   boomlink_flash_storage_port_init(&s_storage_port);
   if (!boomlink_config_store_load(&s_storage_port, out)) {
@@ -206,20 +294,37 @@ bool protocol_service_init(const boomlink_node_config_t *loaded_config) {
 
   boomlink_config_service_init(&s_config_svc, loaded_config, PROTOCOL_SERVICE_CONFIRM_WINDOW_MS);
 
+  /* This node's own identity for any WakeupResponse it sends (section 8.6) -
+     see boomlink_system_identity_t's own doc for why this is supplied once
+     here rather than per-call. */
+  boomlink_system_identity_t system_identity = {
+    .device_type      = boomlink_DeviceType_DEVICE_TYPE_STMNODE,
+    .fw_version_major = PROTOCOL_SERVICE_FW_VERSION_MAJOR,
+    .fw_version_minor = PROTOCOL_SERVICE_FW_VERSION_MINOR,
+    .fw_version_patch = PROTOCOL_SERVICE_FW_VERSION_PATCH,
+  };
+  s_system_ops.on_wakeup_response = system_on_wakeup_response;
+  s_system_ops.ctx                = NULL; /* one instance, nothing per-call to recover - see the callback's own doc */
+  boomlink_system_service_init(&s_system_svc, &system_identity, &s_system_ops);
+
   boomlink_dispatch_handlers_t handlers = {0};
   handlers.on_command      = boomlink_command_service_handle;
   handlers.on_command_user = &s_command_ops;
   handlers.on_config       = boomlink_config_service_handle;
   handlers.on_config_user  = &s_config_svc;
-  /* on_detection/on_telemetry/on_system left NULL: section 4's original PR 4
-     scope for detection/telemetry was recognition-only (no algorithm, no
-     sensor backing exists - see boomlink.md's Phase C notes), and nothing
-     in this protocol yet needs an automatic System/Ping responder. */
+  handlers.on_system       = boomlink_system_service_handle;
+  handlers.on_system_user  = &s_system_svc;
+  /* on_detection/on_telemetry left NULL: section 4's original PR 4 scope for
+     both was recognition-only (no algorithm, no sensor backing exists yet -
+     see boomlink.md's Phase C notes). on_system is wired for the first time
+     here - see boomlink_system_service.h for what it now answers
+     (Ping/Pong, section 8.5) and stages (Wakeup, section 8.6). */
   boomlink_dispatch_init(&s_dispatch, &handlers);
 
-  s_reboot_armed     = false;
-  s_confirm_eligible = false;
-  s_initialized      = true;
+  s_reboot_armed        = false;
+  s_confirm_eligible    = false;
+  s_wakeup_response_cb  = NULL;
+  s_initialized         = true;
   return true;
 }
 
@@ -249,6 +354,17 @@ void protocol_service_on_rx(void *user, uint32_t source_id, uint32_t destination
   bool reboot_was_armed_before_dispatch = s_reboot_armed;
 
   boomlink_dispatch_result_t result = boomlink_dispatch_process(&s_dispatch, &rx, &envelope);
+
+  /* A WakeupRequest just staged by boomlink_system_service_handle() (called
+     from inside boomlink_dispatch_process() above via handlers.on_system)
+     always answers has_response=false - section 8.6's whole point is that
+     the reply goes out LATER, after a random delay, not here - so this must
+     run BEFORE the early return below, or a staged request would never get
+     armed. A no-op (per its own doc) on every other message, staged or not:
+     cheap enough to call unconditionally rather than threading a "was this
+     a WakeupRequest" flag out of boomlink_dispatch_process(). */
+  boomlink_system_service_arm_wakeup(&s_system_svc, HAL_GetTick(), boomlink_radio_port_random_u32());
+
   if (!result.has_response) {
     return;
   }
@@ -319,8 +435,10 @@ void protocol_service_on_rx(void *user, uint32_t source_id, uint32_t destination
   }
 
   /* boomlink_txqueue.h's documented priority mapping: HIGH for a command
-     response, NORMAL for everything else this file ever sends (today, only
-     a config response). */
+     response, NORMAL for everything else this dispatch-response path ever
+     sends (a config response). send_system_message() above is a separate
+     send path (Pong, WakeupRequest, WakeupResponse) with its own NORMAL
+     choice and its own doc comment - not reachable from here. */
   bool is_command_response  = result.response.which_payload == boomlink_Envelope_command_tag;
   boomlink_tx_priority_t priority =
       is_command_response ? BOOMLINK_TXPRIO_HIGH : BOOMLINK_TXPRIO_NORMAL;
@@ -489,5 +607,38 @@ void protocol_service_process(void) {
   if (s_reboot_armed &&
       (uint32_t)(now_ms - s_reboot_armed_at_ms) >= PROTOCOL_SERVICE_REBOOT_DELAY_MS) {
     HAL_NVIC_SystemReset();
+  }
+
+  /* Section 8.6's WakeupResponse leaves this exchange's finish line here,
+     not in protocol_service_on_rx(): the reply fires on its own randomly-
+     drawn delay, not inside the RX handling that received the WakeupRequest
+     - see boomlink_system_service_poll()'s own doc. node_id is filled in
+     here, not by the service itself, for the same reason boomlink_system_
+     service.h documents on that call: the service is host-testable,
+     target-agnostic C with no link engine handle of its own to read this
+     node's real address from. */
+  boomlink_SystemMessage wakeup_response_msg;
+  uint32_t               wakeup_reply_to;
+  if (boomlink_system_service_poll(&s_system_svc, now_ms, &wakeup_response_msg, &wakeup_reply_to)) {
+    wakeup_response_msg.message.wakeup_response.node_id = link_service_node_id();
+    /* Unicast back to the requester, but NO ACK requested - despite being a
+       one-to-one exchange at this point (unlike the WakeupRequest broadcast
+       that triggered it). Review found that requesting one here reintroduces
+       the exact problem this file's own reasoning for `request_ack = false`
+       on a broadcast reply already names: several nodes drew delays close
+       together (most starkly at `window_s == 0`, which section 8.6
+       explicitly allows) end up transmitting an ACK-requested, retried-up-
+       to-LINK_MAX_ATTEMPTS-times frame in the same burst - and the collector
+       is deaf to every OTHER node's reply while it transmits an ACK for one
+       of them, since a single half-duplex radio can only do one of
+       receive/transmit at a time. Fire-and-forget is also what this
+       service's own header already documents as the accepted failure mode
+       for a dropped reply (boomlink_system_service_poll()'s "does not get a
+       second chance" doc) - requesting an ACK here would fight that
+       documented posture, not support it. This call's return value is
+       ignored for the same "no diagnostic channel to report through"
+       reason protocol_service_on_rx() already ignores it on this exact
+       automatic (not CLI-triggered) send path. */
+    (void)send_system_message(&wakeup_response_msg, wakeup_reply_to, false);
   }
 }

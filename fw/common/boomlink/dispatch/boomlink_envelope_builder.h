@@ -17,6 +17,7 @@
 #define BOOMLINK_ENVELOPE_BUILDER_H
 
 #include "envelope.pb.h"
+#include "system.pb.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -29,6 +30,24 @@ void boomlink_build_detection_event(boomlink_Envelope *out, const boomlink_Detec
 
 /** As above, for a periodic TelemetryReport. */
 void boomlink_build_telemetry_report(boomlink_Envelope *out, const boomlink_TelemetryReport *report);
+
+/**
+ * As above, for a `SystemMessage` a node originates itself outside the
+ * ordinary synchronous dispatch response path - section 8.6's `WakeupRequest`
+ * (broadcast by an operator, nothing to correlate a reply to) and its
+ * `WakeupResponse` (sent later, after a randomly-drawn delay - never inside
+ * the RX handling that received the request, so the dispatcher's own
+ * response-building path never runs for it either; see
+ * boomlink_system_service.h). `Ping`/`Pong` do NOT need this helper: both
+ * stay on the ordinary synchronous request/response path
+ * `boomlink_dispatch_process()` already builds correlated headers for, since
+ * section 8.5 requires `MessageHeader.request_id` to correlate a `Pong` back
+ * to its `Ping` - a guarantee only that path provides.
+ *
+ * `message` is copied by value, not referenced - safe to pass a stack local
+ * that goes out of scope right after this call returns.
+ */
+void boomlink_build_system_message(boomlink_Envelope *out, const boomlink_SystemMessage *message);
 
 #ifdef __cplusplus
 }
