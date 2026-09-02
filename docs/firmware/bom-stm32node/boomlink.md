@@ -880,6 +880,70 @@ System messages are protocol housekeeping and node state, for example:
 ACK is **not** a system message — it is a link frame type handled entirely inside
 BoomLink (section 9.5).
 
+### 8.6 Fleet discovery
+
+Section 7.2 is explicit that there is no join/registration protocol and no special
+"master" address — addressing is entirely static configuration (`node_id` plus the
+shared `magic` network ID). That leaves a real, deliberately-unaddressed-until-now gap:
+an operator who wants to know which nodes are actually reachable on a given `magic` has
+no way to ask, short of knowing every `node_id` in advance. This section adds exactly
+that one primitive — discovery — without becoming the "complex distributed network
+coordinator" section 2 rules out. It is not fleet membership, authentication, or a
+persistent roster; a node answering does not become anything, and the protocol itself
+keeps no record that it did. Deciding which nodes an operator trusts, remembers, or
+acts on is left entirely to whatever is on the other end of a `WakeupResponse` — a human
+watching a console today, PR 5's host tooling later — the identical "keep target-
+specific/embedded glue thin, put bookkeeping where it's host-testable" split this whole
+design already follows for everything else.
+
+**`WakeupRequest`** is broadcast by whichever node is acting as the operator's collection
+point for a discovery session — a role for that one exchange, not a wire concept; any
+node can send one. It carries `window_s`, the width of the reply window in seconds.
+`window_s == 0` is a legitimate value (reply immediately, no jitter), useful for a
+point-to-point sanity check between two boards on a bench, not a sentinel for "unset" —
+there is nothing to reserve it against.
+
+**Every node that receives a `WakeupRequest` draws a delay uniformly from `[0,
+window_s]` and answers with `WakeupResponse` after that delay, addressed back to the
+requester (the `WakeupRequest`'s own `source_id`), not broadcast.** This is the same
+"several nodes at almost the same time" collision shape section 9.7's `tx_jitter_max_ms`
+already exists for — every node on the same `magic` would otherwise reply to the same
+broadcast at the same instant — just several orders of magnitude larger (seconds, not
+tens of milliseconds) and driven by a value the *requester* chooses per discovery
+session, not a static per-node config constant, so it needs its own timer and cannot
+reuse `tx_jitter_max_ms` directly. `WakeupResponse` carries `node_id` (redundant with the
+link frame's own `source_id`, but explicit and self-describing on its own), `device_type`
+and a three-field `fw_version_major`/`_minor`/`_patch` — plain integers, not a string,
+matching how the rest of this schema encodes structured data (`CommandResponse
+.diagnostic` is the one existing free-form text field, and it is explicitly that: a
+human-readable note, a different job).
+
+**A second `WakeupRequest` arriving while a node's reply is still pending restarts the
+window with a freshly-drawn delay**, rather than being ignored or queued behind the
+first. A requester re-broadcasting almost always means "the first round did not hear
+back from enough nodes" — restarting gives every node, including ones that already
+scheduled a reply, a fresh, unbiased draw against the new (possibly different)
+`window_s`, rather than leaving some nodes still counting down against a round the
+requester has effectively abandoned.
+
+**`WakeupRequest`/`WakeupResponse` are deliberately NOT synchronous request/response the
+way `Ping`/`Pong` or a `Command` are** — `boomlink_dispatch_system_fn`'s `on_system`
+handler answers `has_response = false` for a `WakeupRequest` (the dispatch contract's own
+documented "return false for no response at all" case), and the actual `WakeupResponse`
+is sent later, out of band, once the drawn delay elapses — see
+`boomlink_system_service.h`'s own doc for the mechanism. This is the reason discovery
+could not simply reuse the already-specified `Ping`/`Pong` exchange with a `window_s`
+field bolted on: `Ping`/`Pong` is speced and implemented as an immediate round-trip probe,
+and changing that contract to sometimes mean "reply eventually" would be a breaking
+change to an existing, working message pair for a need only `Wakeup` has.
+
+**`WakeupRequest` needs no broadcast-danger guard the way `Reboot`/`ClearStatistics`/
+`ConfigSet` do (sections 8.2's own guard and 9.9)** — those exist because acting on them
+mutates persisted or hazardous state, or takes an irreversible action, the moment N nodes
+all do it from one unauthenticated frame. Receiving a `WakeupRequest` does neither: it
+only schedules a harmless, already-bounded-in-time reply. Being broadcast is not a
+danger here, it is the entire point.
+
 ---
 
 ## 9. BoomLink specification
