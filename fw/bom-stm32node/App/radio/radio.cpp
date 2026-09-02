@@ -83,9 +83,31 @@ void OnDio1() {
    forced recovery. Leaves the radio idle (no further DIO1 events expected)
    and records the failure if startReceive() itself fails - a bad SPI link
    would otherwise spin retrying forever while radio_is_ready() kept
-   claiming the radio was healthy. */
+   claiming the radio was healthy.
+
+   First real-hardware bring-up found startReceive() reliably failing
+   (RADIOLIB_ERR_UNKNOWN) the very first time this runs after a TX
+   completion - 100% reproducible on both test boards, immediately after a
+   single `radio ping` from a freshly booted, otherwise-healthy radio
+   (`radio status` clean beforehand). The identical call succeeds every time
+   from radio_init()'s own first EnterReceive(), right after
+   SX1262::begin() - so this is specific to the TX-then-RX transition, not
+   startReceive() being broken outright. finishTransmit() (called just
+   before this, in radio_process()'s kTransmitting case) already puts the
+   chip in standby, but this profile drives the SX1262 from an external TCXO
+   (e22_radio::DefaultProfile()'s 1.8 V DIO3 reference) - the most likely
+   mechanism is that reference not being given time to restabilize before
+   the next RX needs its PLL locked again, since standby() alone does not
+   wait for that. A retry with an explicit standby() and a short settle
+   delay first covers that without needing to know exactly which internal
+   SPI step loses the race. */
 void EnterReceive() {
   int16_t state = s_radio->startReceive();
+  if (state != RADIOLIB_ERR_NONE) {
+    (void)s_radio->standby();
+    HAL_Delay(2);
+    state = s_radio->startReceive();
+  }
   if (state == RADIOLIB_ERR_NONE) {
     s_mode = Mode::kReceiving;
   } else {
