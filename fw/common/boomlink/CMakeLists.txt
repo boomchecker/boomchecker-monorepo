@@ -626,6 +626,24 @@ target_compile_features(boomlink_config_service PUBLIC c_std_11)
 target_compile_options(boomlink_config_service PRIVATE
   ${BOOMLINK_WARNING_FLAGS} ${BOOMLINK_WERROR_FLAGS} ${BOOMLINK_TARGET_WERROR_FLAGS})
 
+# Section 8.5's Ping/Pong echo and section 8.6's fleet discovery (Wakeup/
+# WakeupResponse) - boomlink_dispatch_system_fn's first real implementation
+# (on_system has been NULL through every prior phase). No boomlink_linkframe
+# dependency, unlike command/config service above: this file never touches
+# BOOMLINK_ADDR_INVALID/BOOMLINK_ADDR_BROADCAST, since Wakeup needs no
+# broadcast-danger guard at all (see boomlink.md section 8.6's own reasoning)
+# and Ping/Pong never did either.
+add_library(boomlink_system_service STATIC
+  ${CMAKE_CURRENT_SOURCE_DIR}/services/boomlink_system_service.c
+)
+target_include_directories(boomlink_system_service PUBLIC
+  ${CMAKE_CURRENT_SOURCE_DIR}/services
+)
+target_link_libraries(boomlink_system_service PUBLIC boomlink_dispatch)
+target_compile_features(boomlink_system_service PUBLIC c_std_11)
+target_compile_options(boomlink_system_service PRIVATE
+  ${BOOMLINK_WARNING_FLAGS} ${BOOMLINK_WERROR_FLAGS} ${BOOMLINK_TARGET_WERROR_FLAGS})
+
 # PR 4 Phase B: the seam between the config storage wrapper below and
 # whatever actually holds the bytes (a real flash sector on the target, an
 # in-memory buffer in host tests) - no Nanopb dependency of its own, same
@@ -860,6 +878,17 @@ if(BOOMLINK_STANDALONE)
   target_compile_options(boomlink_config_service_test PRIVATE
     ${BOOMLINK_WARNING_FLAGS} ${BOOMLINK_WERROR_FLAGS})
   add_test(NAME boomlink_config_service_test COMMAND boomlink_config_service_test)
+
+  # Section 8.5's Ping/Pong echo and section 8.6's fleet discovery - the
+  # staged/armed/fired wakeup state machine against caller-supplied now_ms/
+  # random_u32, including the "second WakeupRequest restarts the window"
+  # rule and the window_s == 0 (respond immediately) boundary.
+  add_executable(boomlink_system_service_test tests/system_service_test.c)
+  target_link_libraries(boomlink_system_service_test PRIVATE boomlink_system_service)
+  target_include_directories(boomlink_system_service_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests)
+  target_compile_options(boomlink_system_service_test PRIVATE
+    ${BOOMLINK_WARNING_FLAGS} ${BOOMLINK_WERROR_FLAGS})
+  add_test(NAME boomlink_system_service_test COMMAND boomlink_system_service_test)
 
   # PR 4 Phase B: the standard CRC-32 pinned against its own published test
   # vector - see boomlink_crc32.h's own doc for why this small algorithm gets

@@ -2474,6 +2474,78 @@ Deliberately deferred, not silently dropped:
   value) to track "explicitly assigned" separately from "UID-derived", which PR 5's
   host CLI work below is a more natural place to add than a wiring-only phase.
 
+### Phase D — fleet discovery, what actually landed
+
+Not part of PR 4's original scope list above — added afterwards, once section 8.6's
+discovery gap (no way to ask which nodes are reachable on a given `magic` without
+already knowing every `node_id`) came up in its own right. Filed here rather than as a
+new top-level PR because it reuses exactly the dispatcher/services plumbing PR 4 built
+(`boomlink_dispatch_t`, `boomlink_dispatch_handlers_t`) and lands the one piece of that
+plumbing every earlier phase left unwired — `on_system` was `NULL` through Phase A/B/C
+(see Phase C's own notes above; nothing in this protocol needed an automatic
+`System`/`Ping` responder until now):
+
+- `fw/common/boomlink/services/boomlink_system_service.c/.h` — a new host-testable
+  service handling both `Ping`/`Pong` (section 8.5, an ordinary immediate echo) and
+  `WakeupRequest`/`WakeupResponse` (section 8.6). Wakeup does not fit the synchronous
+  "fill a response, return true" shape `Ping`/`Pong` and the command/config services
+  all share, so it is split across three calls instead of one: `_handle()` (the
+  `boomlink_dispatch_system_fn` itself) stages a received request's `window_s` and
+  reply-to address and answers `false` (no response now); `_arm_wakeup()`, called
+  right after dispatch with a caller-supplied `now_ms`/`random_u32`, turns that stage
+  into an actual fire deadline; `_poll()`, called every tick, reports once that
+  deadline passes and fills the `WakeupResponse` to send — mirroring the
+  "caller owns time and randomness, this file only owns the state machine" split
+  `boomlink_config_service_commit_pending_apply()`/`_poll()` already established;
+- the random delay reuses `App/link/boomlink_radio_port.c`'s existing per-node
+  xorshift32 PRNG via a new `boomlink_radio_port_random_u32()` accessor, rather than
+  standing up a second RNG for one caller — the same "quality requirements are low
+  here, not cryptography" reasoning `boomlink_port_t.random_u32` already documents
+  covers this use just as well;
+- a new `boomlink_build_system_message()` in the existing
+  `fw/common/boomlink/dispatch/boomlink_envelope_builder.c/.h` — needed because both
+  `WakeupRequest` (broadcast by an operator, nothing to correlate a response to) and
+  `WakeupResponse` (sent later, asynchronously, never from inside the RX handling that
+  received the request) originate outside the ordinary synchronous dispatch response
+  path that path's own request/response header correlation depends on;
+- `App/protocol/protocol_service.c` wires all of it: `boomlink_system_service_handle`
+  is registered as `on_system`; `protocol_service_on_rx()` calls
+  `boomlink_system_service_arm_wakeup()` right after `boomlink_dispatch_process()`
+  (before that call's own `has_response == false` early return, since a
+  `WakeupRequest` always takes that path); `protocol_service_process()` polls every
+  tick and, once a response is due, fills in `node_id` (the one field the service
+  itself has no way to know — it holds no link engine handle) from
+  `link_service_node_id()` before sending it back, unicast with an ACK requested, to
+  the original requester;
+- `protocol_service_send_wakeup_request()` broadcasts the `WakeupRequest`, and
+  `protocol_service_set_wakeup_response_callback()` lets `Core/Src/cli.c` learn about
+  each `WakeupResponse` this node collects — the same "the protocol layer owns the
+  mechanism, the CLI layer owns printing to the operator" split `link_service_init()`'s
+  own `on_rx`/`on_tx_done` callbacks already use;
+- a new `wakeup <window_s>` CLI command (`cmd_wakeup()` in `Core/Src/cli.c`)
+  broadcasts the request; each `WakeupResponse` that arrives prints its own line
+  (source address, `device_type`, `fw_version_major.minor.patch`) as it comes in,
+  rather than being collected into a list — there is no fixed node count to wait for,
+  and `window_s` only bounds how long a *responding* node waits, not how long this
+  command itself blocks;
+- `version` now reads from the same `PROTOCOL_SERVICE_FW_VERSION_MAJOR/MINOR/PATCH`
+  macros a `WakeupResponse` reports, rather than a separately-maintained literal that
+  could drift from it — both were the same hardcoded string before this phase;
+- CI's build workflow gained the same class of "actually linked in" check the
+  dispatcher and link engine already have: `boomlink_system_service_handle`,
+  `_arm_wakeup` and `_poll` are checked individually, not as one archive-level check,
+  since each has exactly one call site in `protocol_service.c` and a regression
+  dropping just one (most plausibly `_arm_wakeup`, since nothing about section 8.6's
+  flow looks visibly broken without it until a `WakeupRequest` silently never gets a
+  delay armed) would otherwise compile and link clean under `--gc-sections` — verified
+  by sabotage: removing the `_arm_wakeup()` call site left every earlier check green
+  while that one symbol alone dropped out of the linked ELF;
+- known gap, left open: nothing calls `boomlink_config_store_save()`-style persistence
+  for anything Wakeup does, deliberately — a `WakeupResponse` recipient (an operator's
+  console today, PR 5's host tooling later) is where any notion of "known fleet
+  membership" belongs, per section 8.6's own "not a persistent roster" scoping; this
+  phase adds no state anywhere that outlives one discovery round.
+
 ## PR 5 — Host CLI and end-to-end tooling
 
 Tracked by issue [#76](https://github.com/boomchecker/boomchecker-monorepo/issues/76).

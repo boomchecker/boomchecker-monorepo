@@ -26,10 +26,24 @@
 #include <stdint.h>
 
 #include "boomlink_config_service.h"
+#include "system.pb.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+/**
+ * This firmware's own build version, reported in a section 8.6
+ * WakeupResponse (boomlink_system_identity_t) - the single source of truth
+ * `cli.c`'s `version` command now also reads from, rather than each
+ * carrying its own separately-maintained literal. Bump by hand for now;
+ * nothing in this build wires it to git-describe or a CI-stamped value, the
+ * same "reasonable by inspection, not yet tuned" caveat this codebase's
+ * other bring-up-only constants already carry.
+ */
+#define PROTOCOL_SERVICE_FW_VERSION_MAJOR 0u
+#define PROTOCOL_SERVICE_FW_VERSION_MINOR 1u
+#define PROTOCOL_SERVICE_FW_VERSION_PATCH 0u
 
 /**
  * Load this node's persisted configuration - boomlink_config_store_load()
@@ -117,6 +131,40 @@ void protocol_service_on_rx(void *user, uint32_t source_id, uint32_t destination
  * service_init() has not succeeded.
  */
 void protocol_service_process(void);
+
+/**
+ * Reports a section 8.6 WakeupResponse this node received - i.e. this node
+ * was the one that broadcast the matching WakeupRequest (the `wakeup`
+ * CLI command, cli.c's cmd_wakeup()). NULL is the default and a valid
+ * choice: responses are still counted by boomlink_dispatch_process()'s own
+ * stats either way, matching every other optional dispatch handler's "a
+ * NULL handler only counts the message" contract.
+ *
+ * Registered once, from cli_init() after protocol_service_init() - it is
+ * cli.c that owns printing to the operator's console (embeddedCliPrint(),
+ * `s_cli`), the same reason link_service_init() takes its own on_rx/
+ * on_tx_done callbacks FROM cli.c rather than this file printing directly;
+ * protocol_service.c has never had a CLI-facing print path of its own
+ * before this, and gaining one now would blur that layering rather than
+ * reuse it.
+ */
+typedef void (*protocol_service_wakeup_response_fn)(uint32_t source_id,
+                                                     const boomlink_WakeupResponse *response);
+void protocol_service_set_wakeup_response_callback(protocol_service_wakeup_response_fn cb);
+
+/**
+ * Broadcast a section 8.6 WakeupRequest asking every reachable node to
+ * answer within `window_s` seconds, each after its own randomly-drawn
+ * delay - see boomlink.md section 8.6 and boomlink_system_service.h for the
+ * full mechanism this triggers. No-op if protocol_service_init() has not
+ * succeeded. Broadcast with no ACK requested, the same
+ * `destination_id != BOOMLINK_ADDR_BROADCAST` reasoning
+ * protocol_service_on_rx() already applies to every broadcast-addressed
+ * reply it sends - an ACK from every reachable node at once is exactly the
+ * "N simultaneous responses" problem that reasoning already exists to
+ * avoid, and nothing here waits for one anyway.
+ */
+void protocol_service_send_wakeup_request(uint32_t window_s);
 
 #ifdef __cplusplus
 }

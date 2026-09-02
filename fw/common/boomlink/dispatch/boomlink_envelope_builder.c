@@ -26,3 +26,12 @@ void boomlink_build_telemetry_report(boomlink_Envelope *out, const boomlink_Tele
   out->payload.telemetry.which_message  = boomlink_TelemetryMessage_report_tag;
   out->payload.telemetry.message.report = (report != NULL) ? *report : (boomlink_TelemetryReport){0};
 }
+
+void boomlink_build_system_message(boomlink_Envelope *out, const boomlink_SystemMessage *message) {
+  if (out == NULL) {
+    return;
+  }
+  boomlink_envelope_init(out);
+  out->which_payload = boomlink_Envelope_system_tag;
+  out->payload.system = (message != NULL) ? *message : (boomlink_SystemMessage){0};
+}

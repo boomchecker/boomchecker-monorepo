@@ -90,7 +90,14 @@ static void cmd_version(EmbeddedCli *cli, char *args, void *context)
 {
   (void)args;
   (void)context;
-  embeddedCliPrint(cli, "bom-stm32node CLI v0.1");
+  /* PROTOCOL_SERVICE_FW_VERSION_MAJOR/MINOR/PATCH (protocol_service.h) - the
+     same build version a section 8.6 WakeupResponse reports of this node -
+     rather than a separately-maintained literal here that could drift from
+     it. */
+  char line[48];
+  snprintf(line, sizeof(line), "bom-stm32node CLI v%u.%u.%u", PROTOCOL_SERVICE_FW_VERSION_MAJOR,
+           PROTOCOL_SERVICE_FW_VERSION_MINOR, PROTOCOL_SERVICE_FW_VERSION_PATCH);
+  embeddedCliPrint(cli, line);
 }
 
 /* Parse "<sec>" and run a PCM stream from the given source. Shared by the
@@ -697,6 +704,69 @@ static void cmd_link(EmbeddedCli *cli, char *args, void *context)
   embeddedCliPrint(cli, "usage: link status | link enable | link disable | link ping <node_id_hex> [text]");
 }
 
+static const char *device_type_name(boomlink_DeviceType type)
+{
+  switch (type)
+  {
+    case boomlink_DeviceType_DEVICE_TYPE_STMNODE: return "stmnode";
+    default:                                      return "unspecified";
+  }
+}
+
+/* protocol_service_wakeup_response_fn - prints each section 8.6
+   WakeupResponse this node collects after `wakeup <window_s>` below
+   broadcasts a WakeupRequest. Registered once from cli_init(), after
+   protocol_service_init() - see protocol_service_set_wakeup_response_
+   callback()'s own doc for why this file, not protocol_service.c, owns the
+   actual printing (the same reason link_on_rx()/link_on_tx_done() above do). */
+static void wakeup_on_response(uint32_t source_id, const boomlink_WakeupResponse *response)
+{
+  if (s_cli == NULL || response == NULL)
+  {
+    return;
+  }
+
+  char line[96];
+  snprintf(line, sizeof(line), "wakeup: 0x%08lX responded (%s, fw v%lu.%lu.%lu)",
+           (unsigned long)source_id, device_type_name(response->device_type),
+           (unsigned long)response->fw_version_major, (unsigned long)response->fw_version_minor,
+           (unsigned long)response->fw_version_patch);
+  embeddedCliPrint(s_cli, line);
+}
+
+/* Broadcasts a section 8.6 WakeupRequest asking every reachable node to
+   report in within `window_s` seconds, each after its own randomly-drawn
+   delay (ALOHA-style collision avoidance - see boomlink.md section 8.6).
+   Each reply prints via wakeup_on_response() above as it arrives, not
+   collected into a list here - there is no fixed count of nodes to wait
+   for, and `window_s` is only how long the responding nodes wait, not a
+   deadline this command itself blocks on. `wakeup 0` is valid (every node
+   fires back immediately, with no random spread to avoid collisions) - just
+   not useful for that purpose with more than one reachable node. */
+static void cmd_wakeup(EmbeddedCli *cli, char *args, void *context)
+{
+  (void)context;
+  if (embeddedCliGetTokenCount(args) < 1)
+  {
+    embeddedCliPrint(cli, "usage: wakeup <window_s>");
+    return;
+  }
+  const char   *tok      = embeddedCliGetToken(args, 1);
+  char         *end      = NULL;
+  unsigned long window_s = strtoul(tok, &end, 10);
+  if (end == tok)
+  {
+    embeddedCliPrint(cli, "usage: wakeup <window_s>");
+    return;
+  }
+
+  protocol_service_send_wakeup_request((uint32_t)window_s);
+
+  char line[64];
+  snprintf(line, sizeof(line), "wakeup: broadcast sent (window %lu s)", window_s);
+  embeddedCliPrint(cli, line);
+}
+
 void cli_init(cli_tx_fn tx)
 {
   s_tx      = tx;
@@ -777,6 +847,15 @@ void cli_init(cli_tx_fn tx)
   };
   embeddedCliAddBinding(s_cli, link_binding);
 
+  CliCommandBinding wakeup_binding = {
+    .name         = "wakeup",
+    .help         = "wakeup <window_s> - broadcast a fleet discovery request (section 8.6)",
+    .tokenizeArgs = true,
+    .context      = NULL,
+    .binding      = cmd_wakeup,
+  };
+  embeddedCliAddBinding(s_cli, wakeup_binding);
+
   /* PR 4 Phase C: load the persisted NodeConfig (or safe defaults - see
      protocol_service_load_config()'s own doc) BEFORE link_service_init(),
      so this node's configured identity (rather than only the UID-derived
@@ -814,6 +893,11 @@ void cli_init(cli_tx_fn tx)
      just above: the only way this fails is loaded_config being NULL, which
      the address-of-a-local-variable just taken cannot be. */
   (void)protocol_service_init(&loaded_config);
+
+  /* Registered after protocol_service_init() - see protocol_service_set_
+     wakeup_response_callback()'s own doc for why this ordering, and
+     wakeup_on_response() above for what it prints. */
+  protocol_service_set_wakeup_response_callback(wakeup_on_response);
 
   embeddedCliProcess(s_cli); /* print the initial prompt */
 }
