@@ -1023,7 +1023,10 @@ void cli_init(cli_tx_fn tx)
   cfg->rxBufferSize      = 64;
   cfg->cmdBufferSize     = 64;
   cfg->historyBufferSize = 128;
-  cfg->maxBindingCount   = 10;
+  /* 13 bindings after the BoomLink + detect/GPS merge (help is internal and
+     not counted). embeddedCliAddBinding() silently drops the 11th+ command
+     when this is too small - `link`/`proto`/`wakeup` vanished that way. */
+  cfg->maxBindingCount   = 16;
   cfg->invitation        = "> ";
 
   s_cli = embeddedCliNew(cfg);
