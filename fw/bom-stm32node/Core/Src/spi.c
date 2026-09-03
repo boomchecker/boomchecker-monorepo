@@ -42,11 +42,16 @@ void MX_SPI1_Init(void)
   hspi1.Instance = SPI1;
   hspi1.Init.Mode = SPI_MODE_MASTER;
   hspi1.Init.Direction = SPI_DIRECTION_2LINES;
-  hspi1.Init.DataSize = SPI_DATASIZE_4BIT;
+  /* SX1262 requires 8-bit frames, software-controlled NSS (radio.h/e22_radio
+     drive LORA_NSS as a plain GPIO - see gpio.c) and a clock <= 16 MHz. The
+     CubeMX defaults here (4-bit, hardware NSS, prescaler 2 = 62.5 MHz off the
+     125 MHz SPI1 kernel clock) do not match the chip; see
+     docs/firmware/bom-stm32node/boomlink.md section 6. */
+  hspi1.Init.DataSize = SPI_DATASIZE_8BIT;
   hspi1.Init.CLKPolarity = SPI_POLARITY_LOW;
   hspi1.Init.CLKPhase = SPI_PHASE_1EDGE;
-  hspi1.Init.NSS = SPI_NSS_HARD_INPUT;
-  hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_2;
+  hspi1.Init.NSS = SPI_NSS_SOFT;
+  hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_8; /* 125 MHz / 8 = 15.625 MHz */
   hspi1.Init.FirstBit = SPI_FIRSTBIT_MSB;
   hspi1.Init.TIMode = SPI_TIMODE_DISABLE;
   hspi1.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
@@ -66,7 +71,27 @@ void MX_SPI1_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN SPI1_Init 2 */
-
+  /* Override CubeMX's /8 prescaler (15.625 MHz off the 125 MHz PLL1Q kernel
+     clock) down to /32 (~3.9 MHz). First real-hardware bring-up saw frequent,
+     intermittent SPI corruption that unified every observed radio failure -
+     `radio ping`/`startReceive` returning RADIOLIB_ERR_UNKNOWN (-1) because
+     the getPacketType() SPI read inside SX126x::stageMode() came back as an
+     unrecognised modem, plus receives decoding as "0 bytes" or garbled
+     content - all of which are corruption of a single SPI status/opcode byte.
+     15.625 MHz is only ~2.4% under the SX1262's 16 MHz absolute maximum: fine
+     on a clean PCB, but no margin at all for an E22 module wired to the board
+     over bring-up jumper leads, where reflections and ground bounce at that
+     clock push individual bit sampling over the edge intermittently. /32
+     gives a 4x margin; the transactions are a handful of bytes each, so the
+     lower clock costs nothing measurable. Done here in a USER CODE block, not
+     by editing the CubeMX-generated prescaler line above, so it survives an
+     .ioc regeneration - the .ioc itself should be updated to match (this is a
+     hardware/CubeMX-owned setting) once the value is confirmed on the bench. */
+  hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_32;
+  if (HAL_SPI_Init(&hspi1) != HAL_OK)
+  {
+    Error_Handler();
+  }
   /* USER CODE END SPI1_Init 2 */
 
 }
@@ -180,12 +205,13 @@ void HAL_SPI_MspInit(SPI_HandleTypeDef* spiHandle)
 
     __HAL_RCC_GPIOA_CLK_ENABLE();
     /**SPI1 GPIO Configuration
-    PA4     ------> SPI1_NSS
     PA5     ------> SPI1_SCK
     PA6     ------> SPI1_MISO
     PA7     ------> SPI1_MOSI
+    (PA4/LORA_NSS is software-controlled: configured as a plain GPIO output in
+    gpio.c, not as the SPI1_NSS alternate function - see SPI_NSS_SOFT above.)
     */
-    GPIO_InitStruct.Pin = LORA_NSS_Pin|LORA_SCK_Pin|LORA_MISO_Pin|LORA_MOSI_Pin;
+    GPIO_InitStruct.Pin = LORA_SCK_Pin|LORA_MISO_Pin|LORA_MOSI_Pin;
     GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
     GPIO_InitStruct.Pull = GPIO_NOPULL;
     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
@@ -280,12 +306,12 @@ void HAL_SPI_MspDeInit(SPI_HandleTypeDef* spiHandle)
     __HAL_RCC_SPI1_CLK_DISABLE();
 
     /**SPI1 GPIO Configuration
-    PA4     ------> SPI1_NSS
     PA5     ------> SPI1_SCK
     PA6     ------> SPI1_MISO
     PA7     ------> SPI1_MOSI
+    (LORA_NSS is deinitialized along with the rest of the radio GPIO, not here.)
     */
-    HAL_GPIO_DeInit(GPIOA, LORA_NSS_Pin|LORA_SCK_Pin|LORA_MISO_Pin|LORA_MOSI_Pin);
+    HAL_GPIO_DeInit(GPIOA, LORA_SCK_Pin|LORA_MISO_Pin|LORA_MOSI_Pin);
 
   /* USER CODE BEGIN SPI1_MspDeInit 1 */
 

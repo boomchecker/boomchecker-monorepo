@@ -8,25 +8,171 @@ vars:
   CNN_FIG: sec3_cnn_architecture
 
 tasks:
-  cnn-figure:
-    desc: Generate PlotNeuralNet CNN architecture figure
+  setup:
+    desc: Install LaTeX packages the article needs (IEEEtran from texlive-publishers, algorithmic from texlive-science)
     cmds:
-      - powershell -NoProfile -Command 'python scripts/generate_cnn_architecture.py; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; Push-Location article/figs; pdflatex -interaction=nonstopmode -halt-on-error {{.CNN_FIG}}.tex; $code = $LASTEXITCODE; Pop-Location; if ($code -ne 0) { exit $code }'
+      - sudo apt-get update
+      - sudo apt-get install -y texlive-publishers texlive-science
+    status:
+      - kpsewhich IEEEtran.cls
+      - kpsewhich algorithmic.sty
+
+  cnn-figure:
+    desc: Regenerate PlotNeuralNet CNN architecture figure (optional; needs scripts/external/PlotNeuralNet checkout)
+    cmds:
+      - python3 scripts/generate_cnn_architecture.py
+      - cd article/figs && pdflatex -interaction=nonstopmode -halt-on-error {{.CNN_FIG}}.tex
 
   build:
-    desc: Compile {{.TEX_DIR}}/{{.TEX}} to {{.TEX_DIR}}/{{.JOB}}.pdf
-    deps:
-      - cnn-figure
+    desc: Compile {{.TEX_DIR}}/{{.TEX}} to {{.TEX_DIR}}/{{.JOB}}.pdf (uses the committed CNN figure; run cnn-figure to regenerate it)
+    deps: [setup]
+    dir: '{{.TEX_DIR}}'
     cmds:
-      - powershell -NoProfile -Command 'Push-Location {{.TEX_DIR}}; pdflatex -interaction=nonstopmode -halt-on-error {{.TEX}}; if ($LASTEXITCODE -ne 0) { Pop-Location; exit $LASTEXITCODE }; bibtex {{.JOB}}; if ($LASTEXITCODE -ne 0) { Pop-Location; exit $LASTEXITCODE }; pdflatex -interaction=nonstopmode -halt-on-error {{.TEX}}; if ($LASTEXITCODE -ne 0) { Pop-Location; exit $LASTEXITCODE }; pdflatex -interaction=nonstopmode -halt-on-error {{.TEX}}; $code = $LASTEXITCODE; Pop-Location; if ($code -ne 0) { exit $code }'
+      - pdflatex -interaction=nonstopmode -halt-on-error {{.TEX}}
+      - bibtex {{.JOB}}
+      - pdflatex -interaction=nonstopmode -halt-on-error {{.TEX}}
+      - pdflatex -interaction=nonstopmode -halt-on-error {{.TEX}}
 
   clean:
     desc: Remove LaTeX auxiliary files
     cmds:
-      - powershell -NoProfile -Command "Remove-Item -ErrorAction SilentlyContinue {{.AUX_PREFIX}}.aux,{{.AUX_PREFIX}}.log,{{.AUX_PREFIX}}.out,{{.AUX_PREFIX}}.bbl,{{.AUX_PREFIX}}.blg,{{.AUX_PREFIX}}.toc,{{.AUX_PREFIX}}.synctex.gz,article/figs/{{.CNN_FIG}}.aux,article/figs/{{.CNN_FIG}}.log"
+      - rm -f {{.AUX_PREFIX}}.aux {{.AUX_PREFIX}}.log {{.AUX_PREFIX}}.out {{.AUX_PREFIX}}.bbl {{.AUX_PREFIX}}.blg {{.AUX_PREFIX}}.toc {{.AUX_PREFIX}}.synctex.gz article/figs/{{.CNN_FIG}}.aux article/figs/{{.CNN_FIG}}.log
 
   rebuild:
     desc: Clean and compile again
     cmds:
       - task: clean
       - task: build
+
+  # Retrain tasks run under Linux/WSL (unlike the PowerShell LaTeX tasks above) and use
+  # the project venv one level up.
+  retrain:splits:
+    desc: Generate hard-coded train/val/test split (retraining/retrain/splits3.csv)
+    dir: ..
+    cmds:
+      - venv/bin/python BEC/retraining/retrain/make_splits.py
+    status:
+      - test -f BEC/retraining/retrain/splits3.csv
+
+  retrain:train:
+    desc: "Train one seeded model with the proper 3-way protocol (SEED=42, DATASET=old|new)"
+    dir: ..
+    deps: [retrain:splits]
+    vars:
+      SEED: '{{.SEED | default "42"}}'
+      DATASET: '{{.DATASET | default "old"}}'
+    cmds:
+      - venv/bin/python BEC/retraining/retrain/train.py --seed {{.SEED}} --dataset {{.DATASET}}
+
+  retrain:train:all:
+    desc: Train all five seeds (42-46) for mean +/- std reporting (DATASET=old|new)
+    dir: ..
+    deps: [retrain:splits]
+    vars:
+      DATASET: '{{.DATASET | default "old"}}'
+    cmds:
+      - for s in 42 43 44 45 46; do venv/bin/python BEC/retraining/retrain/train.py --seed $s --dataset {{.DATASET}} || exit 1; done
+
+  retrain-wf:features:
+    desc: Generate waveform-noise augmentation features (seed 142, disjoint from eval seeds 42-46)
+    dir: ..
+    cmds:
+      - venv/bin/python ml/prepare_features.py --include-noisy --snr-db 30 20 10 5 --seed 142 --output generated/features_trainaug_seed142
+    status:
+      - test -f generated/features_trainaug_seed142/features_manifest.csv
+
+  retrain-wf:train:
+    desc: "Train one seed with waveform-noise augmentation added (SEED=42, DATASET=old|new)"
+    dir: ..
+    deps: [retrain:splits, retrain-wf:features]
+    vars:
+      SEED: '{{.SEED | default "42"}}'
+      DATASET: '{{.DATASET | default "old"}}'
+    cmds:
+      - venv/bin/python BEC/retraining/retrain-waveform/train.py --seed {{.SEED}} --dataset {{.DATASET}}
+
+  retrain-wf:train:all:
+    desc: Train all five waveform-augmented seeds (42-46) (DATASET=old|new)
+    dir: ..
+    deps: [retrain:splits, retrain-wf:features]
+    vars:
+      DATASET: '{{.DATASET | default "old"}}'
+    cmds:
+      - for s in 42 43 44 45 46; do venv/bin/python BEC/retraining/retrain-waveform/train.py --seed $s --dataset {{.DATASET}} || exit 1; done
+
+  retrain-wf2:train:
+    desc: "Train one seed with waveform-noise augmentation ONLY, no MFCC jitter (SEED=42, DATASET=old|new)"
+    dir: ..
+    deps: [retrain:splits, retrain-wf:features]
+    vars:
+      SEED: '{{.SEED | default "42"}}'
+      DATASET: '{{.DATASET | default "old"}}'
+    cmds:
+      - venv/bin/python BEC/retraining/retrain-waveform2/train.py --seed {{.SEED}} --dataset {{.DATASET}}
+
+  retrain-wf2:train:all:
+    desc: Train all five waveform-only seeds (42-46) (DATASET=old|new)
+    dir: ..
+    deps: [retrain:splits, retrain-wf:features]
+    vars:
+      DATASET: '{{.DATASET | default "old"}}'
+    cmds:
+      - for s in 42 43 44 45 46; do venv/bin/python BEC/retraining/retrain-waveform2/train.py --seed $s --dataset {{.DATASET}} || exit 1; done
+
+  dataset-new:build:
+    desc: Extract new-campaign zips (BEC/new-dataset) and write manifest_new.csv + splits3_new.csv
+    dir: ..
+    cmds:
+      - venv/bin/python BEC/new-dataset/build_dataset.py
+
+  dataset-new:features:
+    desc: Generate features for the new dataset needed for TRAINING (clean seed42 + waveform trainaug seed 142)
+    dir: ..
+    deps: [dataset-new:build]
+    cmds:
+      - venv/bin/python ml/prepare_features.py --manifest BEC/new-dataset/manifest_new.csv --include-noisy --snr-db 30 20 10 5 --seed 42 --output generated/features_new_seed42
+      - venv/bin/python ml/prepare_features.py --manifest BEC/new-dataset/manifest_new.csv --include-noisy --snr-db 30 20 10 5 --seed 142 --output generated/features_new_trainaug_seed142
+    status:
+      - test -f generated/features_new_seed42/features_manifest.csv
+      - test -f generated/features_new_trainaug_seed142/features_manifest.csv
+
+  esp32:model:
+    desc: "Write firmware model_data.h from a retrained model (default seed 44). Rebuild+flash afterwards!"
+    dir: ..
+    vars:
+      SEED: '{{.SEED | default "44"}}'
+    cmds:
+      - venv/bin/python BEC/retraining/make_model_header.py --tflite BEC/retraining/retrain-waveform2/models/retrained_wf2_new_seed{{.SEED}}.tflite
+
+  esp32:validate:
+    desc: "Run UART validation on the board over all variants incl. 0/-5 dB (PORT=/dev/ttyACM0 required, NOISE_SEED=42)"
+    dir: ..
+    requires:
+      vars: [PORT]
+    vars:
+      NOISE_SEED: '{{.NOISE_SEED | default "42"}}'
+    cmds:
+      - mkdir -p BEC/retraining/esp32-validation
+      - for v in clean noise_snr30db noise_snr20db noise_snr10db noise_snr5db; do venv/bin/python ml/validate_esp_uart.py --port {{.PORT}} --split test --variant $v --features generated/features_new_seed{{.NOISE_SEED}}/features_manifest.csv --per-sample-csv BEC/retraining/esp32-validation/esp32_${v}_test.csv || exit 1; done
+      - for v in noise_snr0db noise_snr-5db; do venv/bin/python ml/validate_esp_uart.py --port {{.PORT}} --split test --variant $v --features generated/features_new_lowsnr_seed{{.NOISE_SEED}}/features_manifest.csv --per-sample-csv BEC/retraining/esp32-validation/esp32_${v}_test.csv || exit 1; done
+
+  esp32:compare:
+    desc: "Compare ESP32 per-sample scores against PC int8 (TRAIN_SEED=44, NOISE_SEED=42); target <=1 LSB, 0 flips"
+    dir: ..
+    vars:
+      TRAIN_SEED: '{{.TRAIN_SEED | default "44"}}'
+      NOISE_SEED: '{{.NOISE_SEED | default "42"}}'
+    cmds:
+      - venv/bin/python BEC/retraining/esp32_compare.py --train-seed {{.TRAIN_SEED}} --noise-seed {{.NOISE_SEED}}
+
+  dataset-new:features:eval:
+    desc: Generate multi-seed evaluation features for the new dataset (noise seeds 43-46; seed 42 comes from dataset-new:features)
+    dir: ..
+    deps: [dataset-new:features]
+    cmds:
+      - for s in 43 44 45 46; do venv/bin/python ml/prepare_features.py --manifest BEC/new-dataset/manifest_new.csv --include-noisy --snr-db 30 20 10 5 --seed $s --output generated/features_new_seed$s || exit 1; done
+    status:
+      - test -f generated/features_new_seed43/features_manifest.csv
+      - test -f generated/features_new_seed44/features_manifest.csv
+      - test -f generated/features_new_seed45/features_manifest.csv
+      - test -f generated/features_new_seed46/features_manifest.csv

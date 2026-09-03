@@ -37,20 +37,42 @@ ENTRY(Reset_Handler)
 
 
 /* Memories definition */
+/* FLASH is 2032K, not the device's full 2048K: the last 16K
+   (0x081FC000-0x08200000, Bank 2 sectors 126-127 of 128x8K sectors per bank
+   on this dual-bank part - see App/storage/boomlink_flash_storage_port.c's
+   own comment for the sector arithmetic and the real geometry constants in
+   Drivers/CMSIS/Device/ST/STM32H5xx/Include/stm32h563xx.h) is reserved for
+   PR 4 Phase B's persisted NodeConfig (boomlink.md section 10.1,
+   fw/common/boomlink/storage/boomlink_config_store.h) and must never be
+   linked into. Shrinking FLASH's LENGTH is enough on its own - every
+   SECTIONS output below already maps to >FLASH with no explicit end
+   address, so the linker itself refuses to place anything past the new top
+   of this region; nothing else here needs to change to keep code out of
+   the reserved sectors. */
 MEMORY
 {
   RAM    (xrw)    : ORIGIN = 0x20000000,   LENGTH = 640K
-  FLASH    (rx)    : ORIGIN = 0x8000000,   LENGTH = 2048K
+  FLASH    (rx)    : ORIGIN = 0x8000000,   LENGTH = 2032K
 }
 /* Highest address of the user mode stack */
 _estack = ORIGIN(RAM) + LENGTH(RAM); /* end of "RAM" Ram type memory */
 _sstack = _estack - _Min_Stack_Size;
 
 _Min_Heap_Size = 0x200;      /* required amount of heap  */
-/* 16 KB: everything runs on MSP (main loop, newlib printf, USBX device stack)
-   with interrupts (HAL PCD -> USBX callbacks) nesting on top; the CubeMX
-   default 0x400 overflowed MSPLIM (UFSR.STKOF hard fault) ~0.7 s into
-   `detect` once a USB IRQ landed inside snprintf (observed 2026-08-10). */
+/* Cortex-M33 arms MSPLIM = _estack - _Min_Stack_Size at reset (see
+   startup_stm32h563xx.s), so this is a hard stack-overflow fault
+   threshold, not just a link-time reservation.
+   - RadioLib's SX1262 driver (RADIOLIB_STATIC_ONLY, see CMakeLists.txt)
+     puts two 268-byte SPI scratch buffers on the stack inside
+     Module::SPItransfer/SPItransferStream; with the call depth through
+     SX126x::stageMode (255-byte LR-FHSS buffer reserved unconditionally),
+     radio_init()'s first startReceive() measured close to 1.3 KB
+     (-fstack-usage) - it MSPLIM-faulted against the CubeMX 0x400 default.
+   - Everything runs on MSP (main loop, newlib printf, USBX device stack)
+     with interrupts (HAL PCD -> USBX callbacks) nesting on top; `detect`
+     overflowed MSPLIM (UFSR.STKOF hard fault) ~0.7 s in once a USB IRQ
+     landed inside snprintf (observed 2026-08-10).
+   16 KB leaves ample margin (640 KB RAM total, ~58 KB used). */
 _Min_Stack_Size = 0x4000; /* required amount of stack */
 
 /* Sections */

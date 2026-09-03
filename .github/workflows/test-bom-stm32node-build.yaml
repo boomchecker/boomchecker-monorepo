@@ -1,0 +1,329 @@
+name: Test bom-stm32node Firmware Build
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.gitmodules'
+      - 'fw/bom-stm32node/**'
+      - 'fw/common/boomlink/**'
+      - '.github/workflows/test-bom-stm32node-build.yaml'
+
+permissions:
+  contents: read
+
+jobs:
+  test-build:
+    name: Build firmware (Debug)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          # This job only reads the checkout to configure/build; it never
+          # needs authenticated git access afterwards, so don't leave the
+          # job token persisted in the workspace's git config for later
+          # steps to pick up.
+          persist-credentials: false
+
+      - name: Install ARM GCC toolchain and Ninja
+        run: |
+          sudo apt-get update
+          # libnewlib-arm-none-eabi and libstdc++-arm-none-eabi-newlib are only
+          # apt "Recommends" of gcc-arm-none-eabi, not hard dependencies, so
+          # they are named explicitly here: without them there is no C++
+          # standard library for the target and every .cpp under App/radio/
+          # (and the vendored RadioLib) fails to compile/link.
+          sudo apt-get install -y \
+            gcc-arm-none-eabi \
+            libnewlib-arm-none-eabi \
+            libstdc++-arm-none-eabi-newlib \
+            ninja-build
+
+      - name: Set up Python for Nanopb code generation
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: fw/common/boomlink/requirements.txt
+
+      - name: Install Nanopb generator dependencies
+        run: |
+          # The firmware build now add_subdirectory()'s into
+          # fw/common/boomlink, which runs the Nanopb generator (and protoc,
+          # via grpcio-tools' bundled copy) at build time to turn
+          # fw/common/boomlink/proto/*.proto into the *.pb.c/.pb.h the
+          # boomlink_protocol library compiles - see
+          # fw/common/boomlink/CMakeLists.txt. Installed from the same
+          # requirements.txt as the host protocol build (not a hand-picked
+          # `pip install protobuf grpcio-tools`) so both jobs are pinned to
+          # the same version RANGES (requirements.txt still uses ranges, so
+          # this doesn't guarantee an identical resolved version on every
+          # run - just removes the one hardcoded, unpinned-anywhere copy
+          # that could drift from that shared range on its own).
+          pip install --quiet -r fw/common/boomlink/requirements.txt
+
+      - name: Register GCC problem matcher
+        # Same rationale as the host workflow: this build compiles the generated
+        # *.pb.c and every firmware source with -Wall (and no -Werror on the
+        # boomlink sources), so without a matcher a new warning here is neither
+        # a failure nor an annotation - just text in a log. arm-none-eabi-gcc
+        # emits the same "file:line:col: severity: message" shape the matcher
+        # already handles.
+        run: echo "::add-matcher::.github/problem-matchers/gcc.json"
+
+      - name: Configure
+        working-directory: ./fw/bom-stm32node
+        # BOOMLINK_TARGET_WERROR makes the "warning-clean for the target" half
+        # of the reason we cross-compile the link frame layer AND the link engine
+        # an actual check. Without it the ARM build has no -Werror at all, so a
+        # warning from those targets was just text in a log: adding
+        # `static int unused_var = 7;` to boomlink_linkframe.c left this job green
+        # (verified) while the same edit is a hard error in the host build. Passed
+        # here rather than defaulted ON in CMake so a developer's local firmware
+        # build is never blocked by a warning from a newer compiler than this
+        # runner's - the same split BOOMLINK_WERROR uses for the host build.
+        # Scoped to this package's hand-written libraries (linkframe,
+        # linkengine, dispatch, command_service, config_service,
+        # storage_port, config_store); the CubeMX sources, vendored
+        # libraries, and this repo's own App/storage/ (boomlink_flash_
+        # storage_port, defined outside fw/common/boomlink and so outside
+        # this flag's reach - same as radio_layer) are unaffected.
+        run: cmake --preset Debug -DBOOMLINK_TARGET_WERROR=ON
+
+      - name: Build
+        working-directory: ./fw/bom-stm32node
+        run: cmake --build --preset Debug
+
+      - name: Verify ELF was produced
+        working-directory: ./fw/bom-stm32node
+        run: |
+          echo "Verifying build output..."
+          if [ ! -f build/Debug/bom-stm32node.elf ]; then
+            echo "❌ Build failed - bom-stm32node.elf not found"
+            exit 1
+          fi
+
+          echo "✅ ELF info:"
+          arm-none-eabi-size build/Debug/bom-stm32node.elf
+
+      - name: Verify the link layer was cross-compiled
+        working-directory: ./fw/bom-stm32node
+        # Originally written when neither archive had a dependent: the whole
+        # stated reason for building boomlink_linkframe and boomlink_linkengine
+        # was to prove them free of host-isms and warning-clean for the target
+        # BEFORE any firmware used them, and nothing else asserted that they
+        # were even being produced - moving a target inside CMake's standalone
+        # branch, marking it EXCLUDE_FROM_ALL or renaming it would have left
+        # this workflow green.
+        #
+        # As of PR 3 Phase C (fw/bom-stm32node/App/link/), that has changed:
+        # both archives now DO have a dependent - see the "actually linked in"
+        # step below, added at the same time, which is the stronger check that
+        # gap-in-CI class of bug actually needs now. This step is kept anyway,
+        # narrower but still worth having on its own: it catches "stopped being
+        # cross-compiled at all" (a build failure here is easier to diagnose
+        # than a missing-symbol failure below) as a distinct, earlier signal.
+        #
+        # The ENGINE was in exactly the "compiled but nothing notices if it
+        # isn't" state this step exists to prevent, once: verified by marking
+        # boomlink_linkengine EXCLUDE_FROM_ALL, which left this job green with
+        # the engine never cross-compiled at all. Its host-ism risk is higher
+        # than the frame layer's, too - it does 64-bit arithmetic on airtime
+        # and holds a size_t-vs-uint32_t boundary at the port seam, and
+        # int/long/size_t widths differ on the target.
+        #
+        # This step covers only "was it built". The warning-clean half is covered
+        # by -DBOOMLINK_TARGET_WERROR=ON in the Configure step above, which
+        # turns a warning from either target into a build failure rather than log
+        # text nobody reads.
+        # PR 4 Phase B's boomlink_storage_port/boomlink_config_store (fw/common/
+        # boomlink/storage/) and boomlink_flash_storage_port (this package's own
+        # App/storage/, hence the different build/Debug path - it is a top-level
+        # target in THIS CMakeLists.txt, not add_subdirectory()'d) list here
+        # alongside dispatch/command_service/config_service for the same
+        # "was it built" reason as every other archive in this loop - not
+        # because they are still unlinked: PR 4 Phase C's App/protocol/
+        # protocol_service.c gave all six a real caller (see the "protocol
+        # dispatcher is actually linked in" step below, added at the same
+        # time), the same milestone PR 3 Phase C's App/link/ once was for
+        # linkframe/linkengine above.
+        run: |
+          status=0
+          for path in build/Debug/boomlink/libboomlink_linkframe.a \
+                      build/Debug/boomlink/libboomlink_linkengine.a \
+                      build/Debug/boomlink/libboomlink_dispatch.a \
+                      build/Debug/boomlink/libboomlink_command_service.a \
+                      build/Debug/boomlink/libboomlink_config_service.a \
+                      build/Debug/boomlink/libboomlink_system_service.a \
+                      build/Debug/boomlink/libboomlink_storage_port.a \
+                      build/Debug/boomlink/libboomlink_config_store.a \
+                      build/Debug/libboomlink_flash_storage_port.a; do
+            if [ ! -f "$path" ]; then
+              echo "❌ $path was not produced - it is no longer cross-compiled for the target"
+              status=1
+            else
+              echo "✅ $(basename "$path") cross-compiled for the target"
+            fi
+          done
+          exit $status
+
+      - name: Verify BoomProtocol is actually linked in, not just compiled
+        working-directory: ./fw/bom-stm32node
+        run: |
+          # boomlink_protocol previously compiled for ARM without a single
+          # symbol from it being referenced anywhere in the firmware (see
+          # `proto` in Core/Src/cli.c) - the PR 2 acceptance criterion
+          # "STM32 build can encode/decode an Envelope using Nanopb" was
+          # unmet despite the build being green. A future refactor could
+          # silently reintroduce that by dropping the `proto` CLI binding;
+          # this step fails the build if boomlink_encode_envelope stops
+          # being present in the linked ELF, not just compiled somewhere.
+          if ! arm-none-eabi-nm build/Debug/bom-stm32node.elf | grep -q boomlink_encode_envelope; then
+            echo "❌ boomlink_encode_envelope is not linked into bom-stm32node.elf"
+            exit 1
+          fi
+          echo "✅ BoomProtocol symbols are linked into the firmware image"
+
+      - name: Verify the link engine is actually linked in, not just compiled
+        working-directory: ./fw/bom-stm32node
+        run: |
+          # boomlink_linkframe/boomlink_linkengine previously cross-compiled
+          # for ARM without a single symbol from either being referenced
+          # anywhere in the firmware - exactly the same "compiled but not
+          # linked" gap the BoomProtocol check above exists to catch, closed
+          # for this pair by PR 3 Phase C's App/link/ call site and the
+          # target_link_libraries entry it added. A future refactor could
+          # silently reintroduce it by removing that entry or the call site
+          # (link_service_init()/_process() in Core/Src/cli.c) without
+          # anything else here noticing: the previous step only checks the
+          # archives were PRODUCED, which happens whether or not anything
+          # references them. This step fails the build if boomlink_link_init
+          # stops being present in the linked ELF, not just compiled
+          # somewhere.
+          if ! arm-none-eabi-nm build/Debug/bom-stm32node.elf | grep -q boomlink_link_init; then
+            echo "❌ boomlink_link_init is not linked into bom-stm32node.elf"
+            exit 1
+          fi
+          echo "✅ BoomLink link engine symbols are linked into the firmware image"
+
+      - name: Verify the protocol dispatcher is actually linked in, not just compiled
+        working-directory: ./fw/bom-stm32node
+        run: |
+          # boomlink_dispatch/boomlink_command_service/boomlink_config_service
+          # and PR 4 Phase B's boomlink_config_store/boomlink_flash_storage_port
+          # previously cross-compiled for ARM (the "Verify the link layer was
+          # cross-compiled" step above) without a single symbol from any of
+          # them being referenced anywhere in the firmware - exactly the same
+          # "compiled but not linked" gap the BoomProtocol/link-engine checks
+          # above exist to catch, closed for this group by PR 4 Phase C's
+          # App/protocol/protocol_service.c call site and the target_link_
+          # libraries entries it added. A future refactor could silently
+          # reintroduce it by removing those entries or the call site
+          # (protocol_service_init()/_on_rx()/_process() in Core/Src/cli.c)
+          # without anything else here noticing. This step fails the build if
+          # any of the symbols below stop being present in the linked ELF,
+          # not just compiled somewhere - one per library this group names,
+          # since a refactor could plausibly drop one path (e.g. leaving
+          # command dispatch wired but silently dropping config dispatch, or
+          # keeping the dispatcher but reverting the boot-time flash load)
+          # while leaving the others intact - a single dispatcher-only
+          # symbol (an earlier version of this check) would stay green
+          # through exactly that kind of partial regression. This once let
+          # exactly that happen for real: boomlink_config_store_save() had
+          # no caller anywhere in the firmware (PR 4 Phase C's own review
+          # found it) despite boomlink_config_store_load() already being
+          # checked here and passing - _load and _save share a translation
+          # unit, but -ffunction-sections/--gc-sections (see cmake/gcc-arm-
+          # none-eabi.cmake) link per-function, not per-object-file, so one
+          # being reachable proves nothing about the other. Both are listed
+          # below now for exactly that reason.
+          #
+          # The five boomlink_config_service_* state-machine entry points
+          # below (get_persistable_config/commit_pending_apply/apply_state/
+          # confirm_pending_apply/poll) share that same failure mode with
+          # each other, one level up: every one of them has exactly one call
+          # site in the whole firmware, all inside protocol_service.c's
+          # stage->commit->confirm->revert->persist wiring (found by review -
+          # that file has no host test seam, see boomlink.md's own "no
+          # automated regression test" deferred item), so silently deleting
+          # any one call site - most importantly the hazard-safe persist
+          # accessor get_persistable_config(), whose fix this same review
+          # round landed - would compile and link clean and pass every
+          # existing check with nothing else here noticing. Verified by
+          # sabotage: reverting persist_current_config() to call the plain
+          # boomlink_config_service_get_config() instead still links clean
+          # and makes get_persistable_config() vanish from the ELF entirely
+          # under --gc-sections, with every check above this one still
+          # green.
+          status=0
+          for symbol in boomlink_dispatch_process boomlink_command_service_handle \
+                        boomlink_config_service_handle boomlink_config_store_load \
+                        boomlink_config_store_save boomlink_flash_storage_port_init \
+                        boomlink_config_service_get_persistable_config \
+                        boomlink_config_service_commit_pending_apply \
+                        boomlink_config_service_apply_state \
+                        boomlink_config_service_confirm_pending_apply \
+                        boomlink_config_service_poll; do
+            if ! arm-none-eabi-nm build/Debug/bom-stm32node.elf | grep -q "$symbol"; then
+              echo "❌ $symbol is not linked into bom-stm32node.elf"
+              status=1
+            fi
+          done
+          [ $status -eq 0 ] && echo "✅ Protocol dispatcher symbols are linked into the firmware image"
+          exit $status
+
+      - name: Verify fleet discovery (Wakeup) is actually linked in, not just compiled
+        working-directory: ./fw/bom-stm32node
+        run: |
+          # boomlink_system_service (boomlink.md section 8.6 - Ping/Pong and
+          # Wakeup/WakeupResponse) has three distinct entry points, each with
+          # exactly one call site in protocol_service.c: _handle (the
+          # dispatch handler, wired into boomlink_dispatch_handlers_t in
+          # protocol_service_init()), _arm_wakeup (protocol_service_on_rx(),
+          # right after boomlink_dispatch_process()), and _poll
+          # (protocol_service_process()). The same one-call-site-per-symbol
+          # gap the config service group above documents (and was once
+          # caught by) applies here just as directly: a refactor dropping
+          # any one of these three - most easily _arm_wakeup, since nothing
+          # about section 8.6's flow LOOKS incomplete without it until a
+          # WakeupRequest silently never gets a random delay armed - would
+          # compile and link clean under --gc-sections with nothing else
+          # here noticing. Listed individually rather than as one archive
+          # check for exactly that reason.
+          #
+          # boomlink_radio_port_random_u32 (App/link/boomlink_radio_port.c)
+          # and boomlink_build_system_message (fw/common/boomlink/dispatch/
+          # boomlink_envelope_builder.c) share the identical one-call-site
+          # risk from the other direction: replace the random draw with a
+          # constant, or drop the envelope-builder call, and every check
+          # above (including the three _system_service symbols themselves,
+          # which stay perfectly reachable either way) stays green while
+          # Wakeup silently stops actually working - every node fires at
+          # the same instant with no jitter, or no WakeupRequest/
+          # WakeupResponse frame is ever built at all.
+          status=0
+          for symbol in boomlink_system_service_handle boomlink_system_service_arm_wakeup \
+                        boomlink_system_service_poll boomlink_radio_port_random_u32 \
+                        boomlink_build_system_message; do
+            if ! arm-none-eabi-nm build/Debug/bom-stm32node.elf | grep -q "$symbol"; then
+              echo "❌ $symbol is not linked into bom-stm32node.elf"
+              status=1
+            fi
+          done
+          [ $status -eq 0 ] && echo "✅ Fleet discovery (Wakeup) symbols are linked into the firmware image"
+          exit $status
+
+      - name: Build summary
+        run: |
+          {
+            echo "### ✅ Build Successful!"
+            echo ""
+            echo "- STM32H563 + RadioLib/SX1262 firmware compiled (Debug) ✓"
+            echo "- ELF produced ✓"
+            echo "- BoomProtocol linked and referenced (not just compiled) ✓"
+            echo "- Protocol dispatcher linked and referenced (not just compiled) ✓"
+            echo "- Fleet discovery (Wakeup) linked and referenced (not just compiled) ✓"
+          } >> "$GITHUB_STEP_SUMMARY"

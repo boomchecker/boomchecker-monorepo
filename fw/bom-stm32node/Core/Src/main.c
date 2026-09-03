@@ -30,6 +30,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "usb_cli.h"
+#include "radio.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -106,6 +107,45 @@ int main(void)
   MX_SPI5_Init();
   MX_USBX_Init();
   /* USER CODE BEGIN 2 */
+  /* The microphone (SAI1 + GPDMA, per docs/pdm-port-plan.md "CubeMX contract")
+     is started on demand by the `stream` command (see pcm_stream.c), so there
+     is nothing to start here. */
+
+  /* SX1262 bring-up (SPI1 + EN_LORA/NRST/BUSY/DIO1, see App/radio/radio.h),
+     BEFORE the USB pull-up goes live (usb_cli_start(), next): RadioLib's
+     internal chip-detect retries the reset/SPI probe up to 10 times with a
+     1 s standby-verify timeout each when no module answers, so radio_init()
+     can block for several seconds. Doing that before usb_cli_start() means
+     the host never sees the device on the bus mid-enumeration during that
+     window - USB simply appears a few seconds later instead of an
+     enumeration attempt timing out because nothing was servicing the USB
+     stack. A radio failure itself is never fatal: the radio stays disabled
+     and `radio status` over the CLI reports why. */
+  (void)radio_init();
+
+  /* USB CDC command console (endpoint PMA + PCD start + CLI, see usb_cli.c).
+     BEFORE the instruction cache is enabled below: usb_cli_start() ->
+     cli_init() -> link_service_init() reads the chip's factory UID
+     (HAL_GetUIDw0()/w1()/w2(), App/link/link_service.c's derive_node_id()/
+     derive_session_id() and App/link/boomlink_radio_port.c's PRNG seed -
+     the only three call sites of those HAL functions anywhere in this
+     firmware, all reached exactly once here, synchronously, and never
+     again afterwards) from UID_BASE (0x08FFF800 - the STM32H563's OTP-style
+     Flash-size/UID/package info block, not the flash array proper). Found
+     by hardware bring-up: with the cache enabled first (as this file used
+     to do), that read HardFaults - a precise BusFault at BFAR == UID_BASE,
+     confirmed identical on two independently flashed boards, confirmed the
+     address itself is valid and its data plausible by reading it directly
+     over SWD (which bypasses the CPU and its cache entirely and succeeds).
+     The CPU's own cached read is what faults, not the address - a burst
+     line-fill transaction this info block's controller does not answer the
+     same way a debug probe's single AHB-AP read does. Deferring the enable
+     until after these three one-time reads sidesteps the mechanism
+     entirely, whatever ST's cache implementation is actually doing
+     underneath, without needing to disable/re-enable the cache around a
+     read that never recurs. */
+  usb_cli_start();
+
   /* Enable the instruction cache. The core runs code from flash at 250 MHz with
      5 wait states (FLASH_LATENCY_5); with the cache off, every instruction fetch
      stalls the CPU and the PDM->PCM DSP misses its 21.33 ms/ring-half real-time
@@ -113,18 +153,18 @@ int main(void)
      CubeMX leaves HAL_ICACHE_MODULE_ENABLED off in stm32h5xx_hal_conf.h, so the
      cache is driven directly here (keeps the CubeMX-owned conf untouched). The
      cache is invalidated on reset; wait for any pending invalidation, then
-     enable it for the whole firmware. */
+     enable it for the whole firmware.
+     Deliberately AFTER usb_cli_start() (see that call's own comment for why -
+     the UID-reading HardFault this ordering avoids), not before: the mic
+     streaming path this cache exists for is only ever started later, on
+     demand, by the `stream`/`streamtest` CLI commands the user issues once
+     the board is already up and enumerated - comfortably after this point -
+     so moving the enable this much later costs nothing the DSP budget above
+     actually needs. */
   while ((ICACHE->SR & ICACHE_SR_BUSYF) != 0u)
   {
   }
   ICACHE->CR |= ICACHE_CR_EN;
-
-  /* The microphone (SAI1 + GPDMA, per docs/pdm-port-plan.md "CubeMX contract")
-     is started on demand by the `stream` command (see pcm_stream.c), so there
-     is nothing to start here. */
-
-  /* USB CDC command console (endpoint PMA + PCD start + CLI, see usb_cli.c). */
-  usb_cli_start();
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -134,6 +174,19 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+    /* Drain the DIO1 event flag and drive RadioLib's TX/RX completion
+       handling BEFORE usb_cli_process(): a `radio ping` dispatched from the
+       CLI calls radio_send(), which changes the radio's mode. Servicing any
+       event already pending from *before* this iteration first means a
+       just-arrived RX-done can never be misread as the completion of a
+       transmission the CLI is about to start in this same iteration (radio_
+       send() also flushes defensively on its own - see radio.cpp - but
+       draining here first is what keeps that from being load-bearing).
+       Never runs from interrupt context - see boomlink.md section 6.2. Not
+       serviced while a `stream`/`streamtest` command blocks the loop
+       (documented limitation, same section). */
+    radio_process();
+
     /* Service USB: enumeration, the CDC console, and PCM streaming. The
        `stream`/`streamtest` commands start the microphone on demand and run the
        whole transfer synchronously from here, so this loop has no separate

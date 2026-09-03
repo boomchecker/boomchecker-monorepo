@@ -31,14 +31,14 @@ def find_peak(y):
 
 def extract_window(y, sr, peak_index):
     '''Extract the windowed signal segment from the audio signal'''
-    '''Window is not symetrical around peak - 40% before peak , 60% after peak'''
+    '''Window is not symetrical around peak - 30% before peak , 70% after peak'''
     '''Window length is 1323 samples afer execution the function'''
 
     window_length_ms = 60 # Lenght od windowed signal in [ms]
     window_length_samples = int(sr * window_length_ms / 1000) # Lenght od windowed signal in sumples
 
-    window_length_after_peak = int(window_length_samples * 0.6)  # 60% after the peak
-    window_length_before_peak = window_length_samples - window_length_after_peak  # 40%
+    window_length_after_peak = int(window_length_samples * 0.7)  # 70% after the peak
+    window_length_before_peak = window_length_samples - window_length_after_peak  # 30%
 
     # Calculate start and end indices of the window around the peak
     start = max(0, peak_index - window_length_before_peak)

@@ -1,0 +1,26 @@
+syntax = "proto3";
+
+package boomlink;
+
+import "header.proto";
+import "system.proto";
+import "detection.proto";
+import "config.proto";
+import "command.proto";
+import "telemetry.proto";
+
+// Every BoomProtocol application message is one Envelope (boomlink.md
+// section 7). It is the payload of a BoomLink DATA link frame (section 7.3);
+// an ACK is a link-frame type with no Envelope at all.
+message Envelope {
+  MessageHeader header = 1;
+
+  oneof payload {
+    // Field numbers 10-14, in the order boomlink.md section 7 assigns them.
+    DetectionMessage detection = 10;
+    ConfigMessage config = 11;
+    CommandMessage command = 12;
+    TelemetryMessage telemetry = 13;
+    SystemMessage system = 14;
+  }
+}

@@ -7,6 +7,17 @@ of addressing the review feedback. It was produced by running the pipeline direc
 venv, no Docker daemon or ESP-IDF available in that environment); firmware compilation and ESP32-S3
 hardware numbers still need to be confirmed by whoever has a board and the `fw-devcontainer`.
 
+**Update 2026-08-14:** the camera-ready reproduction effort (milestones M0-M6) is tracked in
+`REPRODUCTION_ROADMAP.md`, which supersedes several "out of scope" items below (Section 9) **and
+also supersedes the quantization-effect conclusion in Section 3 below** — see the correction note
+inline there before reading Section 3's original numbers. The PC-int8 vs. ESP32-S3 discrepancy and
+the "quantization improves robustness" claim now have concrete, evidence-backed explanations (not
+just candidate suspects), and held-out results now exist. One-command harness: `task reproduce:pc`
+(destructive reset: `task reproduce:clean` — this preserves the M6 hardware capture CSVs and the
+two hand-authored `*.md` reports, but nothing else in `generated/`). Generated deliverables:
+`generated/reports/reviewer_response.md`, `table2_float32.tex`, `table3_int8.tex`,
+`weights_provenance.md`, `provenance_table3.md`.
+
 ## 1. Dataset size does not match the paper
 
 The paper states 706 labeled events (62 artillery launches, 644 non-launch). The manifest generated
@@ -68,10 +79,24 @@ Full per-run CSVs: `generated/reports/archived_model_robustness.csv` (gitignored
 **Assessment**: same trend, same order of magnitude, consistently a bit lower than the paper,
 growing with noise level. This is the expected direction given the corpus is larger (854 vs. 706)
 and includes more diverse `other_gunshot` hard negatives the paper's evaluation set may not have had
-- more opportunities for false positives, which hurts precision/MCC more as recall is preserved. The
-paper's most-scrutinized claim - **int8 quantization is consistently more robust than float32 on the
-same waveform-domain noise** - reproduces cleanly and independently here (e.g. 30 dB MCC 0.52 -> 0.86,
-5 dB MCC 0.36 -> 0.42), which is relevant to Review 4's request to investigate this effect.
+- more opportunities for false positives, which hurts precision/MCC more as recall is preserved.
+
+**Correction (2026-08-14, supersedes the paragraph originally here) — this is NOT a quantization
+effect.** The original text of this section claimed the paper's most-scrutinized claim - "int8
+quantization is consistently more robust than float32 on the same waveform-domain noise" -
+"reproduces cleanly and independently here" (30 dB MCC 0.52 -> 0.86, 5 dB MCC 0.36 -> 0.42, i.e. the
+Table II row above vs. the Table III row above). That comparison is between
+`najlepsi_model.h5` (float32) and `archive/models/model.tflite` (int8) - **the exact pair that
+`REPRODUCTION_ROADMAP.md` milestone M1 later proved are two different trained checkpoints, not a
+float32/int8 pair of the same model** (dequantized-weight correlation ~0 vs. 0.9999+ for a true
+requantization control; 15% of clean-sample predictions flip between them). A follow-up controlled
+test on the *actual* same model (`generated/models/reconverted.tflite`, a genuine int8
+quantization of `najlepsi_model.h5`) found quantization has a negligible-to-slightly-negative
+effect on robustness across 5 noise seeds (mean MCC change -0.0115), not a positive one. See
+`generated/reports/reviewer_response.md` section 2, which formally retracts the claim this
+paragraph originally made. The MCC values above (0.52, 0.86, etc.) are still valid as
+provenance/cross-check numbers for the two archived artifacts individually - only the
+"quantization improves robustness" interpretation of comparing them is wrong.
 
 ## 4. Reproduction result: retrained from scratch (Priority 2)
 
@@ -174,8 +199,22 @@ flash, then `task validate:esp ESPPORT=<port>` (optionally with `--variant noise
 
 ## 9. Out of scope (deferred to the review-response phase)
 
-Not addressed here, on purpose: real ESP32-S3 hardware measurement; explaining/fixing the PC-int8 vs.
-ESP32-S3 discrepancy (Review 4 concern #1); a proper held-out generalization test independent of
-training data (Review 3, Review 4 concern #3); dataset licensing/publication (Review 2); comparison
-to Elkarous et al. 2025 and other related work; acronym definitions; power/energy measurement;
-alternative model families (one-class SVM/isolation forest/autoencoder, Review 3).
+Not addressed here, on purpose: real ESP32-S3 hardware measurement; dataset licensing/publication
+(Review 2); comparison to Elkarous et al. 2025 and other related work; acronym definitions;
+power/energy measurement; alternative model families (one-class SVM/isolation forest/autoencoder,
+Review 3).
+
+**Resolved since this file was written** (see `REPRODUCTION_ROADMAP.md` M1-M4 and
+`generated/reports/reviewer_response.md` for the full evidence trail):
+- **PC-int8 vs. ESP32-S3 discrepancy (Review 4 concern #1):** the archived float32 and int8 models
+  turn out to be two different trained checkpoints of the same architecture, not a float32/int8
+  pair of one model (M1). A candidate bug-based explanation (int8 dequantization overflow in the
+  legacy PC script) was tested directly and **refuted** — it would force PC-int8 recall to exactly
+  0 at every SNR, which contradicts the published numbers (M4).
+- **"Quantization improves robustness" claim (Review 3, Review 4 concern #2):** a controlled
+  same-model float32-vs-int8 comparison over 5 noise seeds shows quantization has a negligible-to-
+  slightly-negative effect on robustness, not a positive one. The original claim is explained as an
+  artifact of comparing two different trained models (M1).
+- **Held-out generalization test (Review 3, Review 4 concern #3):** `ml/evaluate_robustness.py` now
+  supports `--split test`; multi-seed held-out results (mean ± std over seeds 42-46) exist alongside
+  full-corpus results (M2, M3). Caveat carried forward: the held-out split has only 13 launch events.

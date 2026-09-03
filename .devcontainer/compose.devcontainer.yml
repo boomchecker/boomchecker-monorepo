@@ -14,6 +14,19 @@ services:
       - codex-data:/home/boom/.codex
       # Persist Claude Code config/history
       - claude-data:/home/boom/.claude
+      # Live bind mount (not a snapshot): this container's own /dev is a
+      # privileged-mode tmpfs populated once at container start, so ST-Link/
+      # target USB device nodes never appear here for anything hot-plugged,
+      # detached, or renumbered afterwards (WSL2's usbipd attach/reattach
+      # cycle renumbers bus/device IDs on every reattach) - only /sys stays
+      # live, which is what makes `lsusb` look current while `libusb_open()`
+      # on that same "current" device still fails with NO_DEVICE. Bind-
+      # mounting the host's /dev/bus/usb directory (not copying it) makes
+      # this container see the exact same live directory the WSL2 kernel's
+      # vhci_hcd updates, so new/renumbered device nodes appear here the
+      # moment usbipd creates them on the host, with no rebuild needed after
+      # the next reattach.
+      - /dev/bus/usb:/dev/bus/usb
     privileged: true
     cap_add:
       - SYS_PTRACE

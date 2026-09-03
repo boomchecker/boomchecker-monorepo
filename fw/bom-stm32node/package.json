@@ -1,0 +1,6 @@
+{
+  "name": "fw-bom-stm32node",
+  "version": "0.0.0",
+  "private": true,
+  "description": "BOM STM32 Node Firmware (STM32H563 + SX1262)"
+}
