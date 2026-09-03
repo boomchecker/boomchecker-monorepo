@@ -78,7 +78,7 @@ tam tedy z principu nejde otestovat.
 - Přeflashována dnešním buildem (detect + gps + gpstx + gpsrst).
 - Mikrofony (Infineon, viz §6): ve 14:02 nahrávka OK (RMS 0,018, spektrum zdravé,
   detect čistý), od 14:04 **spontánně samé nuly** na record i detect bez jakékoli
-  SW změny mezi tím. Uložené nahrávky: `recordings/rec-20260817-140158.wav` (funkční),
+  SW změny mezi tím. Uložené nahrávky: `fw/bom-stmnode/drony/data/recordings/rec-20260817-140158.wav` (funkční),
   `-140437/-140521/-140743.wav` (nulové).
 
 ## 6. Nové mikrofony: Infineon IM67D130A (plán na příště)
