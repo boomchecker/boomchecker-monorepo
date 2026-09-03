@@ -40,6 +40,13 @@ int mic_start(void);
 void mic_stop(void);
 
 /**
+ * @brief Wiring diagnostics: sample PDM_D1/PDM_D2 as GPIO inputs with the PDM
+ *        clock running (toggle counts) and pull-test them with the clock off.
+ *        Prints MICDIAG lines and a MICDIAGEND trailer on the console.
+ */
+void mic_diag_run(void);
+
+/**
  * @brief Process one completed half of the ring (if one is ready).
  * @param pcm   output buffer, at least PCM_SAMPLES_PER_HALF int16 samples
  * @param nsamp [out] number of samples written (PCM_SAMPLES_PER_HALF)
