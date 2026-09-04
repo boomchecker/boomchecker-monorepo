@@ -24,7 +24,11 @@
  * The threshold default belongs to the ACTIVE MODEL (see svm_classifier.c):
  * v6 MLP outputs raw logits and its champion operating point is +7.25
  * (pick_champion.py 2026-08-10: bebop/membo alarms with zero >=2-window
- * false alarms). For the legacy linear SVMs the natural default was 500. */
+ * false alarms). For the legacy linear SVMs the natural default was 500.
+ * Change this value and svm_classifier.c's model #include TOGETHER: nothing
+ * enforces the pairing yet, and a linear SVM header left at 7250 (its
+ * decision values live around +-3) is a detector that never fires. The
+ * pairing moves into the classifier registry with the boomdetect package. */
 #define DETECTOR_DEFAULT_SQUELCH_MILLI 10
 #define DETECTOR_DEFAULT_THR_MILLI     7250
 
