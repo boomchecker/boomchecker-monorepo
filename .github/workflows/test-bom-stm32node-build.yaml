@@ -316,6 +316,37 @@ jobs:
           [ $status -eq 0 ] && echo "✅ Fleet discovery (Wakeup) symbols are linked into the firmware image"
           exit $status
 
+      - name: Verify the detector is actually linked in, not just compiled
+        working-directory: ./fw/bom-stm32node
+        run: |
+          # Same "compiled but not linked" gap the BoomProtocol/link-engine/
+          # dispatcher checks above exist to catch, now for the acoustic
+          # detector. It is reachable from exactly one place - the `detect`
+          # CLI binding in Core/Src/cli.c - so dropping that binding, or
+          # letting embeddedCliAddBinding() silently refuse it the way a
+          # too-small maxBindingCount already did once on this branch, would
+          # leave the whole MFCC/inference chain compiled, --gc-sections'd
+          # out of the image, and this job green.
+          #
+          # One symbol per stage rather than a single entry point: a refactor
+          # can plausibly keep detector_run() while replacing the feature or
+          # inference stage, and a detector that links but no longer runs an
+          # MFCC is not the thing this check is meant to protect.
+          #
+          # Deliberately NOT svm_get_decision_value: the classifier registry
+          # renames it when the detector moves into fw/common/boomdetect, and
+          # a check that fails during a planned rename teaches people to
+          # delete checks. Add the registry's own entry point there instead.
+          status=0
+          for symbol in detector_run mfcc_process gps_run; do
+            if ! arm-none-eabi-nm build/Debug/bom-stm32node.elf | grep -q "$symbol"; then
+              echo "❌ $symbol is not linked into bom-stm32node.elf"
+              status=1
+            fi
+          done
+          [ $status -eq 0 ] && echo "✅ Detector and GPS console symbols are linked into the firmware image"
+          exit $status
+
       - name: Build summary
         run: |
           {
@@ -326,4 +357,5 @@ jobs:
             echo "- BoomProtocol linked and referenced (not just compiled) ✓"
             echo "- Protocol dispatcher linked and referenced (not just compiled) ✓"
             echo "- Fleet discovery (Wakeup) linked and referenced (not just compiled) ✓"
+            echo "- Detector (MFCC + inference) and GPS console linked ✓"
           } >> "$GITHUB_STEP_SUMMARY"
