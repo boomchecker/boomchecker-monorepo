@@ -36,17 +36,17 @@ Diagnostic: stream <sec> seconds of a synthetic 1 kHz test tone instead of the m
 
 **Response:** Identical framing to `stream` (16-byte `PCM1` header + `byte_length` bytes).
 
-### `detect <sec> [squelch_milli] [thr_milli]`
+### `detect <sec> [squelch_milli] [thr_milli] [dbg]`
 
-Run on-device drone detection for <sec> seconds (1..60): microphone PCM is decimated to 16 kHz, MFCC features are extracted (1024-sample frames, hop 512) and every run of 14 frames above the RMS squelch is classified by a linear SVM. Optional overrides in units of 1/1000: squelch_milli (default 10 = RMS 0.010, 0 disables the gate) and thr_milli (default 500 = decision threshold 0.5, may be negative).
+Run on-device drone detection for <sec> seconds (1..60): microphone PCM is decimated to 16 kHz, MFCC features are extracted (1024-sample frames, hop 512), every run of 14 frames above the RMS squelch is aggregated to a 52-value feature vector and classified by the model compiled into the firmware. That is currently a small MLP (v6), whose decision value is a raw logit, not a probability. Optional overrides in units of 1/1000: squelch_milli (default 10 = RMS 0.010, 0 disables the gate, 0..1000) and thr_milli (default 7250 = logit 7.25, may be negative, -20000..20000 - a value outside that range is rejected, not clamped). A non-zero dbg adds one debug line per frame.
 
-**Response:** A `LVL t=<s>.<ms> rms=<d.ddd>` input-level line about once a second, one line per classified window: `DET t=<s>.<ms> dec=<+d.ddd> <DRONE|noise>` (windows are ~448 ms of audio; input below the squelch yields no windows), then a final `DETEND windows=<n> drones=<n> overrun=<0|1> err=<0|1>` line.
+**Response:** A `LVL t=<s>.<ms> rms=<+d.ddd>` input-level line about once a second, one line per classified window: `DET t=<s>.<ms> dec=<+d.ddd> <DRONE|noise>` (windows are ~448 ms of audio; input below the squelch yields no windows), then a final `DETEND windows=<n> drones=<n> overrun=<0|1> err=<0|1>` line. With dbg set, each frame also emits `F=<frame> a=<accumulated> r=<rms_milli> h=<half_us> m=<mfcc_us>`. A start failure prints `DETERR <reason>` and then the DETEND trailer with err=1, so the trailer always arrives.
 
 ### `gps <sec> [baud]`
 
 Stream raw NMEA sentences from the on-board Teseo-LIV3R GNSS module for <sec> seconds (1..300). The board re-inits UART4 at [baud] (default 9600, the module's ROM default; 1200..921600) and forwards each received line verbatim. The Teseo-LIV3R is a ROM part - its configuration does not persist without VBAT, so hosts should adapt to 9600 rather than reconfigure the module.
 
-**Response:** A `GPS baud=<baud> sec=<sec>` acknowledgement line, then raw NMEA lines (`$G...*hh`, `$PSTM...*hh`) as they arrive, then a final `GPSEND lines=<n> bytes=<n> ne=<n> fe=<n> ore=<n> pe=<n> overrun=<n> err=<0|1>` trailer. The per-flag UART error counters separate marginal signal levels (ne, noise) from a wrong baud rate (fe, framing) and IRQ starvation (ore); err=1 means the host disconnected mid-run. `GPSERR ...` on init failure.
+**Response:** A `GPS baud=<baud> sec=<sec>` acknowledgement line, then raw NMEA lines (`$G...*hh`, `$PSTM...*hh`) as they arrive, then a final `GPSEND lines=<n> bytes=<n> ne=<n> fe=<n> ore=<n> pe=<n> overrun=<n> err=<0|1>` trailer. The per-flag UART error counters separate marginal signal levels (ne, noise) from a wrong baud rate (fe, framing) and IRQ starvation (ore); err=1 means the host disconnected mid-run. A UART init failure prints `GPSERR <reason>` and then the GPSEND trailer with err=1, so the trailer always arrives.
 
 ### `gpstx <sentence> [baud]`
 
@@ -58,7 +58,7 @@ Send one NMEA sentence to the GNSS module (e.g. `gpstx $PSTMGETSWVER`). The lead
 
 PDM microphone wiring diagnostics. With the PDM clock running, samples the PDM_D1 (PE6) and PDM_D2 (PE4) data pins directly as GPIO inputs and counts level transitions (a transmitting mic toggles constantly; the count is qualitative). Then, with the clock stopped, a pull-up/pull-down test tells a floating/tri-stated line apart from one driven or shorted.
 
-**Response:** Four `MICDIAG <pin> ...` lines (toggle counts with clk=on, pull test with clk=off) and a `MICDIAGEND` trailer.
+**Response:** Four `MICDIAG <pin> ...` lines (toggle counts with clk=on, pull test with clk=off) and a `MICDIAGEND err=<0|1>` trailer. A start failure prints the reason and the trailer with err=1, so the trailer always arrives.
 
 ### `gpsrst`
 

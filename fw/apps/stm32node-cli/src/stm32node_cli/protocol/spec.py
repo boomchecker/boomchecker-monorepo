@@ -104,20 +104,26 @@ COMMANDS: tuple[CommandSpec, ...] = (
     ),
     CommandSpec(
         name="detect",
-        usage="detect <sec> [squelch_milli] [thr_milli]",
+        usage="detect <sec> [squelch_milli] [thr_milli] [dbg]",
         description=(
             "Run on-device drone detection for <sec> seconds (1..60): microphone PCM is "
-            "decimated to 16 kHz, MFCC features are extracted (1024-sample frames, hop 512) "
-            "and every run of 14 frames above the RMS squelch is classified by a linear SVM. "
+            "decimated to 16 kHz, MFCC features are extracted (1024-sample frames, hop 512), "
+            "every run of 14 frames above the RMS squelch is aggregated to a 52-value feature "
+            "vector and classified by the model compiled into the firmware. That is currently "
+            "a small MLP (v6), whose decision value is a raw logit, not a probability. "
             "Optional overrides in units of 1/1000: squelch_milli (default 10 = RMS 0.010, "
-            "0 disables the gate) and thr_milli (default 500 = decision threshold 0.5, may "
-            "be negative)."
+            "0 disables the gate, 0..1000) and thr_milli (default 7250 = logit 7.25, may be "
+            "negative, -20000..20000 - a value outside that range is rejected, not clamped). "
+            "A non-zero dbg adds one debug line per frame."
         ),
         response=(
-            "A `LVL t=<s>.<ms> rms=<d.ddd>` input-level line about once a second, one line "
+            "A `LVL t=<s>.<ms> rms=<+d.ddd>` input-level line about once a second, one line "
             "per classified window: `DET t=<s>.<ms> dec=<+d.ddd> <DRONE|noise>` (windows are "
             "~448 ms of audio; input below the squelch yields no windows), then a final "
-            "`DETEND windows=<n> drones=<n> overrun=<0|1> err=<0|1>` line."
+            "`DETEND windows=<n> drones=<n> overrun=<0|1> err=<0|1>` line. With dbg set, each "
+            "frame also emits `F=<frame> a=<accumulated> r=<rms_milli> h=<half_us> "
+            "m=<mfcc_us>`. A start failure prints `DETERR <reason>` and then the DETEND "
+            "trailer with err=1, so the trailer always arrives."
         ),
     ),
     CommandSpec(
@@ -136,7 +142,8 @@ COMMANDS: tuple[CommandSpec, ...] = (
             "bytes=<n> ne=<n> fe=<n> ore=<n> pe=<n> overrun=<n> err=<0|1>` trailer. The "
             "per-flag UART error counters separate marginal signal levels (ne, noise) "
             "from a wrong baud rate (fe, framing) and IRQ starvation (ore); err=1 means "
-            "the host disconnected mid-run. `GPSERR ...` on init failure."
+            "the host disconnected mid-run. A UART init failure prints `GPSERR <reason>` "
+            "and then the GPSEND trailer with err=1, so the trailer always arrives."
         ),
     ),
     CommandSpec(
@@ -162,7 +169,8 @@ COMMANDS: tuple[CommandSpec, ...] = (
         ),
         response=(
             "Four `MICDIAG <pin> ...` lines (toggle counts with clk=on, pull test with "
-            "clk=off) and a `MICDIAGEND` trailer."
+            "clk=off) and a `MICDIAGEND err=<0|1>` trailer. A start failure prints the "
+            "reason and the trailer with err=1, so the trailer always arrives."
         ),
     ),
     CommandSpec(
