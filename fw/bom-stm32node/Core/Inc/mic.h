@@ -40,6 +40,17 @@ int mic_start(void);
 void mic_stop(void);
 
 /**
+ * @brief Select which microphone of the PDM pair the DSP demodulates
+ *        (PDM_SLOT_MASK_A / PDM_SLOT_MASK_B). Takes effect on the next
+ *        mic_start(); which one is populated is a board property, so the
+ *        firmware default is only a default. See `micslot` in cli.c.
+ */
+void mic_set_slot_mask(uint16_t mask);
+
+/** @brief The slot mask the next mic_start() will use. */
+uint16_t mic_get_slot_mask(void);
+
+/**
  * @brief Wiring diagnostics: sample PDM_D1/PDM_D2 as GPIO inputs with the PDM
  *        clock running (toggle counts) and pull-test them with the clock off.
  *        Prints MICDIAG lines and a MICDIAGEND trailer on the console.

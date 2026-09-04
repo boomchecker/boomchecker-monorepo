@@ -12,6 +12,20 @@
 #include <stdio.h>
 #include <string.h>
 
+/* Which microphone of the PDM pair the DSP demodulates. Both mics of a pair
+   share one data line and take turns on opposite clock edges, so the mask -
+   not the wiring - decides which one is heard. Which one is populated is a
+   board property, so this is a default, not a constant: `micslot` overrides it
+   at runtime and `micdiag` measures both so you can tell which is right.
+
+   Default B: on the board this was brought up on, mask A demodulates the
+   unpopulated half and yields digital silence (rms 0.000 indefinitely), which
+   looks exactly like a perfectly quiet detector. Mask A remains correct for
+   boards populated the other way - pdm_pcm.h notes it measured lowest noise on
+   the Mik_stm hardware. */
+#define MIC_DEFAULT_SLOT_MASK PDM_SLOT_MASK_B
+static uint16_t s_slot_mask = MIC_DEFAULT_SLOT_MASK;
+
 /* --- Circular DMA buffer and DMA linked-list ------------------------------- */
 static uint16_t pdm_ring[PDM_RING_HALFWORDS];   /* buffer filled by DMA          */
 
@@ -101,7 +115,7 @@ void mic_dma_init(void)
 
 int mic_start(void)
 {
-  pdm_pcm_init(&s_dsp, PDM_SLOT_MASK_A);
+  pdm_pcm_init(&s_dsp, s_slot_mask);
   s_half0_ready = 0;
   s_half1_ready = 0;
   s_overrun     = 0;
@@ -117,6 +131,16 @@ int mic_start(void)
     return HAL_ERROR;
   }
   return HAL_OK;
+}
+
+void mic_set_slot_mask(uint16_t mask)
+{
+  s_slot_mask = mask;
+}
+
+uint16_t mic_get_slot_mask(void)
+{
+  return s_slot_mask;
 }
 
 void mic_stop(void)
@@ -345,5 +369,17 @@ void mic_diag_run(void)
                                     : "driven HIGH");
     diag_print(line);
   }
+  /* Which microphone of the pair the DSP will actually decode. The toggle
+     counts above cannot answer that: both mics of a pair drive the same data
+     line on opposite clock edges, so the line looks alive whichever one is
+     fitted. Decoding the empty slot yields a flat zero that is indistinguishable
+     from a quiet room in a short measurement - run `detect` for a few seconds
+     and compare, or flip with `micslot`. */
+  const uint16_t active = mic_get_slot_mask();
+  snprintf(line, sizeof(line), "MICDIAG active slot=%s (0x%04X)\n",
+           (active == PDM_SLOT_MASK_A) ? "A" : (active == PDM_SLOT_MASK_B) ? "B" : "custom",
+           (unsigned)active);
+  diag_print(line);
+
   diag_print("MICDIAGEND err=0\n");
 }

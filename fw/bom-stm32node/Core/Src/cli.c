@@ -272,6 +272,43 @@ static void cmd_micdiag(EmbeddedCli *cli, char *args, void *context)
   mic_diag_run();
 }
 
+static void cmd_micslot(EmbeddedCli *cli, char *args, void *context)
+{
+  (void)context;
+  const uint16_t ntok = embeddedCliGetTokenCount(args);
+  char line[64];
+
+  if (ntok == 0u)
+  {
+    const uint16_t m = mic_get_slot_mask();
+    snprintf(line, sizeof(line), "micslot: %s (0x%04X)",
+             (m == PDM_SLOT_MASK_A) ? "A" : (m == PDM_SLOT_MASK_B) ? "B" : "custom",
+             (unsigned)m);
+    embeddedCliPrint(cli, line);
+    return;
+  }
+  if (ntok != 1u)
+  {
+    embeddedCliPrint(cli, "usage: micslot [a|b]");
+    return;
+  }
+
+  const char *tok = embeddedCliGetToken(args, 1);
+  if (tok[1] != '\0' || (tok[0] != 'a' && tok[0] != 'A' && tok[0] != 'b' && tok[0] != 'B'))
+  {
+    embeddedCliPrint(cli, "usage: micslot [a|b]");
+    return;
+  }
+
+  const bool want_a = (tok[0] == 'a' || tok[0] == 'A');
+  mic_set_slot_mask(want_a ? PDM_SLOT_MASK_A : PDM_SLOT_MASK_B);
+  /* Not persisted: this is a bring-up override, and the next reset returns to
+     the firmware default. Run `micdiag` to see which slot carries signal. */
+  snprintf(line, sizeof(line), "micslot: %s selected (next detect/stream)",
+           want_a ? "A" : "B");
+  embeddedCliPrint(cli, line);
+}
+
 static void cmd_gpsrst(EmbeddedCli *cli, char *args, void *context)
 {
   (void)args;
@@ -1101,6 +1138,15 @@ void cli_init(cli_tx_fn tx)
     .binding      = cmd_micdiag,
   };
   embeddedCliAddBinding(s_cli, micdiag_binding);
+
+  CliCommandBinding micslot_binding = {
+    .name         = "micslot",
+    .help         = "micslot [a|b] - show or select which PDM microphone of the pair is decoded",
+    .tokenizeArgs = true,
+    .context      = NULL,
+    .binding      = cmd_micslot,
+  };
+  embeddedCliAddBinding(s_cli, micslot_binding);
 
   CliCommandBinding gpsrst_binding = {
     .name         = "gpsrst",
