@@ -1,15 +1,14 @@
 #include "svm_classifier.h"
 #include "dsp_config.h" /* DET_FEATURE_COUNT */
-/* Active model - exactly one include. Linear SVMs: svm_model_data.h (v1),
-   _v2.h, _v3.h, _v2nm.h (mean-c0 dropped -> level-invariant). MLPs (decision
-   is the raw logit, so the neutral detect threshold is 0 instead of 0.5):
-   mlp_model_data_v4.h (26-feature layout), _v5.h (52-feature layout with
-   dmean/cmax, best quiet-drone sensitivity), _v5e.h (52-feature seed
-   ensemble - field candidate, best on real flyovers), _v6.h (52-feature,
-   pick_champion.py winner for the bebop/membo alarm criterion; operating
-   threshold +7.25 = thr_milli 7250). The MLP_ENSEMBLE / MLP_HIDDEN macros
-   select the matching forward pass; MLP_NUM_INPUTS ties the header to the
-   det_aggregate feature layout. */
+/* Active model - exactly one include. Two headers are kept in tree:
+   mlp_model_data_v6.h (deployed: 52-feature layout, pick_champion.py winner
+   for the bebop/membo alarm criterion, operating threshold +7.25 = thr_milli
+   7250; the decision is a raw logit) and svm_model_data_v3.h (linear SVM on
+   the 26-feature [mean, std] prefix, natural threshold 500; kept as the
+   second classifier family for the upcoming registry). Earlier generations
+   (v1, v2, v2nm, MLP v4/v5/v5e) live in git history and as .pkl on the
+   research branch. The MLP_ENSEMBLE / MLP_HIDDEN macros select the matching
+   forward pass. */
 #include "mlp_model_data_v6.h"
 
 /* The active header must fit the feature layout det_aggregate() produces
