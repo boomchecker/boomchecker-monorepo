@@ -17,4 +17,10 @@
 #define LOW_FREQ_HZ         0.0f        /* Lower frequency bound for Mel filters */
 #define HIGH_FREQ_HZ        8000.0f     /* Upper frequency bound (Nyquist frequency) */
 
+/* Aggregated feature vector one classified window hands to the model:
+   [mean(13), std(13), dmean(13), cmax(13)] over 14 MFCC frames, produced by
+   det_aggregate() in detector.c. Every model header is checked against this
+   at compile time in svm_classifier.c. */
+#define DET_FEATURE_COUNT   (4u * NUM_MFCC_COEFFS)
+
 #endif /* DSP_CONFIG_H */

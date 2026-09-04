@@ -1,4 +1,5 @@
 #include "svm_classifier.h"
+#include "dsp_config.h" /* DET_FEATURE_COUNT */
 /* Active model - exactly one include. Linear SVMs: svm_model_data.h (v1),
    _v2.h, _v3.h, _v2nm.h (mean-c0 dropped -> level-invariant). MLPs (decision
    is the raw logit, so the neutral detect threshold is 0 instead of 0.5):
@@ -10,6 +11,20 @@
    select the matching forward pass; MLP_NUM_INPUTS ties the header to the
    det_aggregate feature layout. */
 #include "mlp_model_data_v6.h"
+
+/* The active header must fit the feature layout det_aggregate() produces
+   (DET_FEATURE_COUNT, dsp_config.h). The forward passes below index the
+   caller's stack array with the header's own count: MLP headers read every
+   entry except index 0 (mean-c0, level-dependent), hence the +1 and the
+   equality; linear SVM headers read a leading [mean, std] prefix. Without
+   these, a header with too many inputs is a silent out-of-bounds read. */
+#if defined(MLP_ENSEMBLE) || defined(MLP_HIDDEN)
+_Static_assert(MLP_NUM_INPUTS + 1u == DET_FEATURE_COUNT,
+               "MLP header input count does not match the det_aggregate() layout");
+#else
+_Static_assert(SVM_NUM_FEATURES <= DET_FEATURE_COUNT,
+               "SVM header reads more features than det_aggregate() produces");
+#endif
 
 void svm_classifier_init(void) {
     // All model families are static tables - nothing to initialize

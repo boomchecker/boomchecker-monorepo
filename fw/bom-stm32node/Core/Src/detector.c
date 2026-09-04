@@ -97,8 +97,9 @@ static bool det_wait_block(void)
    (population std matching np.std; dmean = mean |frame-to-frame delta|,
    capturing prop modulation; cmax = max - mean, level-invariant peakiness).
    Linear SVM headers consume the first 26 entries, the v5 MLP all 52 minus
-   index 0 - so computing the full vector keeps every model include working. */
-#define DET_FEATURE_COUNT (4u * NUM_MFCC_COEFFS)
+   index 0 - so computing the full vector keeps every model include working.
+   DET_FEATURE_COUNT itself lives in dsp_config.h so svm_classifier.c can
+   _Static_assert the active model header against it. */
 
 static void det_aggregate(const float *frames, float *out)
 {
