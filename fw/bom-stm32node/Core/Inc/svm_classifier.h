@@ -1,6 +1,10 @@
 /**
  * @file svm_classifier.h
- * @brief Header for SVM inference using RBF kernel.
+ * @brief Decision-function inference for the active model header (see
+ *        svm_classifier.c): a linear SVM (scaled dot product + bias) or a
+ *        small MLP / MLP ensemble (scaled inputs, one ReLU layer, raw logit).
+ *        Which one is compiled in is fixed at build time by the single
+ *        #include in svm_classifier.c; the name is historical.
  */
 
 #ifndef SVM_CLASSIFIER_H
@@ -8,7 +12,6 @@
 
 #include <stdint.h>
 #include "arm_math.h"
-#include "dsp/svm_functions.h"
 
 /**
  * @brief Initializes the SVM classifier using CMSIS-DSP.
