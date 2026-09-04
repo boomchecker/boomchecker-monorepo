@@ -47,3 +47,12 @@ data/
 
 # Vendored SVD (large; fetched by the fw-devcontainer post-create script)
 fw/bom-stm32node/debug/STM32H563.svd
+
+# STM32CubeIDE / Eclipse project metadata
+.project
+.cproject
+.settings/
+.externalToolBuilders/
+
+# stm32node-cli writes captures to <cwd>/recordings; keep them local
+/recordings/
