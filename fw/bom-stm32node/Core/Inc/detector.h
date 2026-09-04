@@ -25,12 +25,27 @@
  * v6 MLP outputs raw logits and its champion operating point is +7.25
  * (pick_champion.py 2026-08-10: bebop/membo alarms with zero >=2-window
  * false alarms). For the legacy linear SVMs the natural default was 500.
+ *
+ * Raised to 15.0 after measuring the model on real hardware for the first
+ * time. pick_champion.py's +7.25 was chosen on recordings, offline; on a node
+ * with a working microphone it fires on ordinary room noise - 23 of 396
+ * windows over three minutes of an office, decision values peaking at 12.05.
+ * 15.0 clears that peak with about 25 % headroom and gave zero alarms on a
+ * further three minutes of the same room.
+ *
+ * What that number is NOT: it was measured against ambient noise only, with no
+ * drone present, so the sensitivity given up is unquantified. It is a field
+ * default picked to stop crying wolf, not an operating point swept on labelled
+ * data. Replacing it properly means recording drone and non-drone audio
+ * THROUGH this hardware path and sweeping the threshold on that - see the
+ * boomdetect package's skew report.
+ *
  * Change this value and svm_classifier.c's model #include TOGETHER: nothing
- * enforces the pairing yet, and a linear SVM header left at 7250 (its
- * decision values live around +-3) is a detector that never fires. The
+ * enforces the pairing yet, and a linear SVM header left at a logit threshold
+ * (its decision values live around +-3) is a detector that never fires. The
  * pairing moves into the classifier registry with the boomdetect package. */
 #define DETECTOR_DEFAULT_SQUELCH_MILLI 10
-#define DETECTOR_DEFAULT_THR_MILLI     7250
+#define DETECTOR_DEFAULT_THR_MILLI     15000
 
 /**
  * @brief Run detection for `seconds` (clamped to 1..60) and stream results.

@@ -112,8 +112,11 @@ COMMANDS: tuple[CommandSpec, ...] = (
             "vector and classified by the model compiled into the firmware. That is currently "
             "a small MLP (v6), whose decision value is a raw logit, not a probability. "
             "Optional overrides in units of 1/1000: squelch_milli (default 10 = RMS 0.010, "
-            "0 disables the gate, 0..1000) and thr_milli (default 7250 = logit 7.25, may be "
-            "negative, -20000..20000 - a value outside that range is rejected, not clamped). "
+            "0 disables the gate, 0..1000) and thr_milli (default 15000 = logit 15.0, may be "
+            "negative, -20000..20000 - a value outside that range is rejected, not clamped; "
+            "the default was measured against ambient room noise on hardware, with no "
+            "drone present, so it trades away an unquantified amount of sensitivity to "
+            "avoid false alarms). "
             "A non-zero dbg adds one debug line per frame."
         ),
         response=(
