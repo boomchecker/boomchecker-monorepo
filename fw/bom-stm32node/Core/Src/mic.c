@@ -260,9 +260,25 @@ static void diag_print(const char *line)
 void mic_diag_run(void)
 {
   static const uint16_t pin_mask[2] = { PDM_D1_Pin, PDM_D2_Pin };
-  static const uint32_t pin_pos[2]  = { 6u, 4u }; /* PE6, PE4 */
-  static const char    *pin_name[2] = { "PE6/D1", "PE4/D2" };
+  /* Bit positions and labels come from the CubeMX pin macros, so a pin
+     reassignment in main.h cannot leave this probing (or naming) the wrong
+     line. Both pins are read from one GPIOE->IDR snapshot below, hence the
+     same-port check. */
+  const uint32_t pin_pos[2] = { 31u - __CLZ(pin_mask[0]), 31u - __CLZ(pin_mask[1]) };
+  char pin_name[2][8];
   char line[96];
+
+  if (PDM_D1_GPIO_Port != GPIOE || PDM_D2_GPIO_Port != GPIOE)
+  {
+    diag_print("MICDIAG PDM data pins are not on GPIOE - probe not ported\n");
+    diag_print("MICDIAGEND err=1\n");
+    return;
+  }
+  for (uint32_t k = 0u; k < 2u; k++)
+  {
+    snprintf(pin_name[k], sizeof(pin_name[k]), "PE%lu/D%lu",
+             (unsigned long)pin_pos[k], (unsigned long)(k + 1u));
+  }
 
   mic_dma_init();
   if (mic_start() != 0)
