@@ -268,6 +268,7 @@ void mic_diag_run(void)
   if (mic_start() != 0)
   {
     diag_print("MICDIAG mic start failed\n");
+    diag_print("MICDIAGEND err=1\n");
     return;
   }
   HAL_Delay(30); /* IM67D130A: startup <= 20 ms after VDD+CLOCK */
@@ -328,5 +329,5 @@ void mic_diag_run(void)
                                     : "driven HIGH");
     diag_print(line);
   }
-  diag_print("MICDIAGEND\n");
+  diag_print("MICDIAGEND err=0\n");
 }

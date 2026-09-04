@@ -68,6 +68,15 @@ static void det_print(const char *line)
   (void)usb_cli_write_blocking((const uint8_t *)line, (uint32_t)strlen(line));
 }
 
+/* Error exit. The console contract promises a DETEND trailer for every run, so
+   an aborted start still ends with one (err=1, nothing counted) instead of
+   leaving a host waiting for it. */
+static void det_abort(const char *reason)
+{
+  det_print(reason);
+  det_print("DETEND windows=0 drones=0 overrun=0 err=1\n");
+}
+
 /* Wait for one processed PCM block, keeping the USB device serviced. The pump
    runs at least once per call so sustained processing (halves already queued)
    cannot starve the USB stack. */
@@ -160,7 +169,7 @@ void detector_run(uint32_t seconds, uint32_t squelch_milli, int32_t thr_milli,
   {
     if (mfcc_init() != ARM_MATH_SUCCESS)
     {
-      det_print("DETERR mfcc init failed\n");
+      det_abort("DETERR mfcc init failed\n");
       return;
     }
     svm_classifier_init();
@@ -177,7 +186,7 @@ void detector_run(uint32_t seconds, uint32_t squelch_milli, int32_t thr_milli,
   mic_dma_init(); /* no-op when already built (shared with pcm_stream) */
   if (mic_start() != 0)
   {
-    det_print("DETERR mic start failed\n");
+    det_abort("DETERR mic start failed\n");
     return;
   }
 

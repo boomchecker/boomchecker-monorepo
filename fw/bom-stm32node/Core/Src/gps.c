@@ -124,6 +124,7 @@ void gps_run(uint32_t seconds, uint32_t baud)
   if (gps_uart_start(baud) != 0)
   {
     gps_print("GPSERR uart init failed\n");
+    gps_print("GPSEND lines=0 bytes=0 ne=0 fe=0 ore=0 pe=0 overrun=0 err=1\n");
     return;
   }
 
