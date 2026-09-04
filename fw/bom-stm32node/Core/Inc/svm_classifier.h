@@ -16,13 +16,6 @@
 void svm_classifier_init(void);
 
 /**
- * @brief Predicts the class based on input feature vector.
- * @param p_features Pointer to the input feature vector (float[SVM_NUM_FEATURES]).
- * @return int 1 if drone detected, 0 otherwise.
- */
-int svm_predict(const float *p_features);
-
-/**
  * @brief Returns the raw decision function value (for debugging).
  * @param p_features Pointer to the input feature vector.
  * @return float Decision value.

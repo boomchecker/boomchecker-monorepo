@@ -83,8 +83,3 @@ float svm_get_decision_value(const float *p_features) {
 }
 
 #endif
-
-int svm_predict(const float *p_features) {
-    float32_t decision = svm_get_decision_value(p_features);
-    return (decision >= 0.5f) ? 1 : 0;
-}
