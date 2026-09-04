@@ -1,0 +1,57 @@
+Local modification to CMSIS-DSP v1.15.0: RMS instead of absmax pre-FFT scaling
+in arm_mfcc_f32().
+
+Origin is undocumented. The identical modification is present in both copies
+that entered this repository on 2026-08-07 (fw/bom-stm32node/third_party and
+the drony CubeIDE workspace on hermakam/drones-research), so it was applied by
+hand to the downloaded v1.15.0 archive before either was committed.
+
+What it changes: arm_mfcc_f32() conditions the input for the FFT by scaling it
+to unit level and scaling the magnitude spectrum back afterwards. Upstream uses
+the absolute maximum (guard: maxValue != 0.0f); this tree uses the RMS (guard:
+rmsValue > 1e-6f). The scale-and-unscale pair is linear and cancels in exact
+arithmetic, so this is not a change of definition - it changes float32 rounding,
+and it changes behaviour for frames quieter than the guard, which upstream still
+normalises and this version leaves alone.
+
+Why it must not be lost: the deployed model (mlp_model_data_v6.h) was selected
+against MFCC values produced by THIS code path. Reverting to upstream silently
+perturbs every coefficient. When third_party/CMSIS-DSP is replaced by a CMake
+FetchContent of v1.15.0, re-apply this patch (or re-baseline the detector on
+hardware and record the new decision values).
+
+Apply with: git apply patches/0001-mfcc-rms-normalisation.patch
+Verify with: cmp against the v1.15.0 release archive; only this file may differ.
+
+--- a/Source/TransformFunctions/arm_mfcc_f32.c
++++ b/Source/TransformFunctions/arm_mfcc_f32.c
+@@ -81,12 +81,13 @@
+   const float32_t *coefs=S->filterCoefs;
+   arm_matrix_instance_f32 pDctMat;
+ 
+-  /* Normalize */
+-  arm_absmax_f32(pSrc,S->fftLen,&maxValue,&index);
++  /* RMS Normalize */
++  float32_t rmsValue;
++  arm_rms_f32(pSrc,S->fftLen,&rmsValue);
+ 
+-  if (maxValue != 0.0f)
++  if (rmsValue > 1e-6f)
+   {
+-     arm_scale_f32(pSrc,1.0f/maxValue,pSrc,S->fftLen);
++     arm_scale_f32(pSrc,1.0f/rmsValue,pSrc,S->fftLen);
+   }
+ 
+   /* Multiply by window */
+@@ -118,9 +119,9 @@
+   pTmp[1]=0.0f;
+ #endif
+   arm_cmplx_mag_f32(pTmp,pSrc,S->fftLen);
+-  if (maxValue != 0.0f)
++  if (rmsValue > 1e-6f)
+   {
+-     arm_scale_f32(pSrc,maxValue,pSrc,S->fftLen);
++     arm_scale_f32(pSrc,rmsValue,pSrc,S->fftLen);
+   }
+ 
+   /* Apply MEL filters */
