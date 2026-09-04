@@ -22,6 +22,18 @@ STM32H5 ROM bootloader so the board reflashes over the same USB port without an
 ST-Link. The main stack grew to 16 KB after `detect` was found to overflow
 MSPLIM once a USB interrupt nested on top of snprintf.
 
+The PDM slot mask - which microphone of a pair the DSP demodulates - is now a
+runtime setting (`micslot [a|b]`) with a documented default rather than a
+hard-coded constant. It was previously fixed to A, which on a board populated
+the other way decodes the empty half of every frame and reports perfect silence.
+
+The default `detect` threshold moves from 7250 to 15000. The 7.25 operating
+point was selected offline against recordings; measured on hardware with a
+working microphone it fires on ordinary room noise (23 of 396 windows over
+three minutes, peaking at 12.05). 15.0 gave zero alarms over a second
+three-minute campaign. This was measured against ambient noise with no drone
+present, so the sensitivity it gives up is unquantified.
+
 Correctness fixes on the way in: the model header is now static-asserted
 against the feature layout it is indexed with, the detector FIFO refuses to
 overwrite unread samples, `detect`/`gps`/`micdiag` always emit their trailer
