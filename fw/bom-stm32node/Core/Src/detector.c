@@ -197,6 +197,7 @@ void detector_run(uint32_t seconds, uint32_t squelch_milli, int32_t thr_milli,
   uint32_t frame_idx = 0u;          /* absolute 16 kHz frame counter            */
   uint32_t win_start_frame = 0u;
   uint32_t windows = 0u, drones = 0u;
+  uint32_t ring_drops = 0u;         /* 16 kHz samples dropped: FIFO was full */
   bool     mic_got = false;
   bool     mic_ok  = true;
 
@@ -217,6 +218,15 @@ void detector_run(uint32_t seconds, uint32_t squelch_milli, int32_t thr_milli,
     uint32_t i = dec_phase;
     for (; i < PCM_SAMPLES_PER_HALF; i += 3u)
     {
+      if (avail >= DET_RING_LEN)
+      {
+        /* Consumer fell behind (should not happen: 341 in vs 512 out per
+           half). Drop rather than overwrite unread samples, and say so in
+           the trailer's overrun flag instead of silently corrupting a
+           window's features. */
+        ring_drops++;
+        continue;
+      }
       det_ring[w_idx] = (float)det_pcm[i] * (1.0f / 32768.0f);
       w_idx = (w_idx + 1u) % DET_RING_LEN;
       avail++;
@@ -309,7 +319,7 @@ void detector_run(uint32_t seconds, uint32_t squelch_milli, int32_t thr_milli,
 
   snprintf(line, sizeof(line), "DETEND windows=%lu drones=%lu overrun=%u err=%u\n",
            (unsigned long)windows, (unsigned long)drones,
-           (mic_got && mic_overrun()) ? 1u : 0u,
+           ((mic_got && mic_overrun()) || ring_drops != 0u) ? 1u : 0u,
            (mic_ok && mic_got) ? 0u : 1u);
   det_print(line);
 }
