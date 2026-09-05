@@ -24,6 +24,16 @@ SAMPLES_PER_BLOCK = 1024
 # validate up front rather than mistaking that text for a missing acknowledgement.
 STREAM_MAX_SECONDS = 60
 
+# --- On-device detector (matches firmware Core/Inc/detector.h and cli.c) -----
+# Defaults the board applies when `detect` is given fewer arguments. They belong
+# to the model compiled into the firmware (thr_milli is a raw logit for the v6
+# MLP), so tests/test_firmware_defaults.py checks them against detector.h.
+DETECT_MAX_SECONDS = 60
+DETECT_DEFAULT_SQUELCH_MILLI = 10
+DETECT_SQUELCH_MILLI_MAX = 1000
+DETECT_DEFAULT_THR_MILLI = 7250
+DETECT_THR_MILLI_LIMIT = 20000  # accepted thr_milli range is -LIMIT..+LIMIT
+
 # --- Framing -----------------------------------------------------------------
 PROTOCOL_VERSION = 1
 MAGIC = b"PCM1"
@@ -104,20 +114,31 @@ COMMANDS: tuple[CommandSpec, ...] = (
     ),
     CommandSpec(
         name="detect",
-        usage="detect <sec> [squelch_milli] [thr_milli]",
+        usage="detect <sec> [squelch_milli] [thr_milli] [dbg]",
         description=(
-            "Run on-device drone detection for <sec> seconds (1..60): microphone PCM is "
-            "decimated to 16 kHz, MFCC features are extracted (1024-sample frames, hop 512) "
-            "and every run of 14 frames above the RMS squelch is classified by a linear SVM. "
-            "Optional overrides in units of 1/1000: squelch_milli (default 10 = RMS 0.010, "
-            "0 disables the gate) and thr_milli (default 500 = decision threshold 0.5, may "
-            "be negative)."
+            f"Run on-device drone detection for <sec> seconds (1..{DETECT_MAX_SECONDS}): "
+            "microphone PCM is decimated to 16 kHz, MFCC features are extracted "
+            "(1024-sample frames, hop 512), every run of 14 frames above the RMS squelch "
+            "is aggregated to a 52-value feature vector ([mean, std, dmean, cmax] x 13) "
+            "and classified by the model compiled into the firmware. That is currently a "
+            "small MLP (v6) whose decision value is a raw logit, not a probability. "
+            "Optional overrides in units of 1/1000: squelch_milli (default "
+            f"{DETECT_DEFAULT_SQUELCH_MILLI} = RMS {DETECT_DEFAULT_SQUELCH_MILLI / 1000:.3f}, "
+            f"0 disables the gate, 0..{DETECT_SQUELCH_MILLI_MAX}) and thr_milli (default "
+            f"{DETECT_DEFAULT_THR_MILLI} = logit {DETECT_DEFAULT_THR_MILLI / 1000:g}, the v6 "
+            "operating point picked on 2026-08-10 recordings; may be negative, "
+            f"-{DETECT_THR_MILLI_LIMIT}..{DETECT_THR_MILLI_LIMIT}). A value outside its range "
+            "is rejected with a usage line, not clamped. A non-zero dbg adds one debug "
+            "line per frame."
         ),
         response=(
-            "A `LVL t=<s>.<ms> rms=<d.ddd>` input-level line about once a second, one line "
+            "A `LVL t=<s>.<ms> rms=<+d.ddd>` input-level line about once a second, one line "
             "per classified window: `DET t=<s>.<ms> dec=<+d.ddd> <DRONE|noise>` (windows are "
             "~448 ms of audio; input below the squelch yields no windows), then a final "
-            "`DETEND windows=<n> drones=<n> overrun=<0|1> err=<0|1>` line."
+            "`DETEND windows=<n> drones=<n> overrun=<0|1> err=<0|1>` line. With dbg set, "
+            "each frame also emits `F=<frame> a=<accumulated> r=<rms_milli> h=<half_us> "
+            "m=<mfcc_us>`. A start failure prints `DETERR <reason>` and ends the run "
+            "without a DETEND, so hosts must treat DETERR as a terminal line too."
         ),
     ),
     CommandSpec(
@@ -128,7 +149,9 @@ COMMANDS: tuple[CommandSpec, ...] = (
             "seconds (1..300). The board re-inits UART4 at [baud] (default 9600, the "
             "module's ROM default; 1200..921600) and forwards each received line verbatim. "
             "The Teseo-LIV3R is a ROM part - its configuration does not persist without "
-            "VBAT, so hosts should adapt to 9600 rather than reconfigure the module."
+            "VBAT, so hosts should adapt to 9600 rather than reconfigure the module. UART "
+            "reception is switched off again when the run ends, so no stale sentences pile "
+            "up between commands; a reply buffered by an earlier `gpstx` is delivered first."
         ),
         response=(
             "A `GPS baud=<baud> sec=<sec>` acknowledgement line, then raw NMEA lines "
@@ -145,8 +168,11 @@ COMMANDS: tuple[CommandSpec, ...] = (
         description=(
             "Send one NMEA sentence to the GNSS module (e.g. `gpstx $PSTMGETSWVER`). The "
             "leading `$` is optional; the NMEA checksum and CRLF are appended by the board. "
-            "The sentence must not contain spaces. UART reception stays armed afterwards, "
-            "so the module's reply is buffered and delivered by the next `gps` run."
+            "The sentence must not contain spaces. The board discards any stale input, arms "
+            "UART reception and then transmits, so the module's reply (plus roughly the next "
+            "second of NMEA, after which the 1 KB buffer drops further bytes) is buffered and "
+            "delivered at the start of the next `gps` run. Several `gpstx` in a row queue "
+            "their replies behind each other until a `gps` drains them."
         ),
         response="`GPSTX ok` on success, `GPSERR tx failed` or a usage line otherwise.",
     ),
