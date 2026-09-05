@@ -17,7 +17,8 @@ Subcommands:
   find                      print the board's COM port (VID:PID 0483:5710) or exit 1
   wait                      wait for the port to (re)appear, settle, handshake `version`
   cmd "<line>"              send one CLI line, stream output until trailer/idle
-  detect <sec> [opts]       run `detect`, live-print DET/LVL lines, summarize h=/m= stats
+  detect <sec> [opts]       run `detect`, live-print DET/LVL lines, summarize h=/m= stats;
+                            exit 1 unless the run ended with `DETEND ... err=0`
   dfu-flash [--elf PATH]    handshake -> `dfu` -> flash over DFU -> wait for RESET press
 """
 
@@ -198,6 +199,26 @@ def summarize_detect(lines: list[str]) -> None:
     log(f"  {end[0]}" if end else "  ! no DETEND trailer (wedge? deadline?)")
 
 
+DETEND_ERR_RE = re.compile(r" err=([0-9])")
+
+
+def detect_exit_code(lines: list[str]) -> int:
+    """0 only for a run that ended with `DETEND ... err=0`.
+
+    DETERR (start failure), a missing trailer (deadline hit, wedge) and err=1
+    all return 1, so a script cannot mistake a failed run for a clean one.
+    Note stream_command() returns the collected lines in every case - the
+    verdict has to come from their content.
+    """
+    if any(line.startswith("DETERR") for line in lines):
+        return 1
+    end = next((line for line in lines if line.startswith("DETEND")), None)
+    if end is None:
+        return 1
+    m = DETEND_ERR_RE.search(end)
+    return 0 if m and m.group(1) == "0" else 1
+
+
 def cmd_find(_: argparse.Namespace) -> int:
     port = find_port()
     if port:
@@ -236,7 +257,10 @@ def cmd_detect(args: argparse.Namespace) -> int:
     finally:
         ser.close()
     summarize_detect(lines)
-    return 0
+    rc = detect_exit_code(lines)
+    if rc:
+        log("  ! run did not finish cleanly (DETERR / no DETEND / err=1) -> exit 1")
+    return rc
 
 
 def cmd_dfu_flash(args: argparse.Namespace) -> int:
