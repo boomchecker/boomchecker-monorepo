@@ -7,8 +7,9 @@
  * re-inits UART4 at the requested baud rate, collects bytes via an RX
  * interrupt ring and prints complete NMEA lines on the CDC console, ending
  * with a "GPSEND ..." trailer. gps_send() writes one sentence to the module
- * (NMEA checksum appended). The Teseo-LIV3R is a ROM part whose config does
- * not persist without VBAT, so the host adapts to the module's default
+ * (NMEA checksum appended) and leaves reception armed so the reply is
+ * delivered by the next gps_run(). The Teseo-LIV3R is a ROM part whose config
+ * does not persist without VBAT, so the host adapts to the module's default
  * 9600 Bd rather than reconfiguring it.
  ******************************************************************************
  */
@@ -21,11 +22,16 @@
 #define GPS_MAX_SECONDS  300u
 
 /** Stream NMEA lines from the module to the console for `seconds`.
- *  Emits "GPS baud=..." first, raw NMEA lines, then "GPSEND lines=... " */
+ *  Emits "GPS baud=..." first, raw NMEA lines, then "GPSEND lines=... ".
+ *  A reply buffered by a preceding gps_send() comes out first. Reception is
+ *  switched off when the run ends, so nothing stale accumulates in idle. */
 void gps_run(uint32_t seconds, uint32_t baud);
 
 /** Send one sentence to the module at `baud`. `sentence` may omit the
- *  leading '$'; the NMEA checksum and CRLF are appended here.
+ *  leading '$'; the NMEA checksum and CRLF are appended here. Stale input is
+ *  discarded and reception armed before transmitting, so the reply (and about
+ *  the next second of NMEA) waits in the ring for the next gps_run(); replies
+ *  to several consecutive sends queue up behind each other.
  *  @return 0 on success, non-zero on UART error. */
 int gps_send(const char *sentence, uint32_t baud);
 

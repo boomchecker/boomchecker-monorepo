@@ -7,6 +7,13 @@
  * which runs synchronously inside the CLI binding like detector_run(). The
  * handler lives here (startup vectors are weak), NVIC is enabled from user
  * code so the CubeMX files stay untouched - same pattern as mic.c/GPDMA.
+ *
+ * Reception is armed only while somebody will read the bytes: during
+ * gps_run(), and from gps_send() until the next gps_run() drains the reply.
+ * The module streams NMEA continuously (~960 B/s at 9600 Bd), so a ring left
+ * armed in idle fills within about a second; being drop-newest it would then
+ * discard the reply to a later `gpstx` and hand the next `gps` a second of
+ * stale sentences instead.
  ******************************************************************************
  */
 #include "gps.h"
@@ -14,12 +21,15 @@
 #include "usb_cli.h" /* usb_cli_pump / connected / write_blocking */
 #include "main.h"    /* HAL_GetTick */
 
+#include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
 
 /* At 9600 Bd the module produces ~960 B/s; one console write of an 80-byte
    line returns in well under a millisecond, so 1 KB of slack is plenty even
-   for a 115200 Bd scan. */
+   for a 115200 Bd scan. After `gpstx` the same 1 KB holds the reply plus
+   about the next second of NMEA; later bytes are dropped (drop-newest), so
+   the reply survives until the next `gps` however long that takes. */
 #define GPS_RING_LEN 1024u
 #define GPS_LINE_MAX 128u
 
@@ -31,7 +41,8 @@ static volatile uint32_t s_overrun; /* ring full: incoming byte dropped    */
    (NE) apart from baud mismatch (FE) and IRQ starvation (ORE). */
 static volatile uint32_t s_err_ne, s_err_fe, s_err_ore, s_err_pe;
 
-static uint32_t s_cur_baud; /* 0 = UART still at the CubeMX boot default */
+static uint32_t s_cur_baud;      /* 0 = UART still at the CubeMX boot default */
+static bool     s_reply_pending; /* gps_send() armed RX, no gps_run() since   */
 
 void UART4_IRQHandler(void)
 {
@@ -62,12 +73,11 @@ void UART4_IRQHandler(void)
   }
 }
 
-/* Bring UART4 to `baud` and make sure interrupt reception is running.
-   Reception stays enabled after every command (the ring simply drops bytes
-   once full) so a reply the module sends between `gpstx` and the next `gps`
-   is not lost. The ring is cleared only when the baud changes (a re-init
-   garbles any partial byte anyway); the error counters reset per call. */
-static int gps_uart_start(uint32_t baud)
+/* Bring UART4 to `baud` and arm interrupt reception. With `discard` the ring
+   and the receive data register are emptied first, so nothing that arrived
+   before this call reaches the reader; a baud change always discards (the
+   re-init garbles any partial byte anyway). Error counters reset per call. */
+static int gps_uart_start(uint32_t baud, bool discard)
 {
   HAL_NVIC_DisableIRQ(UART4_IRQn);
 
@@ -79,8 +89,12 @@ static int gps_uart_start(uint32_t baud)
       return -1;
     }
     s_cur_baud = baud;
-    s_head     = 0u;
-    s_tail     = 0u;
+    discard    = true;
+  }
+  if (discard)
+  {
+    s_tail = s_head;
+    __HAL_UART_SEND_REQ(&huart4, UART_RXDATA_FLUSH_REQUEST); /* stale RDR byte */
   }
 
   s_overrun = 0u;
@@ -95,6 +109,16 @@ static int gps_uart_start(uint32_t baud)
   HAL_NVIC_SetPriority(UART4_IRQn, 7, 0); /* below USB (0) and mic DMA (5) */
   HAL_NVIC_EnableIRQ(UART4_IRQn);
   return 0;
+}
+
+/* Stop reception between commands - the module never stops talking, and an
+   unread ring is worse than an empty one (see the file header). */
+static void gps_uart_stop(void)
+{
+  CLEAR_BIT(UART4->CR1, USART_CR1_RXNEIE_RXFNEIE);
+  HAL_NVIC_DisableIRQ(UART4_IRQn);
+  s_tail          = s_head; /* drop the partial line the deadline cut off */
+  s_reply_pending = false;
 }
 
 static void gps_print(const char *line)
@@ -121,7 +145,8 @@ void gps_run(uint32_t seconds, uint32_t baud)
   /* NOTE: no usb_cli_flush_tx() here - flushing the console ring from inside
      a CLI binding wedges the CDC write state machine (see detector.c). */
 
-  if (gps_uart_start(baud) != 0)
+  /* Keep the ring: it may hold the reply to a preceding `gpstx`. */
+  if (gps_uart_start(baud, false) != 0)
   {
     gps_print("GPSERR uart init failed\n");
     return;
@@ -176,6 +201,8 @@ void gps_run(uint32_t seconds, uint32_t baud)
     }
   }
 
+  gps_uart_stop();
+
   char trailer[112];
   snprintf(trailer, sizeof(trailer),
            "GPSEND lines=%lu bytes=%lu ne=%lu fe=%lu ore=%lu pe=%lu "
@@ -201,10 +228,6 @@ int gps_send(const char *sentence, uint32_t baud)
   {
     return -1;
   }
-  if (gps_uart_start(baud) != 0) /* also arms RX so the reply is captured */
-  {
-    return -1;
-  }
 
   const char *body = (sentence[0] == '$') ? sentence + 1 : sentence;
   uint8_t     csum = 0u;
@@ -217,10 +240,25 @@ int gps_send(const char *sentence, uint32_t baud)
   {
     return -1;
   }
+
+  /* The reply arrives within milliseconds and must not meet a ring full of
+     idle-time NMEA: start from an empty ring - unless an earlier gpstx is
+     still waiting for its `gps`, in which case its reply stays and this one
+     queues behind it (the ring holds about a second of traffic). */
+  const bool first = !s_reply_pending;
+  if (gps_uart_start(baud, first) != 0)
+  {
+    return -1;
+  }
   if (HAL_UART_Transmit(&huart4, (const uint8_t *)buf, (uint16_t)n, 200u)
       != HAL_OK)
   {
+    if (first)
+    {
+      gps_uart_stop(); /* nothing to wait for; do not leave RX filling up */
+    }
     return -2;
   }
+  s_reply_pending = true;
   return 0;
 }
