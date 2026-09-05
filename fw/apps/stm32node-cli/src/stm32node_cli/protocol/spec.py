@@ -24,6 +24,18 @@ SAMPLES_PER_BLOCK = 1024
 # validate up front rather than mistaking that text for a missing acknowledgement.
 STREAM_MAX_SECONDS = 60
 
+# --- On-device detector (matches firmware App/detect/detect_service.h, cli.c and
+# the model tables in fw/common/boomdetect/models/) -------------------------------
+# Defaults the board applies when `detect` is given fewer arguments. The squelch
+# is the detector's; the threshold belongs to the model `model` last selected
+# (thr_milli is a raw logit for the v6 MLP; 15.0 was set on hardware against room
+# noise), so tests/test_firmware_defaults.py checks both against the firmware.
+DETECT_MAX_SECONDS = 60
+DETECT_DEFAULT_SQUELCH_MILLI = 10
+DETECT_SQUELCH_MILLI_MAX = 1000
+DETECT_MLP_V6_DEFAULT_THR_MILLI = 15000  # default_thr_milli of model_mlp_v6.c
+DETECT_THR_MILLI_LIMIT = 20000  # accepted thr_milli range is -LIMIT..+LIMIT
+
 # --- Framing -----------------------------------------------------------------
 PROTOCOL_VERSION = 1
 MAGIC = b"PCM1"
@@ -203,7 +215,9 @@ COMMANDS: tuple[CommandSpec, ...] = (
             "seconds (1..300). The board re-inits UART4 at [baud] (default 9600, the "
             "module's ROM default; 1200..921600) and forwards each received line verbatim. "
             "The Teseo-LIV3R is a ROM part - its configuration does not persist without "
-            "VBAT, so hosts should adapt to 9600 rather than reconfigure the module."
+            "VBAT, so hosts should adapt to 9600 rather than reconfigure the module. UART "
+            "reception is switched off again when the run ends, so no stale sentences pile "
+            "up between commands; a reply buffered by an earlier `gpstx` is delivered first."
         ),
         response=(
             "A `GPS baud=<baud> sec=<sec>` acknowledgement line, then raw NMEA lines "
@@ -221,8 +235,11 @@ COMMANDS: tuple[CommandSpec, ...] = (
         description=(
             "Send one NMEA sentence to the GNSS module (e.g. `gpstx $PSTMGETSWVER`). The "
             "leading `$` is optional; the NMEA checksum and CRLF are appended by the board. "
-            "The sentence must not contain spaces. UART reception stays armed afterwards, "
-            "so the module's reply is buffered and delivered by the next `gps` run."
+            "The sentence must not contain spaces. The board discards any stale input, arms "
+            "UART reception and then transmits, so the module's reply (plus roughly the next "
+            "second of NMEA, after which the 1 KB buffer drops further bytes) is buffered and "
+            "delivered at the start of the next `gps` run. Several `gpstx` in a row queue "
+            "their replies behind each other until a `gps` drains them."
         ),
         response="`GPSTX ok` on success, `GPSERR tx failed` or a usage line otherwise.",
     ),
