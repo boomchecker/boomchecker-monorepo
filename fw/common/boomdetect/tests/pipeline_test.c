@@ -344,6 +344,7 @@ static void scenario_offset_is_honoured(void)
     REQUIRE(got, "no window completed");
 
     const float *feat = boomdetect_last_features(&d);
+    REQUIRE(feat != NULL, "no feature vector after a completed window");
     CHECK(decision == feat[NUM_MFCC_COEFFS],
           "with offset %u the decision should be features[%u] (%.9g), got %.9g",
           (unsigned)NUM_MFCC_COEFFS, (unsigned)NUM_MFCC_COEFFS,
@@ -362,5 +363,5 @@ int main(void)
     scenario_squelch_resets_partial_window();
     scenario_window_completes_and_dispatches();
     scenario_offset_is_honoured();
-    BD_TEST_REPORT("pipeline_test", 40);
+    BD_TEST_REPORT("pipeline_test", 67);  /* exact count from running the compiled binary */
 }

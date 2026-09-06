@@ -25,6 +25,10 @@ endif()
 if(BOOMDETECT_STANDALONE)
   option(BOOMDETECT_SANITIZE "Build with AddressSanitizer + UndefinedBehaviorSanitizer" OFF)
   option(BOOMDETECT_WERROR "Treat warnings as errors in this package's own targets" OFF)
+  # For a pipeline that wants to guarantee the suite is instrumented rather than
+  # trust that a preset was used; a configure-time warning is invisible in a
+  # green run.
+  option(BOOMDETECT_REQUIRE_SANITIZERS "Fail configuration if BOOMDETECT_SANITIZE is OFF" OFF)
 
   if(BOOMDETECT_SANITIZE)
     # Directory scope, so the fetched CMSIS-DSP is instrumented too. That is
@@ -34,6 +38,10 @@ if(BOOMDETECT_STANDALONE)
     # catches and a pass/fail exit code does not.
     add_compile_options(-fsanitize=address,undefined -fno-sanitize-recover=all -g -O1)
     add_link_options(-fsanitize=address,undefined)
+  elseif(BOOMDETECT_REQUIRE_SANITIZERS)
+    message(FATAL_ERROR
+      "BOOMDETECT_REQUIRE_SANITIZERS is ON but BOOMDETECT_SANITIZE is OFF. "
+      "Configure with `cmake --preset Debug`, or pass -DBOOMDETECT_SANITIZE=ON.")
   else()
     # Warn at CONFIGURE time. ctest hides output on a passing test, so on the
     # all-green run - the one that gives false confidence - nothing else would
@@ -103,8 +111,20 @@ FetchContent_Declare(cmsisdsp
   GIT_REPOSITORY https://github.com/ARM-software/CMSIS-DSP.git
   GIT_TAG        v1.15.0
   GIT_SHALLOW    TRUE
+  EXCLUDE_FROM_ALL TRUE
 )
 FetchContent_MakeAvailable(cmsisdsp)
+
+# The single load-bearing numerical setting in this build, and it fails open:
+# if upstream ever renames the option, option() simply defaults it back ON and
+# every MFCC coefficient moves, with only a hardware fixture to notice. Check
+# that the FORCE above actually took.
+if(LOOPUNROLL)
+  message(FATAL_ERROR
+    "LOOPUNROLL is ON after fetching CMSIS-DSP. Unrolling changes accumulation "
+    "order in arm_dot_prod_f32/arm_rms_f32, and the deployed model was selected "
+    "against the un-unrolled numbers. Upstream may have renamed the option.")
+endif()
 
 # --- this package ------------------------------------------------------------
 
@@ -116,14 +136,22 @@ add_library(boomdetect STATIC
   models/model_mlp_v6.c
   models/model_svm_v3.c
 )
-target_include_directories(boomdetect PUBLIC
-  ${CMAKE_CURRENT_SOURCE_DIR}/include
-  # models/ is PUBLIC only because svm_classifier.c picks the active model with
-  # an #include; once the classifier registry lands, each model is its own
-  # translation unit and this can go PRIVATE.
-  ${CMAKE_CURRENT_SOURCE_DIR}/models
+# PUBLIC is the API: boomdetect.h, classifier.h, dsp_config.h. The MFCC wrapper
+# and its generated tables are internals and live in src/ - published, they put
+# ~10 KB of `static const` tables on the firmware's include path for any
+# translation unit to duplicate.
+target_include_directories(boomdetect
+  PUBLIC  ${CMAKE_CURRENT_SOURCE_DIR}/include
+  PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src
+          ${CMAKE_CURRENT_SOURCE_DIR}/models
 )
 target_link_libraries(boomdetect PUBLIC CMSISDSP)
+
+# SYSTEM, so a warning inside arm_math.h does not fail our build under -Werror.
+get_target_property(BOOMDETECT_CMSIS_INC CMSISDSP INTERFACE_INCLUDE_DIRECTORIES)
+if(BOOMDETECT_CMSIS_INC)
+  target_include_directories(CMSISDSP SYSTEM INTERFACE ${BOOMDETECT_CMSIS_INC})
+endif()
 
 # libm, host only. arm_vlog_f32() calls logf(), and upstream's CMSISDSP target
 # does not link a math library because on a bare-metal target there is no
@@ -153,9 +181,27 @@ endif()
 if(BOOMDETECT_STANDALONE)
   enable_testing()
 
+  # Proves the harness can fail. bd_test.h's `return 1` is the only way any C
+  # test here can fail and it only runs when a test is already failing, so
+  # nothing else exercises it - see tests/check_bd_test.sh.
+  add_executable(boomdetect_bd_test_selfcheck tests/bd_test_selfcheck.c)
+  target_include_directories(boomdetect_bd_test_selfcheck PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/tests)
+  target_compile_options(boomdetect_bd_test_selfcheck PRIVATE
+    ${BOOMDETECT_WARNING_FLAGS} ${BOOMDETECT_WERROR_FLAGS})
+  add_test(NAME boomdetect_test_harness
+    COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/tests/check_bd_test.sh
+            $<TARGET_FILE:boomdetect_bd_test_selfcheck>)
+
   foreach(test IN ITEMS mfcc_smoke registry pipeline)
     add_executable(boomdetect_${test}_test tests/${test}_test.c)
     target_link_libraries(boomdetect_${test}_test PRIVATE boomdetect)
+    # tests/ for the harness, src/ because these are white-box tests: the MFCC
+    # wrapper is an internal, and a test that could only reach the public API
+    # could not check it.
+    target_include_directories(boomdetect_${test}_test PRIVATE
+      ${CMAKE_CURRENT_SOURCE_DIR}/tests
+      ${CMAKE_CURRENT_SOURCE_DIR}/src)
     target_compile_options(boomdetect_${test}_test PRIVATE
       ${BOOMDETECT_WARNING_FLAGS} ${BOOMDETECT_WERROR_FLAGS})
     add_test(NAME boomdetect_${test} COMMAND boomdetect_${test}_test)

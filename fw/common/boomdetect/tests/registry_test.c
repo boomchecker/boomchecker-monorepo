@@ -7,6 +7,7 @@
 #include "boomdetect.h"
 #include "classifier.h"
 
+#include <math.h>
 #include <string.h>
 
 BD_TEST_STATE;
@@ -117,10 +118,97 @@ static void scenario_init_rejects_bad_models(void)
     CHECK(!boomdetect_init(&d, &cfg), "decimation 0 would divide by zero and was accepted");
 }
 
+
+/* The ~1700 trained floats are the reason this package exists, and until this
+   scenario existed nothing on the host ever executed them: pipeline_test drives
+   a stub and the checks above read metadata only. So the forward passes were
+   never seen by ASan, and a NaN or an out-of-bounds weight index would have
+   surfaced first on hardware. */
+static void scenario_real_models_actually_run(void)
+{
+    static boomdetect_t d;
+    boomdetect_event_t ev;
+    static int16_t loud[WINDOW_SIZE * 3u];
+
+    /* A deterministic tone, the same one pipeline_test uses. Its absolute
+       decision value is not asserted - that belongs to the parity fixture -
+       only that each model runs, produces a finite number, and that the two
+       families disagree, which is what proves both forward passes ran rather
+       than one being silently reached twice. */
+    static const int16_t lut[8] = { 0, 6000, 8000, 6000, 0, -6000, -8000, -6000 };
+    for (uint32_t i = 0u; i < WINDOW_SIZE * 3u; i++)
+    {
+        loud[i] = lut[i % 8u];
+    }
+
+    /* A second, clearly different signal. Deterministic integer noise, so the
+       comparison below is reproducible on any platform. */
+    static int16_t noisy[WINDOW_SIZE * 3u];
+    uint32_t seed = 1u;
+    for (uint32_t i = 0u; i < WINDOW_SIZE * 3u; i++)
+    {
+        seed = (seed * 1103515245u) + 12345u;
+        noisy[i] = (int16_t)(((int32_t)((seed >> 16) & 0xFFFFu) - 32768) / 4);
+    }
+
+    float decisions[2][2] = { { 0.0f, 0.0f }, { 0.0f, 0.0f } };
+    for (size_t m = 0u; m < 2u; m++)
+    {
+        const classifier_t *model = classifier_at(m);
+        REQUIRE(model != NULL, "classifier_at(%zu) is NULL", m);
+
+        for (size_t sig = 0u; sig < 2u; sig++)
+        {
+            const int16_t *input = (sig == 0u) ? loud : noisy;
+            boomdetect_config_t cfg = {
+                .decimation = 3u,
+                .squelch_milli = 0u,
+                .thr_milli = model->default_thr_milli,
+                .classifier = model,
+            };
+            REQUIRE(boomdetect_init(&d, &cfg), "init failed for %s", model->name);
+
+            bool got = false;
+            for (uint32_t f = 0u; f < BOOMDETECT_ACCUM_FRAMES + 4u && !got; f++)
+            {
+                boomdetect_push(&d, input, BOOMDETECT_HOP * 3u);
+                while (boomdetect_step(&d, &ev))
+                {
+                    if (ev.window_complete)
+                    {
+                        decisions[m][sig] = ev.decision;
+                        got = true;
+                    }
+                }
+            }
+            REQUIRE(got, "%s never completed a window on signal %zu", model->name, sig);
+            CHECK(isfinite(decisions[m][sig]),
+                  "%s produced a non-finite decision (%g) - a NaN here means a weight "
+                  "table or a scaler is wrong, and nothing else would catch it",
+                  model->name, (double)decisions[m][sig]);
+        }
+
+        /* The check that makes this scenario worth having. Without it a model
+           whose forward pass was replaced by `return 0.0f` still passes: it is
+           finite, and it still differs from the other family. A decision that
+           does not move with the input is a model that is not reading it. */
+        CHECK(decisions[m][0] != decisions[m][1],
+              "%s returned the same decision (%.9g) for a tone and for noise, so its "
+              "forward pass is not reading its input",
+              model->name, (double)decisions[m][0]);
+    }
+
+    CHECK(decisions[0][0] != decisions[1][0],
+          "mlp_v6 and svm_v3 returned the same decision (%.9g) on identical input; "
+          "one forward pass is probably being dispatched twice",
+          (double)decisions[0][0]);
+}
+
 int main(void)
 {
     scenario_lookup();
     scenario_two_families_differ();
     scenario_init_rejects_bad_models();
-    BD_TEST_REPORT("registry_test", 20);
+    scenario_real_models_actually_run();
+    BD_TEST_REPORT("registry_test", 45);  /* exact count from running the compiled binary */
 }

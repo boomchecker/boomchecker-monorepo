@@ -18,6 +18,11 @@ permissions:
 # What it does NOT yet do is compare that arithmetic against the Python the
 # models were trained with. That needs the reference implementation and is the
 # next piece of work; until then "green" means self-consistent, not correct.
+#
+# The cache holds only the fetched SOURCE. Caching the build tree looked
+# cheaper and is not: cmsisdsp-subbuild carries absolute paths, and Ninja's
+# .ninja_log lives a level up outside the cached path, so the restored objects
+# were rebuilt anyway.
 
 jobs:
   test:
@@ -40,7 +45,7 @@ jobs:
       - name: Cache the fetched CMSIS-DSP
         uses: actions/cache@v4
         with:
-          path: fw/common/boomdetect/build/Debug/_deps
+          path: fw/common/boomdetect/build/Debug/_deps/cmsisdsp-src
           key: cmsisdsp-v1.15.0-${{ runner.os }}
 
       - name: Register the GCC problem matcher
@@ -52,7 +57,12 @@ jobs:
         # this is float array indexing driven by dimensions that come out of
         # model headers, plus an MFCC scratch buffer whose documented size is
         # wrong upstream, so an out-of-bounds read is the failure mode to expect.
-        run: cmake --preset Debug
+        #
+        # REQUIRE_SANITIZERS turns "the preset happens to enable them" into a
+        # hard configure failure. Standalone, an unsanitized build only prints a
+        # configure-time warning, which is invisible in a green run - so without
+        # this a preset edit could quietly ship an uninstrumented suite.
+        run: cmake --preset Debug -DBOOMDETECT_REQUIRE_SANITIZERS=ON
 
       - name: Build
         working-directory: ./fw/common/boomdetect
@@ -62,14 +72,17 @@ jobs:
         working-directory: ./fw/common/boomdetect
         run: ctest --preset Debug --output-on-failure
 
+      # No `if: always()`: the text below asserts what passed, so on a failed job
+      # it would write "tests passed" into the summary of a red run.
       - name: Build summary
-        if: always()
         run: |
           {
             echo "### boomdetect (host)"
             echo ""
             echo "- CMSIS-DSP v1.15.0 fetched and built for the host"
             echo "- MFCC front end, classifier registry and pipeline tests passed"
+            echo "- both models' trained weights executed under the sanitizers"
+            echo "- the test harness was verified able to fail"
             echo "- ASan + UBSan on, warnings are errors"
             echo ""
             echo "Parity against the Python reference is not part of this job yet."

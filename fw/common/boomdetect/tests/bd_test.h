@@ -77,17 +77,20 @@ extern int bd_test_checks;
  * boomlink's link_rx_test from 103 checks to 93 with ctest reporting 100% passed - verified.
  * Comparing against a floor here makes coverage disappearing a failure.
  *
- * Deliberately a floor rather than an exact count: adding checks must not require
- * touching a number, so the value only ever moves up, and the direction it fails
- * in is the one worth catching. Losing a whole scenario from main() is already a
- * compile error (-Werror=unused-function), so this covers the other half - a
- * scenario that still runs but stopped asserting.
+ * Set it to the count the binary actually reports, not to a round number below
+ * it: a floor 40 % under the real figure lets a whole scenario be deleted while
+ * ctest stays green, which is the failure it was meant to prevent. It only ever
+ * moves up, so adding checks means editing one number. Losing a scenario from
+ * main() is a compile error only when BOOMDETECT_WERROR is on (the Debug preset
+ * sets it, a bare build does not), so this covers the other half: a scenario
+ * that still runs but stopped asserting.
  *
  * The `return 1` path below is the ONLY way any C test in this package can fail,
- * and it is exercised by tests/bd_test_selfcheck.c via check_bd_test.sh - without
- * that, changing it to `return 0` makes all four binaries pass forever while
- * printing their failures to stderr. That is not hypothetical: it was measured,
- * with two real duplicate-cache bugs green at the same time.
+ * and it is exercised by tests/bd_test_selfcheck.c via check_bd_test.sh -
+ * without that, changing it to `return 0` makes all three test binaries pass
+ * forever while printing their failures to stderr, which ctest hides on success.
+ * That is not hypothetical: the same harness in fw/common/boomlink was
+ * demonstrated failing exactly that way, with two real bugs green at once.
  */
 #define BD_TEST_REPORT(name, min_checks)                              \
   do {                                                                      \
