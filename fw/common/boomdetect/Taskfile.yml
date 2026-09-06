@@ -1,0 +1,22 @@
+version: "3"
+
+tasks:
+  build:
+    desc: Configure and build the host-native detection library and its tests
+    aliases: [b]
+    cmds:
+      - cmake --preset Debug
+      - cmake --build --preset Debug
+
+  test:
+    desc: Build, then run the host test suite via CTest
+    aliases: [t]
+    deps: [build]
+    cmds:
+      - ctest --preset Debug
+
+  clean:
+    desc: Remove the build directory
+    aliases: [c]
+    cmds:
+      - rm -rf build
