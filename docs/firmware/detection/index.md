@@ -35,10 +35,15 @@ absolute loudness — the MLP models skip it deliberately, to stay gain-invarian
 
 | | |
 |---|---|
-| `fw/common/boomdetect/src/boomdetect.c` | decimation, FIFO, framing, gate, windowing |
+| `fw/common/boomdetect/src/boomdetect.c` | decimation, FIFO, framing, gate, windowing, the per-frame descriptor |
 | `fw/common/boomdetect/src/boomdetect_mfcc_f32.c` | MFCC, with one deviation from CMSIS-DSP (below) |
+| `fw/common/boomdetect/src/frame_scalars.c` | eight spectral scalars per frame from the magnitude spectrum |
+| `fw/common/boomdetect/src/extractor_*.c` | the three feature layouts (below) and their registry |
+| `fw/common/boomdetect/src/nn_infer.c` | float32 interpreter for the small CNNs |
+| `fw/common/boomdetect/src/boomdetect_alarm.c` | K-of-N alarm with hysteresis over window verdicts |
 | `fw/common/boomdetect/models/` | one translation unit per model, each exporting a `classifier_t` |
-| `fw/bom-stm32node/App/detect/detect_service.c` | microphone, pacing, console output |
+| `fw/common/boomdetect/training/` | the Python that trains, compares and exports the models (below) |
+| `fw/bom-stm32node/App/detect/detect_service.c` | microphone, pacing, alarm, console output |
 
 The split is the same one `fw/common/boomlink` has against `App/link/`, and for
 the same reason: `Core/` is CubeMX's and cross-compiles only for the Cortex-M33,
@@ -54,7 +59,7 @@ stack. `step()` does at most one frame, by contract rather than by comment.
 
 | command | what it does |
 |---|---|
-| `detect <sec> [squelch_milli] [thr_milli] [dbg]` | run for `<sec>` seconds, stream `LVL`/`DET` lines, end with `DETEND` |
+| `detect <sec> [squelch_milli] [thr_milli] [dbg]` | run for `<sec>` seconds, stream `LVL`/`DET` lines and `ALM` on alarm transitions, end with `DETEND` |
 | `model [name]` | list the classifiers in this image, or select one |
 | `micslot [a\|b]` | which microphone of the PDM pair is decoded |
 | `micdiag` | probe the PDM data pins |
@@ -67,6 +72,69 @@ unbounded logits, so one global default would make one of the families useless.
 `model` prints the value it will use.
 
 Neither `model` nor `micslot` is persisted; a reset returns to the defaults.
+
+### The alarm
+
+A window is 448 ms and one logit; whether a drone is present is a property of
+seconds. Above the classifier sits a K-of-N rule with hysteresis
+(`boomdetect_alarm.h`): the alarm turns ON when at least 2 of the last 4
+classified windows were called `DRONE`, and OFF when fewer than 1 were. The
+board prints `ALM t=<s>.<ms> ON|OFF hits=<k>/<n>` only on transitions, and
+`DETEND` counts the OFF→ON transitions in `alarms=`. Squelched frames yield no
+window and do not move the history. The constants are in `detect_service.h` and
+pinned by the host tool's tests; the training package evaluates clip-level
+verdicts with the same rule, so "alarm" means one thing on both sides.
+
+## Feature layouts
+
+Every accepted frame leaves a 41-float descriptor behind: the 13 MFCC
+coefficients, the 20 log-mel energies the DCT was computed from, and eight
+spectral scalars from the magnitude spectrum the MFCC destroys its input into
+(power above 4 kHz, power 1–4 kHz, centroid, flatness, 85 % roll-off, crest, the
+strength of the best harmonic comb between 60 and 400 Hz and its fundamental).
+The MFCC block comes first, so the deployed layout and every checked-in fixture
+are unchanged bit for bit.
+
+| id | extractor | width | what |
+|---|---|---|---|
+| 1 | `stats` | 52 | `[mean, std, dmean, cmax] × 13` — what `mlp_v6` and `svm_v3` read |
+| 2 | `stats_spectral` | 69 | layout 1, then mean and std of the eight scalars, then log-mel flux |
+| 3 | `logmel` | 280 | the 14 × 20 log-mel patch minus its mean, frame-major — a CNN's input |
+
+The scalars are the things an MFCC envelope smooths away and that separate a
+rotor from a hum: a closed mouth has almost nothing above 4 kHz, a single stable
+harmonic series, and a flat-ish spectrum only where it has energy at all. The
+arithmetic is specified by `training/boomdetect_train/features.py`; the C is
+held to it by `extractor_test` on the `detselftest` signal, with stated
+tolerances and the two discrete values (roll-off bin, comb fundamental) compared
+only on windows the fixture marks as numerically stable.
+
+## Training package
+
+`fw/common/boomdetect/training` is the other half of the detector: the Python
+that produces the weight tables the C ships and judges them. It reads the
+firmware's own `mfcc_tables.h`, so it cannot disagree with the board about a
+filter edge, and its own tests hold it to the `detselftest` fixture stage by
+stage.
+
+```sh
+cd fw/common/boomdetect/training
+python -m venv .venv && .venv/bin/pip install -e .[dev,torch]
+bdtrain manifest            # enumerate the datasets present -> manifest.parquet
+bdtrain features            # run the front end once, cache per-frame descriptors
+bdtrain baseline            # score mlp_v6 / svm_v3 on every suite
+bdtrain train --name r1     # MLP, SVM, gradient-boosted trees, CNNs
+bdtrain compare r1          # the comparison report
+bdtrain export r1           # headers, translation units, parity vectors
+```
+
+Data lives outside the repository (`~/Documents/boomdetect-data`, or
+`BOOMDETECT_DATA`). Suites: `val` (held-out clips of the training sources),
+`halmstad` and `salford` (public, never trained on), `real_mic` (the node's own
+recordings), `stress` (synthetic hums and whistles). The threshold a model is
+compared and exported with is the lowest one that keeps false-alarm windows
+under a budget per hour on the `val` negatives; it is then applied unchanged to
+the unseen suites. `README.md` in that directory has the details.
 
 ## Swapping the classifier
 
@@ -115,7 +183,8 @@ carrying assumptions that looked like facts.
 | `-O2` does not move any number | **measured**, the `Shipped` preset builds without sanitizers at `-O2` and CI diffs its fixture output against the `Debug` build's |
 | Host and target agree bit for bit | **measured, and they do NOT** — same C, same input, but MFCC coefficients differ by up to 1.8e-4 relative and decisions by 1.1e-6 (below) |
 | Train/deploy skew | **expressible but still not measured**: the window policy is now configuration rather than compile-time constants, so both sides can be run; nobody has run them |
-| C matches the Python the models were trained with | **not verified at all** |
+| C matches the Python it is trained with | **measured on the host**: the Python front end reproduces the `detselftest` MFCC and features to 1e-4 relative and the `mlp_v6` decisions to 1e-5 (`training/tests/test_parity_selftest.py`); the C extractors reproduce the Python layouts 2 and 3 (`extractor_test`); every registered model's C forward pass reproduces its Python one (`model_parity_test`) |
+| New models generalise to unseen recordings | **measured, and they do not yet**: every family trained on the public sets scores ~0.99 window AUC on held-out clips of those sets and 0.7–0.94 on Halmstad; the shipped `mlp_v6` and a plain linear SVM sit at the top of that range. Same-microphone field recordings are the missing data, not another architecture |
 | Detection of an actual drone on this hardware | **never tested** |
 
 ### Train/deploy skew
@@ -213,11 +282,14 @@ cd fw/common/boomdetect && task test
 ```
 
 ASan and UBSan are on by default in the preset. The suite covers the MFCC front
-end, the registry, the pipeline's edge cases, both models' trained weights, the
-fixture, and — through a stub registry linked in place of the real one — that
-the model table really is replaceable. The harness itself is checked able to
-fail, because a test framework that silently returns 0 is the failure mode this
-repository has already hit once.
+end, the registry, the pipeline's edge cases, every model's trained weights, the
+fixture, the three extractors against the Python specification, the alarm, the
+CNN interpreter, and — through a stub registry linked in place of the real one
+— that the model table really is replaceable. The harness itself is checked able
+to fail, because a test framework that silently returns 0 is the failure mode
+this repository has already hit once.
 
-It does **not** yet compare anything against Python, so green means
-self-consistent, not correct.
+On Windows the host suite runs under MinGW-w64 (no sanitizers there; the
+fixture is compared within `1e-5` because that compiler lands a few ULP from
+the Linux capture — see the fixture header), and the Python side runs with
+`pytest` in `training/`.

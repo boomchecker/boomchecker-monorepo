@@ -103,6 +103,8 @@ prints every stage as raw IEEE-754 bit patterns.
 |---|---|---|
 | `tests/vectors/selftest_expected.txt` | the board, before the move into this package | `tests/vectors/check_selftest.py`, needs hardware |
 | `tests/vectors/selftest_host.txt` | `boomdetect_selftest_tool` on x86-64 | `ctest`, needs nothing |
+| `tests/vectors/extractor_expected.h` | `bdtrain fixtures` (the Python specification of the layouts, on the same LCG signal) | `extractor_test` under `ctest` |
+| `tests/vectors/parity_vectors.h` | `bdtrain export` (real feature vectors and each model's Python decision) | `model_parity_test` under `ctest` |
 
 The two do not match, for the reason above; each is compared only against its
 own side.

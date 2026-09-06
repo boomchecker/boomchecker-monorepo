@@ -43,7 +43,33 @@ jobs:
 
       - name: Run ruff
         working-directory: ./fw/common/boomdetect
-        run: ruff check tests
+        run: ruff check tests training
+
+  # The Python that trains the models and specifies the feature layouts. Its
+  # tests hold the Python front end to the detselftest fixture and the exporters
+  # to their own parsers; they need the C sources (read from the checkout) but
+  # no build, no data and no torch (the CNN tests skip without it).
+  training:
+    name: Training package (pytest)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install the package
+        working-directory: ./fw/common/boomdetect/training
+        run: pip install --quiet -e .[dev]
+
+      - name: Run pytest
+        working-directory: ./fw/common/boomdetect/training
+        run: python -m pytest -q
 
   test:
     name: Build and test (host, Debug)
