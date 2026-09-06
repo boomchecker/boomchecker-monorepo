@@ -10,10 +10,11 @@ decimates 48 -> 16 kHz by phase-carrying /3 pick (the pdm_pcm 8 kHz FIR is the
 anti-alias), extracts MFCC frames with CMSIS-DSP (1024/512), aggregates every
 run of 14 frames above the RMS squelch into a 52-value feature vector
 ([mean, std, dmean, cmax] x 13) and classifies it with the model compiled into
-the firmware - currently a 51->32->1 MLP whose decision value is a raw logit,
-operating point +7.25. Results stream as `LVL`/`DET`/`DETEND` console lines.
-Vendors CMSIS-DSP v1.15.0 under `third_party/` (Apache-2.0, one local patch to
-`arm_mfcc_f32.c` recorded in `third_party/CMSIS-DSP/patches/`).
+the firmware - currently a 51->32->1 MLP whose decision value is a raw logit.
+Results stream as `LVL`/`DET`/`DETEND` console lines. Builds against CMSIS-DSP
+v1.15.0 (Apache-2.0), which carries one local deviation in `arm_mfcc_f32()`:
+the FFT input is conditioned by RMS rather than by absolute maximum, and the
+deployed model was selected against the values that produces.
 
 Also: a Teseo-LIV3R GNSS console (`gps`, `gpstx`, `gpsrst`) over UART4 with
 per-flag UART error counters; `micdiag`, which probes the PDM data pins as GPIO

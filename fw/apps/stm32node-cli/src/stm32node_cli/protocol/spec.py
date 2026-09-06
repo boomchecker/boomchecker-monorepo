@@ -147,6 +147,49 @@ COMMANDS: tuple[CommandSpec, ...] = (
         ),
     ),
     CommandSpec(
+        name="detselftest",
+        usage="detselftest",
+        description=(
+            "Drive the whole detection chain from a fixed synthetic signal and print every "
+            "stage as raw IEEE-754 bit patterns. The input is an integer LCG "
+            "(`s = s*1103515245 + 12345`, seed 1, sample `(int16)(((s>>16)&0xFFFF)-32768)/4`), "
+            "so it is bit-identical on any platform and costs no flash. It exists because "
+            "the microphone never repeats an input, so two `detect` runs can never be "
+            "compared; this one can, and a mismatch against "
+            "`fw/common/boomdetect/tests/vectors/selftest_expected.txt` means the arithmetic "
+            "moved. Always runs the `mlp_v6` model, whatever `model` last selected."
+        ),
+        response=(
+            "A leading blank line and `DSTBEGIN`, then `DSTMFCC f=<frame> <13 hex words>` for "
+            "the first three frames, `DSTFEAT w=<window> <mean|std |dmea|cmax> <13 hex words>` "
+            "for each window, `DSTDEC w=<window> logit=<8 hex digits>`, a "
+            "`DSTSIG n=<samples> seed=<n> fnv=<8 hex digits>` line covering the generated "
+            "input, and a final `DSTEND frames=<n> windows=<n> err=<0|1>` trailer. Every "
+            "float is its raw bit pattern, not a decimal, so \"unchanged\" means unchanged. "
+            "If the model is missing or the detector fails to init, `DSTERR <reason>` "
+            "precedes the trailer with err=1."
+        ),
+    ),
+    CommandSpec(
+        name="micslot",
+        usage="micslot [a|b]",
+        description=(
+            "Show or select which microphone of the PDM pair the DSP demodulates. The two "
+            "mics of a pair share one 16-bit SAI word, split by a bit mask (A = 0xF807, "
+            "B = 0x07F8); which one is populated is a board-build property. With the wrong "
+            "slot the chain decodes the empty half of every frame and reports a flat zero, "
+            "which is indistinguishable from a perfectly quiet detector, so `micdiag` is the "
+            "way to tell them apart. The selection is a bring-up override and is not "
+            "persisted; a reset returns to the firmware default. Takes effect on the next "
+            "`detect` or `stream`."
+        ),
+        response=(
+            "`micslot: <A|B|custom> (0x<mask>)` when showing, "
+            "`micslot: <A|B> selected (next detect/stream)` when selecting, "
+            "`usage: micslot [a|b]` otherwise."
+        ),
+    ),
+    CommandSpec(
         name="gps",
         usage="gps <sec> [baud]",
         description=(

@@ -29,6 +29,16 @@ jobs:
           # steps to pick up.
           persist-credentials: false
 
+      # The firmware's configure now fetches CMSIS-DSP (fw/common/boomdetect
+      # owns it, because the host build needs it too). Without this every
+      # firmware PR pays the clone and a github.com hiccup turns into a red
+      # firmware build.
+      - name: Cache the fetched CMSIS-DSP
+        uses: actions/cache@v4
+        with:
+          path: fw/bom-stm32node/build/Debug/_deps/cmsisdsp-src
+          key: cmsisdsp-v1.15.0-arm-${{ runner.os }}
+
       - name: Install ARM GCC toolchain and Ninja
         run: |
           sudo apt-get update

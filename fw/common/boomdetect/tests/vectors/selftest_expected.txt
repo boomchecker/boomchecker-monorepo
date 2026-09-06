@@ -18,6 +18,13 @@
 #   - -O2 did not survive the move to the new library target
 #   - the move itself changed the arithmetic
 # Any of those is a finding, not noise.
+#
+# Re-verified: 2026-09-06T15:10Z, same board, on the post-move tree (c1baf16 plus
+# the review fixes) built from fw/common/boomdetect via FetchContent. All 21
+# lines identical, which is what makes "the C refactor did not move any number"
+# a measurement rather than an assertion. Reproduce with:
+#     fw/apps/stm32node-cli/.venv/bin/python \
+#       fw/common/boomdetect/tests/vectors/check_selftest.py /dev/ttyACM1
 
 DSTBEGIN
 DSTMFCC f=0 C101FBCE 3D2FAED4 BDC15173 3CF9CC5A 3D7C518B BDD9C011 3DB7B457 3E5CF376 BD339A03 BDFEE520 BDFE1113 BE72AB82 3E169C7C

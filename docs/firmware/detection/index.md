@@ -82,9 +82,14 @@ count still matches while every weight lands on the wrong input. It is only as
 strong as the discipline of bumping it, so treat it as a tripwire — the real
 check is the parity fixture.
 
-Adding a model is a new file under `models/` plus one line in the registry. A
-model needing a different feature *representation* — raw frames for a CNN, say —
-would add an extractor and a new `layout_id` rather than change the struct.
+Adding a model is a new file under `models/` plus one line in the registry.
+
+A model needing a different feature *representation* — raw frames for a CNN, say
+— is the case `layout_id` is shaped for, but it is not wired up: `boomdetect_init()`
+accepts exactly one value today and rejects everything else, because exactly one
+extractor exists. Adding a second means adding the extractor, the new id, and the
+dispatch in that check. The struct would not have to change, which is the whole
+claim being made here; nothing more than that is implemented.
 
 ## What is measured, and what is not
 
@@ -96,7 +101,7 @@ carrying assumptions that looked like facts.
 | Which microphone of the PDM pair is populated | **measured**, one board. With the wrong slot the chain decodes the empty half and reports a flat zero — indistinguishable from a perfectly quiet detector. |
 | Threshold 15.0 | **measured** against ambient office noise, three minutes, no drone. The offline +7.25 fired on 23 of 396 windows, peaking at 12.05. |
 | Session-to-session variance | **measured, and larger than the change it justified**: one session peaked at 12.05, another at 2.77, same board and firmware. |
-| C refactor did not move any number | **measured**, `detselftest` bit-identical across the whole move |
+| C refactor did not move any number | **measured**, `detselftest` bit-identical across the whole move — captured on the pre-move firmware and re-run on the post-move build on the same board; both runs are recorded in the fixture's header |
 | Train/deploy skew | **described, not measured** (below) |
 | C matches the Python the models were trained with | **not verified at all** |
 | Detection of an actual drone on this hardware | **never tested** |
@@ -124,7 +129,9 @@ afterwards so it cancels in exact arithmetic, but it changes float32 rounding an
 which frames are left untouched.
 
 It arrived as an unrecorded hand-edit to a vendored copy of CMSIS-DSP: 466 of
-that copy's 467 files were byte-identical to v1.15.0, and this one was not. **The
+the 467 files that copy was committed with were byte-identical to v1.15.0, and
+this one was not. (The changeset's count of 470 is the same tree at the point it
+was deleted, after a LICENSE, a README and a patch file were added to it.) **The
 deployed model was selected against the values it produces**, so reverting to
 stock upstream would silently move every coefficient. It is now our own source
 file with the licence attribution attached, and upstream is fetched untouched.
