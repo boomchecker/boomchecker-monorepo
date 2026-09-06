@@ -94,6 +94,8 @@ nav:
           - Toolchain: firmware/bom-stm32node/toolchain.md
           - Build & flash: firmware/bom-stm32node/build.md
           - Microphone & recording: firmware/bom-stm32node/microphone.md
+      - Detection:
+          - Overview: firmware/detection/index.md
       - LoRa:
           - Overview: firmware/lora/index.md
           - BoomLink: firmware/lora/boomlink.md

@@ -67,3 +67,38 @@ st-flash write build/bom-stm32node.bin 0x08000000
     `target/stm32h5x.cfg` — STM32H5 support post-dates both. Use `st-flash` instead, or
     build/install a newer upstream OpenOCD yourself if you need SWD debugging via
     OpenOCD specifically.
+
+## Two things that will cost you twenty minutes each
+
+**The console is dead after flashing.** `openocd ... program ... reset exit`
+leaves the USB device wedged: the board enumerates, but the CDC port neither
+reads nor writes. It is not a crash — reading the fault registers over SWD shows
+`HFSR = 0` and `CFSR = 0`. A separate reset fixes it:
+
+```sh
+openocd-stm32 -f interface/stlink-dap.cfg -c "transport select dapdirect_swd" \
+  -f target/stm32h5x.cfg -c "init; reset halt; reset run; exit"
+```
+
+**`App/radio/*.cpp` will not compile in the fw devcontainer** as shipped:
+`fatal error: cstring`. The image has `gcc-arm-none-eabi` but not the C++
+standard library for the target, which is only an apt *Recommends*. CI installs
+it explicitly; locally:
+
+```sh
+sudo apt-get install -y libstdc++-arm-none-eabi-newlib libnewlib-arm-none-eabi
+```
+
+## Talking to the board
+
+The console is a USB CDC port. Use the `by-id` name rather than `/dev/ttyACMn` —
+the number moves after a reflash, and one of the two is the ST-Link's own VCP:
+
+```sh
+picocom -b 115200 /dev/serial/by-id/usb-STMicroelectronics_boomchecker-node_*-if00
+```
+
+Exit with `Ctrl-A Ctrl-X`. Do not enable local echo; the board echoes already.
+Note that `help` output is truncated: the console TX ring is 512 bytes
+(`CLI_TX_RING` in `Core/Src/cli.c`) and the full help text is longer, so the tail
+is silently dropped.
