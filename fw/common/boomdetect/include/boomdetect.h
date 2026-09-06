@@ -16,11 +16,17 @@
  * separately, so a window can span a gap of silence. Leaving that policy in the
  * firmware would leave the one thing worth testing untestable.
  *
- * Pacing is the caller's business, and the API forces it to be. Feeding samples
- * and doing work are separate calls because the firmware must not run two MFCCs
- * in one iteration of its superloop: doing so overran the 21.33 ms budget and
- * starved the USB stack. That used to be a comment asking the loop to behave;
- * here it is the shape of the interface.
+ * Pacing is the caller's business. Feeding samples and doing work are separate
+ * calls, and step() does at most one frame, because the firmware must not run
+ * two MFCCs in one iteration of its superloop: doing so overran the 21.33 ms
+ * budget and starved the USB stack.
+ *
+ * Precisely what that buys, since an earlier version of this comment overstated
+ * it: the API bounds the CALL, not the loop. Nothing here stops a caller writing
+ * `while (boomdetect_step(...))`, and one deliberately does - the fixture
+ * generator drains fully, because there is no real-time budget on a synthetic
+ * signal. The firmware's own detect path keeps its `if`. What changed is that
+ * "one frame" is now a contract rather than a comment asking the loop to behave.
  */
 #ifndef BOOMDETECT_H
 #define BOOMDETECT_H

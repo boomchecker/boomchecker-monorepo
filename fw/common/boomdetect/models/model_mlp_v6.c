@@ -43,11 +43,11 @@ static float mlp_v6_decide(void *ctx, const float *features, uint16_t n)
 
     (void)ctx;
 
-    for (int i = 0; i < MLP_NUM_INPUTS; i++)
+    for (uint32_t i = 0u; i < MLP_NUM_INPUTS; i++)
     {
         x[i] = (features[i] - mlp_scaler_mean[i]) * mlp_scaler_inv_std[i];
     }
-    for (int j = 0; j < MLP_HIDDEN; j++)
+    for (uint32_t j = 0u; j < MLP_HIDDEN; j++)
     {
         float32_t acc = 0.0f;
         arm_dot_prod_f32(x, mlp_w1[j], MLP_NUM_INPUTS, &acc);

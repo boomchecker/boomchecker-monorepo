@@ -45,10 +45,16 @@ set_source_files_properties(${CMAKE_SOURCE_DIR}/Core/Src/pdm_pcm.c
     PROPERTIES COMPILE_OPTIONS "-O2"
 )
 
-# Same reasoning for the detector: the MFCC (1024-pt FFT every 32 ms) shares
-# the real-time budget with pdm_pcm, so keep it at -O2. The DSP itself and
-# CMSIS-DSP now live in fw/common/boomdetect and re-apply -O2 on their own
-# targets - a source property here is directory-scoped and cannot reach them.
+# The DSP moved to fw/common/boomdetect, which re-applies -O2 on its own targets
+# and asserts that it took; a source property here is directory-scoped and
+# cannot reach them. What is left in this file is the port - microphone pacing,
+# snprintf, console writes - which does no FFT.
+#
+# It stays at -O2 anyway, for a different reason than the comment here used to
+# give: it runs inside the same 21.33 ms half-buffer deadline, calling
+# boomdetect_step() and formatting a line per frame between microphone blocks,
+# and Debug is -O0 -g3. Cheap insurance rather than the arithmetic argument that
+# applies to pdm_pcm above.
 set_source_files_properties(
     ${CMAKE_SOURCE_DIR}/App/detect/detect_service.c
     PROPERTIES COMPILE_OPTIONS "-O2"

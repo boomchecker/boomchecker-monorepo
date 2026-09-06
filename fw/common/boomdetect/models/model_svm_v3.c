@@ -33,7 +33,7 @@ static float svm_v3_decide(void *ctx, const float *features, uint16_t n)
 
     (void)ctx;
 
-    for (int i = 0; i < SVM_NUM_FEATURES; i++)
+    for (uint32_t i = 0u; i < SVM_NUM_FEATURES; i++)
     {
         scaled[i] = (features[i] - svm_scaler_mean[i]) * svm_scaler_inv_std[i];
     }

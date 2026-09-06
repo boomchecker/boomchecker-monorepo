@@ -29,7 +29,10 @@ Apache-2.0 attribution rather than an unrecorded difference.
 Host tests run under ASan and UBSan in CI. A `detselftest` command drives the
 chain from a deterministic integer sequence and prints raw float bits, so a
 refactor can be shown not to have moved any number; it matched bit for bit
-across the whole move, and caught one real off-by-one on the way.
+across the whole move, and caught one real off-by-one on the way. The same
+generator runs on a host, so that check no longer needs a board - though the two
+sides do not produce identical bits, and each is compared against its own
+recorded baseline. Decisions agree to about 1e-6.
 
 Also raises the CLI binding limit and checks the registration result, instead of
 silently dropping commands past the limit as happened once before.

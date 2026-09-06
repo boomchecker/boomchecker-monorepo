@@ -362,6 +362,8 @@ if(BOOMDETECT_STANDALONE)
     ${BOOMDETECT_WARNING_FLAGS} ${BOOMDETECT_WERROR_FLAGS})
   add_test(NAME boomdetect_stub_registry COMMAND boomdetect_stub_registry_test)
 
+  # The items are source stems minus "_test": tests/registry_test.c builds
+  # boomdetect_registry_test and registers as the ctest `boomdetect_registry`.
   foreach(test IN ITEMS mfcc_smoke registry pipeline)
     add_executable(boomdetect_${test}_test tests/${test}_test.c)
     target_link_libraries(boomdetect_${test}_test PRIVATE boomdetect)

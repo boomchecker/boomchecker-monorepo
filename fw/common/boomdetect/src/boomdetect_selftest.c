@@ -27,13 +27,28 @@ static uint32_t selftest_bits(float v)
     return u;
 }
 
+/* Clamped running offset, not an accumulated snprintf() return. snprintf reports
+   the length it WOULD have written, so `off += snprintf(...)` walks past the
+   buffer on the first truncation and every later call gets a pointer outside it
+   and a wrapped length. The loop guard alone happened to save the old version
+   of this; the fix is to not compute the bad offset. */
 static void emit_vec(char *line, size_t len, const char *prefix, const float *v, uint32_t n,
                      boomdetect_selftest_emit_fn emit, void *ctx)
 {
-    int w = snprintf(line, len, "%s", prefix);
-    for (uint32_t c = 0u; c < n && w > 0 && (size_t)w < len; c++)
+    size_t off = 0u;
+    int    w   = snprintf(line, len, "%s", prefix);
+    if (w > 0)
     {
-        w += snprintf(line + w, len - (size_t)w, " %08lX", (unsigned long)selftest_bits(v[c]));
+        off = ((size_t)w < len) ? (size_t)w : (len - 1u);
+    }
+    for (uint32_t c = 0u; c < n && off + 1u < len; c++)
+    {
+        w = snprintf(line + off, len - off, " %08lX", (unsigned long)selftest_bits(v[c]));
+        if (w <= 0)
+        {
+            break;
+        }
+        off += ((size_t)w < (len - off)) ? (size_t)w : (len - off - 1u);
     }
     emit(ctx, line);
 }

@@ -2,7 +2,16 @@
 #define MLP_MODEL_DATA_V6_H
 
 // Tiny MLP drone classifier (see src/analysis/experiment_v5.py and
-// export_v5.py). Feature layout from detector.c det_aggregate:
+// export_v5.py, neither of which is in this repository - see the provenance
+// note in src/mfcc_tables.h).
+//
+// EDITED BY HAND after generation, because the generator is not here to fix:
+// the layout reference below said "detector.c det_aggregate", a file and a
+// function this branch deleted. It is now aggregate() in
+// src/extractor_stats.c. Regenerating this header will reintroduce the stale
+// name.
+//
+// Feature layout:
 // [mean(13), std(13), dmean(13), cmax(13)]; inputs = features[1..51]
 // (mean-c0 excluded -> level-invariant). Decision = raw logit;
 // threshold 0 == p 0.5.
