@@ -8,11 +8,15 @@
  * does CMSIS-DSP configure, compile and link for an x86 host at all, and does
  * our MFCC variant run without tripping a sanitizer.
  */
+#include "bd_test.h"
 #include "boomdetect_mfcc.h"
 
 #include <math.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
+
+BD_TEST_STATE;
 
 #define FFT_LEN     1024u
 #define NUM_MEL     20u
@@ -35,7 +39,7 @@ static float32_t scratch[2u * FFT_LEN];
 static float32_t frame[FFT_LEN];
 static float32_t out[NUM_DCT];
 
-int main(void)
+static void scenario_mfcc_runs(void)
 {
     arm_mfcc_instance_f32 mfcc;
     uint32_t i;
@@ -55,12 +59,9 @@ int main(void)
         dct[i] = (i % (NUM_MEL + 1u) == 0u) ? 1.0f : 0.0f;
     }
 
-    if (arm_mfcc_init_1024_f32(&mfcc, NUM_MEL, NUM_DCT, dct, mel_pos, mel_len,
-                               mel_coefs, win) != ARM_MATH_SUCCESS)
-    {
-        printf("FAIL: arm_mfcc_init_1024_f32\n");
-        return 1;
-    }
+    REQUIRE(arm_mfcc_init_1024_f32(&mfcc, NUM_MEL, NUM_DCT, dct, mel_pos, mel_len,
+                                   mel_coefs, win) == ARM_MATH_SUCCESS,
+            "arm_mfcc_init_1024_f32 failed");
 
     /* Integer LCG, so this input is identical on every platform. */
     uint32_t seed = 1u;
@@ -72,29 +73,54 @@ int main(void)
 
     boomdetect_mfcc_f32(&mfcc, frame, out, scratch);
 
+    float noisy[NUM_DCT];
     for (i = 0; i < NUM_DCT; i++)
     {
-        if (!isfinite(out[i]))
-        {
-            printf("FAIL: coefficient %u is not finite\n", (unsigned)i);
-            return 1;
-        }
+        CHECK(isfinite(out[i]), "coefficient %u is not finite", (unsigned)i);
+        noisy[i] = out[i];
     }
 
-    /* A silent frame must survive the rms > 1e-6f guard rather than dividing
-       by (almost) zero - that guard is one of the two things this variant
-       changes from upstream, so exercise it. */
+    /* The rms > 1e-6f guard is one of the two things this variant changes from
+       upstream, so assert what the guard actually DOES rather than that nothing
+       crashed. Upstream conditions by absolute maximum and skips only when that
+       is exactly 0.0f; ours skips below an RMS floor. Either way a silent frame
+       must come out finite AND must not come out as the previous frame's
+       coefficients, which is what a guard that returned early without writing
+       would produce. */
+    memset(frame, 0, sizeof(frame));
+    boomdetect_mfcc_f32(&mfcc, frame, out, scratch);
+
+    bool all_same = true;
+    for (i = 0; i < NUM_DCT; i++)
+    {
+        CHECK(isfinite(out[i]), "silent frame produced a non-finite coefficient %u",
+              (unsigned)i);
+        if (out[i] != noisy[i])
+        {
+            all_same = false;
+        }
+    }
+    CHECK(!all_same,
+          "a silent frame produced exactly the previous frame's coefficients, so the "
+          "quiet-frame guard returned without writing anything");
+
+    /* And it is idempotent: two silent frames in a row agree, which a guard
+       leaking scratch state between calls would not manage. */
+    float silent_first[NUM_DCT];
+    memcpy(silent_first, out, sizeof(silent_first));
     memset(frame, 0, sizeof(frame));
     boomdetect_mfcc_f32(&mfcc, frame, out, scratch);
     for (i = 0; i < NUM_DCT; i++)
     {
-        if (!isfinite(out[i]))
-        {
-            printf("FAIL: silent frame produced a non-finite coefficient %u\n", (unsigned)i);
-            return 1;
-        }
+        CHECK(out[i] == silent_first[i],
+              "two identical silent frames gave different coefficient %u (%g vs %g), so "
+              "the front end is carrying state between calls",
+              (unsigned)i, (double)silent_first[i], (double)out[i]);
     }
+}
 
-    printf("PASS: CMSIS-DSP builds for the host and the MFCC front end runs\n");
-    return 0;
+int main(void)
+{
+    scenario_mfcc_runs();
+    BD_TEST_REPORT("mfcc_smoke_test", 41); /* exact count from running the compiled binary */
 }

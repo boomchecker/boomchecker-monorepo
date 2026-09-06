@@ -122,8 +122,12 @@ COMMANDS: tuple[CommandSpec, ...] = (
         ),
         response=(
             "A `LVL t=<s>.<ms> rms=<+d.ddd>` input-level line about once a second, one line "
-            "per classified window: `DET t=<s>.<ms> dec=<+d.ddd> <DRONE|noise>` (windows are "
-            "~448 ms of audio; input below the squelch yields no windows), then a final "
+            "per classified window: `DET t=<s>.<ms> span=<frames> dec=<+d.ddd> <DRONE|noise>` "
+            "- `t` is when the window CLOSED and `span` how many frames it covered, which "
+            "is not a constant: the RMS gate resets accumulation, so a window can straddle "
+            "silence and start arbitrarily far from where the decision was made (windows are "
+            "~448 ms of audio at the default hop; input below the squelch yields no windows), "
+            "then a final "
             "`DETEND windows=<n> drones=<n> overrun=<0|1> err=<0|1>` line. With dbg set, each "
             "frame also emits `F=<frame> a=<accumulated> r=<rms_milli> h=<half_us> "
             "m=<mfcc_us>`. A start failure prints `DETERR <reason>` and then the DETEND "
@@ -141,7 +145,9 @@ COMMANDS: tuple[CommandSpec, ...] = (
             "deployed model."
         ),
         response=(
-            "`model: <name> <*| > feat=<lo>..<hi> thr=<milli>` per model when listing, or "
+            "`model: <name> <*| > feat=<lo>..<hi> thr=<milli>` per model when listing - the "
+            "name is left-padded to 8 columns, so a parser must strip whitespace rather than "
+            "split on a single space - or "
             "`model: <name> selected, default thr=<milli> (not persisted)` when selecting. "
             "`model: no such model '<name>'` otherwise."
         ),

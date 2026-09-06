@@ -33,11 +33,19 @@ jobs:
       # owns it, because the host build needs it too). Without this every
       # firmware PR pays the clone and a github.com hiccup turns into a red
       # firmware build.
+      - name: Read the pinned CMSIS-DSP version
+        id: cmsis
+        run: |
+          tag=$(sed -n 's/^set(BOOMDETECT_CMSISDSP_TAG "\(.*\)")$/\1/p' \
+                fw/common/boomdetect/CMakeLists.txt)
+          test -n "$tag" || { echo "could not read the pin from CMakeLists.txt"; exit 1; }
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
       - name: Cache the fetched CMSIS-DSP
         uses: actions/cache@v4
         with:
           path: fw/bom-stm32node/build/Debug/_deps/cmsisdsp-src
-          key: cmsisdsp-v1.15.0-arm-${{ runner.os }}
+          key: cmsisdsp-${{ steps.cmsis.outputs.tag }}-arm-${{ runner.os }}
 
       - name: Install ARM GCC toolchain and Ninja
         run: |
@@ -349,7 +357,12 @@ jobs:
           # a check that fails during a planned rename teaches people to
           # delete checks. Add the registry's own entry point there instead.
           status=0
-          for symbol in detect_service_run boomdetect_step mfcc_process gps_run; do
+          # classifier_by_name is the registry's entry point, which the comment
+          # above promised to add once the move landed. boomdetect_selftest is
+          # the fixture generator: it moved into the package, so the port
+          # linking without it would mean detselftest silently gone.
+          for symbol in detect_service_run boomdetect_step mfcc_process \
+                        classifier_by_name boomdetect_selftest gps_run; do
             if ! arm-none-eabi-nm build/Debug/bom-stm32node.elf | grep -q "$symbol"; then
               echo "❌ $symbol is not linked into bom-stm32node.elf"
               status=1

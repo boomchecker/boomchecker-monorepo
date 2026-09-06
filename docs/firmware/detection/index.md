@@ -82,7 +82,8 @@ count still matches while every weight lands on the wrong input. It is only as
 strong as the discipline of bumping it, so treat it as a tripwire — the real
 check is the parity fixture.
 
-Adding a model is a new file under `models/` plus one line in the registry.
+Adding a model is a new file under `models/`, one line in the registry, and one
+declaration in `models/models.h` so the compiler checks the pair.
 
 A model needing a different feature *representation* — raw frames for a CNN, say
 — is the case `layout_id` is shaped for, but it is not wired up: `boomdetect_init()`
@@ -102,7 +103,9 @@ carrying assumptions that looked like facts.
 | Threshold 15.0 | **measured** against ambient office noise, three minutes, no drone. The offline +7.25 fired on 23 of 396 windows, peaking at 12.05. |
 | Session-to-session variance | **measured, and larger than the change it justified**: one session peaked at 12.05, another at 2.77, same board and firmware. |
 | C refactor did not move any number | **measured**, `detselftest` bit-identical across the whole move — captured on the pre-move firmware and re-run on the post-move build on the same board; both runs are recorded in the fixture's header |
-| Train/deploy skew | **described, not measured** (below) |
+| `-O2` does not move any number | **measured**, the `Shipped` preset builds without sanitizers at `-O2` and CI diffs its fixture output against the `Debug` build's |
+| Host and target agree bit for bit | **measured, and they do NOT** — same C, same input, but MFCC coefficients differ by up to 1.8e-4 relative and decisions by 1.1e-6 (below) |
+| Train/deploy skew | **expressible but still not measured**: the window policy is now configuration rather than compile-time constants, so both sides can be run; nobody has run them |
 | C matches the Python the models were trained with | **not verified at all** |
 | Detection of an actual drone on this hardware | **never tested** |
 
@@ -118,8 +121,40 @@ The training pipeline and the firmware do not window audio the same way:
 | 48 → 16 kHz | no counterpart | decimate by 3 |
 
 None of that is wrong on its face; it is simply undescribed by whatever the
-model was fitted to. Quantifying it needs the Python reference alongside the C,
-which is the next piece of work.
+model was fitted to.
+
+Three of those four rows are now settable rather than compiled in.
+`boomdetect_config_t` carries `accum_frames`, `hop` and `gate`, and
+`BOOMDETECT_GATE_WINDOW_MEDIAN` implements the training pipeline's policy: no
+frame is rejected, and the window is kept or dropped as a whole on the median of
+its frames' RMS. Leaving all three at 0 gives the firmware's behaviour, which is
+what every checked-in fixture still reproduces.
+
+So the gap can now be run from both ends on a host. It has not been: quantifying
+it against the numbers the model was actually fitted to still needs the Python
+reference, which is the next piece of work.
+
+### Host and target are not bit-identical
+
+Running the same fixture through `boomdetect_selftest_tool` on x86-64 and
+through `detselftest` on the board gives the same input checksum, the same 42
+frames and 3 windows, and different bits:
+
+| | |
+|---|---|
+| worst MFCC coefficient | 1.8e-4 relative (2694 ULP), 1.6e-7 absolute |
+| worst decision | 1.1e-6 relative; board −11.476006 / −9.829288 / −10.548382 against host −11.476009 / −9.829277 / −10.548393 |
+
+Identical C, different instruction selection: the Cortex-M33 build takes
+CMSIS-DSP's architecture-specific paths at `-O2`, the host the generic ones at
+`-O1` under sanitizers. Neither compiler owes anyone a particular summation
+order, and float32 addition is not associative.
+
+Two consequences worth stating plainly. Bit-exactness is only ever a
+same-binary, same-target claim, which is why there are two fixtures and each is
+compared only against its own side. And the parity suite this package exists for
+cannot be a bit comparison either; it has to carry a tolerance, and 1e-6 on the
+decision is the scale this measurement suggests.
 
 ### The CMSIS-DSP deviation
 
@@ -139,20 +174,28 @@ file with the licence attribution attached, and upstream is fetched untouched.
 ## Checking a change did not move the numbers
 
 The microphone never repeats an input, so two `detect` runs can never be
-compared. `detselftest` drives the chain from an integer LCG — bit-identical on
-any platform, no flash cost — and prints every stage as raw IEEE-754 bit
-patterns rather than decimals, so "unchanged" means unchanged.
+compared. The generator in `fw/common/boomdetect/src/boomdetect_selftest.c`
+drives the chain from an integer LCG instead — the same input on every platform,
+no flash cost — and prints every stage as raw IEEE-754 bit patterns rather than
+decimals, so "unchanged" means unchanged.
+
+Two consumers, two fixtures, each compared only against its own side (see the
+host/target note above for why one fixture would not do):
 
 ```sh
-# against a connected board
-fw/apps/stm32node-cli/.venv/bin/python \
-  fw/common/boomdetect/tests/vectors/check_selftest.py
+# the host, no hardware; part of `task test`
+cd fw/common/boomdetect && ctest --preset Debug -R selftest_host
+
+# a connected board, against its own recorded capture
+cd fw/common/boomdetect && task setup && task check-board
 ```
 
 A mismatch means one of: the RMS deviation above was lost, `ARM_MATH_LOOPUNROLL`
 was switched on (upstream defaults it on, this build does not), `-O2` did not
 survive a build change, or the change moved the arithmetic. All four are
-findings.
+findings, and the middle two no longer need a board to notice: `LOOPUNROLL`
+fails the configure, and the `Shipped` preset builds at `-O2` without sanitizers
+so CI can diff its output against the `Debug` build's.
 
 ## Host tests
 
@@ -160,6 +203,12 @@ findings.
 cd fw/common/boomdetect && task test
 ```
 
-ASan and UBSan are on by default in the preset. The suite covers the registry
-and the pipeline's edge cases; it does **not** yet compare anything against
-Python, so green means self-consistent, not correct.
+ASan and UBSan are on by default in the preset. The suite covers the MFCC front
+end, the registry, the pipeline's edge cases, both models' trained weights, the
+fixture, and — through a stub registry linked in place of the real one — that
+the model table really is replaceable. The harness itself is checked able to
+fail, because a test framework that silently returns 0 is the failure mode this
+repository has already hit once.
+
+It does **not** yet compare anything against Python, so green means
+self-consistent, not correct.

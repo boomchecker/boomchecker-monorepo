@@ -7,15 +7,16 @@
  * of a section attribute that is invisible in the source and awkward to debug
  * when the linker script changes.
  *
- * Deliberately a separate translation unit from the pipeline, so a test can
- * link its own registry with a stub model instead of the real weights.
+ * A separate translation unit from the pipeline so that a consumer can supply
+ * its own: nothing in src/boomdetect.c references s_models, only the four
+ * accessors below, so linking a different object that defines them replaces the
+ * whole table. tests/stub_registry.c does exactly that, which is what keeps the
+ * claim from being decorative.
  */
 #include "classifier.h"
+#include "models.h"
 
 #include <string.h>
-
-extern const classifier_t classifier_mlp_v6;
-extern const classifier_t classifier_svm_v3;
 
 /* First entry is the default. */
 static const classifier_t *const s_models[] = {

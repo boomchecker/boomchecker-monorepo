@@ -13,9 +13,20 @@
  * Console output, all lines CRLF-terminated:
  *
  *   LVL t=<s>.<ms> rms=<+d.ddd>                     input level, ~1/s
- *   DET t=<s>.<ms> dec=<+d.ddd> <DRONE|noise>       one per classified window
+ *   DET t=<s>.<ms> span=<n> dec=<+d.ddd> <DRONE|noise>
+ *                                                   one per classified window;
+ *                                                   t is when the window CLOSED
+ *                                                   and span is how many frames
+ *                                                   it covered, which is not a
+ *                                                   constant: the gate resets
+ *                                                   accumulation, so a window
+ *                                                   can straddle silence
+ *   F=<n> a=<n> r=<n> h=<us> m=<us>                 per frame, only with dbg=1
  *   DETEND windows=<n> drones=<n> overrun=<0|1> err=<0|1>
  *   DETERR <reason>                                 followed by DETEND, always
+ *
+ * detect_service_selftest() prints a separate DST* family; see
+ * fw/common/boomdetect/include/boomdetect_selftest.h for its grammar.
  *
  * Runs synchronously inside the CLI command, servicing USB while it waits for
  * microphone blocks. The radio is NOT serviced meanwhile - see

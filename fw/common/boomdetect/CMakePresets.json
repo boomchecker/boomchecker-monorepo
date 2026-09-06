@@ -3,6 +3,7 @@
   "configurePresets": [
     {
       "name": "Debug",
+      "description": "Sanitized host build with warnings as errors. The default; what CI runs.",
       "generator": "Ninja",
       "binaryDir": "${sourceDir}/build/Debug",
       "cacheVariables": {
@@ -11,12 +12,27 @@
         "BOOMDETECT_WERROR": "ON",
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
       }
+    },
+    {
+      "name": "Shipped",
+      "description": "The optimisation level the firmware actually ships: -O2, no sanitizer. The Debug preset builds at -O1 under ASan, so it is the one configuration that cannot answer 'does -O2 move any number?' - which is one of the four causes the fixture's header tells a reader to suspect.",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/Shipped",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_C_FLAGS_RELEASE": "-O2 -g",
+        "BOOMDETECT_SANITIZE": "OFF",
+        "BOOMDETECT_WERROR": "ON",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+      }
     }
   ],
   "buildPresets": [
-    { "name": "Debug", "configurePreset": "Debug" }
+    { "name": "Debug", "configurePreset": "Debug" },
+    { "name": "Shipped", "configurePreset": "Shipped" }
   ],
   "testPresets": [
-    { "name": "Debug", "configurePreset": "Debug", "output": { "outputOnFailure": true } }
+    { "name": "Debug", "configurePreset": "Debug", "output": { "outputOnFailure": true } },
+    { "name": "Shipped", "configurePreset": "Shipped", "output": { "outputOnFailure": true } }
   ]
 }

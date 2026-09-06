@@ -8,8 +8,11 @@
 #include "detect_service.h"
 
 #include "boomdetect.h"
+#include "boomdetect_selftest.h"
+#include "classifier.h"
 #include "main.h"    /* HAL_GetTick, DWT */
-#include "mic.h"     /* mic_dma_init/start/stop/poll, PCM_SAMPLES_PER_HALF */
+#include "mic.h"     /* mic_dma_init/start/stop/poll/overrun, PCM_SAMPLES_PER_HALF,
+                        PCM_FS_HZ */
 #include "usb_cli.h" /* usb_cli_pump / connected / write_blocking */
 
 #include <stdio.h>
@@ -133,20 +136,27 @@ static void det_report(const boomdetect_event_t *ev, uint32_t debug)
 
   if ((ev->frame_index % DET_LVL_EVERY) == 0u)
   {
-    uint32_t t_ms = (ev->frame_index * BOOMDETECT_HOP) / 16u;
+    uint32_t t_ms = boomdetect_frame_to_ms(&s_det, ev->frame_index);
     fmt_milli(dec_str, sizeof(dec_str), ev->rms);
     snprintf(line, sizeof(line), "LVL t=%lu.%03lu rms=%s\r\n",
              (unsigned long)(t_ms / 1000u), (unsigned long)(t_ms % 1000u), dec_str);
     det_print(line);
   }
 
-  if (ev->window_complete)
+  if (ev->window.complete)
   {
-    uint32_t t_ms = (ev->window_start_frame * BOOMDETECT_HOP) / 16u; /* /16000*1000 */
-    fmt_milli(dec_str, sizeof(dec_str), ev->decision);
-    snprintf(line, sizeof(line), "DET t=%lu.%03lu dec=%s %s\r\n",
-             (unsigned long)(t_ms / 1000u), (unsigned long)(t_ms % 1000u), dec_str,
-             ev->is_drone ? "DRONE" : "noise");
+    /* Timestamped from the frame that CLOSED the window, and the span reported
+       alongside. A window is not a fixed 14 frames of wall clock: the gate
+       resets accumulation, so it can straddle silence and start arbitrarily far
+       from where the decision was actually made. Stamping from start_frame
+       alone put the DET line at a time nothing was decided. */
+    uint32_t t_ms = boomdetect_frame_to_ms(&s_det, ev->window.end_frame);
+    uint32_t span = (ev->window.end_frame - ev->window.start_frame) + 1u;
+    fmt_milli(dec_str, sizeof(dec_str), ev->window.decision);
+    snprintf(line, sizeof(line), "DET t=%lu.%03lu span=%lu dec=%s %s\r\n",
+             (unsigned long)(t_ms / 1000u), (unsigned long)(t_ms % 1000u),
+             (unsigned long)span, dec_str,
+             ev->window.is_drone ? "DRONE" : "noise");
     det_print(line);
   }
 }
@@ -157,9 +167,17 @@ void detect_service_run(uint32_t seconds, uint32_t squelch_milli, int32_t thr_mi
   static uint8_t s_cyccnt_ready = 0u;
   char           line[80];
 
-  if (!usb_cli_connected() || seconds == 0u)
+  if (!usb_cli_connected())
   {
     return;
+  }
+  /* Clamped to 1..60, as the header says and as cli.c already enforces. It used
+     to return silently on 0, which contradicted both the header's contract and
+     the "the trailer always arrives" rule the other error paths follow - a host
+     driving this directly would have waited for a DETEND that never came. */
+  if (seconds == 0u)
+  {
+    seconds = 1u;
   }
   if (seconds > DET_MAX_SECONDS)
   {
@@ -248,86 +266,43 @@ void detect_service_run(uint32_t seconds, uint32_t squelch_milli, int32_t thr_mi
 
 /* --- Deterministic self-test (see detect_service.h) ------------------------ */
 
-/* 48 kHz input long enough for THREE full windows (42 frames): 1024 + 41*512 at
-   16 kHz, tripled upstream. One window would leave the accumulator reset
-   between windows untested, which is exactly the kind of state bug a move can
-   introduce. */
-#define DST_INPUT_LEN   66048u
-#define DST_LCG_SEED    1u
-#define DST_MFCC_FRAMES 3u /* how many frames' coefficients to print */
-
-/* Fed in blocks rather than all at once: the FIFO holds 4096 samples and the
-   signal decimates to 22016, so one push would overflow it and start dropping.
-   3072 is a multiple of the decimation factor, so the phase stays at zero and
-   the kept samples are the same ones a continuous stream would give. */
-#define DST_BLOCK 3072u
+/* The generator itself lives in fw/common/boomdetect: the fixture it produces
+   is checked in there, and a package that ships reference data it cannot
+   regenerate has the dependency pointing the wrong way. What is left here is
+   the board-specific half - a buffer that must not be a stack frame, CRLF, and
+   the USB console. */
 
 /* 6 KB, and static for the same reason s_det is: it was 37 % of the MSPLIM
    budget as a stack frame, in a function that also calls snprintf while USB
    interrupts nest on top - the exact combination that hard-faulted this board
    once already (see the rationale in STM32H563xx_FLASH.ld). */
-static int16_t s_dst_block[DST_BLOCK];
+static int16_t s_dst_block[BOOMDETECT_SELFTEST_BLOCK];
 
-_Static_assert(DST_BLOCK % 3u == 0u,
-               "DST_BLOCK must be a multiple of the decimation factor, or the "
-               "kept samples shift and the fixture no longer matches");
+_Static_assert(BOOMDETECT_SELFTEST_BLOCK % 3u == 0u,
+               "the selftest block must be a multiple of the decimation factor, "
+               "or the kept samples shift and the fixture no longer matches");
 
-/* One sample of the reference signal. Integer LCG, so every platform produces
-   the same bits - a sinf() table would differ in the last place between the
-   Cortex-M33 and an x86 host and would defeat the whole point. Amplitude is
-   quartered to sit around -12 dBFS instead of slamming the CIC at full scale. */
-static int16_t dst_sample(uint32_t *state)
+/* The package emits bare lines; the console is CRLF, like everything else the
+   node prints. */
+static void dst_emit(void *ctx, const char *line)
 {
-  *state = (*state * 1103515245u) + 12345u;
-  int32_t v = (int32_t)((*state >> 16) & 0xFFFFu) - 32768; /* -32768..32767 */
-  return (int16_t)(v / 4);
-}
-
-/* Print a float as its raw bit pattern. Decimal would need %f (absent from
-   newlib-nano, hence fmt_milli) and would round away exactly the differences
-   this test exists to catch. */
-static uint32_t dst_bits(float v)
-{
-  uint32_t u;
-  memcpy(&u, &v, sizeof(u));
-  return u;
-}
-
-static void dst_print_vec(char *line, size_t len, const char *prefix, const float *v,
-                          uint32_t n)
-{
-  int w = snprintf(line, len, "%s", prefix);
-  for (uint32_t c = 0u; c < n && w > 0 && (size_t)w < len; c++)
-  {
-    w += snprintf(line + w, len - (size_t)w, " %08lX", (unsigned long)dst_bits(v[c]));
-  }
+  (void)ctx;
   det_print(line);
   det_print("\r\n");
 }
 
 void detect_service_selftest(void)
 {
-  static const char *stat[4] = { "mean", "std ", "dmea", "cmax" };
-  char     line[160];
-  char     prefix[24];
-  uint32_t state = DST_LCG_SEED;
-  uint32_t fnv = 2166136261u;
-  uint32_t windows = 0u;
-
   if (!usb_cli_connected())
   {
     return;
   }
 
-  /* No squelch: the gate is a policy knob, and letting it drop frames would
-     make the fixture depend on the signal's level rather than on the arithmetic
-     it is meant to pin down. */
-  /* Pinned to the deployed model so the fixture does not shift when someone
-     leaves another one selected - and resolved explicitly, because a NULL from
-     by_name() is not an error to boomdetect_init(), it silently means "use the
-     default". Rename or reorder the registry and this would quietly measure a
-     different model while the reference file sends the reader hunting for a
-     lost -O2 or a flipped LOOPUNROLL. */
+  /* Pinned to the deployed model rather than to whatever `model` last selected,
+     and resolved explicitly: a NULL from by_name() is not an error to
+     boomdetect_init(), it silently means "use the default". Rename or reorder
+     the registry and this would quietly measure a different model while the
+     reference file sent the reader hunting for a lost -O2. */
   const classifier_t *model = classifier_by_name("mlp_v6");
   if (model == NULL)
   {
@@ -336,90 +311,10 @@ void detect_service_selftest(void)
     return;
   }
 
-  const boomdetect_config_t cfg = {
-    .decimation    = (uint16_t)(PCM_FS_HZ / 16000u),
-    .squelch_milli = 0u,
-    .thr_milli     = model->default_thr_milli,
-    .classifier    = model,
-  };
-  if (!boomdetect_init(&s_det, &cfg))
-  {
-    det_print("DSTERR detector init failed\r\n");
-    det_print("DSTEND frames=0 windows=0 err=1\r\n");
-    return;
-  }
-
   /* Leading break: the CLI echo of the command has not been terminated yet at
      this point, so without it DSTBEGIN lands on the same line as the echo and a
      line-oriented reader drops it. */
-  det_print("\r\nDSTBEGIN\r\n");
-
-  for (uint32_t off = 0u; off < DST_INPUT_LEN; off += DST_BLOCK)
-  {
-    /* Clamp rather than assume DST_BLOCK divides DST_INPUT_LEN. It does not
-       (66048 / 3072 = 21.5), and running the loop one block long generated
-       1536 samples too many - which the fixture caught as a 43rd frame and a
-       different checksum. A short final block is fine: boomdetect_push carries
-       the decimation phase across calls. */
-    const uint32_t n = (DST_INPUT_LEN - off < DST_BLOCK) ? (DST_INPUT_LEN - off)
-                                                         : DST_BLOCK;
-    for (uint32_t i = 0u; i < n; i++)
-    {
-      const int16_t x = dst_sample(&state);
-      s_dst_block[i] = x;
-      /* FNV-1a over the generated samples: proves both sides scored the same
-         input before comparing anything downstream of it. */
-      fnv = (fnv ^ (uint32_t)((uint16_t)x & 0xFFu)) * 16777619u;
-      fnv = (fnv ^ (uint32_t)(((uint16_t)x >> 8) & 0xFFu)) * 16777619u;
-    }
-    boomdetect_push(&s_det, s_dst_block, n);
-
-    /* Drain fully here. detect_service_run caps this at one frame per block to
-       keep USB fed; that is a pacing constraint, not arithmetic, so draining
-       yields the same frames in the same order. */
-    boomdetect_event_t ev;
-    while (boomdetect_step(&s_det, &ev))
-    {
-      /* NULL for a squelched frame, which cannot happen here because this
-         runs with squelch 0 - but that is an accident of the config above, not
-         a property of the accessor, and dereferencing it would be a hard fault
-         on the board rather than a wrong number. */
-      const float *mf = boomdetect_last_mfcc(&s_det);
-      if (ev.frame_index < DST_MFCC_FRAMES && mf != NULL)
-      {
-        snprintf(prefix, sizeof(prefix), "DSTMFCC f=%lu",
-                 (unsigned long)ev.frame_index);
-        dst_print_vec(line, sizeof(line), prefix, mf, NUM_MFCC_COEFFS);
-      }
-
-      if (ev.window_complete)
-      {
-        /* Every window, not just the first: the aggregate is rebuilt from a
-           reset accumulator each time, so a state bug shows up in window 1
-           while window 0 still looks perfect. */
-        const float *f = boomdetect_last_features(&s_det);
-        for (uint32_t g = 0u; g < 4u; g++)
-        {
-          snprintf(prefix, sizeof(prefix), "DSTFEAT w=%lu %s", (unsigned long)windows,
-                   stat[g]);
-          dst_print_vec(line, sizeof(line), prefix, f + g * NUM_MFCC_COEFFS,
-                        NUM_MFCC_COEFFS);
-        }
-        snprintf(line, sizeof(line), "DSTDEC w=%lu logit=%08lX\r\n",
-                 (unsigned long)windows, (unsigned long)dst_bits(ev.decision));
-        det_print(line);
-        windows++;
-      }
-    }
-  }
-
-  uint32_t win = 0u, dro = 0u;
-  boomdetect_counts(&s_det, &win, &dro);
-  snprintf(line, sizeof(line), "DSTSIG n=%lu seed=%lu fnv=%08lX\r\n",
-           (unsigned long)DST_INPUT_LEN, (unsigned long)DST_LCG_SEED,
-           (unsigned long)fnv);
-  det_print(line);
-  snprintf(line, sizeof(line), "DSTEND frames=%lu windows=%lu err=0\r\n",
-           (unsigned long)s_det.frame_index, (unsigned long)win);
-  det_print(line);
+  det_print("\r\n");
+  (void)boomdetect_selftest(&s_det, model, s_dst_block, BOOMDETECT_SELFTEST_BLOCK,
+                            dst_emit, NULL);
 }

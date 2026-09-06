@@ -10,6 +10,7 @@
  * nothing else.
  */
 #include "classifier.h"
+#include "models.h"
 
 #include "arm_math.h"
 #include "svm_model_data_v3.h"
@@ -20,11 +21,12 @@
 /* Mirrors the runtime check in boomdetect_init: the offset has to be in it, or
    retargeting this model at a later slice passes the assert and is caught only
    at run time. */
-_Static_assert(SVM_V3_OFFSET + SVM_NUM_FEATURES <= DET_FEATURE_COUNT,
+_Static_assert(SVM_V3_OFFSET + SVM_NUM_FEATURES <= BOOMDETECT_FEATURE_COUNT,
                "svm_v3's slice runs past the features the aggregate produces");
 
-static float svm_v3_decide(const void *ctx, const float *features)
+static float svm_v3_decide(void *ctx, const float *features, uint16_t n)
 {
+    (void)n; /* declared SVM_NUM_FEATURES, static-asserted below against the layout */
     float32_t scaled[SVM_NUM_FEATURES];
     float32_t dot = 0.0f;
 

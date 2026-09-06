@@ -14,9 +14,10 @@ BD_TEST_STATE;
 
 /* Returns the first feature it is given, so a test can prove exactly which
    slice of the vector reached decide(). */
-static float probe_decide(const void *ctx, const float *features)
+static float probe_decide(void *ctx, const float *features, uint16_t n)
 {
     (void)ctx;
+    (void)n;
     return features[0];
 }
 
@@ -46,9 +47,9 @@ static void scenario_lookup(void)
         REQUIRE(m != NULL, "classifier_at(%zu) is NULL below the count", i);
         CHECK(m->decide != NULL, "%s has no decide function", m->name);
         CHECK(m->n_features > 0u, "%s reads zero features", m->name);
-        CHECK((uint32_t)m->feature_offset + m->n_features <= DET_FEATURE_COUNT,
+        CHECK((uint32_t)m->feature_offset + m->n_features <= BOOMDETECT_FEATURE_COUNT,
               "%s reads %u features from offset %u, past the %u the aggregate produces",
-              m->name, m->n_features, m->feature_offset, (unsigned)DET_FEATURE_COUNT);
+              m->name, m->n_features, m->feature_offset, (unsigned)BOOMDETECT_FEATURE_COUNT);
         CHECK(m->layout_id == BOOMDETECT_LAYOUT_MEAN_STD_DMEAN_CMAX,
               "%s declares layout %u, this build produces %u", m->name, m->layout_id,
               BOOMDETECT_LAYOUT_MEAN_STD_DMEAN_CMAX);
@@ -85,13 +86,13 @@ static void scenario_init_rejects_bad_models(void)
 
     classifier_t bad = {
         .name = "bad", .layout_id = BOOMDETECT_LAYOUT_MEAN_STD_DMEAN_CMAX,
-        .n_features = DET_FEATURE_COUNT, .feature_offset = 1u,
+        .n_features = BOOMDETECT_FEATURE_COUNT, .feature_offset = 1u,
         .default_thr_milli = 0, .decide = probe_decide, .ctx = NULL,
     };
     cfg.classifier = &bad;
     CHECK(!boomdetect_init(&d, &cfg),
           "a model reading %u features from offset 1 fits in %u and should not",
-          bad.n_features, (unsigned)DET_FEATURE_COUNT);
+          bad.n_features, (unsigned)BOOMDETECT_FEATURE_COUNT);
 
     classifier_t wrong_layout = bad;
     wrong_layout.n_features = 4u;
@@ -110,8 +111,25 @@ static void scenario_init_rejects_bad_models(void)
     cfg.classifier = &ok;
     CHECK(boomdetect_init(&d, &cfg), "a model that fits was rejected");
 
+    /* NULL means "use the default", and proving that needs the entry that was
+       adopted, not just a true return: init returning true is equally
+       consistent with it having kept the previous model. */
     cfg.classifier = NULL;
     CHECK(boomdetect_init(&d, &cfg), "a NULL classifier should fall back to the default");
+    CHECK(d.cfg.classifier == classifier_default(),
+          "a NULL classifier resolved to '%s', not the default '%s'",
+          (d.cfg.classifier != NULL) ? d.cfg.classifier->name : "(null)",
+          classifier_default()->name);
+
+    /* And the same for the threshold sentinel, which is the other thing a
+       caller is entitled to leave to the model. */
+    cfg.classifier = classifier_by_name("svm_v3");
+    cfg.thr_milli  = BOOMDETECT_THR_MODEL_DEFAULT;
+    REQUIRE(boomdetect_init(&d, &cfg), "init with the threshold sentinel failed");
+    CHECK(d.cfg.thr_milli == classifier_by_name("svm_v3")->default_thr_milli,
+          "the sentinel resolved to %ld, not svm_v3's %ld", (long)d.cfg.thr_milli,
+          (long)classifier_by_name("svm_v3")->default_thr_milli);
+    cfg.thr_milli = 0;
 
     cfg.classifier = &ok;
     cfg.decimation = 0u;
@@ -128,7 +146,7 @@ static void scenario_real_models_actually_run(void)
 {
     static boomdetect_t d;
     boomdetect_event_t ev;
-    static int16_t loud[WINDOW_SIZE * 3u];
+    static int16_t loud[BOOMDETECT_WINDOW_SIZE * 3u];
 
     /* A deterministic tone, the same one pipeline_test uses. Its absolute
        decision value is not asserted - that belongs to the parity fixture -
@@ -136,16 +154,16 @@ static void scenario_real_models_actually_run(void)
        families disagree, which is what proves both forward passes ran rather
        than one being silently reached twice. */
     static const int16_t lut[8] = { 0, 6000, 8000, 6000, 0, -6000, -8000, -6000 };
-    for (uint32_t i = 0u; i < WINDOW_SIZE * 3u; i++)
+    for (uint32_t i = 0u; i < BOOMDETECT_WINDOW_SIZE * 3u; i++)
     {
         loud[i] = lut[i % 8u];
     }
 
     /* A second, clearly different signal. Deterministic integer noise, so the
        comparison below is reproducible on any platform. */
-    static int16_t noisy[WINDOW_SIZE * 3u];
+    static int16_t noisy[BOOMDETECT_WINDOW_SIZE * 3u];
     uint32_t seed = 1u;
-    for (uint32_t i = 0u; i < WINDOW_SIZE * 3u; i++)
+    for (uint32_t i = 0u; i < BOOMDETECT_WINDOW_SIZE * 3u; i++)
     {
         seed = (seed * 1103515245u) + 12345u;
         noisy[i] = (int16_t)(((int32_t)((seed >> 16) & 0xFFFFu) - 32768) / 4);
@@ -174,9 +192,9 @@ static void scenario_real_models_actually_run(void)
                 boomdetect_push(&d, input, BOOMDETECT_HOP * 3u);
                 while (boomdetect_step(&d, &ev))
                 {
-                    if (ev.window_complete)
+                    if (ev.window.complete)
                     {
-                        decisions[m][sig] = ev.decision;
+                        decisions[m][sig] = ev.window.decision;
                         got = true;
                     }
                 }
@@ -210,5 +228,5 @@ int main(void)
     scenario_two_families_differ();
     scenario_init_rejects_bad_models();
     scenario_real_models_actually_run();
-    BD_TEST_REPORT("registry_test", 45);  /* exact count from running the compiled binary */
+    BD_TEST_REPORT("registry_test", 48);  /* exact count from running the compiled binary */
 }

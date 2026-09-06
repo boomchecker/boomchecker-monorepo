@@ -92,6 +92,11 @@ static void tx_flush(void)
 }
 
 /* --- Commands (help is built into embedded-cli) ---------------------------- */
+/* Defined with the registration machinery at the bottom of this file; read
+   here so `version` can report a shortfall that the boot-time line announced
+   into a console nobody had attached yet. */
+static bool cli_bindings_short(void);
+
 static void cmd_version(EmbeddedCli *cli, char *args, void *context)
 {
   (void)args;
@@ -109,6 +114,10 @@ static void cmd_version(EmbeddedCli *cli, char *args, void *context)
   snprintf(line, sizeof(line), "bom-stm32node CLI v%u.%u.%u", PROTOCOL_SERVICE_FW_VERSION_MAJOR,
            PROTOCOL_SERVICE_FW_VERSION_MINOR, PROTOCOL_SERVICE_FW_VERSION_PATCH);
   embeddedCliPrint(cli, line);
+  if (cli_bindings_short())
+  {
+    embeddedCliPrint(cli, "WARNING: not every command registered; see cli_init");
+  }
 }
 
 /* Parse "<sec>" and run a PCM stream from the given source. Shared by the
@@ -1123,6 +1132,15 @@ static void cmd_wakeup(EmbeddedCli *cli, char *args, void *context)
    the field than a number that does not match. */
 static uint8_t s_bindings_ok;
 static uint8_t s_bindings_tried;
+/* Latched so `version` can report it too. The boot-time line below is printed
+   before anyone has attached a console, so on the one occasion it matters it is
+   into a port nobody is reading. */
+static bool s_bindings_short;
+
+static bool cli_bindings_short(void)
+{
+  return s_bindings_short;
+}
 
 static void cli_add(CliCommandBinding binding)
 {
@@ -1135,6 +1153,13 @@ static void cli_add(CliCommandBinding binding)
 
 void cli_init(cli_tx_fn tx)
 {
+  /* Reset first: these are file-scope counters and cli_init() is not documented
+     as single-shot, so a second call would double-count every binding and
+     report a shortfall that never happened. */
+  s_bindings_ok    = 0u;
+  s_bindings_tried = 0u;
+  s_bindings_short = false;
+
   s_tx      = tx;
   s_tx_head = 0;
   s_tx_tail = 0;
@@ -1365,6 +1390,7 @@ void cli_init(cli_tx_fn tx)
 
   if (s_bindings_ok != s_bindings_tried)
   {
+    s_bindings_short = true;
     char line[64];
     snprintf(line, sizeof(line), "CLI: only %u of %u commands registered",
              (unsigned)s_bindings_ok, (unsigned)s_bindings_tried);

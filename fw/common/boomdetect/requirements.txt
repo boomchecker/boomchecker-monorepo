@@ -1,0 +1,5 @@
+# The board-side fixture checker talks to a USB CDC console, and ruff keeps the
+# one Python file in this package honest. Deliberately short: unlike boomlink,
+# nothing here generates code at configure time, so the C build needs no venv.
+pyserial>=3.5
+ruff>=0.5

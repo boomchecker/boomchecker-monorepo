@@ -66,16 +66,41 @@ keeps upstream pristine, avoids a `PATCH_COMMAND` that re-runs and fails on the
 second configure, and puts the licence attribution somewhere a reader will
 actually find it.
 
+## Two things a first-time reader should know
+
+**Adding this package makes the FIRMWARE build need the network.** CMSIS-DSP is
+fetched at configure time rather than vendored, which is what removed 11 MB and
+470 files from the tree, and the cost is that `cmake --preset Debug` in
+`fw/bom-stm32node` now clones from github.com. Both CI workflows cache the
+fetched source; an offline build needs `FETCHCONTENT_SOURCE_DIR_CMSISDSP`
+pointing at a copy.
+
+**Host and target do not produce identical bits.** Same C, same input, same
+window and frame counts, but the Cortex-M33 build takes CMSIS-DSP's
+architecture-specific paths at `-O2` while the host takes the generic ones, and
+float32 addition is not associative. Measured on the fixture: MFCC coefficients
+differ by at most 1.8e-4 relative, decisions by at most 1.1e-6. That is why
+there are two fixtures rather than one, and it is the reason a future
+C-versus-Python parity suite has to state a tolerance instead of comparing bits.
+The scale this measurement suggests is 1e-6 on the decision.
+
 ## Regression fixture
 
-`tests/vectors/selftest_expected.txt` is the output of the firmware's
-`detselftest` command, captured on hardware *before* the detector moved into
-this package. The board's only real input is a live microphone, which never
-repeats, so that fixture is the only way to tell "the refactor changed nothing"
-from "the refactor changed something by one bit".
+The generator lives in `src/boomdetect_selftest.c` and is driven from two
+places: the board's `detselftest` command, and `boomdetect_selftest_tool` here.
+It replaces the live microphone, which never repeats, with an integer LCG, and
+prints every stage as raw IEEE-754 bit patterns.
 
-`tests/vectors/check_selftest.py` replays it against a connected board.
+| fixture | produced by | checked by |
+|---|---|---|
+| `tests/vectors/selftest_expected.txt` | the board, before the move into this package | `tests/vectors/check_selftest.py`, needs hardware |
+| `tests/vectors/selftest_host.txt` | `boomdetect_selftest_tool` on x86-64 | `ctest`, needs nothing |
 
-A mismatch means one of: the RMS deviation above was lost, `LOOPUNROLL` got
-switched on, `-O2` did not survive, or the move changed the arithmetic. All four
-are findings.
+The two do not match, for the reason above; each is compared only against its
+own side.
+
+A mismatch on either means one of: the RMS deviation above was lost,
+`LOOPUNROLL` got switched on, `-O2` did not survive, or the change moved the
+arithmetic. All four are findings. Two of them are now checked without a board:
+`LOOPUNROLL` fails the configure, and the `Shipped` preset builds at `-O2`
+without sanitizers so CI can diff it against the `Debug` output.

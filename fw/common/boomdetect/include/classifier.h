@@ -27,13 +27,21 @@ extern "C" {
 
 /**
  * @brief Score one feature vector.
- * @param ctx      the entry's own ctx pointer, for models that need state
+ * @param ctx      the entry's own ctx pointer, for models that need state.
+ *                 Non-const: a stateful model that had to cast the const away
+ *                 to use it would be a worse contract than saying so.
  * @param features already offset by the entry's feature_offset, so this reads
  *                 from index 0 and needs to know nothing about the layout
+ * @param n        how many values are readable through @p features. Passed even
+ *                 though the entry declares it, because n_features was
+ *                 otherwise validated once at init and then never enforced: a
+ *                 model reading past its slice stays inside the caller's
+ *                 feature array, so it reads the next family's statistics and
+ *                 no sanitizer fires.
  * @return the decision value. Its scale is the model's own business: a linear
  *         SVM's lives around +-3, an MLP's is an unbounded logit.
  */
-typedef float (*classifier_decide_fn)(const void *ctx, const float *features);
+typedef float (*classifier_decide_fn)(void *ctx, const float *features, uint16_t n);
 
 typedef struct
 {
@@ -65,11 +73,11 @@ typedef struct
     int32_t default_thr_milli;
 
     classifier_decide_fn decide;
-    const void          *ctx;
+    void                *ctx;
 } classifier_t;
 
 /** Feature layout produced by the aggregation in boomdetect.c:
-    [mean, std, dmean, cmax] x NUM_MFCC_COEFFS, in that order.
+    [mean, std, dmean, cmax] x BOOMDETECT_MFCC_COEFFS, in that order.
     Bump when the contents or the order change, never when only a value does. */
 #define BOOMDETECT_LAYOUT_MEAN_STD_DMEAN_CMAX 1u
 

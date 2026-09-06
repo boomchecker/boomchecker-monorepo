@@ -12,28 +12,28 @@
    buffers in boomdetect_t) and mfcc_tables.h's (which the generator wrote). They
    agree today and nothing made them. A regenerated table with a different
    coefficient count would have mfcc_process() write MFCC_DCT_ROWS floats into a
-   slot strided by NUM_MFCC_COEFFS - an overrun that stays inside boomdetect_t,
+   slot strided by BOOMDETECT_MFCC_COEFFS - an overrun that stays inside boomdetect_t,
    so ASan never sees it and only the decisions go quietly wrong. */
-_Static_assert(MFCC_DCT_ROWS == NUM_MFCC_COEFFS,
+_Static_assert(MFCC_DCT_ROWS == BOOMDETECT_MFCC_COEFFS,
                "mfcc_tables.h was generated for a different coefficient count");
-_Static_assert(MFCC_DCT_COLS == NUM_MEL_FILTERS,
+_Static_assert(MFCC_DCT_COLS == BOOMDETECT_MEL_FILTERS,
                "mfcc_tables.h was generated for a different mel filter count");
-_Static_assert(MFCC_NUM_MEL_FILTERS == NUM_MEL_FILTERS,
+_Static_assert(MFCC_NUM_MEL_FILTERS == BOOMDETECT_MEL_FILTERS,
                "mfcc_tables.h was generated for a different mel filter count");
-_Static_assert(MFCC_WINDOW_LEN == WINDOW_SIZE,
+_Static_assert(MFCC_WINDOW_LEN == BOOMDETECT_WINDOW_SIZE,
                "mfcc_tables.h was generated for a different window length");
 /* And the CMSIS entry point below hardcodes fftLen, so the buffers sized from
    these macros must match it rather than merely being large enough. */
-_Static_assert(WINDOW_SIZE == 1024 && FFT_SIZE == 1024,
+_Static_assert(BOOMDETECT_WINDOW_SIZE == 1024 && BOOMDETECT_FFT_SIZE == 1024,
                "arm_mfcc_init_1024_f32 fixes fftLen at 1024; frame[] and "
-               "scratch_buffer[] are sized from WINDOW_SIZE/FFT_SIZE");
+               "scratch_buffer[] are sized from BOOMDETECT_WINDOW_SIZE/BOOMDETECT_FFT_SIZE");
 
 static arm_mfcc_instance_f32 mfcc_inst;
 
-/* 2*FFT_SIZE, and it has to be: the magnitude step inside the MFCC asks for
+/* 2*BOOMDETECT_FFT_SIZE, and it has to be: the magnitude step inside the MFCC asks for
    fftLen magnitudes and so reads twice that many floats, while upstream's doc
    comment claims "FFT length + 2" is enough. See boomdetect_mfcc_f32.c. */
-static float32_t scratch_buffer[FFT_SIZE * 2];
+static float32_t scratch_buffer[BOOMDETECT_FFT_SIZE * 2];
 
 arm_status mfcc_init(void)
 {

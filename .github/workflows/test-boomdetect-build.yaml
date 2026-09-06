@@ -25,6 +25,26 @@ permissions:
 # were rebuilt anyway.
 
 jobs:
+  # Separate job, as fw/common/boomlink does it: a lint failure and a build
+  # failure are different problems, and a red X on one should not hide the
+  # other's result.
+  lint:
+    name: Lint the package's Python
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Install ruff
+        working-directory: ./fw/common/boomdetect
+        run: pip install --quiet -r requirements.txt
+
+      - name: Run ruff
+        working-directory: ./fw/common/boomdetect
+        run: ruff check tests
+
   test:
     name: Build and test (host, Debug)
     runs-on: ubuntu-latest
@@ -42,11 +62,22 @@ jobs:
       # CMSIS-DSP is fetched rather than vendored, so it is cloned at configure
       # time. Cached on the pinned tag: the clone is the slowest part of this
       # job by a wide margin, and the tag never moves.
+      # The tag comes out of CMakeLists.txt rather than being retyped here: a
+      # constant key with the version spelled in a second place is silently
+      # wrong the day the pin moves and the key does not.
+      - name: Read the pinned CMSIS-DSP version
+        id: cmsis
+        run: |
+          tag=$(sed -n 's/^set(BOOMDETECT_CMSISDSP_TAG "\(.*\)")$/\1/p' \
+                fw/common/boomdetect/CMakeLists.txt)
+          test -n "$tag" || { echo "could not read the pin from CMakeLists.txt"; exit 1; }
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
       - name: Cache the fetched CMSIS-DSP
         uses: actions/cache@v4
         with:
           path: fw/common/boomdetect/build/Debug/_deps/cmsisdsp-src
-          key: cmsisdsp-v1.15.0-${{ runner.os }}
+          key: cmsisdsp-${{ steps.cmsis.outputs.tag }}-${{ runner.os }}
 
       - name: Register the GCC problem matcher
         run: echo "::add-matcher::.github/problem-matchers/gcc.json"
@@ -72,6 +103,23 @@ jobs:
         working-directory: ./fw/common/boomdetect
         run: ctest --preset Debug --output-on-failure
 
+      # The Debug preset builds at -O1 under ASan, so on its own it cannot
+      # answer "did -O2 move a number?" - which is one of the four causes the
+      # fixture's header tells a reader to suspect, and until this ran, only a
+      # board could have noticed.
+      - name: Build and test at the shipped optimisation level
+        working-directory: ./fw/common/boomdetect
+        run: |
+          cmake --preset Shipped
+          cmake --build --preset Shipped
+          ctest --preset Shipped --output-on-failure
+
+      - name: Compare -O1+ASan against -O2
+        working-directory: ./fw/common/boomdetect
+        run: |
+          diff <(./build/Debug/boomdetect_selftest_tool) \
+               <(./build/Shipped/boomdetect_selftest_tool)
+
       # No `if: always()`: the text below asserts what passed, so on a failed job
       # it would write "tests passed" into the summary of a red run.
       - name: Build summary
@@ -84,6 +132,7 @@ jobs:
             echo "- both models' trained weights executed under the sanitizers"
             echo "- the test harness was verified able to fail"
             echo "- ASan + UBSan on, warnings are errors"
+            echo "- the fixture reproduced on the host, and -O2 shown not to move it"
             echo ""
             echo "Parity against the Python reference is not part of this job yet."
           } >> "$GITHUB_STEP_SUMMARY"

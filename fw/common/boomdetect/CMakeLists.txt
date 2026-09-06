@@ -18,6 +18,23 @@ else()
   set(BOOMDETECT_STANDALONE FALSE)
 endif()
 
+# Two INDEPENDENT axes, and conflating them was a real trap: standalone-vs-
+# embedded decides whether this package owns the project and its tests,
+# host-vs-cross decides whether CMSIS-DSP needs Core headers. A third consumer
+# that add_subdirectory()s this package for a HOST build - which is exactly the
+# shape a WAV/parity harness wants - is embedded but not cross, and keying the
+# CMSIS branch off STANDALONE sent it into the cross path to fail on Core
+# headers it does not need.
+option(BOOMDETECT_HOST_BUILD "Build against a host libc rather than CMSIS Core" OFF)
+if(BOOMDETECT_STANDALONE AND NOT CMAKE_CROSSCOMPILING)
+  set(BOOMDETECT_HOST_BUILD ON)
+endif()
+if(NOT CMAKE_CROSSCOMPILING AND NOT BOOMDETECT_HOST_BUILD AND NOT BOOMDETECT_CMSIS_CORE_DIR)
+  # Embedded in a host project and told nothing: the host path is the only one
+  # that can work, so take it rather than failing on Core headers.
+  set(BOOMDETECT_HOST_BUILD ON)
+endif()
+
 # Declared only in the standalone branch: neither is meaningful under the ARM
 # cross build (no sanitizer runtime there, and firmware warning policy belongs
 # in fw/bom-stm32node/cmake/gcc-arm-none-eabi.cmake), and declaring them anyway
@@ -79,14 +96,28 @@ endif()
 # without a parity suite there is no reason for this package to exist.
 include(FetchContent)
 
+# One place, so the CI cache key and the upstream-drift check below cannot drift
+# from what is actually fetched.
+set(BOOMDETECT_CMSISDSP_TAG "v1.15.0")
+set(BOOMDETECT_CMSISDSP_COMMIT "8f8bb8d56b346274c9b2918928f2d5c3dae51758")
+
 # Upstream defaults LOOPUNROLL to ON; the hand-rolled build this replaces never
 # defined ARM_MATH_LOOPUNROLL. Unrolling changes accumulation order in
 # arm_dot_prod_f32/arm_rms_f32, which moves MFCC coefficients in the last
 # places - and the deployed model was selected against the un-unrolled numbers.
 # Turn it on only together with a re-measured hardware baseline.
+#
+# These three are upstream CMSIS-DSP's own option names, unprefixed, and setting
+# them CACHE...FORCE stamps them on the CONSUMER's cache - the firmware's, shared
+# with boomlink and everything else. That collision risk is accepted knowingly:
+# FetchContent gives a subproject no private cache, upstream reads them via
+# option()/if() at its own configure time, and renaming them would mean patching
+# the fetched tree, which is the mechanism this package deliberately avoids.
+# FORCE also means a -DLOOPUNROLL=ON on the command line is discarded in
+# silence, which is intended here and checked for below.
 set(LOOPUNROLL OFF CACHE BOOL "" FORCE)
 
-if(BOOMDETECT_STANDALONE)
+if(BOOMDETECT_HOST_BUILD)
   # HOST=ON makes configDsp.cmake define __GNUC_PYTHON__, which is what lets
   # arm_math_types.h skip its #include of cmsis_compiler.h - a CMSIS *Core*
   # header that ships with the device support package, not with CMSIS-DSP, and
@@ -99,7 +130,7 @@ else()
   # fw/common/boomlink.
   if(NOT BOOMDETECT_CMSIS_CORE_DIR)
     message(FATAL_ERROR
-      "boomdetect was add_subdirectory()'d without BOOMDETECT_CMSIS_CORE_DIR. "
+      "boomdetect is cross-compiling without BOOMDETECT_CMSIS_CORE_DIR. "
       "CMSIS-DSP includes cmsis_compiler.h from CMSIS Core, which ships with the "
       "device support package, not with DSP. Set it to your Drivers/CMSIS before "
       "the add_subdirectory() call.")
@@ -109,7 +140,11 @@ endif()
 
 FetchContent_Declare(cmsisdsp
   GIT_REPOSITORY https://github.com/ARM-software/CMSIS-DSP.git
-  GIT_TAG        v1.15.0
+  # The tag, so the clone can stay shallow: fetching a bare SHA needs the full
+  # history, which is minutes of CI on every firmware PR. A tag is a movable
+  # ref, so it is NOT trusted - the commit it resolved to is verified after
+  # populate, below, together with the content hashes.
+  GIT_TAG        ${BOOMDETECT_CMSISDSP_TAG}
   GIT_SHALLOW    TRUE
   EXCLUDE_FROM_ALL TRUE
 )
@@ -126,15 +161,87 @@ if(LOOPUNROLL)
     "against the un-unrolled numbers. Upstream may have renamed the option.")
 endif()
 
+# src/boomdetect_mfcc_f32.c is a hand-modified copy of ONE upstream file, and
+# nothing binds the copy to the version fetched above. Bump the pin and the copy
+# still compiles - against a possibly reordered arm_mfcc_instance_f32, a changed
+# RFFT packing convention, a renamed helper - and produces different numbers on
+# every platform, with no test anywhere that can fail. These hashes turn that
+# into a configure error, so a bump becomes a review of the diff rather than a
+# silent regression. They are the file our copy was derived from and the header
+# whose types it uses; update both only together with a re-measured baseline.
+# The tag is a movable ref. Check what it actually resolved to; the tag being
+# re-pointed at a different commit is the failure mode a version string cannot
+# see, and it is precisely the class of unrecorded drift that cost this project
+# a day already. Non-fatal if git is unavailable: the content hashes below are
+# the load-bearing check, this one only names the cause faster.
+find_program(BOOMDETECT_GIT git)
+if(BOOMDETECT_GIT)
+  execute_process(
+    COMMAND "${BOOMDETECT_GIT}" -c safe.directory=* rev-parse HEAD
+    WORKING_DIRECTORY "${cmsisdsp_SOURCE_DIR}"
+    OUTPUT_VARIABLE BOOMDETECT_CMSISDSP_GOT
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_QUIET RESULT_VARIABLE BOOMDETECT_GIT_RC)
+  if(BOOMDETECT_GIT_RC EQUAL 0 AND
+     NOT BOOMDETECT_CMSISDSP_GOT STREQUAL BOOMDETECT_CMSISDSP_COMMIT)
+    message(FATAL_ERROR
+      "CMSIS-DSP ${BOOMDETECT_CMSISDSP_TAG} resolved to ${BOOMDETECT_CMSISDSP_GOT}, "
+      "not the pinned ${BOOMDETECT_CMSISDSP_COMMIT}. The tag moved.")
+  endif()
+endif()
+
+# Two parallel lists rather than a list of pairs: a ";" inside a set() argument
+# is a list separator, so "a;b" "c;d" is four elements, not two.
+set(BOOMDETECT_UPSTREAM_PATHS
+  "Source/TransformFunctions/arm_mfcc_f32.c"
+  "Include/dsp/transform_functions.h")
+set(BOOMDETECT_UPSTREAM_HASHES
+  "3f4487c75ff7ab4ae79e1ceec2b7973f30fbd2dfbe43d9e5646b332deb212fb0"
+  "6ab56f4342e6bf56f550af9d0ea80bcfe5773ad8bd1c4b9e580238a311226fb6")
+
+list(LENGTH BOOMDETECT_UPSTREAM_PATHS _n)
+math(EXPR _last "${_n} - 1")
+foreach(_i RANGE ${_last})
+  list(GET BOOMDETECT_UPSTREAM_PATHS ${_i} _rel)
+  list(GET BOOMDETECT_UPSTREAM_HASHES ${_i} _want)
+  set(_path "${cmsisdsp_SOURCE_DIR}/${_rel}")
+  if(NOT EXISTS "${_path}")
+    message(FATAL_ERROR
+      "CMSIS-DSP ${BOOMDETECT_CMSISDSP_TAG} does not contain ${_rel}. "
+      "src/boomdetect_mfcc_f32.c is derived from it; the pin moved under us.")
+  endif()
+  file(SHA256 "${_path}" _got)
+  if(NOT _got STREQUAL _want)
+    message(FATAL_ERROR
+      "Upstream ${_rel} changed.\n"
+      "  expected ${_want}\n"
+      "  got      ${_got}\n"
+      "src/boomdetect_mfcc_f32.c is a modified copy of that file (RMS rather "
+      "than absolute-maximum conditioning of the FFT input) and the deployed "
+      "model was selected against what it produces. Diff the two, port the "
+      "deviation deliberately, re-measure the fixture on hardware, then update "
+      "the hash here.")
+  endif()
+endforeach()
+
 # --- this package ------------------------------------------------------------
 
-add_library(boomdetect STATIC
+# Split so the registry is genuinely replaceable rather than only claimed to be:
+# the pipeline objects reference the four classifier_* accessors and nothing
+# else, so linking a different definition of them swaps the whole model table.
+# tests/stub_registry.c does that, which is what turns the claim into a check.
+add_library(boomdetect_core OBJECT
   src/boomdetect.c
   src/boomdetect_mfcc_f32.c
-  src/classifier_registry.c
+  src/boomdetect_selftest.c
   src/mfcc_processor.c
+)
+
+add_library(boomdetect STATIC
+  src/classifier_registry.c
   models/model_mlp_v6.c
   models/model_svm_v3.c
+  $<TARGET_OBJECTS:boomdetect_core>
 )
 # PUBLIC is the API: boomdetect.h, classifier.h, dsp_config.h. The MFCC wrapper
 # and its generated tables are internals and live in src/ - published, they put
@@ -146,6 +253,15 @@ target_include_directories(boomdetect
           ${CMAKE_CURRENT_SOURCE_DIR}/models
 )
 target_link_libraries(boomdetect PUBLIC CMSISDSP)
+
+# The object library needs the same headers and the same flags; it does not link
+# anything itself, so the usage requirements are copied rather than inherited.
+target_include_directories(boomdetect_core
+  PUBLIC  ${CMAKE_CURRENT_SOURCE_DIR}/include
+  PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src
+          ${CMAKE_CURRENT_SOURCE_DIR}/models
+)
+target_link_libraries(boomdetect_core PUBLIC CMSISDSP)
 
 # SYSTEM, so a warning inside arm_math.h does not fail our build under -Werror.
 get_target_property(BOOMDETECT_CMSIS_INC CMSISDSP INTERFACE_INCLUDE_DIRECTORIES)
@@ -175,7 +291,23 @@ target_compile_options(boomdetect PRIVATE
 # tests are not real-time.
 if(NOT BOOMDETECT_STANDALONE)
   target_compile_options(boomdetect PRIVATE -O2)
+  target_compile_options(boomdetect_core PRIVATE -O2)
   target_compile_options(CMSISDSP PRIVATE -O2)
+
+  # And assert it took. "-O2 did not survive the move" is one of the four causes
+  # the fixture's own header tells a reader to suspect, and until now the only
+  # thing that could notice was a board. A property read is not a compile, but it
+  # catches the realistic failure - a target renamed, a branch restructured, this
+  # block quietly not applying to something - at configure time and for free.
+  foreach(_t boomdetect boomdetect_core CMSISDSP)
+    get_target_property(_opts ${_t} COMPILE_OPTIONS)
+    if(NOT _opts MATCHES "-O2")
+      message(FATAL_ERROR
+        "${_t} is missing -O2 on the cross build. The MFCC shares a 21.33 ms "
+        "real-time budget with the PDM conversion and the Debug toolchain is "
+        "-O0 -g3; without this the detector stops keeping up with the microphone.")
+    endif()
+  endforeach()
 endif()
 
 if(BOOMDETECT_STANDALONE)
@@ -192,6 +324,42 @@ if(BOOMDETECT_STANDALONE)
   add_test(NAME boomdetect_test_harness
     COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/tests/check_bd_test.sh
             $<TARGET_FILE:boomdetect_bd_test_selfcheck>)
+
+  # The fixture generator as an executable, which is what lets a host reproduce
+  # tests/vectors/ without a board, and what a future parity harness drives.
+  add_executable(boomdetect_selftest_tool tests/selftest_tool.c)
+  target_link_libraries(boomdetect_selftest_tool PRIVATE boomdetect)
+  target_compile_options(boomdetect_selftest_tool PRIVATE
+    ${BOOMDETECT_WARNING_FLAGS} ${BOOMDETECT_WERROR_FLAGS})
+
+  # Host regression: the tool's own output against a checked-in host capture.
+  # Deliberately a DIFFERENT file from the board fixture. Both run identical C,
+  # but an x86 host and a Cortex-M33 do not have to produce identical float32
+  # bits - different instruction selection, and FMA contraction on one and not
+  # the other - so asserting they match would be asserting something nobody
+  # measured. check_selftest.py compares the board against its own fixture; this
+  # compares the host against its own. Whether the two agree is a finding either
+  # way, and tests/vectors/README.md records what was actually observed.
+  add_test(NAME boomdetect_selftest_host
+    COMMAND ${CMAKE_COMMAND}
+            -DTOOL=$<TARGET_FILE:boomdetect_selftest_tool>
+            -DEXPECTED=${CMAKE_CURRENT_SOURCE_DIR}/tests/vectors/selftest_host.txt
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/run_selftest_host.cmake)
+
+  # Links the pipeline against a one-model fake registry, with neither
+  # classifier_registry.c nor the model translation units present.
+  add_executable(boomdetect_stub_registry_test
+    tests/stub_registry_test.c
+    tests/stub_registry.c
+    $<TARGET_OBJECTS:boomdetect_core>)
+  target_link_libraries(boomdetect_stub_registry_test PRIVATE CMSISDSP m)
+  target_include_directories(boomdetect_stub_registry_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/tests)
+  target_compile_options(boomdetect_stub_registry_test PRIVATE
+    ${BOOMDETECT_WARNING_FLAGS} ${BOOMDETECT_WERROR_FLAGS})
+  add_test(NAME boomdetect_stub_registry COMMAND boomdetect_stub_registry_test)
 
   foreach(test IN ITEMS mfcc_smoke registry pipeline)
     add_executable(boomdetect_${test}_test tests/${test}_test.c)

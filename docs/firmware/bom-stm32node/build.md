@@ -1,5 +1,18 @@
 # Build & flash
 
+!!! warning "Configuring now needs the network"
+
+    `cmake --preset Debug` clones CMSIS-DSP from github.com. The detector's
+    arithmetic lives in `fw/common/boomdetect`, which fetches it at configure
+    time rather than vendoring it - that is what removed 11 MB and 470 files
+    from this repository, and the network dependency is the price. CI caches
+    the fetched source. For an offline build, point
+    `FETCHCONTENT_SOURCE_DIR_CMSISDSP` at a copy:
+
+    ```sh
+    cmake --preset Debug -DFETCHCONTENT_SOURCE_DIR_CMSISDSP=/path/to/CMSIS-DSP
+    ```
+
 ## Build via CMake
 
 The project is configured in **STM32CubeMX** (`bom-stm32node.ioc`). Generate the
@@ -101,4 +114,8 @@ picocom -b 115200 /dev/serial/by-id/usb-STMicroelectronics_boomchecker-node_*-if
 Exit with `Ctrl-A Ctrl-X`. Do not enable local echo; the board echoes already.
 Note that `help` output is truncated: the console TX ring is 512 bytes
 (`CLI_TX_RING` in `Core/Src/cli.c`) and the full help text is longer, so the tail
-is silently dropped.
+is silently dropped. This got worse, not better, with the detector: `model`,
+`micslot` and `detselftest` are three more entries in the same buffer, and
+`maxBindingCount` went to 24. Use `PROTOCOL.md` as the command reference until
+the ring is resized; `help` is not a reliable way to check what an image
+carries.

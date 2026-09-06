@@ -1,7 +1,24 @@
-#ifndef MFCC_TABLES_H
-#define MFCC_TABLES_H
+#ifndef BOOMDETECT_MFCC_TABLES_H
+#define BOOMDETECT_MFCC_TABLES_H
 
-// Automatically generated MFCC tables matching Librosa configuration
+/* Automatically generated MFCC tables matching a Librosa configuration.
+ *
+ * Provenance, recorded here because it is baked into the numbers below and
+ * cannot be changed by editing a header: 16 kHz sample rate, 1024-sample
+ * Hamming window, 20 mel filters spanning 0..8000 Hz, 13 DCT coefficients. Two
+ * of those used to live in dsp_config.h as settable-looking constants that
+ * nothing read, which made them look adjustable. They are not.
+ *
+ * The generator is not in this repository. Vendoring it is the remaining piece
+ * of provenance work; until then these tables cannot be reproduced here.
+ *
+ * src/mfcc_processor.c static-asserts every dimension below against
+ * dsp_config.h, because the two sets are independent and nothing else made
+ * them agree.
+ */
+
+#include <stdint.h> /* the tables below are uint32_t; do not rely on the
+                       includer having pulled arm_math.h first */
 
 #define MFCC_WINDOW_LEN 1024
 static const float mfcc_window_coefs[MFCC_WINDOW_LEN] = {
@@ -42,4 +59,4 @@ static const float mfcc_dct_coefs[MFCC_DCT_ROWS][MFCC_DCT_COLS] = {
     {1.85874017e-01f, -3.00750478e-01f, 0.00000000e+00f, 3.00750478e-01f, -1.85874017e-01f, -1.85874017e-01f, 3.00750478e-01f, 0.00000000e+00f, -3.00750478e-01f, 1.85874017e-01f, 1.85874017e-01f, -3.00750478e-01f, 0.00000000e+00f, 3.00750478e-01f, -1.85874017e-01f, -1.85874017e-01f, 3.00750478e-01f, 0.00000000e+00f, -3.00750478e-01f, 1.85874017e-01f}
 };
 
-#endif // MFCC_TABLES_H
+#endif // BOOMDETECT_MFCC_TABLES_H

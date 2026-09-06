@@ -22,6 +22,7 @@
  * detector.
  */
 #include "classifier.h"
+#include "models.h"
 
 #include "arm_math.h"
 #include "mlp_model_data_v6.h"
@@ -30,11 +31,12 @@
    This family is trained to be gain-invariant, so it starts at 1. */
 #define MLP_V6_OFFSET 1u
 
-_Static_assert(MLP_V6_OFFSET + MLP_NUM_INPUTS == DET_FEATURE_COUNT,
+_Static_assert(MLP_V6_OFFSET + MLP_NUM_INPUTS == BOOMDETECT_FEATURE_COUNT,
                "mlp_v6's slice does not cover the features the aggregate produces");
 
-static float mlp_v6_decide(const void *ctx, const float *features)
+static float mlp_v6_decide(void *ctx, const float *features, uint16_t n)
 {
+    (void)n; /* declared MLP_NUM_INPUTS, static-asserted below against the layout */
     float32_t x[MLP_NUM_INPUTS];
     float32_t h[MLP_HIDDEN];
 

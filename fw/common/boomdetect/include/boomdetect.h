@@ -36,11 +36,43 @@
 extern "C" {
 #endif
 
-/** MFCC frames aggregated into one classified window. */
+/**
+ * Largest number of MFCC frames that can be aggregated into one window, and the
+ * firmware's value. A ceiling rather than the setting itself: it sizes
+ * boomdetect_t::mfccs, while boomdetect_config_t::accum_frames picks the value
+ * actually used, so a host run can reproduce the training pipeline's windowing
+ * without a rebuild.
+ */
 #define BOOMDETECT_ACCUM_FRAMES 14u
 
-/** Frame hop, in 16 kHz samples. Frames are WINDOW_SIZE long and overlap. */
+/**
+ * Default frame hop, in 16 kHz samples. Frames are BOOMDETECT_WINDOW_SIZE long and
+ * overlap; boomdetect_config_t::hop overrides it.
+ */
 #define BOOMDETECT_HOP 512u
+
+/** How a window is gated. The two are not equivalent; see the skew table in
+    docs/firmware/detection/index.md. */
+typedef enum
+{
+    /** Every frame must clear the gate, and one that does not resets the
+        accumulator. The firmware's policy, and what the deployed model met on
+        hardware. */
+    BOOMDETECT_GATE_PER_FRAME = 0,
+    /** No frame is rejected; the window is kept or dropped as a whole on the
+        median of its frames' RMS. What the training pipeline did. */
+    BOOMDETECT_GATE_WINDOW_MEDIAN = 1
+} boomdetect_gate_t;
+
+/**
+ * thr_milli value meaning "whatever the chosen model's operating point is".
+ *
+ * The default is a property of the model - a linear SVM's decisions live around
+ * +-3 while an MLP's are unbounded logits - so every consumer that wanted the
+ * model's own threshold had to reach into classifier_t and copy it. One of them
+ * forgetting is a detector that never fires, with nothing to say so.
+ */
+#define BOOMDETECT_THR_MODEL_DEFAULT INT32_MIN
 
 /** last_mfcc_slot when the last step computed no MFCC (squelched, or none yet). */
 #define BOOMDETECT_NO_MFCC 0xFFFFFFFFu
@@ -56,13 +88,29 @@ typedef struct
 {
     /** Input decimation factor. 3 for a 48 kHz source feeding a 16 kHz chain. */
     uint16_t decimation;
-    /** Per-frame RMS gate in 1/1000 of full scale; 0 disables it. */
+    /** RMS gate in 1/1000 of full scale; 0 disables it. Read per frame or per
+        window depending on `gate`. */
     uint32_t squelch_milli;
     /** Decision threshold in 1/1000. May be negative: for an MLP the decision
-        is a raw logit, not a probability. */
+        is a raw logit, not a probability. BOOMDETECT_THR_MODEL_DEFAULT takes
+        the chosen model's own operating point, which is almost always what a
+        caller means. */
     int32_t thr_milli;
     /** Which model scores the windows. NULL selects classifier_default(). */
     const classifier_t *classifier;
+
+    /* The three below are what make the train/deploy skew expressible rather
+       than merely describable. Leave them 0 for the firmware's behaviour;
+       boomdetect_init() fills in the defaults. */
+
+    /** Frames per window, 1..BOOMDETECT_ACCUM_FRAMES. 0 means the default. */
+    uint16_t accum_frames;
+    /** Frame hop in 16 kHz samples, 1..BOOMDETECT_WINDOW_SIZE. 0 means BOOMDETECT_HOP.
+        The training pipeline slid by 7 frames over contiguous audio; the
+        firmware takes disjoint runs. */
+    uint16_t hop;
+    /** Gating policy. */
+    boomdetect_gate_t gate;
 } boomdetect_config_t;
 
 /** What one processed frame produced. */
@@ -72,13 +120,31 @@ typedef struct
     float    rms;         /**< frame level, full scale = 1.0 */
     uint32_t accum;       /**< frames held in the current window after this one */
     bool     squelched;   /**< below the gate, so accumulation was reset */
+    bool     gap;         /**< samples were dropped since the previous frame, so
+                               this one is not continuous with it */
 
-    /** Set when this frame completed a window; the three fields below are only
-        meaningful then. */
-    bool     window_complete;
-    uint32_t window_start_frame;
-    float    decision;
-    bool     is_drone;
+    /**
+     * The window this frame completed, if it completed one.
+     *
+     * Nested rather than flat so that reading a decision without checking
+     * `complete` is a visible act. Flat, every field was always readable and
+     * always zero-valued in between, which made a squelched frame report
+     * `is_drone = false` - indistinguishable from "classified, not a drone".
+     * `decision` is NAN whenever `complete` is false, for the same reason.
+     */
+    struct
+    {
+        bool     complete;
+        uint32_t start_frame;
+        /** Frame that closed the window. Not `start_frame + accum_frames - 1`:
+            under BOOMDETECT_GATE_PER_FRAME a squelched frame resets the
+            accumulator, so a window can span silence and be arbitrarily longer
+            than the frames it contains. Timestamping from `start_frame` alone
+            can therefore land far from where the decision was made. */
+        uint32_t end_frame;
+        float    decision;
+        bool     is_drone;
+    } window;
 } boomdetect_event_t;
 
 /**
@@ -94,10 +160,14 @@ typedef struct
     uint32_t w_idx, r_idx, avail;
     uint32_t dec_phase; /**< index of the next input sample to keep */
     uint32_t dropped;   /**< samples discarded because the FIFO was full */
+    bool     gap_pending; /**< a drop happened; the next frame reports it */
 
-    float    frame[WINDOW_SIZE]; /**< contiguous copy; the MFCC destroys it */
-    float    mfccs[BOOMDETECT_ACCUM_FRAMES * NUM_MFCC_COEFFS];
-    float    features[DET_FEATURE_COUNT];
+    float    frame[BOOMDETECT_WINDOW_SIZE]; /**< contiguous copy; the MFCC destroys it */
+    float    mfccs[BOOMDETECT_ACCUM_FRAMES * BOOMDETECT_MFCC_COEFFS];
+    /** Per-frame RMS of the frames held in the current window, for
+        BOOMDETECT_GATE_WINDOW_MEDIAN. Unused by the per-frame gate. */
+    float    rms_hist[BOOMDETECT_ACCUM_FRAMES];
+    float    features[BOOMDETECT_FEATURE_COUNT];
     uint32_t last_mfcc_slot;
 
     uint32_t accum;
@@ -118,12 +188,20 @@ bool boomdetect_init(boomdetect_t *d, const boomdetect_config_t *cfg);
 
 /**
  * @brief Hand over a block of input samples. Stores only; does no DSP.
+ * @return decimated samples actually stored.
  *
  * Samples that do not fit are dropped rather than allowed to overwrite unread
  * ones, and counted (boomdetect_dropped). Overwriting would silently corrupt a
  * window's features, which is far worse than a gap the caller can report.
+ *
+ * The FIFO holds BOOMDETECT_RING_LEN *decimated* samples, so the ceiling on one
+ * push is that times `decimation`: at the firmware's /3 that is ~12288 input
+ * samples, but a host feeding a 16 kHz WAV with decimation 1 must chunk at
+ * 4096 or lose the excess. The return value and the `gap` event flag are how a
+ * replay harness notices; polling the cumulative boomdetect_dropped() cannot
+ * say which window straddled the loss.
  */
-void boomdetect_push(boomdetect_t *d, const int16_t *pcm, size_t n);
+size_t boomdetect_push(boomdetect_t *d, const int16_t *pcm, size_t n);
 
 /**
  * @brief Do at most one frame of work.
@@ -138,13 +216,32 @@ bool boomdetect_step(boomdetect_t *d, boomdetect_event_t *out);
 /** @brief Samples dropped because the FIFO was full. Nonzero means a gap. */
 uint32_t boomdetect_dropped(const boomdetect_t *d);
 
+/**
+ * @brief Absolute frame counter since init.
+ *
+ * Exists because the port was reading `d->frame_index` straight out of the
+ * struct while every other read went through an accessor. The struct is public
+ * so both compile; only one of them survives a field being renamed.
+ */
+uint32_t boomdetect_frame_index(const boomdetect_t *d);
+
+/**
+ * @brief Start time of @p frame_index, in milliseconds since init.
+ *
+ * The chain rate and the hop both live here, so a consumer that wants a
+ * timestamp does not have to hardcode either. The port used to divide by a
+ * literal 16, which was right only while the hop and the sample rate both
+ * stayed at their defaults - and one of them is now a config field.
+ */
+uint32_t boomdetect_frame_to_ms(const boomdetect_t *d, uint32_t frame_index);
+
 /** @brief Windows classified, and how many of those were called drone. */
 void boomdetect_counts(const boomdetect_t *d, uint32_t *windows, uint32_t *drones);
 
 /**
  * @brief MFCC coefficients of the frame the last successful step() consumed.
  *
- * NUM_MFCC_COEFFS values, valid until the next step(). NULL when the last step
+ * BOOMDETECT_MFCC_COEFFS values, valid until the next step(). NULL when the last step
  * computed none - a squelched frame is a successful step that skips the MFCC,
  * and returning the previous frame's coefficients there would hand a parity
  * harness a duplicate it would report as a mismatch of its own.
@@ -157,7 +254,7 @@ const float *boomdetect_last_mfcc(const boomdetect_t *d);
 /**
  * @brief The aggregated feature vector of the last completed window.
  *
- * DET_FEATURE_COUNT values in [mean, std, dmean, cmax] x NUM_MFCC_COEFFS order.
+ * BOOMDETECT_FEATURE_COUNT values in [mean, std, dmean, cmax] x BOOMDETECT_MFCC_COEFFS order.
  * NULL before the first window completes.
  */
 const float *boomdetect_last_features(const boomdetect_t *d);

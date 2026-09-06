@@ -18,8 +18,9 @@ BD_TEST_STATE;
 
 /* A stub, so nothing here depends on the real weights: returns feature[0] so a
    decision is predictable from the input. */
-static float stub_decide(const void *ctx, const float *features)
+static float stub_decide(void *ctx, const float *features, uint16_t n)
 {
+    (void)n;
     (void)ctx;
     return features[0];
 }
@@ -69,7 +70,7 @@ static void scenario_nothing_from_nothing(void)
     CHECK(boomdetect_dropped(&d) == 0u, "two samples were counted as dropped");
 }
 
-/* One frame needs WINDOW_SIZE decimated samples; the boundary is worth pinning
+/* One frame needs BOOMDETECT_WINDOW_SIZE decimated samples; the boundary is worth pinning
    because an off-by-one here shifts every frame in the run. */
 static void scenario_frame_boundary(void)
 {
@@ -78,20 +79,20 @@ static void scenario_frame_boundary(void)
     boomdetect_event_t ev;
     REQUIRE(boomdetect_init(&d, &cfg), "init failed");
 
-    static int16_t buf[WINDOW_SIZE * 3u];
-    for (uint32_t i = 0u; i < WINDOW_SIZE * 3u; i++)
+    static int16_t buf[BOOMDETECT_WINDOW_SIZE * 3u];
+    for (uint32_t i = 0u; i < BOOMDETECT_WINDOW_SIZE * 3u; i++)
     {
         buf[i] = tone(i);
     }
 
     /* One sample short of a full frame. */
-    boomdetect_push(&d, buf, (WINDOW_SIZE - 1u) * 3u);
+    boomdetect_push(&d, buf, (BOOMDETECT_WINDOW_SIZE - 1u) * 3u);
     CHECK(!boomdetect_step(&d, &ev), "a frame appeared %u samples early", 1u);
 
     boomdetect_push(&d, buf, 3u); /* the sample that completes it */
     CHECK(boomdetect_step(&d, &ev), "a full frame did not produce an event");
     CHECK(ev.frame_index == 0u, "first frame reported index %u", ev.frame_index);
-    CHECK(!ev.window_complete, "one frame completed a whole window");
+    CHECK(!ev.window.complete, "one frame completed a whole window");
 }
 
 /* Block size must not change the result: the phase carry across pushes is what
@@ -101,8 +102,13 @@ static void scenario_block_size_is_irrelevant(void)
     static boomdetect_t a, b;
     boomdetect_config_t cfg = base_cfg(0u);
     boomdetect_event_t ev;
-    static int16_t buf[WINDOW_SIZE * 3u * 2u];
-    float dec_a[8], dec_b[8];
+    static int16_t buf[BOOMDETECT_WINDOW_SIZE * 3u * 2u];
+    /* The input is BOOMDETECT_WINDOW_SIZE*6 samples at 48 kHz, so BOOMDETECT_WINDOW_SIZE*2 after /3,
+       which is one whole frame plus (BOOMDETECT_WINDOW_SIZE/HOP - 1) hops: 3 frames.
+       Sized to that and asserted below, because an array of 8 with a `< 8u` cap
+       reads as if eight frames were being compared when the cap never engages. */
+    enum { EXPECTED_FRAMES = 3u };
+    float dec_a[EXPECTED_FRAMES], dec_b[EXPECTED_FRAMES];
     uint32_t na = 0u, nb = 0u;
 
     for (uint32_t i = 0u; i < sizeof(buf) / sizeof(buf[0]); i++)
@@ -112,7 +118,7 @@ static void scenario_block_size_is_irrelevant(void)
 
     REQUIRE(boomdetect_init(&a, &cfg), "init a failed");
     boomdetect_push(&a, buf, sizeof(buf) / sizeof(buf[0]));
-    while (na < 8u && boomdetect_step(&a, &ev))
+    while (na < EXPECTED_FRAMES && boomdetect_step(&a, &ev))
     {
         dec_a[na++] = ev.rms;
     }
@@ -123,13 +129,17 @@ static void scenario_block_size_is_irrelevant(void)
     for (uint32_t i = 0u; i < sizeof(buf) / sizeof(buf[0]); i++)
     {
         boomdetect_push(&b, &buf[i], 1u);
-        while (nb < 8u && boomdetect_step(&b, &ev))
+        while (nb < EXPECTED_FRAMES && boomdetect_step(&b, &ev))
         {
             dec_b[nb++] = ev.rms;
         }
     }
 
     REQUIRE(na == nb, "block feeding gave %u frames, sample feeding %u", na, nb);
+    CHECK(na == EXPECTED_FRAMES,
+          "this input should yield exactly %u frames, got %u - if that changed, the "
+          "cap above is silently truncating the comparison",
+          (unsigned)EXPECTED_FRAMES, na);
     for (uint32_t i = 0u; i < na; i++)
     {
         CHECK(dec_a[i] == dec_b[i],
@@ -177,15 +187,15 @@ static void scenario_squelch_resets_partial_window(void)
     boomdetect_event_t ev;
     REQUIRE(boomdetect_init(&d, &cfg), "init failed");
 
-    static int16_t loud[WINDOW_SIZE * 3u];
-    static int16_t quiet[WINDOW_SIZE * 3u];
-    for (uint32_t i = 0u; i < WINDOW_SIZE * 3u; i++)
+    static int16_t loud[BOOMDETECT_WINDOW_SIZE * 3u];
+    static int16_t quiet[BOOMDETECT_WINDOW_SIZE * 3u];
+    for (uint32_t i = 0u; i < BOOMDETECT_WINDOW_SIZE * 3u; i++)
     {
         loud[i] = tone(i);
         quiet[i] = 0;
     }
 
-    /* Two frames short, not one. Frames are WINDOW_SIZE long but advance by
+    /* Two frames short, not one. Frames are BOOMDETECT_WINDOW_SIZE long but advance by
        BOOMDETECT_HOP, so the first frame after the input goes quiet still
        overlaps half a frame of loud audio and passes the gate - only the second
        is genuinely silent. Stopping one short would let that mixed frame
@@ -207,7 +217,7 @@ static void scenario_squelch_resets_partial_window(void)
         while (boomdetect_step(&d, &ev))
         {
             CHECK(!ev.squelched, "a loud frame was gated out (rms %.6g)", (double)ev.rms);
-            CHECK(!ev.window_complete, "a window completed before it was full");
+            CHECK(!ev.window.complete, "a window completed before it was full");
             accepted = ev.accum;
         }
     }
@@ -237,7 +247,7 @@ static void scenario_squelch_resets_partial_window(void)
                       "a gated frame left %u frames accumulated instead of resetting",
                       ev.accum);
             }
-            CHECK(!ev.window_complete,
+            CHECK(!ev.window.complete,
                   "a window completed although silence should have reset the "
                   "accumulation first");
         }
@@ -259,8 +269,8 @@ static void scenario_window_completes_and_dispatches(void)
     boomdetect_event_t ev;
     REQUIRE(boomdetect_init(&d, &cfg), "init failed");
 
-    static int16_t loud[WINDOW_SIZE * 3u];
-    for (uint32_t i = 0u; i < WINDOW_SIZE * 3u; i++)
+    static int16_t loud[BOOMDETECT_WINDOW_SIZE * 3u];
+    for (uint32_t i = 0u; i < BOOMDETECT_WINDOW_SIZE * 3u; i++)
     {
         loud[i] = tone(i);
     }
@@ -272,12 +282,12 @@ static void scenario_window_completes_and_dispatches(void)
         boomdetect_push(&d, loud, BOOMDETECT_HOP * 3u);
         while (boomdetect_step(&d, &ev))
         {
-            if (ev.window_complete)
+            if (ev.window.complete)
             {
                 completed++;
-                decision = ev.decision;
-                CHECK(ev.window_start_frame == 0u,
-                      "first window started at frame %u", ev.window_start_frame);
+                decision = ev.window.decision;
+                CHECK(ev.window.start_frame == 0u,
+                      "first window started at frame %u", ev.window.start_frame);
                 CHECK(ev.accum == 0u,
                       "the accumulator was not reset after a window (%u left)", ev.accum);
             }
@@ -310,7 +320,7 @@ static void scenario_offset_is_honoured(void)
         .name = "stub_shifted",
         .layout_id = BOOMDETECT_LAYOUT_MEAN_STD_DMEAN_CMAX,
         .n_features = 8u,
-        .feature_offset = NUM_MFCC_COEFFS, /* first std, rather than first mean */
+        .feature_offset = BOOMDETECT_MFCC_COEFFS, /* first std, rather than first mean */
         .default_thr_milli = 0,
         .decide = stub_decide,
         .ctx = NULL,
@@ -321,8 +331,8 @@ static void scenario_offset_is_honoured(void)
     cfg.classifier = &shifted;
     REQUIRE(boomdetect_init(&d, &cfg), "init failed");
 
-    static int16_t loud[WINDOW_SIZE * 3u];
-    for (uint32_t i = 0u; i < WINDOW_SIZE * 3u; i++)
+    static int16_t loud[BOOMDETECT_WINDOW_SIZE * 3u];
+    for (uint32_t i = 0u; i < BOOMDETECT_WINDOW_SIZE * 3u; i++)
     {
         loud[i] = tone(i);
     }
@@ -334,9 +344,9 @@ static void scenario_offset_is_honoured(void)
         boomdetect_push(&d, loud, BOOMDETECT_HOP * 3u);
         while (boomdetect_step(&d, &ev))
         {
-            if (ev.window_complete)
+            if (ev.window.complete)
             {
-                decision = ev.decision;
+                decision = ev.window.decision;
                 got = true;
             }
         }
@@ -345,13 +355,13 @@ static void scenario_offset_is_honoured(void)
 
     const float *feat = boomdetect_last_features(&d);
     REQUIRE(feat != NULL, "no feature vector after a completed window");
-    CHECK(decision == feat[NUM_MFCC_COEFFS],
+    CHECK(decision == feat[BOOMDETECT_MFCC_COEFFS],
           "with offset %u the decision should be features[%u] (%.9g), got %.9g",
-          (unsigned)NUM_MFCC_COEFFS, (unsigned)NUM_MFCC_COEFFS,
-          (double)feat[NUM_MFCC_COEFFS], (double)decision);
+          (unsigned)BOOMDETECT_MFCC_COEFFS, (unsigned)BOOMDETECT_MFCC_COEFFS,
+          (double)feat[BOOMDETECT_MFCC_COEFFS], (double)decision);
     CHECK(decision != feat[0],
           "the decision equals features[0] even though the model declared offset %u, "
-          "so the offset is being ignored", (unsigned)NUM_MFCC_COEFFS);
+          "so the offset is being ignored", (unsigned)BOOMDETECT_MFCC_COEFFS);
 }
 
 int main(void)
@@ -363,5 +373,5 @@ int main(void)
     scenario_squelch_resets_partial_window();
     scenario_window_completes_and_dispatches();
     scenario_offset_is_honoured();
-    BD_TEST_REPORT("pipeline_test", 67);  /* exact count from running the compiled binary */
+    BD_TEST_REPORT("pipeline_test", 68);  /* exact count from running the compiled binary */
 }
