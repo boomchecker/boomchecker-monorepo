@@ -57,4 +57,20 @@
 void detector_run(uint32_t seconds, uint32_t squelch_milli, int32_t thr_milli,
                   uint32_t debug);
 
+/**
+ * @brief Run the pipeline over a deterministic synthetic signal and print every
+ *        stage as raw IEEE-754 bit patterns.
+ *
+ * Exists to make a numerically sensitive refactor checkable: the live
+ * microphone never repeats an input, so two `detect` runs can never be
+ * compared. This one feeds an integer LCG (bit-identical on any platform, no
+ * flash cost) through the same decimation, framing, MFCC, aggregation and
+ * classifier the real run uses, and prints hex bit patterns rather than decimal
+ * so "unchanged" means unchanged, not "agrees to six places".
+ *
+ * Capture the output before a refactor, compare after. The same fixture is the
+ * seed of the host-side parity vectors.
+ */
+void detector_selftest(void);
+
 #endif /* DETECTOR_H */

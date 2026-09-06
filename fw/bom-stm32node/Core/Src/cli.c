@@ -194,6 +194,15 @@ static void cmd_detect(EmbeddedCli *cli, char *args, void *context)
   detector_run((uint32_t)sec, (uint32_t)squelch, (int32_t)thr, (uint32_t)dbg);
 }
 
+static void cmd_detselftest(EmbeddedCli *cli, char *args, void *context)
+{
+  (void)cli;
+  (void)args;
+  (void)context;
+  /* Streams DST* lines on the console; see detector.h for what it is for. */
+  detector_selftest();
+}
+
 /* Optional "[baud]" token shared by `gps` and `gpstx`. Returns 0 on error. */
 static uint32_t parse_baud(EmbeddedCli *cli, const char *tok)
 {
@@ -1111,6 +1120,15 @@ void cli_init(cli_tx_fn tx)
     .binding      = cmd_detect,
   };
   embeddedCliAddBinding(s_cli, detect_binding);
+
+  CliCommandBinding detselftest_binding = {
+    .name         = "detselftest",
+    .help         = "Run the detector over a fixed synthetic signal; prints raw float bits",
+    .tokenizeArgs = false,
+    .context      = NULL,
+    .binding      = cmd_detselftest,
+  };
+  embeddedCliAddBinding(s_cli, detselftest_binding);
 
   CliCommandBinding gps_binding = {
     .name         = "gps",

@@ -146,6 +146,173 @@ static void det_aggregate(const float *frames, float *out)
   }
 }
 
+/* --- Deterministic self-test (see detector.h) ------------------------------ */
+
+/* 48 kHz input long enough for THREE full windows (42 frames): 1024 + 41*512
+   at 16 kHz, tripled upstream. One window would leave the accumulator reset
+   between windows untested, which is exactly the kind of state bug a move can
+   introduce. */
+#define DST_INPUT_LEN   66048u
+#define DST_LCG_SEED    1u
+#define DST_MFCC_FRAMES 3u   /* how many frames' coefficients to print */
+
+/* One sample of the reference signal. Integer LCG, so every platform produces
+   the same bits - a sinf() table would differ in the last place between the
+   Cortex-M33 and an x86 host and would defeat the whole point. Amplitude is
+   quartered to sit around -12 dBFS instead of slamming the CIC at full scale. */
+static int16_t dst_sample(uint32_t *state)
+{
+  *state = (*state * 1103515245u) + 12345u;
+  int32_t v = (int32_t)((*state >> 16) & 0xFFFFu) - 32768; /* -32768..32767 */
+  return (int16_t)(v / 4);
+}
+
+/* Print a float as its raw bit pattern. Decimal would need %f (absent from
+   newlib-nano, hence fmt_milli) and would round away exactly the differences
+   this test exists to catch. */
+static uint32_t dst_bits(float v)
+{
+  uint32_t u;
+  memcpy(&u, &v, sizeof(u));
+  return u;
+}
+
+void detector_selftest(void)
+{
+  static uint8_t s_dsp_ready = 0u;
+  char line[160];
+  int  n;
+
+  if (!usb_cli_connected())
+  {
+    return;
+  }
+
+  if (!s_dsp_ready)
+  {
+    if (mfcc_init() != ARM_MATH_SUCCESS)
+    {
+      det_print("DSTERR mfcc init failed\r\n");
+      det_print("DSTEND frames=0 windows=0 err=1\r\n");
+      return;
+    }
+    svm_classifier_init();
+    s_dsp_ready = 1u;
+  }
+
+  /* FNV-1a over the generated samples: proves both sides scored the same input
+     before comparing anything downstream of it. */
+  uint32_t fnv   = 2166136261u;
+  uint32_t state = DST_LCG_SEED;
+  uint32_t w_idx = 0u, r_idx = 0u, avail = 0u;
+  uint32_t frame_idx = 0u, accum = 0u, windows = 0u;
+
+  /* Leading break: the CLI echo of the command has not been terminated yet at
+     this point, so without it DSTBEGIN lands on the same line as the echo and a
+     line-oriented reader drops it. */
+  det_print("\r\nDSTBEGIN\r\n");
+
+  for (uint32_t i = 0u; i < DST_INPUT_LEN; i++)
+  {
+    const int16_t x = dst_sample(&state);
+    fnv = (fnv ^ (uint32_t)((uint16_t)x & 0xFFu)) * 16777619u;
+    fnv = (fnv ^ (uint32_t)(((uint16_t)x >> 8) & 0xFFu)) * 16777619u;
+
+    /* Same decimation as detector_run. That one carries a phase across mic
+       blocks because a block is not a multiple of three; here the whole signal
+       is one contiguous run, so the kept set is plainly {0, 3, 6, ...} - the
+       same samples the streaming version ends up with. */
+    if ((i % 3u) == 0u)
+    {
+      if (avail < DET_RING_LEN)
+      {
+        det_ring[w_idx] = (float)x * (1.0f / 32768.0f);
+        w_idx = (w_idx + 1u) % DET_RING_LEN;
+        avail++;
+      }
+    }
+
+    /* detector_run caps this at one frame per mic block to stop two MFCCs in
+       one iteration starving USB; that is a pacing constraint, not arithmetic,
+       so draining fully here yields the same frames in the same order. */
+    while (avail >= WINDOW_SIZE)
+    {
+      uint32_t idx = r_idx;
+      for (uint32_t k = 0u; k < WINDOW_SIZE; k++)
+      {
+        det_frame[k] = det_ring[idx];
+        idx = (idx + 1u) % DET_RING_LEN;
+      }
+
+      /* No squelch here: the gate is a policy knob, and letting it drop frames
+         would make the fixture depend on the signal's level rather than on the
+         arithmetic it is meant to pin down. */
+      mfcc_process(det_frame, &det_mfccs[accum * NUM_MFCC_COEFFS]);
+
+      if (frame_idx < DST_MFCC_FRAMES)
+      {
+        n = snprintf(line, sizeof(line), "DSTMFCC f=%lu", (unsigned long)frame_idx);
+        for (uint32_t c = 0u; c < NUM_MFCC_COEFFS && n > 0 && (size_t)n < sizeof(line); c++)
+        {
+          n += snprintf(line + n, sizeof(line) - (size_t)n, " %08lX",
+                        (unsigned long)dst_bits(det_mfccs[accum * NUM_MFCC_COEFFS + c]));
+        }
+        det_print(line);
+        det_print("\r\n");
+      }
+
+      accum++;
+      frame_idx++;
+
+      if (accum >= DET_ACCUM_FRAMES)
+      {
+        float features[DET_FEATURE_COUNT];
+        det_aggregate(det_mfccs, features);
+
+        {
+          /* Every window, not just the first: the aggregate is rebuilt from a
+             reset accumulator each time, so a state bug shows up in window 1
+             while window 0 still looks perfect. 52 values as four lines of 13,
+             one per statistic. */
+          static const char *stat[4] = { "mean", "std ", "dmea", "cmax" };
+          for (uint32_t g = 0u; g < 4u; g++)
+          {
+            n = snprintf(line, sizeof(line), "DSTFEAT w=%lu %s",
+                         (unsigned long)windows, stat[g]);
+            for (uint32_t c = 0u; c < NUM_MFCC_COEFFS && n > 0 && (size_t)n < sizeof(line); c++)
+            {
+              n += snprintf(line + n, sizeof(line) - (size_t)n, " %08lX",
+                            (unsigned long)dst_bits(features[g * NUM_MFCC_COEFFS + c]));
+            }
+            det_print(line);
+            det_print("\r\n");
+          }
+        }
+
+        const float decision = svm_get_decision_value(features);
+        snprintf(line, sizeof(line), "DSTDEC w=%lu logit=%08lX\r\n",
+                 (unsigned long)windows, (unsigned long)dst_bits(decision));
+        det_print(line);
+
+        accum = 0u;
+        windows++;
+      }
+
+      r_idx = (r_idx + DET_HOP) % DET_RING_LEN;
+      avail -= DET_HOP;
+    }
+  }
+
+  snprintf(line, sizeof(line),
+           "DSTSIG n=%lu seed=%lu fnv=%08lX\r\n",
+           (unsigned long)DST_INPUT_LEN, (unsigned long)DST_LCG_SEED,
+           (unsigned long)fnv);
+  det_print(line);
+  snprintf(line, sizeof(line), "DSTEND frames=%lu windows=%lu err=0\r\n",
+           (unsigned long)frame_idx, (unsigned long)windows);
+  det_print(line);
+}
+
 void detector_run(uint32_t seconds, uint32_t squelch_milli, int32_t thr_milli,
                   uint32_t debug)
 {
