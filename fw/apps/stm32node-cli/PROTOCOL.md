@@ -15,8 +15,12 @@ The host performs no DSP; the board sends finished PCM.
 
 ## Command channel (text)
 
-Commands are ASCII lines terminated by `b'\n'`. The board may
-echo input and print a `> ` prompt.
+Commands are ASCII lines terminated by `b'\n'`; the board accepts
+`\r`, `\n` or `\r\n`. The board may echo input and print a `> ` prompt.
+
+Every line the board sends back ends with `\r\n`, including the report lines the
+`detect`, `gps` and `micdiag` commands stream. Hosts that split on `\n` should strip
+the trailing `\r`; a terminal in raw mode needs the CR to return to column zero.
 
 ### `version`
 
