@@ -21,8 +21,12 @@
  *                                                   constant: the gate resets
  *                                                   accumulation, so a window
  *                                                   can straddle silence
+ *   ALM t=<s>.<ms> <ON|OFF> hits=<k>/<n>            the K-of-N alarm changed
+ *                                                   state on the window that
+ *                                                   closed at t; k = drone
+ *                                                   windows among the last n
  *   F=<n> a=<n> r=<n> h=<us> m=<us>                 per frame, only with dbg=1
- *   DETEND windows=<n> drones=<n> overrun=<0|1> err=<0|1>
+ *   DETEND windows=<n> drones=<n> alarms=<n> overrun=<0|1> err=<0|1>
  *   DETERR <reason>                                 followed by DETEND, always
  *
  * detect_service_selftest() prints a separate DST* family; see
@@ -43,6 +47,16 @@
 
 /** Default RMS gate, in 1/1000 of full scale. */
 #define DETECT_DEFAULT_SQUELCH_MILLI 10
+
+/* The alarm rule above the classifier (fw/common/boomdetect/include/
+   boomdetect_alarm.h): ON when at least K_ON of the last N classified windows
+   were called drone, OFF when fewer than K_OFF were. One window is 448 ms and
+   one logit; an alarm is a property of seconds. 2-of-4 with release below 1 is
+   what the training package evaluates clip-level verdicts with, so the board
+   and the report mean the same thing by "alarm". */
+#define DETECT_ALARM_N     4
+#define DETECT_ALARM_K_ON  2
+#define DETECT_ALARM_K_OFF 1
 
 /* The decision threshold is NOT here. It belongs to the model - a linear SVM's
    decisions live around +-3 while an MLP's are unbounded logits - so it is

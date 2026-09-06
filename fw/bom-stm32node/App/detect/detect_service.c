@@ -8,6 +8,7 @@
 #include "detect_service.h"
 
 #include "boomdetect.h"
+#include "boomdetect_alarm.h"
 #include "boomdetect_selftest.h"
 #include "classifier.h"
 #include "main.h"    /* HAL_GetTick, DWT */
@@ -30,6 +31,12 @@
 /* ~21 KB, so static rather than a stack frame. */
 static boomdetect_t s_det;
 static int16_t      s_pcm[PCM_SAMPLES_PER_HALF];
+
+/* The K-of-N alarm over the window verdicts; re-initialised per run. */
+static boomdetect_alarm_t s_alarm;
+static const boomdetect_alarm_rule_t s_alarm_rule = {
+  .n = DETECT_ALARM_N, .k_on = DETECT_ALARM_K_ON, .k_off = DETECT_ALARM_K_OFF,
+};
 
 /* Selected model. NULL means "whatever the registry calls default", resolved
    late so this file does not need an initialiser that runs before main. */
@@ -82,7 +89,7 @@ static void det_print(const char *line)
 static void det_abort(const char *reason)
 {
   det_print(reason);
-  det_print("DETEND windows=0 drones=0 overrun=0 err=1\r\n");
+  det_print("DETEND windows=0 drones=0 alarms=0 overrun=0 err=1\r\n");
 }
 
 /* Wait for one processed PCM block, keeping the USB device serviced. The pump
@@ -158,6 +165,17 @@ static void det_report(const boomdetect_event_t *ev, uint32_t debug)
              (unsigned long)span, dec_str,
              ev->window.is_drone ? "DRONE" : "noise");
     det_print(line);
+
+    /* The alarm is reported only when it changes, so a run over a steady drone
+       prints one ALM ON and one ALM OFF, not one line per window. */
+    if (boomdetect_alarm_push(&s_alarm, ev->window.is_drone))
+    {
+      snprintf(line, sizeof(line), "ALM t=%lu.%03lu %s hits=%u/%u\r\n",
+               (unsigned long)(t_ms / 1000u), (unsigned long)(t_ms % 1000u),
+               boomdetect_alarm_on(&s_alarm) ? "ON" : "OFF",
+               (unsigned)boomdetect_alarm_hits(&s_alarm), (unsigned)DETECT_ALARM_N);
+      det_print(line);
+    }
   }
 }
 
@@ -209,6 +227,14 @@ void detect_service_run(uint32_t seconds, uint32_t squelch_milli, int32_t thr_mi
     det_abort(reason);
     return;
   }
+  if (!boomdetect_alarm_init(&s_alarm, &s_alarm_rule))
+  {
+    /* The rule is three compile-time constants; this can only fail if someone
+       edits them into an inconsistent set, and it should say so rather than
+       run with an alarm that never fires. */
+    det_abort("DETERR alarm rule invalid\r\n");
+    return;
+  }
 
   /* NOTE: do NOT call usb_cli_flush_tx() here. Flushing the console ring from
      inside the CLI binding wedges the CDC write state machine (observed on
@@ -257,8 +283,9 @@ void detect_service_run(uint32_t seconds, uint32_t squelch_milli, int32_t thr_mi
 
   uint32_t windows = 0u, drones = 0u;
   boomdetect_counts(&s_det, &windows, &drones);
-  snprintf(line, sizeof(line), "DETEND windows=%lu drones=%lu overrun=%u err=%u\r\n",
-           (unsigned long)windows, (unsigned long)drones,
+  snprintf(line, sizeof(line),
+           "DETEND windows=%lu drones=%lu alarms=%lu overrun=%u err=%u\r\n",
+           (unsigned long)windows, (unsigned long)drones, (unsigned long)s_alarm.onsets,
            ((mic_got && mic_overrun()) || boomdetect_dropped(&s_det) != 0u) ? 1u : 0u,
            (mic_ok && mic_got) ? 0u : 1u);
   det_print(line);

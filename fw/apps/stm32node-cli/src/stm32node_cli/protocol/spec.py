@@ -35,6 +35,12 @@ DETECT_DEFAULT_SQUELCH_MILLI = 10
 DETECT_SQUELCH_MILLI_MAX = 1000
 DETECT_MLP_V6_DEFAULT_THR_MILLI = 15000  # default_thr_milli of model_mlp_v6.c
 DETECT_THR_MILLI_LIMIT = 20000  # accepted thr_milli range is -LIMIT..+LIMIT
+# The K-of-N alarm above the classifier (App/detect/detect_service.h): ON when at
+# least K_ON of the last N classified windows were called drone, OFF when fewer
+# than K_OFF were. One window is ~448 ms; an alarm is a property of seconds.
+DETECT_ALARM_N = 4
+DETECT_ALARM_K_ON = 2
+DETECT_ALARM_K_OFF = 1
 
 # --- Framing -----------------------------------------------------------------
 PROTOCOL_VERSION = 1
@@ -138,9 +144,15 @@ COMMANDS: tuple[CommandSpec, ...] = (
             "- `t` is when the window CLOSED and `span` how many frames it covered, which "
             "is not a constant: the RMS gate resets accumulation, so a window can straddle "
             "silence and start arbitrarily far from where the decision was made (windows are "
-            "~448 ms of audio at the default hop; input below the squelch yields no windows), "
-            "then a final "
-            "`DETEND windows=<n> drones=<n> overrun=<0|1> err=<0|1>` line. With dbg set, each "
+            "~448 ms of audio at the default hop; input below the squelch yields no windows). "
+            "An `ALM t=<s>.<ms> <ON|OFF> hits=<k>/<n>` line whenever the K-of-N alarm changes "
+            "state: ON once at least "
+            f"{DETECT_ALARM_K_ON} of the last {DETECT_ALARM_N} classified windows were DRONE, "
+            f"OFF once fewer than {DETECT_ALARM_K_OFF} were - printed only on transitions, so "
+            "a steady drone gives one ON and one OFF, and a lone DRONE window gives nothing. "
+            "Then a final "
+            "`DETEND windows=<n> drones=<n> alarms=<n> overrun=<0|1> err=<0|1>` line, where "
+            "alarms counts OFF-to-ON transitions. With dbg set, each "
             "frame also emits `F=<frame> a=<accumulated> r=<rms_milli> h=<half_us> "
             "m=<mfcc_us>`. A start failure prints `DETERR <reason>` and then the DETEND "
             "trailer with err=1, so the trailer always arrives."

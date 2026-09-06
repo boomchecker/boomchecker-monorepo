@@ -49,8 +49,19 @@ def test_detect_thr_default_matches_mlp_v6_model() -> None:
     assert spec.DETECT_MLP_V6_DEFAULT_THR_MILLI == int(m.group(1))
 
 
+def test_detect_alarm_rule_matches_firmware() -> None:
+    text = _read(DETECT_SERVICE_H)
+    assert spec.DETECT_ALARM_N == _define(text, "DETECT_ALARM_N", DETECT_SERVICE_H)
+    assert spec.DETECT_ALARM_K_ON == _define(text, "DETECT_ALARM_K_ON", DETECT_SERVICE_H)
+    assert spec.DETECT_ALARM_K_OFF == _define(text, "DETECT_ALARM_K_OFF", DETECT_SERVICE_H)
+    assert 1 <= spec.DETECT_ALARM_K_OFF <= spec.DETECT_ALARM_K_ON <= spec.DETECT_ALARM_N
+
+
 def test_detect_description_quotes_the_defaults() -> None:
     detect = next(c for c in spec.COMMANDS if c.name == "detect")
     assert f"default {spec.DETECT_DEFAULT_SQUELCH_MILLI}" in detect.description
     assert str(spec.DETECT_MLP_V6_DEFAULT_THR_MILLI) in detect.description
     assert "[dbg]" in detect.usage
+    assert f"{spec.DETECT_ALARM_K_ON} of the last {spec.DETECT_ALARM_N}" in detect.response
+    assert "ALM t=" in detect.response
+    assert "alarms=<n>" in detect.response
