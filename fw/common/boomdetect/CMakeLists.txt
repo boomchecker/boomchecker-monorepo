@@ -153,9 +153,11 @@ endif()
 if(BOOMDETECT_STANDALONE)
   enable_testing()
 
-  add_executable(boomdetect_mfcc_smoke tests/mfcc_smoke_test.c)
-  target_link_libraries(boomdetect_mfcc_smoke PRIVATE boomdetect)
-  target_compile_options(boomdetect_mfcc_smoke PRIVATE
-    ${BOOMDETECT_WARNING_FLAGS} ${BOOMDETECT_WERROR_FLAGS})
-  add_test(NAME boomdetect_mfcc_smoke COMMAND boomdetect_mfcc_smoke)
+  foreach(test IN ITEMS mfcc_smoke registry pipeline)
+    add_executable(boomdetect_${test}_test tests/${test}_test.c)
+    target_link_libraries(boomdetect_${test}_test PRIVATE boomdetect)
+    target_compile_options(boomdetect_${test}_test PRIVATE
+      ${BOOMDETECT_WARNING_FLAGS} ${BOOMDETECT_WERROR_FLAGS})
+    add_test(NAME boomdetect_${test} COMMAND boomdetect_${test}_test)
+  endforeach()
 endif()
