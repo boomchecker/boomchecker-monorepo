@@ -110,8 +110,16 @@ FetchContent_MakeAvailable(cmsisdsp)
 
 add_library(boomdetect STATIC
   src/boomdetect_mfcc_f32.c
+  src/mfcc_processor.c
+  src/svm_classifier.c
 )
-target_include_directories(boomdetect PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_include_directories(boomdetect PUBLIC
+  ${CMAKE_CURRENT_SOURCE_DIR}/include
+  # models/ is PUBLIC only because svm_classifier.c picks the active model with
+  # an #include; once the classifier registry lands, each model is its own
+  # translation unit and this can go PRIVATE.
+  ${CMAKE_CURRENT_SOURCE_DIR}/models
+)
 target_link_libraries(boomdetect PUBLIC CMSISDSP)
 
 # libm, host only. arm_vlog_f32() calls logf(), and upstream's CMSISDSP target

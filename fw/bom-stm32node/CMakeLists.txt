@@ -45,20 +45,12 @@ set_source_files_properties(${CMAKE_SOURCE_DIR}/Core/Src/pdm_pcm.c
     PROPERTIES COMPILE_OPTIONS "-O2"
 )
 
-# Same reasoning for the detector's DSP: the MFCC (1024-pt FFT every 32 ms)
-# shares the real-time budget with pdm_pcm, so keep the math TUs at -O2.
+# Same reasoning for the detector: the MFCC (1024-pt FFT every 32 ms) shares
+# the real-time budget with pdm_pcm, so keep it at -O2. The DSP itself and
+# CMSIS-DSP now live in fw/common/boomdetect and re-apply -O2 on their own
+# targets - a source property here is directory-scoped and cannot reach them.
 set_source_files_properties(
     ${CMAKE_SOURCE_DIR}/Core/Src/detector.c
-    ${CMAKE_SOURCE_DIR}/Core/Src/mfcc_processor.c
-    ${CMAKE_SOURCE_DIR}/Core/Src/svm_classifier.c
-    ${CMAKE_SOURCE_DIR}/third_party/CMSIS-DSP/Source/BasicMathFunctions/BasicMathFunctions.c
-    ${CMAKE_SOURCE_DIR}/third_party/CMSIS-DSP/Source/CommonTables/CommonTables.c
-    ${CMAKE_SOURCE_DIR}/third_party/CMSIS-DSP/Source/ComplexMathFunctions/ComplexMathFunctions.c
-    ${CMAKE_SOURCE_DIR}/third_party/CMSIS-DSP/Source/FastMathFunctions/FastMathFunctions.c
-    ${CMAKE_SOURCE_DIR}/third_party/CMSIS-DSP/Source/MatrixFunctions/MatrixFunctions.c
-    ${CMAKE_SOURCE_DIR}/third_party/CMSIS-DSP/Source/StatisticsFunctions/StatisticsFunctions.c
-    ${CMAKE_SOURCE_DIR}/third_party/CMSIS-DSP/Source/SupportFunctions/SupportFunctions.c
-    ${CMAKE_SOURCE_DIR}/third_party/CMSIS-DSP/Source/TransformFunctions/TransformFunctions.c
     PROPERTIES COMPILE_OPTIONS "-O2"
 )
 
@@ -148,6 +140,18 @@ target_link_libraries(radio_layer PRIVATE RadioLib stm32cubemx)
 # see fw/common/boomlink/CMakeLists.txt for why.
 add_subdirectory(${CMAKE_SOURCE_DIR}/../common/boomlink boomlink)
 
+# The detection pipeline (MFCC, feature aggregation, classifier) and the
+# CMSIS-DSP it needs. Same reason boomlink lives outside this package: it is
+# arithmetic that has to be runnable and testable on a host, which nothing
+# under Core/ can be.
+#
+# CMSIS-DSP includes cmsis_compiler.h from CMSIS *Core*, which ships with the
+# device support package rather than with DSP - so the path is injected from
+# here rather than boomdetect reaching up into one board's tree.
+set(BOOMDETECT_CMSIS_CORE_DIR ${CMAKE_SOURCE_DIR}/Drivers/CMSIS CACHE PATH
+    "CMSIS Core headers for the CMSIS-DSP cross build")
+add_subdirectory(${CMAKE_SOURCE_DIR}/../common/boomdetect boomdetect)
+
 # The config storage wrapper's real flash backend (App/storage/, PR 4
 # Phase B) - a separate, STM32-specific static library rather than a source
 # added straight into ${CMAKE_PROJECT_NAME}, the same isolation radio_layer
@@ -195,21 +199,9 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     ${CMAKE_SOURCE_DIR}/Core/Src/usb_cli.c
     ${CMAKE_SOURCE_DIR}/Core/Src/pcm_stream.c
     ${CMAKE_SOURCE_DIR}/Core/Src/detector.c
-    ${CMAKE_SOURCE_DIR}/Core/Src/mfcc_processor.c
-    ${CMAKE_SOURCE_DIR}/Core/Src/svm_classifier.c
     ${CMAKE_SOURCE_DIR}/Core/Src/dfu_boot.c
     ${CMAKE_SOURCE_DIR}/Core/Src/gps.c
     ${CMAKE_SOURCE_DIR}/third_party/embedded-cli/lib/src/embedded_cli.c
-    # CMSIS-DSP: per-group combined TUs (only what arm_mfcc_f32 + the SVM
-    # need); --gc-sections drops the unused tables/kernels.
-    ${CMAKE_SOURCE_DIR}/third_party/CMSIS-DSP/Source/BasicMathFunctions/BasicMathFunctions.c
-    ${CMAKE_SOURCE_DIR}/third_party/CMSIS-DSP/Source/CommonTables/CommonTables.c
-    ${CMAKE_SOURCE_DIR}/third_party/CMSIS-DSP/Source/ComplexMathFunctions/ComplexMathFunctions.c
-    ${CMAKE_SOURCE_DIR}/third_party/CMSIS-DSP/Source/FastMathFunctions/FastMathFunctions.c
-    ${CMAKE_SOURCE_DIR}/third_party/CMSIS-DSP/Source/MatrixFunctions/MatrixFunctions.c
-    ${CMAKE_SOURCE_DIR}/third_party/CMSIS-DSP/Source/StatisticsFunctions/StatisticsFunctions.c
-    ${CMAKE_SOURCE_DIR}/third_party/CMSIS-DSP/Source/SupportFunctions/SupportFunctions.c
-    ${CMAKE_SOURCE_DIR}/third_party/CMSIS-DSP/Source/TransformFunctions/TransformFunctions.c
 )
 
 # Add include paths
@@ -217,8 +209,6 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user defined include paths
     ${CMAKE_SOURCE_DIR}/Core/Inc
     ${CMAKE_SOURCE_DIR}/third_party/embedded-cli/lib/include
-    ${CMAKE_SOURCE_DIR}/third_party/CMSIS-DSP/Include
-    ${CMAKE_SOURCE_DIR}/third_party/CMSIS-DSP/PrivateInclude
 )
 
 # Add project symbols (macros)
@@ -250,6 +240,10 @@ target_link_libraries(${CMAKE_PROJECT_NAME}
     # Fleet discovery (boomlink.md section 8.6) - Ping/Pong and Wakeup/
     # WakeupResponse, wired the same way as the two services above.
     boomlink_system_service
+
+    # MFCC, feature aggregation and the classifier (fw/common/boomdetect);
+    # PUBLIC-links the CMSISDSP it fetches.
+    boomdetect
 
     # Add user defined libraries
 )
