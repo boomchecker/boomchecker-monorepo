@@ -1,0 +1,7 @@
+# Same settings as fw/common/boomlink, so one `ruff check` behaves the same way
+# in both packages.
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]

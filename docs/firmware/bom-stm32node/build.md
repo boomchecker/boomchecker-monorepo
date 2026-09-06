@@ -1,5 +1,18 @@
 # Build & flash
 
+!!! warning "Configuring now needs the network"
+
+    `cmake --preset Debug` clones CMSIS-DSP from github.com. The detector's
+    arithmetic lives in `fw/common/boomdetect`, which fetches it at configure
+    time rather than vendoring it - that is what removed 11 MB and 470 files
+    from this repository, and the network dependency is the price. CI caches
+    the fetched source. For an offline build, point
+    `FETCHCONTENT_SOURCE_DIR_CMSISDSP` at a copy:
+
+    ```sh
+    cmake --preset Debug -DFETCHCONTENT_SOURCE_DIR_CMSISDSP=/path/to/CMSIS-DSP
+    ```
+
 ## Build via CMake
 
 The project is configured in **STM32CubeMX** (`bom-stm32node.ioc`). Generate the
@@ -67,3 +80,42 @@ st-flash write build/bom-stm32node.bin 0x08000000
     `target/stm32h5x.cfg` — STM32H5 support post-dates both. Use `st-flash` instead, or
     build/install a newer upstream OpenOCD yourself if you need SWD debugging via
     OpenOCD specifically.
+
+## Two things that will cost you twenty minutes each
+
+**The console is dead after flashing.** `openocd ... program ... reset exit`
+leaves the USB device wedged: the board enumerates, but the CDC port neither
+reads nor writes. It is not a crash — reading the fault registers over SWD shows
+`HFSR = 0` and `CFSR = 0`. A separate reset fixes it:
+
+```sh
+openocd-stm32 -f interface/stlink-dap.cfg -c "transport select dapdirect_swd" \
+  -f target/stm32h5x.cfg -c "init; reset halt; reset run; exit"
+```
+
+**`App/radio/*.cpp` will not compile in the fw devcontainer** as shipped:
+`fatal error: cstring`. The image has `gcc-arm-none-eabi` but not the C++
+standard library for the target, which is only an apt *Recommends*. CI installs
+it explicitly; locally:
+
+```sh
+sudo apt-get install -y libstdc++-arm-none-eabi-newlib libnewlib-arm-none-eabi
+```
+
+## Talking to the board
+
+The console is a USB CDC port. Use the `by-id` name rather than `/dev/ttyACMn` —
+the number moves after a reflash, and one of the two is the ST-Link's own VCP:
+
+```sh
+picocom -b 115200 /dev/serial/by-id/usb-STMicroelectronics_boomchecker-node_*-if00
+```
+
+Exit with `Ctrl-A Ctrl-X`. Do not enable local echo; the board echoes already.
+Note that `help` output is truncated: the console TX ring is 512 bytes
+(`CLI_TX_RING` in `Core/Src/cli.c`) and the full help text is longer, so the tail
+is silently dropped. This got worse, not better, with the detector: `model`,
+`micslot` and `detselftest` are three more entries in the same buffer, and
+`maxBindingCount` went to 24. Use `PROTOCOL.md` as the command reference until
+the ring is resized; `help` is not a reliable way to check what an image
+carries.

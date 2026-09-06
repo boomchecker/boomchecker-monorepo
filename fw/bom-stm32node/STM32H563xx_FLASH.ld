@@ -61,15 +61,19 @@ _sstack = _estack - _Min_Stack_Size;
 _Min_Heap_Size = 0x200;      /* required amount of heap  */
 /* Cortex-M33 arms MSPLIM = _estack - _Min_Stack_Size at reset (see
    startup_stm32h563xx.s), so this is a hard stack-overflow fault
-   threshold, not just a link-time reservation. RadioLib's SX1262 driver
-   (RADIOLIB_STATIC_ONLY, see CMakeLists.txt) puts two 268-byte SPI
-   scratch buffers on the stack inside Module::SPItransfer/SPItransferStream;
-   combined with the call depth through SX126x::stageMode (which reserves a
-   255-byte LR-FHSS buffer unconditionally), radio_init()'s very first
-   startReceive() measured close to 1.3 KB of stack (-fstack-usage) against
-   the previous 0x400 (1 KB) limit - i.e. it would MSPLIM-fault on boot.
-   8 KB leaves ample margin (640 KB RAM total, ~58 KB used). */
-_Min_Stack_Size = 0x2000; /* required amount of stack */
+   threshold, not just a link-time reservation.
+   - RadioLib's SX1262 driver (RADIOLIB_STATIC_ONLY, see CMakeLists.txt)
+     puts two 268-byte SPI scratch buffers on the stack inside
+     Module::SPItransfer/SPItransferStream; with the call depth through
+     SX126x::stageMode (255-byte LR-FHSS buffer reserved unconditionally),
+     radio_init()'s first startReceive() measured close to 1.3 KB
+     (-fstack-usage) - it MSPLIM-faulted against the CubeMX 0x400 default.
+   - Everything runs on MSP (main loop, newlib printf, USBX device stack)
+     with interrupts (HAL PCD -> USBX callbacks) nesting on top; `detect`
+     overflowed MSPLIM (UFSR.STKOF hard fault) ~0.7 s in once a USB IRQ
+     landed inside snprintf (observed 2026-08-10).
+   16 KB leaves ample margin (640 KB RAM total, ~58 KB used). */
+_Min_Stack_Size = 0x4000; /* required amount of stack */
 
 /* Sections */
 SECTIONS

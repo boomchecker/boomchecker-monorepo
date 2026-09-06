@@ -90,7 +90,7 @@ static bool mic_ensure_started(void)
 static void send_trailer(bool overrun, bool err)
 {
   char trailer[32];
-  int  n = snprintf(trailer, sizeof(trailer), "PCMEND overrun=%u err=%u\n",
+  int  n = snprintf(trailer, sizeof(trailer), "PCMEND overrun=%u err=%u\r\n",
                     overrun ? 1u : 0u, err ? 1u : 0u);
   if (n > 0)
   {

@@ -11,6 +11,11 @@
 #include "link_service.h"
 #include "main.h"   /* Error_Handler */
 #include "pcm_stream.h"
+#include "detect_service.h"
+#include "gps.h"
+#include "mic.h"     /* mic_diag_run */
+#include "dfu_boot.h"
+#include "usb_cli.h" /* flush before the DFU jump */
 #include "protocol_service.h"
 #include "radio.h"
 
@@ -40,7 +45,7 @@ _Static_assert(RADIO_MAX_PAYLOAD >= BOOMLINK_LINK_FRAME_HEADER_SIZE + boomlink_E
                "BoomLink Envelope no longer fits the real RADIO_MAX_PAYLOAD budget");
 
 /* Static CLI allocation (no malloc). Sized for the rx/cmd/history below plus bindings. */
-#define CLI_STATIC_BYTES  2048u
+#define CLI_STATIC_BYTES  3072u
 #define CLI_TX_RING       512u
 
 static EmbeddedCli *s_cli;
@@ -87,6 +92,11 @@ static void tx_flush(void)
 }
 
 /* --- Commands (help is built into embedded-cli) ---------------------------- */
+/* Defined with the registration machinery at the bottom of this file; read
+   here so `version` can report a shortfall that the boot-time line announced
+   into a console nobody had attached yet. */
+static bool cli_bindings_short(void);
+
 static void cmd_version(EmbeddedCli *cli, char *args, void *context)
 {
   (void)args;
@@ -104,6 +114,10 @@ static void cmd_version(EmbeddedCli *cli, char *args, void *context)
   snprintf(line, sizeof(line), "bom-stm32node CLI v%u.%u.%u", PROTOCOL_SERVICE_FW_VERSION_MAJOR,
            PROTOCOL_SERVICE_FW_VERSION_MINOR, PROTOCOL_SERVICE_FW_VERSION_PATCH);
   embeddedCliPrint(cli, line);
+  if (cli_bindings_short())
+  {
+    embeddedCliPrint(cli, "WARNING: not every command registered; see cli_init");
+  }
 }
 
 /* Parse "<sec>" and run a PCM stream from the given source. Shared by the
@@ -137,6 +151,261 @@ static void cmd_streamtest(EmbeddedCli *cli, char *args, void *context)
 {
   (void)context;
   stream_command(cli, args, PCM_SRC_TONE);
+}
+
+static void cmd_detect(EmbeddedCli *cli, char *args, void *context)
+{
+  (void)context;
+  char line[80];
+  const uint16_t ntok = embeddedCliGetTokenCount(args);
+  if (ntok < 1 || ntok > 4)
+  {
+    embeddedCliPrint(cli, "usage: detect <sec> [squelch_milli] [thr_milli] [dbg]");
+    return;
+  }
+  const char   *tok = embeddedCliGetToken(args, 1);
+  char         *end = NULL;
+  unsigned long sec = strtoul(tok, &end, 10);
+  if (end == tok || sec == 0u || sec > 60u)
+  {
+    embeddedCliPrint(cli, "usage: detect <sec> (1..60)");
+    return;
+  }
+
+  unsigned long squelch = DETECT_DEFAULT_SQUELCH_MILLI;
+  /* The operating point belongs to the model, not to the detector: a linear
+     SVM's decisions live around +-3 while an MLP's are unbounded logits, so a
+     single global default would make one of the two families useless. It does
+     mean the same `detect 20 0` means different things depending on what
+     `model` last selected - `model` prints the value it will use. */
+  long          thr     = detect_service_model()->default_thr_milli;
+  if (ntok >= 2)
+  {
+    tok     = embeddedCliGetToken(args, 2);
+    squelch = strtoul(tok, &end, 10);
+    if (end == tok || squelch > 1000u)
+    {
+      embeddedCliPrint(cli, "squelch_milli: 0..1000 (10 = RMS 0.010)");
+      return;
+    }
+  }
+  if (ntok >= 3)
+  {
+    tok = embeddedCliGetToken(args, 3);
+    thr = strtol(tok, &end, 10);
+    if (end == tok || thr < -20000 || thr > 20000)
+    {
+      snprintf(line, sizeof(line), "thr_milli: -20000..20000 (%s default %ld)",
+               detect_service_model()->name,
+               (long)detect_service_model()->default_thr_milli);
+      embeddedCliPrint(cli, line);
+      return;
+    }
+  }
+  unsigned long dbg = 0u;
+  if (ntok >= 4)
+  {
+    tok = embeddedCliGetToken(args, 4);
+    dbg = strtoul(tok, &end, 10);
+    /* The only argument that used to accept anything: `detect 10 10 15000 on`
+       silently ran without the breadcrumbs the operator asked for. */
+    if (end == tok || dbg > 1u)
+    {
+      embeddedCliPrint(cli, "dbg: 0 or 1");
+      return;
+    }
+  }
+  /* Emits LVL/DET/DETEND text lines on the console; see detect_service.h. */
+  detect_service_run((uint32_t)sec, (uint32_t)squelch, (int32_t)thr, (uint32_t)dbg);
+}
+
+static void cmd_model(EmbeddedCli *cli, char *args, void *context)
+{
+  (void)context;
+  const uint16_t ntok = embeddedCliGetTokenCount(args);
+  char line[96];
+
+  if (ntok == 0u)
+  {
+    /* One command rather than a `model` plus a `models`: listing and selecting
+       are the same question asked two ways, and CLI bindings are a scarce
+       resource here. */
+    const classifier_t *active = detect_service_model();
+    for (size_t i = 0u; i < classifier_count(); i++)
+    {
+      const classifier_t *m = classifier_at(i);
+      snprintf(line, sizeof(line), "model: %-8s %c feat=%u..%u thr=%ld",
+               m->name, (m == active) ? '*' : ' ',
+               (unsigned)m->feature_offset,
+               (unsigned)(m->feature_offset + m->n_features - 1u),
+               (long)m->default_thr_milli);
+      embeddedCliPrint(cli, line);
+    }
+    return;
+  }
+  if (ntok != 1u)
+  {
+    embeddedCliPrint(cli, "usage: model [name]");
+    return;
+  }
+
+  const char *name = embeddedCliGetToken(args, 1);
+  if (!detect_service_set_model(name))
+  {
+    snprintf(line, sizeof(line), "model: no such model '%s'", name);
+    embeddedCliPrint(cli, line);
+    return;
+  }
+  const classifier_t *m = detect_service_model();
+  /* Not persisted, same as micslot: a reset returns to the deployed model. */
+  snprintf(line, sizeof(line), "model: %s selected, default thr=%ld (not persisted)",
+           m->name, (long)m->default_thr_milli);
+  embeddedCliPrint(cli, line);
+}
+
+static void cmd_detselftest(EmbeddedCli *cli, char *args, void *context)
+{
+  (void)cli;
+  (void)args;
+  (void)context;
+  /* Streams DST* lines on the console; see detect_service.h for what it is for. */
+  detect_service_selftest();
+}
+
+/* Optional "[baud]" token shared by `gps` and `gpstx`. Returns 0 on error. */
+static uint32_t parse_baud(EmbeddedCli *cli, const char *tok)
+{
+  char         *end  = NULL;
+  unsigned long baud = strtoul(tok, &end, 10);
+  if (end == tok || baud < 1200u || baud > 921600u)
+  {
+    embeddedCliPrint(cli, "baud: 1200..921600 (Teseo-LIV3R default 9600)");
+    return 0u;
+  }
+  return (uint32_t)baud;
+}
+
+static void cmd_gps(EmbeddedCli *cli, char *args, void *context)
+{
+  (void)context;
+  const uint16_t ntok = embeddedCliGetTokenCount(args);
+  if (ntok < 1 || ntok > 2)
+  {
+    embeddedCliPrint(cli, "usage: gps <sec> [baud]");
+    return;
+  }
+  const char   *tok = embeddedCliGetToken(args, 1);
+  char         *end = NULL;
+  unsigned long sec = strtoul(tok, &end, 10);
+  if (end == tok || sec == 0u || sec > GPS_MAX_SECONDS)
+  {
+    embeddedCliPrint(cli, "usage: gps <sec> (1..300)");
+    return;
+  }
+  uint32_t baud = GPS_DEFAULT_BAUD;
+  if (ntok >= 2)
+  {
+    baud = parse_baud(cli, embeddedCliGetToken(args, 2));
+    if (baud == 0u)
+    {
+      return;
+    }
+  }
+  /* Emits raw NMEA lines and a GPSEND trailer on the console; see gps.c. */
+  gps_run((uint32_t)sec, baud);
+}
+
+static void cmd_gpstx(EmbeddedCli *cli, char *args, void *context)
+{
+  (void)context;
+  const uint16_t ntok = embeddedCliGetTokenCount(args);
+  if (ntok < 1 || ntok > 2)
+  {
+    embeddedCliPrint(cli, "usage: gpstx <sentence> [baud]");
+    return;
+  }
+  uint32_t baud = GPS_DEFAULT_BAUD;
+  if (ntok >= 2)
+  {
+    baud = parse_baud(cli, embeddedCliGetToken(args, 2));
+    if (baud == 0u)
+    {
+      return;
+    }
+  }
+  if (gps_send(embeddedCliGetToken(args, 1), baud) != 0)
+  {
+    embeddedCliPrint(cli, "GPSERR tx failed");
+    return;
+  }
+  embeddedCliPrint(cli, "GPSTX ok");
+}
+
+static void cmd_micdiag(EmbeddedCli *cli, char *args, void *context)
+{
+  (void)cli;
+  (void)args;
+  (void)context;
+  /* Emits MICDIAG lines + MICDIAGEND trailer on the console; see mic.c. */
+  mic_diag_run();
+}
+
+static void cmd_micslot(EmbeddedCli *cli, char *args, void *context)
+{
+  (void)context;
+  const uint16_t ntok = embeddedCliGetTokenCount(args);
+  char line[64];
+
+  if (ntok == 0u)
+  {
+    const uint16_t m = mic_get_slot_mask();
+    snprintf(line, sizeof(line), "micslot: %s (0x%04X)",
+             (m == PDM_SLOT_MASK_A) ? "A" : (m == PDM_SLOT_MASK_B) ? "B" : "custom",
+             (unsigned)m);
+    embeddedCliPrint(cli, line);
+    return;
+  }
+  if (ntok != 1u)
+  {
+    embeddedCliPrint(cli, "usage: micslot [a|b]");
+    return;
+  }
+
+  const char *tok = embeddedCliGetToken(args, 1);
+  if (tok[1] != '\0' || (tok[0] != 'a' && tok[0] != 'A' && tok[0] != 'b' && tok[0] != 'B'))
+  {
+    embeddedCliPrint(cli, "usage: micslot [a|b]");
+    return;
+  }
+
+  const bool want_a = (tok[0] == 'a' || tok[0] == 'A');
+  mic_set_slot_mask(want_a ? PDM_SLOT_MASK_A : PDM_SLOT_MASK_B);
+  /* Not persisted: this is a bring-up override, and the next reset returns to
+     the firmware default. Run `micdiag` to see which slot carries signal. */
+  snprintf(line, sizeof(line), "micslot: %s selected (next detect/stream)",
+           want_a ? "A" : "B");
+  embeddedCliPrint(cli, line);
+}
+
+static void cmd_gpsrst(EmbeddedCli *cli, char *args, void *context)
+{
+  (void)args;
+  (void)context;
+  gps_reset_pulse();
+  embeddedCliPrint(cli, "GPSRST done (SYS_RSTn pulsed 100 ms)");
+}
+
+static void cmd_dfu(EmbeddedCli *cli, char *args, void *context)
+{
+  (void)cli;
+  (void)args;
+  (void)context;
+  /* Bypass the CLI TX ring: the jump never returns, so push the farewell out
+     synchronously before detaching from the bus. */
+  static const char msg[] = "DFU: rebooting into the ROM bootloader\r\n";
+  (void)usb_cli_flush_tx();
+  (void)usb_cli_write_blocking((const uint8_t *)msg, sizeof(msg) - 1u);
+  dfu_boot_enter();
 }
 
 /* Render `value` with `decimals` digits after the point (max 3) using only
@@ -857,8 +1126,40 @@ static void cmd_wakeup(EmbeddedCli *cli, char *args, void *context)
   embeddedCliPrint(cli, line);
 }
 
+/* Register one command, and complain on the console if it did not fit rather
+   than dropping it silently. Counts what got through so cli_init can report a
+   single summary line: a bare "command missing" is far harder to diagnose from
+   the field than a number that does not match. */
+static uint8_t s_bindings_ok;
+static uint8_t s_bindings_tried;
+/* Latched so `version` can report it too. The boot-time line below is printed
+   before anyone has attached a console, so on the one occasion it matters it is
+   into a port nobody is reading. */
+static bool s_bindings_short;
+
+static bool cli_bindings_short(void)
+{
+  return s_bindings_short;
+}
+
+static void cli_add(CliCommandBinding binding)
+{
+  s_bindings_tried++;
+  if (embeddedCliAddBinding(s_cli, binding))
+  {
+    s_bindings_ok++;
+  }
+}
+
 void cli_init(cli_tx_fn tx)
 {
+  /* Reset first: these are file-scope counters and cli_init() is not documented
+     as single-shot, so a second call would double-count every binding and
+     report a shortfall that never happened. */
+  s_bindings_ok    = 0u;
+  s_bindings_tried = 0u;
+  s_bindings_short = false;
+
   s_tx      = tx;
   s_tx_head = 0;
   s_tx_tail = 0;
@@ -869,7 +1170,13 @@ void cli_init(cli_tx_fn tx)
   cfg->rxBufferSize      = 64;
   cfg->cmdBufferSize     = 64;
   cfg->historyBufferSize = 128;
-  cfg->maxBindingCount   = 8;
+  /* embeddedCliAddBinding() returns false and drops the command when this is
+     too small, and once did: `link`, `proto` and `wakeup` silently vanished
+     from a build that otherwise looked fine. cli_add() below now checks the
+     return value, so a future overflow says so instead of hiding. Headroom
+     over the current count on purpose - the failure mode is quiet enough that
+     sitting exactly on the limit is not worth the saved bytes. */
+  cfg->maxBindingCount   = 24;
   cfg->invitation        = "> ";
 
   s_cli = embeddedCliNew(cfg);
@@ -877,7 +1184,18 @@ void cli_init(cli_tx_fn tx)
   {
     /* Static buffer too small. Do NOT trap here: the USB device stack must keep
        being serviced from the main loop, so a CLI failure must not dead-loop.
-       cli_process()/cli_feed() are NULL-guarded and simply no-op. */
+       cli_process()/cli_feed() are NULL-guarded and simply no-op.
+
+       Say so on the wire first, though. This drops EVERY command, not just the
+       ones past a limit, and it is the failure the binding counter added below
+       does not cover - it is also the one that gets closer every time
+       maxBindingCount or historyBufferSize grows. Without this the board
+       enumerates as a CDC port that answers nothing, with no clue why. */
+    if (s_tx != NULL)
+    {
+      static const char msg[] = "CLI: static buffer too small, no commands registered\r\n";
+      (void)s_tx((const uint8_t *)msg, (uint16_t)(sizeof(msg) - 1u));
+    }
     return;
   }
   s_cli->writeChar = cli_write_char;
@@ -889,7 +1207,7 @@ void cli_init(cli_tx_fn tx)
     .context      = NULL,
     .binding      = cmd_version,
   };
-  embeddedCliAddBinding(s_cli, version_binding);
+  cli_add(version_binding);
 
   CliCommandBinding stream_binding = {
     .name         = "stream",
@@ -898,7 +1216,7 @@ void cli_init(cli_tx_fn tx)
     .context      = NULL,
     .binding      = cmd_stream,
   };
-  embeddedCliAddBinding(s_cli, stream_binding);
+  cli_add(stream_binding);
 
   CliCommandBinding streamtest_binding = {
     .name         = "streamtest",
@@ -907,7 +1225,88 @@ void cli_init(cli_tx_fn tx)
     .context      = NULL,
     .binding      = cmd_streamtest,
   };
-  embeddedCliAddBinding(s_cli, streamtest_binding);
+  cli_add(streamtest_binding);
+
+  CliCommandBinding detect_binding = {
+    .name         = "detect",
+    .help         = "Run drone detection for <sec> seconds (DET/DETEND lines)",
+    .tokenizeArgs = true,
+    .context      = NULL,
+    .binding      = cmd_detect,
+  };
+  cli_add(detect_binding);
+
+  CliCommandBinding detselftest_binding = {
+    .name         = "detselftest",
+    .help         = "Run the detector over a fixed synthetic signal; prints raw float bits",
+    .tokenizeArgs = false,
+    .context      = NULL,
+    .binding      = cmd_detselftest,
+  };
+  cli_add(detselftest_binding);
+
+  CliCommandBinding model_binding = {
+    .name         = "model",
+    .help         = "model [name] - list the classifiers in this image, or select one",
+    .tokenizeArgs = true,
+    .context      = NULL,
+    .binding      = cmd_model,
+  };
+  cli_add(model_binding);
+
+  CliCommandBinding gps_binding = {
+    .name         = "gps",
+    .help         = "Stream <sec> seconds of raw NMEA from the GNSS module",
+    .tokenizeArgs = true,
+    .context      = NULL,
+    .binding      = cmd_gps,
+  };
+  cli_add(gps_binding);
+
+  CliCommandBinding gpstx_binding = {
+    .name         = "gpstx",
+    .help         = "Send one NMEA/$PSTM sentence to the GNSS module",
+    .tokenizeArgs = true,
+    .context      = NULL,
+    .binding      = cmd_gpstx,
+  };
+  cli_add(gpstx_binding);
+
+  CliCommandBinding micdiag_binding = {
+    .name         = "micdiag",
+    .help         = "PDM wiring diagnostics: toggle counts on D1/D2 + pull test",
+    .tokenizeArgs = false,
+    .context      = NULL,
+    .binding      = cmd_micdiag,
+  };
+  cli_add(micdiag_binding);
+
+  CliCommandBinding micslot_binding = {
+    .name         = "micslot",
+    .help         = "micslot [a|b] - show or select which PDM microphone of the pair is decoded",
+    .tokenizeArgs = true,
+    .context      = NULL,
+    .binding      = cmd_micslot,
+  };
+  cli_add(micslot_binding);
+
+  CliCommandBinding gpsrst_binding = {
+    .name         = "gpsrst",
+    .help         = "Pulse the GNSS module reset line (bring-up fallback)",
+    .tokenizeArgs = false,
+    .context      = NULL,
+    .binding      = cmd_gpsrst,
+  };
+  cli_add(gpsrst_binding);
+
+  CliCommandBinding dfu_binding = {
+    .name         = "dfu",
+    .help         = "Reboot into the ROM bootloader for USB DFU flashing",
+    .tokenizeArgs = false,
+    .context      = NULL,
+    .binding      = cmd_dfu,
+  };
+  cli_add(dfu_binding);
 
   CliCommandBinding radio_binding = {
     .name         = "radio",
@@ -917,7 +1316,7 @@ void cli_init(cli_tx_fn tx)
     .context      = NULL,
     .binding      = cmd_radio,
   };
-  embeddedCliAddBinding(s_cli, radio_binding);
+  cli_add(radio_binding);
 
   CliCommandBinding proto_binding = {
     .name         = "proto",
@@ -926,7 +1325,7 @@ void cli_init(cli_tx_fn tx)
     .context      = NULL,
     .binding      = cmd_proto,
   };
-  embeddedCliAddBinding(s_cli, proto_binding);
+  cli_add(proto_binding);
 
   CliCommandBinding link_binding = {
     .name         = "link",
@@ -935,7 +1334,7 @@ void cli_init(cli_tx_fn tx)
     .context      = NULL,
     .binding      = cmd_link,
   };
-  embeddedCliAddBinding(s_cli, link_binding);
+  cli_add(link_binding);
 
   CliCommandBinding wakeup_binding = {
     .name         = "wakeup",
@@ -944,7 +1343,7 @@ void cli_init(cli_tx_fn tx)
     .context      = NULL,
     .binding      = cmd_wakeup,
   };
-  embeddedCliAddBinding(s_cli, wakeup_binding);
+  cli_add(wakeup_binding);
 
   /* PR 4 Phase C: load the persisted NodeConfig (or safe defaults - see
      protocol_service_load_config()'s own doc) BEFORE link_service_init(),
@@ -988,6 +1387,15 @@ void cli_init(cli_tx_fn tx)
      wakeup_response_callback()'s own doc for why this ordering, and
      wakeup_on_response() above for what it prints. */
   protocol_service_set_wakeup_response_callback(wakeup_on_response);
+
+  if (s_bindings_ok != s_bindings_tried)
+  {
+    s_bindings_short = true;
+    char line[64];
+    snprintf(line, sizeof(line), "CLI: only %u of %u commands registered",
+             (unsigned)s_bindings_ok, (unsigned)s_bindings_tried);
+    embeddedCliPrint(s_cli, line);
+  }
 
   embeddedCliProcess(s_cli); /* print the initial prompt */
 }

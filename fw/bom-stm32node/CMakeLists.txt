@@ -45,6 +45,21 @@ set_source_files_properties(${CMAKE_SOURCE_DIR}/Core/Src/pdm_pcm.c
     PROPERTIES COMPILE_OPTIONS "-O2"
 )
 
+# The DSP moved to fw/common/boomdetect, which re-applies -O2 on its own targets
+# and asserts that it took; a source property here is directory-scoped and
+# cannot reach them. What is left in this file is the port - microphone pacing,
+# snprintf, console writes - which does no FFT.
+#
+# It stays at -O2 anyway, for a different reason than the comment here used to
+# give: it runs inside the same 21.33 ms half-buffer deadline, calling
+# boomdetect_step() and formatting a line per frame between microphone blocks,
+# and Debug is -O0 -g3. Cheap insurance rather than the arithmetic argument that
+# applies to pdm_pcm above.
+set_source_files_properties(
+    ${CMAKE_SOURCE_DIR}/App/detect/detect_service.c
+    PROPERTIES COMPILE_OPTIONS "-O2"
+)
+
 # Create an executable object type
 add_executable(${CMAKE_PROJECT_NAME})
 
@@ -131,6 +146,18 @@ target_link_libraries(radio_layer PRIVATE RadioLib stm32cubemx)
 # see fw/common/boomlink/CMakeLists.txt for why.
 add_subdirectory(${CMAKE_SOURCE_DIR}/../common/boomlink boomlink)
 
+# The detection pipeline (MFCC, feature aggregation, classifier) and the
+# CMSIS-DSP it needs. Same reason boomlink lives outside this package: it is
+# arithmetic that has to be runnable and testable on a host, which nothing
+# under Core/ can be.
+#
+# CMSIS-DSP includes cmsis_compiler.h from CMSIS *Core*, which ships with the
+# device support package rather than with DSP - so the path is injected from
+# here rather than boomdetect reaching up into one board's tree.
+set(BOOMDETECT_CMSIS_CORE_DIR ${CMAKE_SOURCE_DIR}/Drivers/CMSIS CACHE PATH
+    "CMSIS Core headers for the CMSIS-DSP cross build")
+add_subdirectory(${CMAKE_SOURCE_DIR}/../common/boomdetect boomdetect)
+
 # The config storage wrapper's real flash backend (App/storage/, PR 4
 # Phase B) - a separate, STM32-specific static library rather than a source
 # added straight into ${CMAKE_PROJECT_NAME}, the same isolation radio_layer
@@ -177,6 +204,9 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     ${CMAKE_SOURCE_DIR}/Core/Src/cli.c
     ${CMAKE_SOURCE_DIR}/Core/Src/usb_cli.c
     ${CMAKE_SOURCE_DIR}/Core/Src/pcm_stream.c
+    ${CMAKE_SOURCE_DIR}/App/detect/detect_service.c
+    ${CMAKE_SOURCE_DIR}/Core/Src/dfu_boot.c
+    ${CMAKE_SOURCE_DIR}/Core/Src/gps.c
     ${CMAKE_SOURCE_DIR}/third_party/embedded-cli/lib/src/embedded_cli.c
 )
 
@@ -184,6 +214,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user defined include paths
     ${CMAKE_SOURCE_DIR}/Core/Inc
+    ${CMAKE_SOURCE_DIR}/App/detect
     ${CMAKE_SOURCE_DIR}/third_party/embedded-cli/lib/include
 )
 
@@ -216,6 +247,10 @@ target_link_libraries(${CMAKE_PROJECT_NAME}
     # Fleet discovery (boomlink.md section 8.6) - Ping/Pong and Wakeup/
     # WakeupResponse, wired the same way as the two services above.
     boomlink_system_service
+
+    # MFCC, feature aggregation and the classifier (fw/common/boomdetect);
+    # PUBLIC-links the CMSISDSP it fetches.
+    boomdetect
 
     # Add user defined libraries
 )

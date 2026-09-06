@@ -1,0 +1,39 @@
+version: "3"
+
+tasks:
+  setup:
+    desc: Create a venv with the fixture checker's dependencies
+    cmds:
+      - python3 -m venv .venv
+      - .venv/bin/pip install --quiet --upgrade pip
+      - .venv/bin/pip install --quiet -r requirements.txt
+
+  build:
+    desc: Configure and build the host-native detection library and its tests
+    aliases: [b]
+    cmds:
+      - cmake --preset Debug
+      - cmake --build --preset Debug
+
+  test:
+    desc: Build, then run the host test suite via CTest
+    aliases: [t]
+    deps: [build]
+    cmds:
+      - ctest --preset Debug
+
+  lint:
+    desc: Run ruff over the Python in this package
+    cmds:
+      - .venv/bin/ruff check tests
+
+  check-board:
+    desc: Compare a connected board's detselftest against the recorded fixture
+    cmds:
+      - .venv/bin/python tests/vectors/check_selftest.py {{.CLI_ARGS}}
+
+  clean:
+    desc: Remove the build directory
+    aliases: [c]
+    cmds:
+      - rm -rf build
