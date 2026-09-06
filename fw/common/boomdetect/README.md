@@ -66,7 +66,7 @@ keeps upstream pristine, avoids a `PATCH_COMMAND` that re-runs and fails on the
 second configure, and puts the licence attribution somewhere a reader will
 actually find it.
 
-## Two things a first-time reader should know
+## Three things a first-time reader should know
 
 **Adding this package makes the FIRMWARE build need the network.** CMSIS-DSP is
 fetched at configure time rather than vendored, which is what removed 11 MB and
@@ -83,6 +83,14 @@ differ by at most 1.8e-4 relative, decisions by at most 1.1e-6. That is why
 there are two fixtures rather than one, and it is the reason a future
 C-versus-Python parity suite has to state a tolerance instead of comparing bits.
 The scale this measurement suggests is 1e-6 on the decision.
+
+**"The same decisions the board would make" holds only for audio that went
+through the board's front end.** `pdm_pcm.c`'s CIC and FIR stay in the firmware
+and are not part of this package, and `boomdetect_push()`'s decimation is plain
+sample dropping with no anti-alias filter of its own - the 8 kHz FIR upstream of
+it is what makes that legitimate on the board. A WAV captured off the `stream`
+command at 48 kHz is therefore a valid input; a WAV from anywhere else answers a
+different question. Prefer `stream`-captured audio for any parity corpus.
 
 ## Regression fixture
 

@@ -10,6 +10,7 @@
  * nothing else.
  */
 #include "classifier.h"
+#include "dsp_config.h" /* BOOMDETECT_FEATURE_COUNT, for the assert below */
 #include "models.h"
 
 #include "arm_math.h"

@@ -6,6 +6,7 @@
 #include "bd_test.h"
 #include "boomdetect.h"
 #include "classifier.h"
+#include "extractor.h"
 
 #include <math.h>
 #include <string.h>
@@ -222,11 +223,118 @@ static void scenario_real_models_actually_run(void)
           (double)decisions[0][0]);
 }
 
+/* A second layout, so the extractor seam is exercised rather than described.
+   Writes a recognisable constant into every slot; nothing else in this build
+   produces BOOMDETECT_LAYOUT_MEAN_STD_DMEAN_CMAX + 7. */
+#define FAKE_LAYOUT (BOOMDETECT_LAYOUT_MEAN_STD_DMEAN_CMAX + 7u)
+#define FAKE_WIDTH  6u
+
+static void fake_extract(void *ctx, const float *frames, uint32_t nframes, uint32_t coeffs,
+                         float *out)
+{
+    (void)ctx;
+    (void)frames;
+    (void)nframes;
+    (void)coeffs;
+    for (uint32_t i = 0u; i < FAKE_WIDTH; i++)
+    {
+        out[i] = 100.0f + (float)i;
+    }
+}
+
+/* layout_id was a version tag with exactly one legal value: boomdetect_init()
+   compared it against a constant, so declaring a new layout made init fail while
+   the docs called it the extension point for a new feature representation. It is
+   now compared against the CONFIGURED extractor's, and this is what says so. */
+static void scenario_extractor_is_the_seam(void)
+{
+    static boomdetect_t d;
+    boomdetect_event_t  ev;
+    static int16_t      buf[BOOMDETECT_WINDOW_SIZE * 3u];
+
+    REQUIRE(boomdetect_extractor_count() >= 1u, "no extractors in this build");
+    const boomdetect_extractor_t *def = boomdetect_extractor_default();
+    REQUIRE(def != NULL, "boomdetect_extractor_default() returned NULL");
+    CHECK(def->layout_id == BOOMDETECT_LAYOUT_MEAN_STD_DMEAN_CMAX,
+          "the default extractor produces layout %u, models declare %u",
+          def->layout_id, BOOMDETECT_LAYOUT_MEAN_STD_DMEAN_CMAX);
+    CHECK(boomdetect_extractor_by_name("stats") == def, "by_name did not find the default");
+    CHECK(boomdetect_extractor_by_name("nope") == NULL, "an unknown extractor resolved");
+    CHECK(boomdetect_extractor_at(boomdetect_extractor_count()) == NULL,
+          "extractor_at() past the end should be NULL");
+
+    const boomdetect_extractor_t fake = {
+        .name = "fake", .layout_id = FAKE_LAYOUT, .n_features = FAKE_WIDTH,
+        .extract = fake_extract, .ctx = NULL,
+    };
+    const classifier_t fake_model = {
+        .name = "fake_model", .layout_id = FAKE_LAYOUT, .n_features = FAKE_WIDTH,
+        .feature_offset = 0u, .default_thr_milli = 0, .decide = probe_decide, .ctx = NULL,
+    };
+
+    boomdetect_config_t cfg = { .decimation = 3u, .squelch_milli = 0u, .thr_milli = 0 };
+
+    /* The real model against the new extractor: same width, different layout,
+       and that has to be refused - it is precisely the reordering a feature
+       count cannot catch. */
+    cfg.extractor  = &fake;
+    cfg.classifier = classifier_by_name("mlp_v6");
+    CHECK(!boomdetect_init(&d, &cfg),
+          "mlp_v6 was accepted against a foreign layout");
+
+    /* The new model against the real extractor: mirror image, same verdict. */
+    cfg.extractor  = NULL;
+    cfg.classifier = &fake_model;
+    CHECK(!boomdetect_init(&d, &cfg),
+          "a model declaring layout %u was accepted by the stats extractor",
+          (unsigned)FAKE_LAYOUT);
+
+    /* And the pair that agree, which is the whole point: a new representation
+       is an addition, not an edit to the pipeline. */
+    cfg.extractor  = &fake;
+    cfg.classifier = &fake_model;
+    REQUIRE(boomdetect_init(&d, &cfg), "a matching extractor/model pair was rejected");
+
+    for (uint32_t i = 0u; i < BOOMDETECT_WINDOW_SIZE * 3u; i++)
+    {
+        buf[i] = (int16_t)((i % 8u) * 900u);
+    }
+    bool got = false;
+    for (uint32_t f = 0u; f < BOOMDETECT_ACCUM_FRAMES + 4u && !got; f++)
+    {
+        boomdetect_push(&d, buf, BOOMDETECT_HOP * 3u);
+        while (boomdetect_step(&d, &ev))
+        {
+            if (ev.window.complete)
+            {
+                /* probe_decide returns features[0], and fake_extract writes
+                   100.0f there, so this value can only have come through the
+                   configured extractor. */
+                CHECK(ev.window.decision == 100.0f,
+                      "decision %.9g did not come from the configured extractor",
+                      (double)ev.window.decision);
+                got = true;
+            }
+        }
+    }
+    CHECK(got, "no window completed with the fake extractor");
+
+    /* A model may still read a slice, and the bound is now the extractor's
+       width rather than what boomdetect_t happens to hold. */
+    classifier_t too_wide = fake_model;
+    too_wide.feature_offset = 1u;
+    cfg.classifier = &too_wide;
+    CHECK(!boomdetect_init(&d, &cfg),
+          "a model reading %u features from offset 1 fits in %u and should not",
+          FAKE_WIDTH, FAKE_WIDTH);
+}
+
 int main(void)
 {
     scenario_lookup();
+    scenario_extractor_is_the_seam();
     scenario_two_families_differ();
     scenario_init_rejects_bad_models();
     scenario_real_models_actually_run();
-    BD_TEST_REPORT("registry_test", 48);  /* exact count from running the compiled binary */
+    BD_TEST_REPORT("registry_test", 60);  /* exact count from running the compiled binary */
 }

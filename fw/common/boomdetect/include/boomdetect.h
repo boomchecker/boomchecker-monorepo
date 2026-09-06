@@ -31,6 +31,7 @@
 
 #include "classifier.h"
 #include "dsp_config.h"
+#include "extractor.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -98,6 +99,11 @@ typedef struct
     int32_t thr_milli;
     /** Which model scores the windows. NULL selects classifier_default(). */
     const classifier_t *classifier;
+    /** What shape the model is handed. NULL selects
+        boomdetect_extractor_default(). init() checks the model's layout_id
+        against THIS rather than against a constant, which is what makes a new
+        feature representation an addition rather than an edit to the pipeline. */
+    const boomdetect_extractor_t *extractor;
 
     /* The three below are what make the train/deploy skew expressible rather
        than merely describable. Leave them 0 for the firmware's behaviour;
@@ -150,7 +156,14 @@ typedef struct
 /**
  * Detector state. Big (about 21 KB, mostly the FIFO), so give it static storage
  * rather than a stack frame. Held by the caller rather than hidden in this
- * translation unit so that a test can run several independently.
+ * translation unit rather than a hidden singleton, so several detectors can be
+ * driven side by side - pipeline_test does exactly that.
+ *
+ * "Independently" has one limit worth knowing: the CMSIS MFCC instance and its
+ * scratch buffer are file-static in src/mfcc_processor.c, shared by every
+ * detector. Sequential use is fine and that is all any consumer does; two
+ * threads stepping two detectors at once is not, and moving them in here would
+ * cost 8 KB per detector on a part with 640 KB.
  */
 typedef struct
 {

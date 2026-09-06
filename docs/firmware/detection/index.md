@@ -86,11 +86,20 @@ Adding a model is a new file under `models/`, one line in the registry, and one
 declaration in `models/models.h` so the compiler checks the pair.
 
 A model needing a different feature *representation* — raw frames for a CNN, say
-— is the case `layout_id` is shaped for, but it is not wired up: `boomdetect_init()`
-accepts exactly one value today and rejects everything else, because exactly one
-extractor exists. Adding a second means adding the extractor, the new id, and the
-dispatch in that check. The struct would not have to change, which is the whole
-claim being made here; nothing more than that is implemented.
+— adds a **feature extractor** rather than an edit to the pipeline.
+`boomdetect_extractor_t` (`include/extractor.h`) declares a name, the
+`layout_id` it produces and how wide it is, and `boomdetect_init()` checks the
+model's `layout_id` against the configured extractor's rather than against a
+constant. So a new representation is one file under `src/`, a new id, a line in
+the extractor registry, and a model that declares the same id; nothing in
+`boomdetect.c` changes.
+
+There is still exactly one extractor, `stats`, which is the aggregation
+described above. The seam was put in while there was one implementation
+deliberately: it is cheap now and expensive once a second one is being wedged in.
+`registry_test` drives a fake extractor with a foreign layout end to end, and
+checks that a mismatched pair in either direction is refused — which is what a
+feature *count* cannot catch, since reordering the statistics keeps the width.
 
 ## What is measured, and what is not
 

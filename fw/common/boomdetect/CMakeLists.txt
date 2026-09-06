@@ -232,6 +232,7 @@ endforeach()
 # tests/stub_registry.c does that, which is what turns the claim into a check.
 add_library(boomdetect_core OBJECT
   src/boomdetect.c
+  src/extractor_stats.c
   src/boomdetect_mfcc_f32.c
   src/boomdetect_selftest.c
   src/mfcc_processor.c

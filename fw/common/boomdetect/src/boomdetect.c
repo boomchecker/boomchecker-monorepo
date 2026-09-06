@@ -21,51 +21,6 @@
    however many detectors exist. */
 static bool s_mfcc_ready = false;
 
-/* Aggregate `nframes` MFCC frames into
-     [mean(13), std(13), dmean(13), cmax(13)]
-   population std (matching numpy's default, which is what the training used);
-   dmean = mean absolute frame-to-frame delta, which is what carries propeller
-   modulation; cmax = max - mean, a peakiness measure that does not move with
-   level.
-
-   All four are computed even though the linear SVM models only read the first
-   26: computing the full vector is what lets one pipeline feed either family. */
-static void aggregate(const float *frames, uint32_t nframes, float *out)
-{
-    for (uint32_t c = 0u; c < BOOMDETECT_MFCC_COEFFS; c++)
-    {
-        float sum = 0.0f;
-        float mx = frames[c];
-        for (uint32_t f = 0u; f < nframes; f++)
-        {
-            float v = frames[f * BOOMDETECT_MFCC_COEFFS + c];
-            sum += v;
-            if (v > mx)
-            {
-                mx = v;
-            }
-        }
-        float mean = sum / (float)nframes;
-        out[c] = mean;
-
-        float sq = 0.0f;
-        float dsum = 0.0f;
-        for (uint32_t f = 0u; f < nframes; f++)
-        {
-            float v = frames[f * BOOMDETECT_MFCC_COEFFS + c];
-            float d = v - mean;
-            sq += d * d;
-            if (f > 0u)
-            {
-                dsum += fabsf(v - frames[(f - 1u) * BOOMDETECT_MFCC_COEFFS + c]);
-            }
-        }
-        out[c + BOOMDETECT_MFCC_COEFFS] = sqrtf(sq / (float)nframes);
-        out[c + 2u * BOOMDETECT_MFCC_COEFFS] = dsum / (float)(nframes - 1u);
-        out[c + 3u * BOOMDETECT_MFCC_COEFFS] = mx - mean;
-    }
-}
-
 /* Median of up to BOOMDETECT_ACCUM_FRAMES values. Insertion sort on a copy: n
    is 14 at most, and sorting rms_hist in place would destroy the order. */
 static float median_of(const float *v, uint32_t n)
@@ -114,12 +69,27 @@ bool boomdetect_init(boomdetect_t *d, const boomdetect_config_t *cfg)
 
     const classifier_t *model = (cfg->classifier != NULL) ? cfg->classifier
                                                           : classifier_default();
+    const boomdetect_extractor_t *ex = (cfg->extractor != NULL)
+                                           ? cfg->extractor
+                                           : boomdetect_extractor_default();
+
+    if (ex == NULL || ex->extract == NULL || ex->n_features == 0u ||
+        ex->n_features > BOOMDETECT_FEATURE_COUNT)
+    {
+        return false;
+    }
 
     /* Refuse a model that does not fit rather than reading past the feature
        vector. Each model asserts its own dimensions at compile time, but a
-       caller can hand over any entry it likes, so check here too. */
-    if (model->decide == NULL || model->layout_id != BOOMDETECT_LAYOUT_MEAN_STD_DMEAN_CMAX ||
-        (uint32_t)model->feature_offset + model->n_features > BOOMDETECT_FEATURE_COUNT)
+       caller can hand over any entry it likes, so check here too.
+
+       The layout is compared against the EXTRACTOR's, not against a constant.
+       That is the difference between layout_id being an extension point and
+       being a version tag with one legal value: a new representation ships an
+       extractor and a model that agree, and neither this function nor anything
+       else in the pipeline changes. */
+    if (model->decide == NULL || model->layout_id != ex->layout_id ||
+        (uint32_t)model->feature_offset + model->n_features > ex->n_features)
     {
         return false;
     }
@@ -136,6 +106,7 @@ bool boomdetect_init(boomdetect_t *d, const boomdetect_config_t *cfg)
     memset(d, 0, sizeof(*d));
     d->cfg = *cfg;
     d->cfg.classifier = model;
+    d->cfg.extractor  = ex;
 
     /* Fill the window policy in here rather than at every call site. 0 means
        "the firmware's value", so a caller that zero-initialises its config gets
@@ -272,7 +243,9 @@ bool boomdetect_step(boomdetect_t *d, boomdetect_event_t *out)
 
             if (keep)
             {
-                aggregate(d->mfccs, d->accum, d->features);
+                const boomdetect_extractor_t *ext = d->cfg.extractor;
+                ext->extract(ext->ctx, d->mfccs, d->accum, BOOMDETECT_MFCC_COEFFS,
+                             d->features);
                 const classifier_t *model = d->cfg.classifier;
                 /* The entry declares where its slice starts and how wide it is,
                    so decide() reads from index 0 and needs to know nothing about

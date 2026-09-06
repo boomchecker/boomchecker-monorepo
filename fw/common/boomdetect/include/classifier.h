@@ -19,7 +19,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "dsp_config.h"
+#include "extractor.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -76,10 +76,7 @@ typedef struct
     void                *ctx;
 } classifier_t;
 
-/** Feature layout produced by the aggregation in boomdetect.c:
-    [mean, std, dmean, cmax] x BOOMDETECT_MFCC_COEFFS, in that order.
-    Bump when the contents or the order change, never when only a value does. */
-#define BOOMDETECT_LAYOUT_MEAN_STD_DMEAN_CMAX 1u
+/* The layout ids live in extractor.h, with the code that produces them. */
 
 /** @brief Look a model up by name. NULL if there is no such model. */
 const classifier_t *classifier_by_name(const char *name);
