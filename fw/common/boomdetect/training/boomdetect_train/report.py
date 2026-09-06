@@ -182,9 +182,50 @@ def render_report(
     ]
     tables = []
     details = []
+    summary_rows = []
     for m in models:
         df, thr, scored = evaluate_model(manifest, cache, m, rule, fa_per_hour)
         tables.append(df)
+        by_suite = {r.suite: r for r in df.itertuples(index=False)}
+
+        def cell(suite: str, field: str, nd: int = 3, rows=by_suite) -> str:
+            r = rows.get(suite)
+            if r is None:
+                return "-"
+            v = getattr(r, field)
+            return v if isinstance(v, str) else _fmt(v, nd)
+
+        stress_pct = "-"
+        if "stress" in scored:
+            neg = [c for c in scored["stress"] if c.label == 0]
+            tot = sum(c.decisions.shape[0] for c in neg)
+            fired = sum(int((c.decisions >= thr).sum()) for c in neg)
+            stress_pct = f"{100.0 * fired / tot:.1f}" if tot else "-"
+        summary_rows.append(
+            {
+                "model": m.name,
+                "auc_val": cell("val", "auc"),
+                "auc_halmstad": cell("halmstad", "auc"),
+                "auc_salford": cell("salford", "auc"),
+                "auc_real": cell("real_mic", "auc"),
+                "tpr_halmstad": cell("halmstad", "win_tpr", 2),
+                "clip_det_halmstad": cell("halmstad", "clip_det"),
+                "stress_fired_pct": stress_pct,
+                "_sort": by_suite["halmstad"].auc if "halmstad" in by_suite else float("nan"),
+            }
+        )
+    if summary_rows:
+        summary_rows.sort(key=lambda r: -(r["_sort"] if r["_sort"] == r["_sort"] else -1.0))
+        cols = [c for c in summary_rows[0] if not c.startswith("_")]
+        parts += [
+            "## Summary, ranked by window AUC on Halmstad (unseen)",
+            "",
+            "| " + " | ".join(cols) + " |",
+            "|" + "|".join("---" for _ in cols) + "|",
+        ]
+        for r in summary_rows:
+            parts.append("| " + " | ".join(str(r[c]) for c in cols) + " |")
+        parts += ["", "## Per suite", ""]
         if "stress" in scored:
             details.append(
                 (f"{m.name}: stress probes", per_category_false_alarms(scored["stress"], thr))

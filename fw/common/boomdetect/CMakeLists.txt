@@ -274,10 +274,22 @@ add_library(boomdetect_core OBJECT
   src/mfcc_processor.c
 )
 
-add_library(boomdetect STATIC
-  src/classifier_registry.c
+# One translation unit per model. `bdtrain export` generates model_<name>.c for
+# a trained model; adding it here, to models/models.h and to
+# src/classifier_registry.c is what puts it in the image (see
+# training/README.md, "Adding a model to the board").
+set(BOOMDETECT_MODEL_SOURCES
   models/model_mlp_v6.c
   models/model_svm_v3.c
+  models/model_svm_l2.c
+  models/model_gbt_l2.c
+  models/model_mlp_l2.c
+  models/model_cnn_1d.c
+)
+
+add_library(boomdetect STATIC
+  src/classifier_registry.c
+  ${BOOMDETECT_MODEL_SOURCES}
   $<TARGET_OBJECTS:boomdetect_core>
 )
 # PUBLIC is the API: boomdetect.h, classifier.h, dsp_config.h. The MFCC wrapper
@@ -424,7 +436,10 @@ if(BOOMDETECT_STANDALONE)
 
   # The items are source stems minus "_test": tests/registry_test.c builds
   # boomdetect_registry_test and registers as the ctest `boomdetect_registry`.
-  foreach(test IN ITEMS mfcc_smoke registry pipeline alarm nn_infer extractor)
+  # model_parity reads tests/vectors/parity_vectors.h, which `bdtrain export`
+  # regenerates whenever a model is exported; it holds every registered model's
+  # C forward pass to the Python one.
+  foreach(test IN ITEMS mfcc_smoke registry pipeline alarm nn_infer extractor model_parity)
     add_executable(boomdetect_${test}_test tests/${test}_test.c)
     target_link_libraries(boomdetect_${test}_test PRIVATE boomdetect)
     # tests/ for the harness, src/ because these are white-box tests: the MFCC

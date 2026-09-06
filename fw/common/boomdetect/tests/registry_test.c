@@ -340,5 +340,5 @@ int main(void)
     scenario_two_families_differ();
     scenario_init_rejects_bad_models();
     scenario_real_models_actually_run();
-    BD_TEST_REPORT("registry_test", 60);  /* exact count from running the compiled binary */
+    BD_TEST_REPORT("registry_test", 80);  /* exact count from running the compiled binary */
 }

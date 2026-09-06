@@ -96,5 +96,8 @@ int main(void)
 {
     scenario_every_entry_has_a_model_and_vice_versa();
     scenario_decisions_match();
-    BD_TEST_REPORT("model_parity_test", 20); /* raised by `bdtrain export`; see CMakeLists.txt */
+    /* Exact count from running the compiled binary: six models x 16 vectors x 2
+       checks plus the registry cross-checks. Re-read it off the binary whenever
+       a model is added or removed. */
+    BD_TEST_REPORT("model_parity_test", 223);
 }

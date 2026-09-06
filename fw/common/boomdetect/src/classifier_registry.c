@@ -22,6 +22,11 @@
 static const classifier_t *const s_models[] = {
     &classifier_mlp_v6,
     &classifier_svm_v3,
+    /* The comparison set from training run r2; see models/models.h. */
+    &classifier_svm_l2,
+    &classifier_gbt_l2,
+    &classifier_mlp_l2,
+    &classifier_cnn_1d,
 };
 
 size_t classifier_count(void)
