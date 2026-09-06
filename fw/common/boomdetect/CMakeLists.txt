@@ -47,6 +47,23 @@ if(BOOMDETECT_STANDALONE)
   # green run.
   option(BOOMDETECT_REQUIRE_SANITIZERS "Fail configuration if BOOMDETECT_SANITIZE is OFF" OFF)
 
+  # MinGW-w64 ships no libasan/libubsan, so the Debug preset cannot instrument
+  # there. Rather than fail the configure - which would leave a Windows
+  # developer with no host suite at all - build uninstrumented and say so.
+  # REQUIRE_SANITIZERS still fails, since a pipeline asking for instrumentation
+  # should not get a quiet downgrade.
+  if(BOOMDETECT_SANITIZE AND MINGW)
+    if(BOOMDETECT_REQUIRE_SANITIZERS)
+      message(FATAL_ERROR
+        "BOOMDETECT_REQUIRE_SANITIZERS is ON but MinGW has no sanitizer runtime.")
+    endif()
+    message(WARNING
+      "BOOMDETECT_SANITIZE is ON but this is MinGW, which ships no ASan/UBSan "
+      "runtime: building the suite uninstrumented. The instrumented run is what "
+      "CI does on Linux; do not read a green run here as proof of memory safety.")
+    set(BOOMDETECT_SANITIZE OFF)
+  endif()
+
   if(BOOMDETECT_SANITIZE)
     # Directory scope, so the fetched CMSIS-DSP is instrumented too. That is
     # deliberate: this package indexes float arrays by counts that come out of
@@ -73,6 +90,14 @@ if(BOOMDETECT_STANDALONE)
 endif()
 
 set(BOOMDETECT_WARNING_FLAGS -Wall -Wextra)
+
+# MinGW's default printf is msvcrt's, whose format checker does not know %zu, so
+# every size_t in a test message is a -Wformat error under -Werror. The ANSI
+# stdio shim gives the C99 conversions; directory scope because the tests are
+# the ones that print, and they are several targets.
+if(MINGW)
+  add_compile_definitions(__USE_MINGW_ANSI_STDIO=1)
+endif()
 
 # Kept separate from the warning flags and guarded on STANDALONE as well as on
 # the option: the option only exists in that branch, so a bare
@@ -210,7 +235,13 @@ foreach(_i RANGE ${_last})
       "CMSIS-DSP ${BOOMDETECT_CMSISDSP_TAG} does not contain ${_rel}. "
       "src/boomdetect_mfcc_f32.c is derived from it; the pin moved under us.")
   endif()
-  file(SHA256 "${_path}" _got)
+  # Hash the CONTENT with line endings normalised, not the file: a Windows git
+  # with core.autocrlf=true checks the fetched tree out with CRLF, and file(SHA256)
+  # then reports a drift that is not one. The two files are text, so reading
+  # them into a string is safe; CMake's file(READ) keeps the bytes as they are.
+  file(READ "${_path}" _content)
+  string(REPLACE "\r\n" "\n" _content "${_content}")
+  string(SHA256 _got "${_content}")
   if(NOT _got STREQUAL _want)
     message(FATAL_ERROR
       "Upstream ${_rel} changed.\n"
@@ -322,9 +353,19 @@ if(BOOMDETECT_STANDALONE)
     ${CMAKE_CURRENT_SOURCE_DIR}/tests)
   target_compile_options(boomdetect_bd_test_selfcheck PRIVATE
     ${BOOMDETECT_WARNING_FLAGS} ${BOOMDETECT_WERROR_FLAGS})
-  add_test(NAME boomdetect_test_harness
-    COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/tests/check_bd_test.sh
-            $<TARGET_FILE:boomdetect_bd_test_selfcheck>)
+  # Through an explicit interpreter: ctest cannot exec a .sh directly on Windows
+  # (BAD_COMMAND), and Git for Windows puts a POSIX sh on the PATH. If there is
+  # none the test is left out with a warning rather than registered to fail.
+  find_program(BOOMDETECT_SH NAMES sh bash)
+  if(BOOMDETECT_SH)
+    add_test(NAME boomdetect_test_harness
+      COMMAND ${BOOMDETECT_SH} ${CMAKE_CURRENT_SOURCE_DIR}/tests/check_bd_test.sh
+              $<TARGET_FILE:boomdetect_bd_test_selfcheck>)
+  else()
+    message(WARNING
+      "no POSIX sh found: boomdetect_test_harness (the check that the test "
+      "harness can fail) is not registered on this host.")
+  endif()
 
   # The fixture generator as an executable, which is what lets a host reproduce
   # tests/vectors/ without a board, and what a future parity harness drives.
@@ -341,11 +382,25 @@ if(BOOMDETECT_STANDALONE)
   # measured. check_selftest.py compares the board against its own fixture; this
   # compares the host against its own. Whether the two agree is a finding either
   # way, and tests/vectors/README.md records what was actually observed.
-  add_test(NAME boomdetect_selftest_host
-    COMMAND ${CMAKE_COMMAND}
-            -DTOOL=$<TARGET_FILE:boomdetect_selftest_tool>
-            -DEXPECTED=${CMAKE_CURRENT_SOURCE_DIR}/tests/vectors/selftest_host.txt
-            -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/run_selftest_host.cmake)
+  #
+  # The bit-exact claim holds for the toolchain that recorded the file (the
+  # Linux CI compiler). MinGW-w64 at -O2 is the same C with a different
+  # instruction selection and lands a few ULP away - measured 4.1e-7 relative
+  # on the worst feature, 6.8e-7 on a decision, see the fixture's header - so
+  # there the tool compares within a tolerance an order of magnitude above that
+  # measurement. Anywhere else the comparison stays exact.
+  if(MINGW)
+    add_test(NAME boomdetect_selftest_host
+      COMMAND boomdetect_selftest_tool
+              --compare ${CMAKE_CURRENT_SOURCE_DIR}/tests/vectors/selftest_host.txt
+              --rel 1e-5)
+  else()
+    add_test(NAME boomdetect_selftest_host
+      COMMAND ${CMAKE_COMMAND}
+              -DTOOL=$<TARGET_FILE:boomdetect_selftest_tool>
+              -DEXPECTED=${CMAKE_CURRENT_SOURCE_DIR}/tests/vectors/selftest_host.txt
+              -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/run_selftest_host.cmake)
+  endif()
 
   # Links the pipeline against a one-model fake registry, with neither
   # classifier_registry.c nor the model translation units present.
