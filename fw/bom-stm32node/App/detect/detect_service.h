@@ -33,24 +33,10 @@
 /** Default RMS gate, in 1/1000 of full scale. */
 #define DETECT_DEFAULT_SQUELCH_MILLI 10
 
-/**
- * Default decision threshold, in 1/1000. Belongs to the model compiled into
- * fw/common/boomdetect (currently the v6 MLP, whose decision is a raw logit
- * rather than a probability - hence a value nowhere near 0.5).
- *
- * 15.0 was measured on hardware: pick_champion.py's offline +7.25 fired on 23
- * of 396 windows of ordinary room noise, peaking at 12.05, and a second
- * three-minute campaign at 15.0 saw none. That was ambient noise with no drone
- * present, so the sensitivity it gives up is unquantified - it is a field
- * default chosen to stop crying wolf, not an operating point swept on labelled
- * data.
- *
- * Change this together with the model include in boomdetect: a linear SVM
- * header left at a logit threshold (its decisions live around +-3) is a
- * detector that never fires. The classifier registry makes the pairing
- * mechanical.
- */
-#define DETECT_DEFAULT_THR_MILLI 15000
+/* The decision threshold is NOT here. It belongs to the model - a linear SVM's
+   decisions live around +-3 while an MLP's are unbounded logits - so it is
+   classifier_t::default_thr_milli, and the measurement behind the deployed
+   model's value is recorded beside it in boomdetect/models/model_mlp_v6.c. */
 
 /**
  * @brief Run detection for `seconds` (clamped to 1..60) and stream results.

@@ -42,6 +42,9 @@ extern "C" {
 /** Frame hop, in 16 kHz samples. Frames are WINDOW_SIZE long and overlap. */
 #define BOOMDETECT_HOP 512u
 
+/** last_mfcc_slot when the last step computed no MFCC (squelched, or none yet). */
+#define BOOMDETECT_NO_MFCC 0xFFFFFFFFu
+
 /**
  * Sample FIFO length, in decimated samples. Must hold one window plus slack:
  * at 48 kHz in and /3 decimation the caller delivers ~341 samples per block
@@ -141,9 +144,13 @@ void boomdetect_counts(const boomdetect_t *d, uint32_t *windows, uint32_t *drone
 /**
  * @brief MFCC coefficients of the frame the last successful step() consumed.
  *
- * NUM_MFCC_COEFFS values, valid until the next step(). Exists for the parity
- * fixtures, which have to compare each stage of the chain rather than only its
- * verdict.
+ * NUM_MFCC_COEFFS values, valid until the next step(). NULL when the last step
+ * computed none - a squelched frame is a successful step that skips the MFCC,
+ * and returning the previous frame's coefficients there would hand a parity
+ * harness a duplicate it would report as a mismatch of its own.
+ *
+ * Exists for the parity fixtures, which compare each stage of the chain rather
+ * than only its verdict.
  */
 const float *boomdetect_last_mfcc(const boomdetect_t *d);
 
@@ -151,6 +158,7 @@ const float *boomdetect_last_mfcc(const boomdetect_t *d);
  * @brief The aggregated feature vector of the last completed window.
  *
  * DET_FEATURE_COUNT values in [mean, std, dmean, cmax] x NUM_MFCC_COEFFS order.
+ * NULL before the first window completes.
  */
 const float *boomdetect_last_features(const boomdetect_t *d);
 

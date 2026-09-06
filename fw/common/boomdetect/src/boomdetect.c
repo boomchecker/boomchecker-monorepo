@@ -97,11 +97,21 @@ bool boomdetect_init(boomdetect_t *d, const boomdetect_config_t *cfg)
     memset(d, 0, sizeof(*d));
     d->cfg = *cfg;
     d->cfg.classifier = model;
+    d->last_mfcc_slot = BOOMDETECT_NO_MFCC;
     return true;
 }
 
 void boomdetect_push(boomdetect_t *d, const int16_t *pcm, size_t n)
 {
+    /* A caller that ignored a failed init leaves decimation at 0, and the loop
+       below would then never advance i: it would fill the FIFO and spin forever
+       incrementing dropped. On the board that is a watchdog reset with no
+       diagnostic, so refuse rather than hang. */
+    if (d == NULL || pcm == NULL || d->cfg.decimation == 0u)
+    {
+        return;
+    }
+
     /* Decimate straight into the FIFO, carrying the phase across calls: a
        block is not generally a multiple of the decimation factor, so restarting
        at zero each time would repeat or skip a sample at every boundary. */
@@ -122,6 +132,10 @@ void boomdetect_push(boomdetect_t *d, const int16_t *pcm, size_t n)
 
 bool boomdetect_step(boomdetect_t *d, boomdetect_event_t *out)
 {
+    if (d == NULL || out == NULL || d->cfg.decimation == 0u)
+    {
+        return false;
+    }
     if (d->avail < WINDOW_SIZE)
     {
         return false;
@@ -149,6 +163,11 @@ bool boomdetect_step(boomdetect_t *d, boomdetect_event_t *out)
            windows were selected - see the note in boomdetect.h. */
         d->accum = 0u;
         out->squelched = true;
+        /* No MFCC was computed for this frame. Without this the accessor would
+           keep returning the previously accepted frame's coefficients, and a
+           parity harness logging one vector per step would record that vector
+           twice and report a mismatch that is its own. */
+        d->last_mfcc_slot = BOOMDETECT_NO_MFCC;
     }
     else
     {
@@ -214,10 +233,16 @@ void boomdetect_counts(const boomdetect_t *d, uint32_t *windows, uint32_t *drone
 
 const float *boomdetect_last_mfcc(const boomdetect_t *d)
 {
+    if (d->last_mfcc_slot >= BOOMDETECT_ACCUM_FRAMES)
+    {
+        return NULL;
+    }
     return &d->mfccs[d->last_mfcc_slot * NUM_MFCC_COEFFS];
 }
 
 const float *boomdetect_last_features(const boomdetect_t *d)
 {
-    return d->features;
+    /* Zeroed until a window completes, which is a plausible-looking feature
+       vector rather than an obvious absence - so say nothing instead. */
+    return (d->windows == 0u) ? NULL : d->features;
 }

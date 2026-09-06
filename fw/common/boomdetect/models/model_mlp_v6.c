@@ -3,10 +3,18 @@
  * @brief The deployed model: a 51 -> 32 -> 1 ReLU MLP.
  *
  * Selected by pick_champion.py as the winner of the bebop/membo alarm criterion
- * with zero two-window false alarms, at an operating point of +7.25. That
- * threshold was later raised to 15.0 after the model was measured on hardware
- * for the first time - see DETECT_DEFAULT_THR_MILLI in detect_service.h for the
- * measurement and for what it does not prove.
+ * with zero two-window false alarms, at an operating point of +7.25.
+ *
+ * default_thr_milli below is 15000, not 7250, because +7.25 was chosen offline
+ * against recordings and this was the first time the model met a node with a
+ * working microphone: it fired on 23 of 396 windows of ordinary office noise,
+ * peaking at 12.05, and a second three-minute campaign at 15.0 saw none.
+ *
+ * What that number is not: it was measured against ambient noise with no drone
+ * present, so the sensitivity it gives up is unquantified, and the spread
+ * between sessions (one peaked at 12.05, another at 2.77, same board and
+ * firmware) is wider than the change it justified. A field default chosen to
+ * stop crying wolf, not an operating point swept on labelled data.
  *
  * The decision is a raw logit, not a probability. A threshold that looks
  * sensible for a probability (0.5, say) is nowhere near this model's operating
@@ -18,12 +26,12 @@
 #include "arm_math.h"
 #include "mlp_model_data_v6.h"
 
-_Static_assert(MLP_NUM_INPUTS + 1u == DET_FEATURE_COUNT,
-               "mlp_v6 expects a different feature count than the aggregate produces");
-
 /* Feature 0 is the mean of MFCC coefficient 0, which tracks absolute level.
    This family is trained to be gain-invariant, so it starts at 1. */
 #define MLP_V6_OFFSET 1u
+
+_Static_assert(MLP_V6_OFFSET + MLP_NUM_INPUTS == DET_FEATURE_COUNT,
+               "mlp_v6's slice does not cover the features the aggregate produces");
 
 static float mlp_v6_decide(const void *ctx, const float *features)
 {

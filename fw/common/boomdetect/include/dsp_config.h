@@ -9,7 +9,13 @@
 /* Audio Sampling Configuration */
 #define SAMPLING_RATE       16000.0f    /* 16 kHz sampling rate */
 #define WINDOW_SIZE         1024        /* Number of audio samples per processing window */
-#define FFT_SIZE            1024        /* FFT size (must be >= WINDOW_SIZE and power of 2) */
+/* Both are pinned to 1024 by arm_mfcc_init_1024_f32(), which hardcodes the FFT
+   length; mfcc_processor.c static-asserts it. The old comment here said FFT_SIZE
+   "must be >= WINDOW_SIZE", which invited a combination that silently overruns:
+   the transform reads and writes fftLen floats through a buffer sized from
+   WINDOW_SIZE, and in boomdetect_t that buffer is immediately followed by the
+   accumulated MFCC frames and the feature vector. */
+#define FFT_SIZE            1024        /* == WINDOW_SIZE, see above */
 
 /* MFCC Configuration */
 #define NUM_MFCC_COEFFS     13          /* Number of MFCC coefficients to extract */

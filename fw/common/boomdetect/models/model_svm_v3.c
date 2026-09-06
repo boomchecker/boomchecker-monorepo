@@ -14,8 +14,14 @@
 #include "arm_math.h"
 #include "svm_model_data_v3.h"
 
-_Static_assert(SVM_NUM_FEATURES <= DET_FEATURE_COUNT,
-               "svm_v3 reads more features than the aggregate produces");
+/* This family reads the vector from the start; the MLPs skip feature 0. */
+#define SVM_V3_OFFSET 0u
+
+/* Mirrors the runtime check in boomdetect_init: the offset has to be in it, or
+   retargeting this model at a later slice passes the assert and is caught only
+   at run time. */
+_Static_assert(SVM_V3_OFFSET + SVM_NUM_FEATURES <= DET_FEATURE_COUNT,
+               "svm_v3's slice runs past the features the aggregate produces");
 
 static float svm_v3_decide(const void *ctx, const float *features)
 {
@@ -36,7 +42,7 @@ const classifier_t classifier_svm_v3 = {
     .name              = "svm_v3",
     .layout_id         = BOOMDETECT_LAYOUT_MEAN_STD_DMEAN_CMAX,
     .n_features        = SVM_NUM_FEATURES,
-    .feature_offset    = 0u,
+    .feature_offset    = SVM_V3_OFFSET,
     /* 500, not 15000: this family's decision lives around +-3, so the MLP's
        logit threshold would be a detector that never fires. */
     .default_thr_milli = 500,

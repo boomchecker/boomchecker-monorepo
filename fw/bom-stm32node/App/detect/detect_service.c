@@ -180,7 +180,15 @@ void detect_service_run(uint32_t seconds, uint32_t squelch_milli, int32_t thr_mi
   };
   if (!boomdetect_init(&s_det, &cfg))
   {
-    det_abort("DETERR mfcc init failed\r\n");
+    /* Four distinct causes, and three have nothing to do with the MFCC: bad
+       arguments, decimation 0, a model the registry rejected (no decide
+       function, a foreign layout_id, or a slice past the feature vector), and
+       only then an MFCC table failure. Reporting them all as "mfcc init
+       failed" sent the reader to the wrong half of the system. */
+    char reason[80];
+    snprintf(reason, sizeof(reason), "DETERR init failed for model %s\r\n",
+             detect_service_model()->name);
+    det_abort(reason);
     return;
   }
 
@@ -254,6 +262,16 @@ void detect_service_run(uint32_t seconds, uint32_t squelch_milli, int32_t thr_mi
    the kept samples are the same ones a continuous stream would give. */
 #define DST_BLOCK 3072u
 
+/* 6 KB, and static for the same reason s_det is: it was 37 % of the MSPLIM
+   budget as a stack frame, in a function that also calls snprintf while USB
+   interrupts nest on top - the exact combination that hard-faulted this board
+   once already (see the rationale in STM32H563xx_FLASH.ld). */
+static int16_t s_dst_block[DST_BLOCK];
+
+_Static_assert(DST_BLOCK % 3u == 0u,
+               "DST_BLOCK must be a multiple of the decimation factor, or the "
+               "kept samples shift and the fixture no longer matches");
+
 /* One sample of the reference signal. Integer LCG, so every platform produces
    the same bits - a sinf() table would differ in the last place between the
    Cortex-M33 and an x86 host and would defeat the whole point. Amplitude is
@@ -292,7 +310,6 @@ void detect_service_selftest(void)
   static const char *stat[4] = { "mean", "std ", "dmea", "cmax" };
   char     line[160];
   char     prefix[24];
-  int16_t  block[DST_BLOCK];
   uint32_t state = DST_LCG_SEED;
   uint32_t fnv = 2166136261u;
   uint32_t windows = 0u;
@@ -305,17 +322,29 @@ void detect_service_selftest(void)
   /* No squelch: the gate is a policy knob, and letting it drop frames would
      make the fixture depend on the signal's level rather than on the arithmetic
      it is meant to pin down. */
+  /* Pinned to the deployed model so the fixture does not shift when someone
+     leaves another one selected - and resolved explicitly, because a NULL from
+     by_name() is not an error to boomdetect_init(), it silently means "use the
+     default". Rename or reorder the registry and this would quietly measure a
+     different model while the reference file sends the reader hunting for a
+     lost -O2 or a flipped LOOPUNROLL. */
+  const classifier_t *model = classifier_by_name("mlp_v6");
+  if (model == NULL)
+  {
+    det_print("DSTERR model mlp_v6 is not in this image\r\n");
+    det_print("DSTEND frames=0 windows=0 err=1\r\n");
+    return;
+  }
+
   const boomdetect_config_t cfg = {
     .decimation    = (uint16_t)(PCM_FS_HZ / 16000u),
     .squelch_milli = 0u,
-    /* Fixed to the deployed model and its own operating point, so the fixture
-       does not shift when someone leaves another model selected. */
-    .thr_milli     = 15000,
-    .classifier    = classifier_by_name("mlp_v6"),
+    .thr_milli     = model->default_thr_milli,
+    .classifier    = model,
   };
   if (!boomdetect_init(&s_det, &cfg))
   {
-    det_print("DSTERR mfcc init failed\r\n");
+    det_print("DSTERR detector init failed\r\n");
     det_print("DSTEND frames=0 windows=0 err=1\r\n");
     return;
   }
@@ -337,13 +366,13 @@ void detect_service_selftest(void)
     for (uint32_t i = 0u; i < n; i++)
     {
       const int16_t x = dst_sample(&state);
-      block[i] = x;
+      s_dst_block[i] = x;
       /* FNV-1a over the generated samples: proves both sides scored the same
          input before comparing anything downstream of it. */
       fnv = (fnv ^ (uint32_t)((uint16_t)x & 0xFFu)) * 16777619u;
       fnv = (fnv ^ (uint32_t)(((uint16_t)x >> 8) & 0xFFu)) * 16777619u;
     }
-    boomdetect_push(&s_det, block, n);
+    boomdetect_push(&s_det, s_dst_block, n);
 
     /* Drain fully here. detect_service_run caps this at one frame per block to
        keep USB fed; that is a pacing constraint, not arithmetic, so draining
@@ -351,12 +380,16 @@ void detect_service_selftest(void)
     boomdetect_event_t ev;
     while (boomdetect_step(&s_det, &ev))
     {
-      if (ev.frame_index < DST_MFCC_FRAMES)
+      /* NULL for a squelched frame, which cannot happen here because this
+         runs with squelch 0 - but that is an accident of the config above, not
+         a property of the accessor, and dereferencing it would be a hard fault
+         on the board rather than a wrong number. */
+      const float *mf = boomdetect_last_mfcc(&s_det);
+      if (ev.frame_index < DST_MFCC_FRAMES && mf != NULL)
       {
         snprintf(prefix, sizeof(prefix), "DSTMFCC f=%lu",
                  (unsigned long)ev.frame_index);
-        dst_print_vec(line, sizeof(line), prefix, boomdetect_last_mfcc(&s_det),
-                      NUM_MFCC_COEFFS);
+        dst_print_vec(line, sizeof(line), prefix, mf, NUM_MFCC_COEFFS);
       }
 
       if (ev.window_complete)

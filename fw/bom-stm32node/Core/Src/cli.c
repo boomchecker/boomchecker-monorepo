@@ -147,6 +147,7 @@ static void cmd_streamtest(EmbeddedCli *cli, char *args, void *context)
 static void cmd_detect(EmbeddedCli *cli, char *args, void *context)
 {
   (void)context;
+  char line[80];
   const uint16_t ntok = embeddedCliGetTokenCount(args);
   if (ntok < 1 || ntok > 4)
   {
@@ -185,7 +186,10 @@ static void cmd_detect(EmbeddedCli *cli, char *args, void *context)
     thr = strtol(tok, &end, 10);
     if (end == tok || thr < -20000 || thr > 20000)
     {
-      embeddedCliPrint(cli, "thr_milli: -20000..20000 (mlp_v6 default 15000 = logit 15.0)");
+      snprintf(line, sizeof(line), "thr_milli: -20000..20000 (%s default %ld)",
+               detect_service_model()->name,
+               (long)detect_service_model()->default_thr_milli);
+      embeddedCliPrint(cli, line);
       return;
     }
   }
@@ -194,6 +198,13 @@ static void cmd_detect(EmbeddedCli *cli, char *args, void *context)
   {
     tok = embeddedCliGetToken(args, 4);
     dbg = strtoul(tok, &end, 10);
+    /* The only argument that used to accept anything: `detect 10 10 15000 on`
+       silently ran without the breadcrumbs the operator asked for. */
+    if (end == tok || dbg > 1u)
+    {
+      embeddedCliPrint(cli, "dbg: 0 or 1");
+      return;
+    }
   }
   /* Emits LVL/DET/DETEND text lines on the console; see detect_service.h. */
   detect_service_run((uint32_t)sec, (uint32_t)squelch, (int32_t)thr, (uint32_t)dbg);
@@ -1148,7 +1159,18 @@ void cli_init(cli_tx_fn tx)
   {
     /* Static buffer too small. Do NOT trap here: the USB device stack must keep
        being serviced from the main loop, so a CLI failure must not dead-loop.
-       cli_process()/cli_feed() are NULL-guarded and simply no-op. */
+       cli_process()/cli_feed() are NULL-guarded and simply no-op.
+
+       Say so on the wire first, though. This drops EVERY command, not just the
+       ones past a limit, and it is the failure the binding counter added below
+       does not cover - it is also the one that gets closer every time
+       maxBindingCount or historyBufferSize grows. Without this the board
+       enumerates as a CDC port that answers nothing, with no clue why. */
+    if (s_tx != NULL)
+    {
+      static const char msg[] = "CLI: static buffer too small, no commands registered\r\n";
+      (void)s_tx((const uint8_t *)msg, (uint16_t)(sizeof(msg) - 1u));
+    }
     return;
   }
   s_cli->writeChar = cli_write_char;
