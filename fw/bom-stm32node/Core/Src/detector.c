@@ -74,7 +74,7 @@ static void det_print(const char *line)
 static void det_abort(const char *reason)
 {
   det_print(reason);
-  det_print("DETEND windows=0 drones=0 overrun=0 err=1\n");
+  det_print("DETEND windows=0 drones=0 overrun=0 err=1\r\n");
 }
 
 /* Wait for one processed PCM block, keeping the USB device serviced. The pump
@@ -150,7 +150,12 @@ void detector_run(uint32_t seconds, uint32_t squelch_milli, int32_t thr_milli,
                   uint32_t debug)
 {
   static uint8_t s_dsp_ready = 0u;
-  char           line[64];
+  /* 80, not 64: the dbg breadcrumb "F=%lu a=%lu r=%lu h=%lu m=%lu" needs 67
+     bytes if every counter runs to 32 bits. Real runs stay near 34 (frame_idx
+     tops out at 1875 for a 60 s capture), but det_half_us/det_mfcc_us are
+     DWT cycle deltas, which go wild if the core is halted under a debugger -
+     and a truncated line loses its CRLF, breaking the console framing. */
+  char           line[80];
   char           dec_str[16];
 
   const float squelch   = (float)squelch_milli / 1000.0f;
@@ -169,7 +174,7 @@ void detector_run(uint32_t seconds, uint32_t squelch_milli, int32_t thr_milli,
   {
     if (mfcc_init() != ARM_MATH_SUCCESS)
     {
-      det_abort("DETERR mfcc init failed\n");
+      det_abort("DETERR mfcc init failed\r\n");
       return;
     }
     svm_classifier_init();
@@ -186,7 +191,7 @@ void detector_run(uint32_t seconds, uint32_t squelch_milli, int32_t thr_milli,
   mic_dma_init(); /* no-op when already built (shared with pcm_stream) */
   if (mic_start() != 0)
   {
-    det_abort("DETERR mic start failed\n");
+    det_abort("DETERR mic start failed\r\n");
     return;
   }
 
@@ -253,7 +258,7 @@ void detector_run(uint32_t seconds, uint32_t squelch_milli, int32_t thr_milli,
 
       if (debug)
       {
-        snprintf(line, sizeof(line), "F=%lu a=%lu r=%lu h=%lu m=%lu\n",
+        snprintf(line, sizeof(line), "F=%lu a=%lu r=%lu h=%lu m=%lu\r\n",
                  (unsigned long)frame_idx, (unsigned long)accum,
                  (unsigned long)(rms * 1000.0f),
                  (unsigned long)det_half_us, (unsigned long)det_mfcc_us);
@@ -264,7 +269,7 @@ void detector_run(uint32_t seconds, uint32_t squelch_milli, int32_t thr_milli,
       {
         uint32_t t_ms = (frame_idx * DET_HOP) / 16u;
         fmt_milli(dec_str, sizeof(dec_str), rms);
-        snprintf(line, sizeof(line), "LVL t=%lu.%03lu rms=%s\n",
+        snprintf(line, sizeof(line), "LVL t=%lu.%03lu rms=%s\r\n",
                  (unsigned long)(t_ms / 1000u), (unsigned long)(t_ms % 1000u),
                  dec_str);
         det_print(line);
@@ -295,7 +300,7 @@ void detector_run(uint32_t seconds, uint32_t squelch_milli, int32_t thr_milli,
 
           uint32_t t_ms = (win_start_frame * DET_HOP) / 16u; /* /16000*1000 */
           fmt_milli(dec_str, sizeof(dec_str), decision);
-          snprintf(line, sizeof(line), "DET t=%lu.%03lu dec=%s %s\n",
+          snprintf(line, sizeof(line), "DET t=%lu.%03lu dec=%s %s\r\n",
                    (unsigned long)(t_ms / 1000u), (unsigned long)(t_ms % 1000u),
                    dec_str, is_drone ? "DRONE" : "noise");
           det_print(line);
@@ -317,7 +322,7 @@ void detector_run(uint32_t seconds, uint32_t squelch_milli, int32_t thr_milli,
 
   mic_stop();
 
-  snprintf(line, sizeof(line), "DETEND windows=%lu drones=%lu overrun=%u err=%u\n",
+  snprintf(line, sizeof(line), "DETEND windows=%lu drones=%lu overrun=%u err=%u\r\n",
            (unsigned long)windows, (unsigned long)drones,
            ((mic_got && mic_overrun()) || ring_drops != 0u) ? 1u : 0u,
            (mic_ok && mic_got) ? 0u : 1u);

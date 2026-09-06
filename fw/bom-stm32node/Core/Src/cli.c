@@ -324,7 +324,7 @@ static void cmd_dfu(EmbeddedCli *cli, char *args, void *context)
   (void)context;
   /* Bypass the CLI TX ring: the jump never returns, so push the farewell out
      synchronously before detaching from the bus. */
-  static const char msg[] = "DFU: rebooting into the ROM bootloader\n";
+  static const char msg[] = "DFU: rebooting into the ROM bootloader\r\n";
   (void)usb_cli_flush_tx();
   (void)usb_cli_write_blocking((const uint8_t *)msg, sizeof(msg) - 1u);
   dfu_boot_enter();

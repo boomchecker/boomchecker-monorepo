@@ -294,8 +294,8 @@ void mic_diag_run(void)
 
   if (PDM_D1_GPIO_Port != GPIOE || PDM_D2_GPIO_Port != GPIOE)
   {
-    diag_print("MICDIAG PDM data pins are not on GPIOE - probe not ported\n");
-    diag_print("MICDIAGEND err=1\n");
+    diag_print("MICDIAG PDM data pins are not on GPIOE - probe not ported\r\n");
+    diag_print("MICDIAGEND err=1\r\n");
     return;
   }
   for (uint32_t k = 0u; k < 2u; k++)
@@ -307,8 +307,8 @@ void mic_diag_run(void)
   mic_dma_init();
   if (mic_start() != 0)
   {
-    diag_print("MICDIAG mic start failed\n");
-    diag_print("MICDIAGEND err=1\n");
+    diag_print("MICDIAG mic start failed\r\n");
+    diag_print("MICDIAGEND err=1\r\n");
     return;
   }
   HAL_Delay(30); /* IM67D130A: startup <= 20 ms after VDD+CLOCK */
@@ -342,7 +342,7 @@ void mic_diag_run(void)
 
   for (uint32_t k = 0u; k < 2u; k++)
   {
-    snprintf(line, sizeof(line), "MICDIAG %s clk=on toggles=%lu hi=%lu/%lu\n",
+    snprintf(line, sizeof(line), "MICDIAG %s clk=on toggles=%lu hi=%lu/%lu\r\n",
              pin_name[k], (unsigned long)togg[k], (unsigned long)hi[k],
              (unsigned long)samples);
     diag_print(line);
@@ -362,7 +362,7 @@ void mic_diag_run(void)
     MODIFY_REG(GPIOE->PUPDR, 3u << pos2, 0u);           /* no pull      */
     MODIFY_REG(GPIOE->MODER, 3u << pos2, 2u << pos2);   /* back to AF   */
     snprintf(line, sizeof(line),
-             "MICDIAG %s clk=off pu=%lu pd=%lu (%s)\n", pin_name[k],
+             "MICDIAG %s clk=off pu=%lu pd=%lu (%s)\r\n", pin_name[k],
              (unsigned long)pu, (unsigned long)pd,
              (pu == 1u && pd == 0u) ? "floating/tri-state"
              : (pu == 0u)           ? "driven/shorted LOW"
@@ -376,10 +376,10 @@ void mic_diag_run(void)
      from a quiet room in a short measurement - run `detect` for a few seconds
      and compare, or flip with `micslot`. */
   const uint16_t active = mic_get_slot_mask();
-  snprintf(line, sizeof(line), "MICDIAG active slot=%s (0x%04X)\n",
+  snprintf(line, sizeof(line), "MICDIAG active slot=%s (0x%04X)\r\n",
            (active == PDM_SLOT_MASK_A) ? "A" : (active == PDM_SLOT_MASK_B) ? "B" : "custom",
            (unsigned)active);
   diag_print(line);
 
-  diag_print("MICDIAGEND err=0\n");
+  diag_print("MICDIAGEND err=0\r\n");
 }

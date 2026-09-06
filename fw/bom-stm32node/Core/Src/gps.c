@@ -104,7 +104,7 @@ static void gps_print(const char *line)
 
 void gps_run(uint32_t seconds, uint32_t baud)
 {
-  char     line[GPS_LINE_MAX + 2u]; /* room for '\n' + NUL */
+  char     line[GPS_LINE_MAX + 3u]; /* room for '\r' '\n' + NUL */
   uint32_t line_len = 0u;
   uint32_t lines = 0u, bytes = 0u;
   uint8_t  err = 0u;
@@ -123,13 +123,13 @@ void gps_run(uint32_t seconds, uint32_t baud)
 
   if (gps_uart_start(baud) != 0)
   {
-    gps_print("GPSERR uart init failed\n");
-    gps_print("GPSEND lines=0 bytes=0 ne=0 fe=0 ore=0 pe=0 overrun=0 err=1\n");
+    gps_print("GPSERR uart init failed\r\n");
+    gps_print("GPSEND lines=0 bytes=0 ne=0 fe=0 ore=0 pe=0 overrun=0 err=1\r\n");
     return;
   }
 
   char hdr[48];
-  snprintf(hdr, sizeof(hdr), "GPS baud=%lu sec=%lu\n",
+  snprintf(hdr, sizeof(hdr), "GPS baud=%lu sec=%lu\r\n",
            (unsigned long)baud, (unsigned long)seconds);
   gps_print(hdr);
 
@@ -159,8 +159,9 @@ void gps_run(uint32_t seconds, uint32_t baud)
         }
         if (line_len > 0u)
         {
-          line[line_len]      = '\n';
-          line[line_len + 1u] = '\0';
+          line[line_len]      = '\r';
+          line[line_len + 1u] = '\n';
+          line[line_len + 2u] = '\0';
           gps_print(line);
           lines++;
         }
@@ -177,10 +178,10 @@ void gps_run(uint32_t seconds, uint32_t baud)
     }
   }
 
-  char trailer[112];
+  char trailer[144]; /* six 10-digit counters + labels + CRLF */
   snprintf(trailer, sizeof(trailer),
            "GPSEND lines=%lu bytes=%lu ne=%lu fe=%lu ore=%lu pe=%lu "
-           "overrun=%lu err=%u\n",
+           "overrun=%lu err=%u\r\n",
            (unsigned long)lines, (unsigned long)bytes, (unsigned long)s_err_ne,
            (unsigned long)s_err_fe, (unsigned long)s_err_ore,
            (unsigned long)s_err_pe, (unsigned long)s_overrun, err);
