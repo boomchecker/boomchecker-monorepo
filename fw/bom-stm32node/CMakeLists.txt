@@ -50,7 +50,7 @@ set_source_files_properties(${CMAKE_SOURCE_DIR}/Core/Src/pdm_pcm.c
 # CMSIS-DSP now live in fw/common/boomdetect and re-apply -O2 on their own
 # targets - a source property here is directory-scoped and cannot reach them.
 set_source_files_properties(
-    ${CMAKE_SOURCE_DIR}/Core/Src/detector.c
+    ${CMAKE_SOURCE_DIR}/App/detect/detect_service.c
     PROPERTIES COMPILE_OPTIONS "-O2"
 )
 
@@ -198,7 +198,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     ${CMAKE_SOURCE_DIR}/Core/Src/cli.c
     ${CMAKE_SOURCE_DIR}/Core/Src/usb_cli.c
     ${CMAKE_SOURCE_DIR}/Core/Src/pcm_stream.c
-    ${CMAKE_SOURCE_DIR}/Core/Src/detector.c
+    ${CMAKE_SOURCE_DIR}/App/detect/detect_service.c
     ${CMAKE_SOURCE_DIR}/Core/Src/dfu_boot.c
     ${CMAKE_SOURCE_DIR}/Core/Src/gps.c
     ${CMAKE_SOURCE_DIR}/third_party/embedded-cli/lib/src/embedded_cli.c
@@ -208,6 +208,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user defined include paths
     ${CMAKE_SOURCE_DIR}/Core/Inc
+    ${CMAKE_SOURCE_DIR}/App/detect
     ${CMAKE_SOURCE_DIR}/third_party/embedded-cli/lib/include
 )
 

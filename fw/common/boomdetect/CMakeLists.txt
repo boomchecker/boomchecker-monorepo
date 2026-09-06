@@ -109,6 +109,7 @@ FetchContent_MakeAvailable(cmsisdsp)
 # --- this package ------------------------------------------------------------
 
 add_library(boomdetect STATIC
+  src/boomdetect.c
   src/boomdetect_mfcc_f32.c
   src/mfcc_processor.c
   src/svm_classifier.c

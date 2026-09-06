@@ -11,7 +11,7 @@
 #include "link_service.h"
 #include "main.h"   /* Error_Handler */
 #include "pcm_stream.h"
-#include "detector.h"
+#include "detect_service.h"
 #include "gps.h"
 #include "mic.h"     /* mic_diag_run */
 #include "dfu_boot.h"
@@ -162,8 +162,8 @@ static void cmd_detect(EmbeddedCli *cli, char *args, void *context)
     return;
   }
 
-  unsigned long squelch = DETECTOR_DEFAULT_SQUELCH_MILLI;
-  long          thr     = DETECTOR_DEFAULT_THR_MILLI;
+  unsigned long squelch = DETECT_DEFAULT_SQUELCH_MILLI;
+  long          thr     = DETECT_DEFAULT_THR_MILLI;
   if (ntok >= 2)
   {
     tok     = embeddedCliGetToken(args, 2);
@@ -191,7 +191,7 @@ static void cmd_detect(EmbeddedCli *cli, char *args, void *context)
     dbg = strtoul(tok, &end, 10);
   }
   /* Emits LVL/DET/DETEND text lines on the console; see detector.c. */
-  detector_run((uint32_t)sec, (uint32_t)squelch, (int32_t)thr, (uint32_t)dbg);
+  detect_service_run((uint32_t)sec, (uint32_t)squelch, (int32_t)thr, (uint32_t)dbg);
 }
 
 static void cmd_detselftest(EmbeddedCli *cli, char *args, void *context)
@@ -199,8 +199,8 @@ static void cmd_detselftest(EmbeddedCli *cli, char *args, void *context)
   (void)cli;
   (void)args;
   (void)context;
-  /* Streams DST* lines on the console; see detector.h for what it is for. */
-  detector_selftest();
+  /* Streams DST* lines on the console; see detect_service.h for what it is for. */
+  detect_service_selftest();
 }
 
 /* Optional "[baud]" token shared by `gps` and `gpstx`. Returns 0 on error. */

@@ -4,7 +4,7 @@
  * @brief   Teseo-LIV3R NMEA passthrough (see gps.h).
  *
  * RX path: UART4 RXNE interrupt -> byte ring -> line assembly in gps_run(),
- * which runs synchronously inside the CLI binding like detector_run(). The
+ * which runs synchronously inside the CLI binding like detect_service_run(). The
  * handler lives here (startup vectors are weak), NVIC is enabled from user
  * code so the CubeMX files stay untouched - same pattern as mic.c/GPDMA.
  ******************************************************************************

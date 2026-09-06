@@ -329,7 +329,7 @@ jobs:
           # out of the image, and this job green.
           #
           # One symbol per stage rather than a single entry point: a refactor
-          # can plausibly keep detector_run() while replacing the feature or
+          # can plausibly keep detect_service_run() while replacing the feature or
           # inference stage, and a detector that links but no longer runs an
           # MFCC is not the thing this check is meant to protect.
           #
@@ -338,7 +338,7 @@ jobs:
           # a check that fails during a planned rename teaches people to
           # delete checks. Add the registry's own entry point there instead.
           status=0
-          for symbol in detector_run mfcc_process gps_run; do
+          for symbol in detect_service_run boomdetect_step mfcc_process gps_run; do
             if ! arm-none-eabi-nm build/Debug/bom-stm32node.elf | grep -q "$symbol"; then
               echo "❌ $symbol is not linked into bom-stm32node.elf"
               status=1
