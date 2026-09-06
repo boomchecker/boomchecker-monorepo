@@ -263,7 +263,12 @@ endforeach()
 # tests/stub_registry.c does that, which is what turns the claim into a check.
 add_library(boomdetect_core OBJECT
   src/boomdetect.c
+  src/boomdetect_alarm.c
   src/extractor_stats.c
+  src/extractor_spectral.c
+  src/extractor_logmel.c
+  src/frame_scalars.c
+  src/nn_infer.c
   src/boomdetect_mfcc_f32.c
   src/boomdetect_selftest.c
   src/mfcc_processor.c
@@ -419,7 +424,7 @@ if(BOOMDETECT_STANDALONE)
 
   # The items are source stems minus "_test": tests/registry_test.c builds
   # boomdetect_registry_test and registers as the ctest `boomdetect_registry`.
-  foreach(test IN ITEMS mfcc_smoke registry pipeline)
+  foreach(test IN ITEMS mfcc_smoke registry pipeline alarm nn_infer extractor)
     add_executable(boomdetect_${test}_test tests/${test}_test.c)
     target_link_libraries(boomdetect_${test}_test PRIVATE boomdetect)
     # tests/ for the harness, src/ because these are white-box tests: the MFCC

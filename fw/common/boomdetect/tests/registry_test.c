@@ -48,12 +48,16 @@ static void scenario_lookup(void)
         REQUIRE(m != NULL, "classifier_at(%zu) is NULL below the count", i);
         CHECK(m->decide != NULL, "%s has no decide function", m->name);
         CHECK(m->n_features > 0u, "%s reads zero features", m->name);
-        CHECK((uint32_t)m->feature_offset + m->n_features <= BOOMDETECT_FEATURE_COUNT,
-              "%s reads %u features from offset %u, past the %u the aggregate produces",
-              m->name, m->n_features, m->feature_offset, (unsigned)BOOMDETECT_FEATURE_COUNT);
-        CHECK(m->layout_id == BOOMDETECT_LAYOUT_MEAN_STD_DMEAN_CMAX,
-              "%s declares layout %u, this build produces %u", m->name, m->layout_id,
-              BOOMDETECT_LAYOUT_MEAN_STD_DMEAN_CMAX);
+        /* A model is usable only if some extractor in this build produces its
+           layout, and its slice fits inside THAT extractor's width - not the
+           deployed layout's, which is what this used to check and which would
+           have rejected every layout-2 and layout-3 model on sight. */
+        const boomdetect_extractor_t *ex = boomdetect_extractor_for_layout(m->layout_id);
+        REQUIRE(ex != NULL, "%s declares layout %u, which no extractor in this build produces",
+                m->name, m->layout_id);
+        CHECK((uint32_t)m->feature_offset + m->n_features <= ex->n_features,
+              "%s reads %u features from offset %u, past the %u extractor '%s' produces",
+              m->name, m->n_features, m->feature_offset, ex->n_features, ex->name);
     }
 }
 

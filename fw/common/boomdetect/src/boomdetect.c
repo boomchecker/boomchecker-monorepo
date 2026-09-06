@@ -11,11 +11,22 @@
 #include "boomdetect.h"
 
 #include "arm_math.h"
-#include "mfcc_processor.h"
 #include "classifier.h"
+#include "extractors.h"
+#include "frame_scalars.h"
+#include "mfcc_processor.h"
 
 #include <math.h>
 #include <string.h>
+
+_Static_assert(BOOMDETECT_FEATURE_COUNT <= BOOMDETECT_FEATURE_MAX &&
+                   BOOMDETECT_FEATURE_COUNT_STATS_SPECTRAL <= BOOMDETECT_FEATURE_MAX &&
+                   BOOMDETECT_FEATURE_COUNT_LOGMEL <= BOOMDETECT_FEATURE_MAX,
+               "boomdetect_t::features cannot hold every layout this build produces");
+_Static_assert(BOOMDETECT_FRAME_SCALAR_COUNT == BOOMDETECT_FRAME_SCALARS,
+               "dsp_config.h and frame_scalars.h disagree about the scalar count");
+_Static_assert(BOOMDETECT_SCALAR_BINS <= BOOMDETECT_WINDOW_SIZE,
+               "the spectral scalars read more magnitude bins than the frame buffer holds");
 
 /* The MFCC tables are global to the CMSIS instance, so initialise them once
    however many detectors exist. */
@@ -74,7 +85,7 @@ bool boomdetect_init(boomdetect_t *d, const boomdetect_config_t *cfg)
                                            : boomdetect_extractor_default();
 
     if (ex == NULL || ex->extract == NULL || ex->n_features == 0u ||
-        ex->n_features > BOOMDETECT_FEATURE_COUNT)
+        ex->n_features > BOOMDETECT_FEATURE_MAX)
     {
         return false;
     }
@@ -229,9 +240,17 @@ bool boomdetect_step(boomdetect_t *d, boomdetect_event_t *out)
         }
 
         /* The MFCC destroys its input, which is why d->frame is a copy of the
-           ring rather than a view into it. */
+           ring rather than a view into it. What it leaves behind is the
+           magnitude spectrum, which the spectral scalars read; the log-mel
+           vector it applied the DCT to is still in its scratch buffer. Both go
+           into the frame descriptor next to the coefficients, so an extractor
+           that wants them pays nothing more than the copy. */
+        float *row = &d->mfccs[d->accum * BOOMDETECT_FRAME_WIDTH];
         d->last_mfcc_slot = d->accum;
-        mfcc_process(d->frame, &d->mfccs[d->accum * BOOMDETECT_MFCC_COEFFS]);
+        mfcc_process(d->frame, row + BOOMDETECT_FRAME_MFCC_OFF);
+        memcpy(row + BOOMDETECT_FRAME_LOGMEL_OFF, mfcc_last_logmel(),
+               BOOMDETECT_MEL_FILTERS * sizeof(float));
+        boomdetect_frame_scalars(d->frame, row + BOOMDETECT_FRAME_SCALAR_OFF);
         d->rms_hist[d->accum] = rms;
         d->accum++;
 
@@ -244,7 +263,7 @@ bool boomdetect_step(boomdetect_t *d, boomdetect_event_t *out)
             if (keep)
             {
                 const boomdetect_extractor_t *ext = d->cfg.extractor;
-                ext->extract(ext->ctx, d->mfccs, d->accum, BOOMDETECT_MFCC_COEFFS,
+                ext->extract(ext->ctx, d->mfccs, d->accum, BOOMDETECT_FRAME_WIDTH,
                              d->features);
                 const classifier_t *model = d->cfg.classifier;
                 /* The entry declares where its slice starts and how wide it is,
@@ -327,7 +346,16 @@ const float *boomdetect_last_mfcc(const boomdetect_t *d)
     {
         return NULL;
     }
-    return &d->mfccs[d->last_mfcc_slot * BOOMDETECT_MFCC_COEFFS];
+    return &d->mfccs[d->last_mfcc_slot * BOOMDETECT_FRAME_WIDTH + BOOMDETECT_FRAME_MFCC_OFF];
+}
+
+const float *boomdetect_last_frame(const boomdetect_t *d)
+{
+    if (d->last_mfcc_slot >= d->cfg.accum_frames)
+    {
+        return NULL;
+    }
+    return &d->mfccs[d->last_mfcc_slot * BOOMDETECT_FRAME_WIDTH];
 }
 
 const float *boomdetect_last_features(const boomdetect_t *d)
