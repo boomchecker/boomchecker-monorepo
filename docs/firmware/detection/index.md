@@ -157,10 +157,12 @@ hand edit, and `model_parity_test` fails for any exported model the registry
 does not list.
 
 The image currently carries six: the deployed `mlp_v6` and `svm_v3` on layout 1,
-and the comparison set from training run r2 — `svm_l2`, `gbt_l2` (gradient
-boosted trees) and `mlp_l2` on layout 2, `cnn_1d` on layout 3 — each with the
-threshold that kept its false-alarm windows under 5 per hour on the validation
-negatives. `model <name>` switches; the default stays `mlp_v6`.
+and the comparison set from training run r2 — the model of each family that
+generalised best to the unseen Halmstad recordings: `svm_l1` (layout 1),
+`svm_l2` and `gbt_reg_l2` (gradient-boosted trees) on layout 2, `cnn_small` on
+layout 3 — each with the threshold that kept its false-alarm windows under 5
+per hour on the validation negatives. `model <name>` switches; the default stays
+`mlp_v6`.
 
 A model needing a different feature *representation* — raw frames for a CNN, say
 — adds a **feature extractor** rather than an edit to the pipeline.

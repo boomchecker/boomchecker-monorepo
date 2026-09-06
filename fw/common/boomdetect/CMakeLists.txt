@@ -281,10 +281,10 @@ add_library(boomdetect_core OBJECT
 set(BOOMDETECT_MODEL_SOURCES
   models/model_mlp_v6.c
   models/model_svm_v3.c
+  models/model_svm_l1.c
   models/model_svm_l2.c
-  models/model_gbt_l2.c
-  models/model_mlp_l2.c
-  models/model_cnn_1d.c
+  models/model_gbt_reg_l2.c
+  models/model_cnn_small.c
 )
 
 add_library(boomdetect STATIC
