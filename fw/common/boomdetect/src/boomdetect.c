@@ -12,7 +12,7 @@
 
 #include "arm_math.h"
 #include "mfcc_processor.h"
-#include "svm_classifier.h"
+#include "classifier.h"
 
 #include <math.h>
 #include <string.h>
@@ -73,18 +73,30 @@ bool boomdetect_init(boomdetect_t *d, const boomdetect_config_t *cfg)
         return false;
     }
 
+    const classifier_t *model = (cfg->classifier != NULL) ? cfg->classifier
+                                                          : classifier_default();
+
+    /* Refuse a model that does not fit rather than reading past the feature
+       vector. Each model asserts its own dimensions at compile time, but a
+       caller can hand over any entry it likes, so check here too. */
+    if (model->decide == NULL || model->layout_id != BOOMDETECT_LAYOUT_MEAN_STD_DMEAN_CMAX ||
+        (uint32_t)model->feature_offset + model->n_features > DET_FEATURE_COUNT)
+    {
+        return false;
+    }
+
     if (!s_mfcc_ready)
     {
         if (mfcc_init() != ARM_MATH_SUCCESS)
         {
             return false;
         }
-        svm_classifier_init();
         s_mfcc_ready = true;
     }
 
     memset(d, 0, sizeof(*d));
     d->cfg = *cfg;
+    d->cfg.classifier = model;
     return true;
 }
 
@@ -154,7 +166,11 @@ bool boomdetect_step(boomdetect_t *d, boomdetect_event_t *out)
         if (d->accum >= BOOMDETECT_ACCUM_FRAMES)
         {
             aggregate(d->mfccs, d->features);
-            const float decision = svm_get_decision_value(d->features);
+            const classifier_t *model = d->cfg.classifier;
+            /* The entry declares where its slice starts, so decide() reads from
+               index 0 and needs to know nothing about the layout. */
+            const float decision = model->decide(model->ctx,
+                                                 d->features + model->feature_offset);
             const float threshold = (float)d->cfg.thr_milli / 1000.0f;
 
             out->window_complete = true;

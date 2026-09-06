@@ -20,7 +20,7 @@
 /* Aggregated feature vector one classified window hands to the model:
    [mean(13), std(13), dmean(13), cmax(13)] over 14 MFCC frames, produced by
    det_aggregate() in detector.c. Every model header is checked against this
-   at compile time in svm_classifier.c. */
+   at compile time by each model translation unit under models/. */
 #define DET_FEATURE_COUNT   (4u * NUM_MFCC_COEFFS)
 
 #endif /* DSP_CONFIG_H */

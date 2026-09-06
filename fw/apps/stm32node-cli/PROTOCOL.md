@@ -42,9 +42,15 @@ Diagnostic: stream <sec> seconds of a synthetic 1 kHz test tone instead of the m
 
 ### `detect <sec> [squelch_milli] [thr_milli] [dbg]`
 
-Run on-device drone detection for <sec> seconds (1..60): microphone PCM is decimated to 16 kHz, MFCC features are extracted (1024-sample frames, hop 512), every run of 14 frames above the RMS squelch is aggregated to a 52-value feature vector and classified by the model compiled into the firmware. That is currently a small MLP (v6), whose decision value is a raw logit, not a probability. Optional overrides in units of 1/1000: squelch_milli (default 10 = RMS 0.010, 0 disables the gate, 0..1000) and thr_milli (default 15000 = logit 15.0, may be negative, -20000..20000 - a value outside that range is rejected, not clamped; the default was measured against ambient room noise on hardware, with no drone present, so it trades away an unquantified amount of sensitivity to avoid false alarms). A non-zero dbg adds one debug line per frame.
+Run on-device drone detection for <sec> seconds (1..60): microphone PCM is decimated to 16 kHz, MFCC features are extracted (1024-sample frames, hop 512), every run of 14 frames above the RMS squelch is aggregated to a 52-value feature vector and classified by the model compiled into the firmware. That is currently a small MLP (v6), whose decision value is a raw logit, not a probability. Optional overrides in units of 1/1000: squelch_milli (default 10 = RMS 0.010, 0 disables the gate, 0..1000) and thr_milli (defaults to the selected model's own operating point, 15000 = logit 15.0 for mlp_v6, may be negative, -20000..20000 - a value outside that range is rejected, not clamped; the default was measured against ambient room noise on hardware, with no drone present, so it trades away an unquantified amount of sensitivity to avoid false alarms). A non-zero dbg adds one debug line per frame.
 
 **Response:** A `LVL t=<s>.<ms> rms=<+d.ddd>` input-level line about once a second, one line per classified window: `DET t=<s>.<ms> dec=<+d.ddd> <DRONE|noise>` (windows are ~448 ms of audio; input below the squelch yields no windows), then a final `DETEND windows=<n> drones=<n> overrun=<0|1> err=<0|1>` line. With dbg set, each frame also emits `F=<frame> a=<accumulated> r=<rms_milli> h=<half_us> m=<mfcc_us>`. A start failure prints `DETERR <reason>` and then the DETEND trailer with err=1, so the trailer always arrives.
+
+### `model [name]`
+
+List the classifiers compiled into this image, or select one for subsequent `detect` runs. With no argument it prints one line per model, marking the active one with `*` and showing the feature range it reads and its own default threshold. The selection is not persisted; a reset returns to the deployed model.
+
+**Response:** `model: <name> <*| > feat=<lo>..<hi> thr=<milli>` per model when listing, or `model: <name> selected, default thr=<milli> (not persisted)` when selecting. `model: no such model '<name>'` otherwise.
 
 ### `gps <sec> [baud]`
 

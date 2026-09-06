@@ -25,7 +25,10 @@
 #ifndef DETECT_SERVICE_H
 #define DETECT_SERVICE_H
 
+#include <stdbool.h>
 #include <stdint.h>
+
+#include "classifier.h"
 
 /** Default RMS gate, in 1/1000 of full scale. */
 #define DETECT_DEFAULT_SQUELCH_MILLI 10
@@ -73,5 +76,16 @@ void detect_service_run(uint32_t seconds, uint32_t squelch_milli, int32_t thr_mi
  * fw/common/boomdetect/tests/vectors/selftest_expected.txt.
  */
 void detect_service_selftest(void);
+
+/**
+ * @brief The model `detect` will use, and its default threshold.
+ *
+ * Not persisted: a reset returns to the deployed model, the same way `micslot`
+ * behaves. This is a bring-up and comparison knob, not configuration.
+ */
+const classifier_t *detect_service_model(void);
+
+/** @brief Select a model by name. false if there is no such model. */
+bool detect_service_set_model(const char *name);
 
 #endif /* DETECT_SERVICE_H */

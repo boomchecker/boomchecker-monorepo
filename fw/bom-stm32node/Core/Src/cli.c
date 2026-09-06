@@ -163,7 +163,12 @@ static void cmd_detect(EmbeddedCli *cli, char *args, void *context)
   }
 
   unsigned long squelch = DETECT_DEFAULT_SQUELCH_MILLI;
-  long          thr     = DETECT_DEFAULT_THR_MILLI;
+  /* The operating point belongs to the model, not to the detector: a linear
+     SVM's decisions live around +-3 while an MLP's are unbounded logits, so a
+     single global default would make one of the two families useless. It does
+     mean the same `detect 20 0` means different things depending on what
+     `model` last selected - `model` prints the value it will use. */
+  long          thr     = detect_service_model()->default_thr_milli;
   if (ntok >= 2)
   {
     tok     = embeddedCliGetToken(args, 2);
@@ -180,7 +185,7 @@ static void cmd_detect(EmbeddedCli *cli, char *args, void *context)
     thr = strtol(tok, &end, 10);
     if (end == tok || thr < -20000 || thr > 20000)
     {
-      embeddedCliPrint(cli, "thr_milli: -20000..20000 (7250 = logit 7.25)");
+      embeddedCliPrint(cli, "thr_milli: -20000..20000 (mlp_v6 default 15000 = logit 15.0)");
       return;
     }
   }
@@ -190,8 +195,52 @@ static void cmd_detect(EmbeddedCli *cli, char *args, void *context)
     tok = embeddedCliGetToken(args, 4);
     dbg = strtoul(tok, &end, 10);
   }
-  /* Emits LVL/DET/DETEND text lines on the console; see detector.c. */
+  /* Emits LVL/DET/DETEND text lines on the console; see detect_service.h. */
   detect_service_run((uint32_t)sec, (uint32_t)squelch, (int32_t)thr, (uint32_t)dbg);
+}
+
+static void cmd_model(EmbeddedCli *cli, char *args, void *context)
+{
+  (void)context;
+  const uint16_t ntok = embeddedCliGetTokenCount(args);
+  char line[96];
+
+  if (ntok == 0u)
+  {
+    /* One command rather than a `model` plus a `models`: listing and selecting
+       are the same question asked two ways, and CLI bindings are a scarce
+       resource here. */
+    const classifier_t *active = detect_service_model();
+    for (size_t i = 0u; i < classifier_count(); i++)
+    {
+      const classifier_t *m = classifier_at(i);
+      snprintf(line, sizeof(line), "model: %-8s %c feat=%u..%u thr=%ld",
+               m->name, (m == active) ? '*' : ' ',
+               (unsigned)m->feature_offset,
+               (unsigned)(m->feature_offset + m->n_features - 1u),
+               (long)m->default_thr_milli);
+      embeddedCliPrint(cli, line);
+    }
+    return;
+  }
+  if (ntok != 1u)
+  {
+    embeddedCliPrint(cli, "usage: model [name]");
+    return;
+  }
+
+  const char *name = embeddedCliGetToken(args, 1);
+  if (!detect_service_set_model(name))
+  {
+    snprintf(line, sizeof(line), "model: no such model '%s'", name);
+    embeddedCliPrint(cli, line);
+    return;
+  }
+  const classifier_t *m = detect_service_model();
+  /* Not persisted, same as micslot: a reset returns to the deployed model. */
+  snprintf(line, sizeof(line), "model: %s selected, default thr=%ld (not persisted)",
+           m->name, (long)m->default_thr_milli);
+  embeddedCliPrint(cli, line);
 }
 
 static void cmd_detselftest(EmbeddedCli *cli, char *args, void *context)
@@ -1057,6 +1106,22 @@ static void cmd_wakeup(EmbeddedCli *cli, char *args, void *context)
   embeddedCliPrint(cli, line);
 }
 
+/* Register one command, and complain on the console if it did not fit rather
+   than dropping it silently. Counts what got through so cli_init can report a
+   single summary line: a bare "command missing" is far harder to diagnose from
+   the field than a number that does not match. */
+static uint8_t s_bindings_ok;
+static uint8_t s_bindings_tried;
+
+static void cli_add(CliCommandBinding binding)
+{
+  s_bindings_tried++;
+  if (embeddedCliAddBinding(s_cli, binding))
+  {
+    s_bindings_ok++;
+  }
+}
+
 void cli_init(cli_tx_fn tx)
 {
   s_tx      = tx;
@@ -1069,10 +1134,13 @@ void cli_init(cli_tx_fn tx)
   cfg->rxBufferSize      = 64;
   cfg->cmdBufferSize     = 64;
   cfg->historyBufferSize = 128;
-  /* 13 bindings after the BoomLink + detect/GPS merge (help is internal and
-     not counted). embeddedCliAddBinding() silently drops the 11th+ command
-     when this is too small - `link`/`proto`/`wakeup` vanished that way. */
-  cfg->maxBindingCount   = 16;
+  /* embeddedCliAddBinding() returns false and drops the command when this is
+     too small, and once did: `link`, `proto` and `wakeup` silently vanished
+     from a build that otherwise looked fine. cli_add() below now checks the
+     return value, so a future overflow says so instead of hiding. Headroom
+     over the current count on purpose - the failure mode is quiet enough that
+     sitting exactly on the limit is not worth the saved bytes. */
+  cfg->maxBindingCount   = 24;
   cfg->invitation        = "> ";
 
   s_cli = embeddedCliNew(cfg);
@@ -1092,7 +1160,7 @@ void cli_init(cli_tx_fn tx)
     .context      = NULL,
     .binding      = cmd_version,
   };
-  embeddedCliAddBinding(s_cli, version_binding);
+  cli_add(version_binding);
 
   CliCommandBinding stream_binding = {
     .name         = "stream",
@@ -1101,7 +1169,7 @@ void cli_init(cli_tx_fn tx)
     .context      = NULL,
     .binding      = cmd_stream,
   };
-  embeddedCliAddBinding(s_cli, stream_binding);
+  cli_add(stream_binding);
 
   CliCommandBinding streamtest_binding = {
     .name         = "streamtest",
@@ -1110,7 +1178,7 @@ void cli_init(cli_tx_fn tx)
     .context      = NULL,
     .binding      = cmd_streamtest,
   };
-  embeddedCliAddBinding(s_cli, streamtest_binding);
+  cli_add(streamtest_binding);
 
   CliCommandBinding detect_binding = {
     .name         = "detect",
@@ -1119,7 +1187,7 @@ void cli_init(cli_tx_fn tx)
     .context      = NULL,
     .binding      = cmd_detect,
   };
-  embeddedCliAddBinding(s_cli, detect_binding);
+  cli_add(detect_binding);
 
   CliCommandBinding detselftest_binding = {
     .name         = "detselftest",
@@ -1128,7 +1196,16 @@ void cli_init(cli_tx_fn tx)
     .context      = NULL,
     .binding      = cmd_detselftest,
   };
-  embeddedCliAddBinding(s_cli, detselftest_binding);
+  cli_add(detselftest_binding);
+
+  CliCommandBinding model_binding = {
+    .name         = "model",
+    .help         = "model [name] - list the classifiers in this image, or select one",
+    .tokenizeArgs = true,
+    .context      = NULL,
+    .binding      = cmd_model,
+  };
+  cli_add(model_binding);
 
   CliCommandBinding gps_binding = {
     .name         = "gps",
@@ -1137,7 +1214,7 @@ void cli_init(cli_tx_fn tx)
     .context      = NULL,
     .binding      = cmd_gps,
   };
-  embeddedCliAddBinding(s_cli, gps_binding);
+  cli_add(gps_binding);
 
   CliCommandBinding gpstx_binding = {
     .name         = "gpstx",
@@ -1146,7 +1223,7 @@ void cli_init(cli_tx_fn tx)
     .context      = NULL,
     .binding      = cmd_gpstx,
   };
-  embeddedCliAddBinding(s_cli, gpstx_binding);
+  cli_add(gpstx_binding);
 
   CliCommandBinding micdiag_binding = {
     .name         = "micdiag",
@@ -1155,7 +1232,7 @@ void cli_init(cli_tx_fn tx)
     .context      = NULL,
     .binding      = cmd_micdiag,
   };
-  embeddedCliAddBinding(s_cli, micdiag_binding);
+  cli_add(micdiag_binding);
 
   CliCommandBinding micslot_binding = {
     .name         = "micslot",
@@ -1164,7 +1241,7 @@ void cli_init(cli_tx_fn tx)
     .context      = NULL,
     .binding      = cmd_micslot,
   };
-  embeddedCliAddBinding(s_cli, micslot_binding);
+  cli_add(micslot_binding);
 
   CliCommandBinding gpsrst_binding = {
     .name         = "gpsrst",
@@ -1173,7 +1250,7 @@ void cli_init(cli_tx_fn tx)
     .context      = NULL,
     .binding      = cmd_gpsrst,
   };
-  embeddedCliAddBinding(s_cli, gpsrst_binding);
+  cli_add(gpsrst_binding);
 
   CliCommandBinding dfu_binding = {
     .name         = "dfu",
@@ -1182,7 +1259,7 @@ void cli_init(cli_tx_fn tx)
     .context      = NULL,
     .binding      = cmd_dfu,
   };
-  embeddedCliAddBinding(s_cli, dfu_binding);
+  cli_add(dfu_binding);
 
   CliCommandBinding radio_binding = {
     .name         = "radio",
@@ -1192,7 +1269,7 @@ void cli_init(cli_tx_fn tx)
     .context      = NULL,
     .binding      = cmd_radio,
   };
-  embeddedCliAddBinding(s_cli, radio_binding);
+  cli_add(radio_binding);
 
   CliCommandBinding proto_binding = {
     .name         = "proto",
@@ -1201,7 +1278,7 @@ void cli_init(cli_tx_fn tx)
     .context      = NULL,
     .binding      = cmd_proto,
   };
-  embeddedCliAddBinding(s_cli, proto_binding);
+  cli_add(proto_binding);
 
   CliCommandBinding link_binding = {
     .name         = "link",
@@ -1210,7 +1287,7 @@ void cli_init(cli_tx_fn tx)
     .context      = NULL,
     .binding      = cmd_link,
   };
-  embeddedCliAddBinding(s_cli, link_binding);
+  cli_add(link_binding);
 
   CliCommandBinding wakeup_binding = {
     .name         = "wakeup",
@@ -1219,7 +1296,7 @@ void cli_init(cli_tx_fn tx)
     .context      = NULL,
     .binding      = cmd_wakeup,
   };
-  embeddedCliAddBinding(s_cli, wakeup_binding);
+  cli_add(wakeup_binding);
 
   /* PR 4 Phase C: load the persisted NodeConfig (or safe defaults - see
      protocol_service_load_config()'s own doc) BEFORE link_service_init(),
@@ -1263,6 +1340,14 @@ void cli_init(cli_tx_fn tx)
      wakeup_response_callback()'s own doc for why this ordering, and
      wakeup_on_response() above for what it prints. */
   protocol_service_set_wakeup_response_callback(wakeup_on_response);
+
+  if (s_bindings_ok != s_bindings_tried)
+  {
+    char line[64];
+    snprintf(line, sizeof(line), "CLI: only %u of %u commands registered",
+             (unsigned)s_bindings_ok, (unsigned)s_bindings_tried);
+    embeddedCliPrint(s_cli, line);
+  }
 
   embeddedCliProcess(s_cli); /* print the initial prompt */
 }

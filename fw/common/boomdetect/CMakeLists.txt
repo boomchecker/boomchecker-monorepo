@@ -111,8 +111,10 @@ FetchContent_MakeAvailable(cmsisdsp)
 add_library(boomdetect STATIC
   src/boomdetect.c
   src/boomdetect_mfcc_f32.c
+  src/classifier_registry.c
   src/mfcc_processor.c
-  src/svm_classifier.c
+  models/model_mlp_v6.c
+  models/model_svm_v3.c
 )
 target_include_directories(boomdetect PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}/include

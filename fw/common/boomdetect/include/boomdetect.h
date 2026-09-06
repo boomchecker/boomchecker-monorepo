@@ -29,6 +29,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "classifier.h"
 #include "dsp_config.h"
 
 #ifdef __cplusplus
@@ -57,6 +58,8 @@ typedef struct
     /** Decision threshold in 1/1000. May be negative: for an MLP the decision
         is a raw logit, not a probability. */
     int32_t thr_milli;
+    /** Which model scores the windows. NULL selects classifier_default(). */
+    const classifier_t *classifier;
 } boomdetect_config_t;
 
 /** What one processed frame produced. */
@@ -103,7 +106,8 @@ typedef struct
 
 /**
  * @brief Reset the detector and adopt @p cfg.
- * @return false if the MFCC front end could not be initialised.
+ * @return false if the MFCC front end could not be initialised, or if the
+ *         chosen model does not fit the feature layout this build produces.
  *
  * Safe to call repeatedly; the MFCC tables are initialised once and reused.
  */

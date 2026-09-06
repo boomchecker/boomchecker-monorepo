@@ -112,7 +112,8 @@ COMMANDS: tuple[CommandSpec, ...] = (
             "vector and classified by the model compiled into the firmware. That is currently "
             "a small MLP (v6), whose decision value is a raw logit, not a probability. "
             "Optional overrides in units of 1/1000: squelch_milli (default 10 = RMS 0.010, "
-            "0 disables the gate, 0..1000) and thr_milli (default 15000 = logit 15.0, may be "
+            "0 disables the gate, 0..1000) and thr_milli (defaults to the selected "
+            "model's own operating point, 15000 = logit 15.0 for mlp_v6, may be "
             "negative, -20000..20000 - a value outside that range is rejected, not clamped; "
             "the default was measured against ambient room noise on hardware, with no "
             "drone present, so it trades away an unquantified amount of sensitivity to "
@@ -127,6 +128,22 @@ COMMANDS: tuple[CommandSpec, ...] = (
             "frame also emits `F=<frame> a=<accumulated> r=<rms_milli> h=<half_us> "
             "m=<mfcc_us>`. A start failure prints `DETERR <reason>` and then the DETEND "
             "trailer with err=1, so the trailer always arrives."
+        ),
+    ),
+    CommandSpec(
+        name="model",
+        usage="model [name]",
+        description=(
+            "List the classifiers compiled into this image, or select one for subsequent "
+            "`detect` runs. With no argument it prints one line per model, marking the "
+            "active one with `*` and showing the feature range it reads and its own "
+            "default threshold. The selection is not persisted; a reset returns to the "
+            "deployed model."
+        ),
+        response=(
+            "`model: <name> <*| > feat=<lo>..<hi> thr=<milli>` per model when listing, or "
+            "`model: <name> selected, default thr=<milli> (not persisted)` when selecting. "
+            "`model: no such model '<name>'` otherwise."
         ),
     ),
     CommandSpec(

@@ -28,6 +28,26 @@
 static boomdetect_t s_det;
 static int16_t      s_pcm[PCM_SAMPLES_PER_HALF];
 
+/* Selected model. NULL means "whatever the registry calls default", resolved
+   late so this file does not need an initialiser that runs before main. */
+static const classifier_t *s_model;
+
+const classifier_t *detect_service_model(void)
+{
+  return (s_model != NULL) ? s_model : classifier_default();
+}
+
+bool detect_service_set_model(const char *name)
+{
+  const classifier_t *m = classifier_by_name(name);
+  if (m == NULL)
+  {
+    return false;
+  }
+  s_model = m;
+  return true;
+}
+
 /* Cycle-accurate timing of the two hot operations (250 MHz -> 250 cyc/us).
    Cheap enough to keep always-on; reported on the debug breadcrumbs. */
 static uint32_t s_half_us; /* last mic_poll, including the PDM conversion */
@@ -156,6 +176,7 @@ void detect_service_run(uint32_t seconds, uint32_t squelch_milli, int32_t thr_mi
     .decimation    = (uint16_t)(PCM_FS_HZ / 16000u), /* 48 kHz in, 16 kHz chain */
     .squelch_milli = squelch_milli,
     .thr_milli     = thr_milli,
+    .classifier    = detect_service_model(),
   };
   if (!boomdetect_init(&s_det, &cfg))
   {
@@ -287,7 +308,10 @@ void detect_service_selftest(void)
   const boomdetect_config_t cfg = {
     .decimation    = (uint16_t)(PCM_FS_HZ / 16000u),
     .squelch_milli = 0u,
-    .thr_milli     = DETECT_DEFAULT_THR_MILLI,
+    /* Fixed to the deployed model and its own operating point, so the fixture
+       does not shift when someone leaves another model selected. */
+    .thr_milli     = 15000,
+    .classifier    = classifier_by_name("mlp_v6"),
   };
   if (!boomdetect_init(&s_det, &cfg))
   {
