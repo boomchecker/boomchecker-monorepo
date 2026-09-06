@@ -1,0 +1,45 @@
+# The training side of fw/common/boomdetect: the Python that produces the
+# weight tables the C library ships, the evaluation that picks them, and the
+# fixtures that prove the C computes the same numbers.
+#
+# Same ruff settings as the sibling packages (fw/common/boomdetect,
+# fw/common/boomlink), so one `ruff check` behaves the same way everywhere.
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "boomdetect-train"
+version = "0.1.0"
+description = "Training, evaluation and C export for the boomdetect acoustic drone detector"
+requires-python = ">=3.11"
+dependencies = [
+    "numpy>=1.26",
+    "scipy>=1.11",
+    "soundfile>=0.12",
+    "scikit-learn>=1.4",
+    "pyarrow>=14",
+    "pandas>=2.1",
+    "tqdm>=4.66",
+]
+
+[project.optional-dependencies]
+# The CNN family trains with PyTorch; everything else runs without it. Install
+# the CPU build: `pip install torch --index-url https://download.pytorch.org/whl/cpu`.
+torch = ["torch>=2.2"]
+dev = ["pytest>=8", "ruff>=0.5"]
+
+[project.scripts]
+bdtrain = "boomdetect_train.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["boomdetect_train*"]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
