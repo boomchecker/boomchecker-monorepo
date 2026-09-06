@@ -151,7 +151,16 @@ strong as the discipline of bumping it, so treat it as a tripwire — the real
 check is the parity fixture.
 
 Adding a model is a new file under `models/`, one line in the registry, and one
-declaration in `models/models.h` so the compiler checks the pair.
+declaration in `models/models.h` so the compiler checks the pair. `bdtrain
+export` generates the file and its weight header; the registry lines stay a
+hand edit, and `model_parity_test` fails for any exported model the registry
+does not list.
+
+The image currently carries six: the deployed `mlp_v6` and `svm_v3` on layout 1,
+and the comparison set from training run r2 — `svm_l2`, `gbt_l2` (gradient
+boosted trees) and `mlp_l2` on layout 2, `cnn_1d` on layout 3 — each with the
+threshold that kept its false-alarm windows under 5 per hour on the validation
+negatives. `model <name>` switches; the default stays `mlp_v6`.
 
 A model needing a different feature *representation* — raw frames for a CNN, say
 — adds a **feature extractor** rather than an edit to the pipeline.
