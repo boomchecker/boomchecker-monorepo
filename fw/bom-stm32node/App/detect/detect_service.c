@@ -208,11 +208,29 @@ void detect_service_run(uint32_t seconds, uint32_t squelch_milli, int32_t thr_mi
     s_cyccnt_ready = 1u;
   }
 
+  /* The extractor follows the model, not the board: boomdetect_init() compares
+     the model's layout_id against the CONFIGURED extractor and, told nothing,
+     configures `stats` (layout 1). Leaving this field out therefore made every
+     layout-2/3 model in the registry fail init on hardware while passing the
+     host suite, whose tests all resolve the extractor this way (2026-09-07:
+     svm_l2, gbt_reg_l2 and cnn_small all answered DETERR). */
+  const classifier_t           *model = detect_service_model();
+  const boomdetect_extractor_t *ex    = boomdetect_extractor_for_layout(model->layout_id);
+  if (ex == NULL)
+  {
+    char reason[80];
+    snprintf(reason, sizeof(reason), "DETERR no extractor for layout %u (model %s)\r\n",
+             (unsigned)model->layout_id, model->name);
+    det_abort(reason);
+    return;
+  }
+
   const boomdetect_config_t cfg = {
     .decimation    = (uint16_t)(PCM_FS_HZ / 16000u), /* 48 kHz in, 16 kHz chain */
     .squelch_milli = squelch_milli,
     .thr_milli     = thr_milli,
-    .classifier    = detect_service_model(),
+    .classifier    = model,
+    .extractor     = ex,
   };
   if (!boomdetect_init(&s_det, &cfg))
   {

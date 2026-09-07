@@ -173,9 +173,12 @@ constant. So a new representation is one file under `src/`, a new id, a line in
 the extractor registry, and a model that declares the same id; nothing in
 `boomdetect.c` changes.
 
-There is still exactly one extractor, `stats`, which is the aggregation
-described above. The seam was put in while there was one implementation
-deliberately: it is cheap now and expensive once a second one is being wedged in.
+The image carries the three extractors of the table above, `stats` being the
+default. A consumer must hand `boomdetect_init()` the extractor that produces the
+model's layout — `boomdetect_extractor_for_layout(model->layout_id)`, which is
+what the host tests and `App/detect/detect_service.c` do; a config with the field
+left NULL gets `stats`, and every layout-2/3 model is then refused at init. That
+refusal was seen on the board before the firmware resolved the extractor this way.
 `registry_test` drives a fake extractor with a foreign layout end to end, and
 checks that a mismatched pair in either direction is refused — which is what a
 feature *count* cannot catch, since reordering the statistics keeps the width.
