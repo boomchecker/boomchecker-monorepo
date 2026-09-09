@@ -1,0 +1,65 @@
+\documentclass[conference]{IEEEtran}
+\IEEEoverridecommandlockouts
+
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{algorithmic}
+\usepackage{graphicx}
+\usepackage{textcomp}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\def\BibTeX{{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.08em
+    T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
+
+\begin{document}
+
+\title{Ego-Noise Suppression for Impulsive Acoustic Event Detection on Multirotor UAVs\\\thanks{Draft skeleton for ICASSP 2027 submission. Title, funding note, and author list to be finalized before submission.}}
+
+\author{\IEEEauthorblockN{Martin Maxa}
+\IEEEauthorblockA{\textit{Dept. of Measurement} \\
+\textit{Czech Technical University in Prague, FEE} \\
+Prague, Czechia \\
+maxamart@fel.cvut.cz}}
+
+\maketitle
+
+\begin{abstract}
+Placeholder abstract. State the problem (on-board microphones on multirotor UAVs are dominated by ego-noise from motors/propellers, which masks short impulsive acoustic events of interest), the proposed approach (reference-free / motor-reference-driven active/adaptive noise suppression, e.g., FxLMS, applied ahead of an impulsive-event detector), and the headline quantitative result (attenuation in dB, effect on detection metrics) once experiments are finalized. Keep to ~150-200 words for ICASSP.
+\end{abstract}
+
+\begin{IEEEkeywords}
+active noise control, ego-noise suppression, FxLMS, UAV acoustics, impulsive event detection
+\end{IEEEkeywords}
+
+\section{Introduction}
+\label{sec:intro}
+Motivate the problem: UAV-borne acoustic sensing (e.g., detecting impulsive events such as gunshots/explosions) is degraded by drone ego-noise (motor/propeller tones and broadband turbulence). State the gap in prior work, the proposed contribution, and a short itemized list of contributions.
+
+\section{Related Work}
+\label{sec:sota}
+Position against: (1) classical/adaptive ANC (FxLMS and variants), (2) drone ego-noise characterization and suppression literature, (3) impulsive/acoustic event detection literature, (4) embedded/real-time deployment constraints.
+
+\section{Method}
+\label{sec:method}
+Describe the signal model, the noise-reference source (motor control signals / synthetic reference), the adaptive filter (FxLMS, fixed-point or floating-point), and how the denoised signal feeds the downstream impulsive-event detector/classifier.
+
+\section{Experimental Setup}
+\label{sec:setup}
+Describe dataset(s) (e.g., DADS drone-noise corpus, synthetic mixtures, any impulsive-event corpus reused from prior work), evaluation protocol, and metrics (attenuation in dB, detection accuracy/F1 before vs. after suppression).
+
+\section{Results}
+\label{sec:results}
+Report attenuation results and downstream detection-performance results, with figures/tables.
+
+\section{Discussion}
+\label{sec:discussion}
+Limitations and scope boundaries (e.g., single-channel vs. multi-channel, simulated vs. real acoustic paths, embedded real-time feasibility).
+
+\section{Conclusion}
+\label{sec:conclusion}
+Summarize contribution and outline future work (e.g., real hardware validation, embedded real-time implementation).
+
+\bibliographystyle{IEEEtran}
+\bibliography{references}
+
+\end{document}
