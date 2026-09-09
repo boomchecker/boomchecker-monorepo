@@ -1,0 +1,17 @@
+version: "3"
+
+tasks:
+  build:
+    desc: Build the IEEE conference paper PDF
+    dir: article
+    cmds:
+      - pdflatex -interaction=nonstopmode -halt-on-error article_main.tex
+      - bibtex article_main
+      - pdflatex -interaction=nonstopmode -halt-on-error article_main.tex
+      - pdflatex -interaction=nonstopmode -halt-on-error article_main.tex
+
+  clean:
+    desc: Remove LaTeX build artifacts
+    dir: article
+    cmds:
+      - rm -f article_main.aux article_main.bbl article_main.blg article_main.log article_main.out article_main.pdf
