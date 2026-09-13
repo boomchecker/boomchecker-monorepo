@@ -6,17 +6,15 @@
 **Submission ID:** 28
 **Slot:** 10 minutes, Q&A separate. The script is written to 9:30.
 
-> **Venue:** the conference is hosted at CTU FEE – home ground. The talk opens with
-> "the Department of Measurement – here at this faculty" rather than reciting the full
-> affiliation, which the audience already knows. The title slide keeps the full
-> affiliation for the record.
->
-> **TODO – the one thing still unknown:** the exact conference name and edition.
-> The abstract uses an IMEKO template (the PDF metadata carries "XVII IMEKO World
-> Congress" from the template author D. Ilić), which identifies the template's origin,
-> not a confirmed venue. Until it is confirmed, the title slide shows a red
-> `⟨CONFERENCE NAME – TO BE CONFIRMED⟩` placeholder – see `\date` in `slides/slides.tex`.
-> Rename this directory once it is known.
+**Conference:** 27th IMEKO TC4 Conference 2026, with Special TC11 Technical Session,
+hosted at CTU FEE – home ground. On the title slide; the directory name stays as it is.
+
+Because it is home ground, the talk opens with "the Department of Measurement – here at
+this faculty" rather than reciting the full affiliation, which the audience already
+knows. The title slide keeps the full affiliation for the record.
+
+(For the record: the abstract PDF's metadata carries "XVII IMEKO World Congress" from
+the template author D. Ilić. That is the template's origin, not this venue – ignore it.)
 
 ## Contents
 
