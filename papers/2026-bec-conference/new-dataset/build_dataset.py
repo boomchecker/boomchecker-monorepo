@@ -15,7 +15,7 @@ Split protocol (fixes the cross-split leakage class found in the original corpus
   augmentation); val/test events contribute channel 1 only, their remaining channels
   are excluded entirely, so val/test rows stay statistically independent events.
 - Non-launch (false alarm) recordings are shared with the old dataset unchanged,
-  including their split assignment from BEC/retraining/retrain/splits3.csv — negatives
+  including their split assignment from papers/2026-bec-conference/retraining/retrain/splits3.csv — negatives
   are identical in both datasets by design.
 - Old-campaign dana_artillery recordings are NOT included: they may be re-cuts of the
   same physical shots as the new zips, and including both would recreate cross-split
@@ -29,6 +29,7 @@ Outputs (committed):
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import wave
 import zipfile
@@ -38,7 +39,13 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 
 NEW_DATASET_ROOT = Path(__file__).resolve().parent
-PROJECT_ROOT = NEW_DATASET_ROOT.parents[1]
+# This paper lives under papers/; the training data, the ml/ pipeline and the
+# generated/ feature caches belong to the Zelinjak project. Resolve the repository
+# root by walking up to the .git marker so the paths survive further moves.
+_HERE = Path(__file__).resolve()
+REPO_ROOT = next(p for p in _HERE.parents if (p / ".git").exists())
+PROJECT_ROOT = REPO_ROOT / "projects" / "2026-zelinjak-artillery-detection"
+BEC_ROOT = REPO_ROOT / "papers" / "2026-bec-conference"
 AUDIO_ROOT = PROJECT_ROOT / "datasets" / "recordings"
 
 TEST_EVENT_FRACTION = 0.2
@@ -80,7 +87,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--old-manifest", type=Path, default=AUDIO_ROOT / "manifest.csv")
     parser.add_argument(
-        "--old-splits3", type=Path, default=PROJECT_ROOT / "BEC" / "retraining" / "retrain" / "splits3.csv"
+        "--old-splits3", type=Path, default=BEC_ROOT / "retraining" / "retrain" / "splits3.csv"
     )
     args = parser.parse_args()
 
@@ -102,7 +109,9 @@ def main() -> None:
         split = split_of_event[event_id]
         channels = events[event_id] if split == "train" else events[event_id][:1]
         for channel, wav_path in channels:
-            rel_audio = Path("..") / ".." / wav_path.relative_to(PROJECT_ROOT)
+            # ml/prepare_features.py resolves audio_path against datasets/recordings/,
+            # not against this manifest, so the path must be relative to AUDIO_ROOT.
+            rel_audio = Path(os.path.relpath(wav_path, AUDIO_ROOT))
             rows.append(
                 {
                     "recording_id": f"{event_id}_ch{channel}",

@@ -29,7 +29,13 @@ import numpy as np
 import pandas as pd
 
 RETRAIN_ROOT = Path(__file__).resolve().parent
-PROJECT_ROOT = RETRAIN_ROOT.parents[2]
+# This paper lives under papers/; the training data, the ml/ pipeline and the
+# generated/ feature caches belong to the Zelinjak project. Resolve the repository
+# root by walking up to the .git marker so the paths survive further moves.
+_HERE = Path(__file__).resolve()
+REPO_ROOT = next(p for p in _HERE.parents if (p / ".git").exists())
+PROJECT_ROOT = REPO_ROOT / "projects" / "2026-zelinjak-artillery-detection"
+BEC_ROOT = REPO_ROOT / "papers" / "2026-bec-conference"
 sys.path.insert(0, str(PROJECT_ROOT / "ml"))
 
 NOISE_LEVELS = [0.1, 0.2, 0.3, 0.5]  # thesis ml/load_data.py values
@@ -72,7 +78,7 @@ def main() -> None:
         "--dataset",
         choices=["old", "new"],
         default="old",
-        help="'old' = original 854-recording corpus; 'new' = new-campaign launches (BEC/new-dataset) with shared negatives.",
+        help="'old' = original 854-recording corpus; 'new' = new-campaign launches (papers/2026-bec-conference/new-dataset) with shared negatives.",
     )
     parser.add_argument("--features", type=Path, default=None, help="Override the per-dataset default feature index.")
     parser.add_argument("--splits3", type=Path, default=None, help="Override the per-dataset default splits file.")
@@ -84,7 +90,7 @@ def main() -> None:
 
     if args.dataset == "new":
         features = args.features or PROJECT_ROOT / "generated/features_new_seed42/features_manifest.csv"
-        splits3 = args.splits3 or PROJECT_ROOT / "BEC/new-dataset/splits3_new.csv"
+        splits3 = args.splits3 or BEC_ROOT / "new-dataset/splits3_new.csv"
         output = args.output or RETRAIN_ROOT / "models" / f"retrained_new_seed{args.seed}.h5"
     else:
         features = args.features or PROJECT_ROOT / "generated/features_seed42/features_manifest.csv"

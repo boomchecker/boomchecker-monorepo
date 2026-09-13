@@ -8,12 +8,12 @@ analysis window extracted exactly as in the processing pipeline (ml/utils.py:
 peak detection in the first 20 % of the clip, 30 % of the window before the peak,
 70 % after).
 
-Reference recording: BEC/scripts/reference_launch_ch1.wav (channel 1 of launch event
+Reference recording: papers/2026-bec-conference/scripts/reference_launch_ch1.wav (channel 1 of launch event
 0005_0697s_shot_036 from the four-microphone campaign). The signal is loaded through
 the same front end as the pipeline (librosa, resampled to 22.05 kHz) and normalized
 to [-1, 1] for display.
 
-Output: BEC/article/figs/sec2_waveform_combined.pdf (vector).
+Output: papers/2026-bec-conference/article/figs/sec2_waveform_combined.pdf (vector).
 """
 
 from __future__ import annotations
@@ -29,7 +29,13 @@ import matplotlib.ticker as mticker
 import numpy as np
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-PROJECT_ROOT = SCRIPT_DIR.parents[1]
+# This paper lives under papers/; the training data, the ml/ pipeline and the
+# generated/ feature caches belong to the Zelinjak project. Resolve the repository
+# root by walking up to the .git marker so the paths survive further moves.
+_HERE = Path(__file__).resolve()
+REPO_ROOT = next(p for p in _HERE.parents if (p / ".git").exists())
+PROJECT_ROOT = REPO_ROOT / "projects" / "2026-zelinjak-artillery-detection"
+BEC_ROOT = REPO_ROOT / "papers" / "2026-bec-conference"
 sys.path.insert(0, str(PROJECT_ROOT / "ml"))
 
 from utils import extract_window, find_peak, load_signal  # noqa: E402

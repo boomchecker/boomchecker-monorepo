@@ -12,7 +12,13 @@ import sys
 from pathlib import Path
 
 RETRAINING_ROOT = Path(__file__).resolve().parent
-PROJECT_ROOT = RETRAINING_ROOT.parents[1]
+# This paper lives under papers/; the training data, the ml/ pipeline and the
+# generated/ feature caches belong to the Zelinjak project. Resolve the repository
+# root by walking up to the .git marker so the paths survive further moves.
+_HERE = Path(__file__).resolve()
+REPO_ROOT = next(p for p in _HERE.parents if (p / ".git").exists())
+PROJECT_ROOT = REPO_ROOT / "projects" / "2026-zelinjak-artillery-detection"
+BEC_ROOT = REPO_ROOT / "papers" / "2026-bec-conference"
 sys.path.insert(0, str(PROJECT_ROOT / "ml"))
 
 from convert_model import write_c_header  # noqa: E402

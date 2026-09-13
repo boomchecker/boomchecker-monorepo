@@ -5,7 +5,7 @@ look up what we published and where its sources live.
 
 | Year | Venue | Contribution | Authors | Status | Sources |
 |---|---|---|---|---|---|
-| 2026 | BEC 2026 (paper 53) | Artillery Launch Detection | Zelinjak, Maxa | published | [`projects/2026-zelinjak-artillery-detection/BEC/`](../projects/2026-zelinjak-artillery-detection/BEC/) |
+| 2026 | BEC 2026 (paper 53) | Artillery Launch Detection | Zelinjak, Maxa | published | [`2026-bec-conference/`](2026-bec-conference/) |
 | 2026 | IMEKO *(exact venue to be confirmed)* | Acoustic-Based Detection, Classification, and Localization of Impulsive Sounds | Svatoš, Maxa | presented 2026-09-16 | [`2026-imeko-impulsive-sounds/`](2026-imeko-impulsive-sounds/) |
 
 ## Where a new contribution goes

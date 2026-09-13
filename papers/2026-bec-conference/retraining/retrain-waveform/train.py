@@ -1,6 +1,6 @@
 """Retrain the thesis CNN with waveform-domain noise augmentation added to the train set.
 
-Second arm of the augmentation comparison. Identical to BEC/retraining/retrain/train.py (same
+Second arm of the augmentation comparison. Identical to papers/2026-bec-conference/retraining/retrain/train.py (same
 architecture, same hard-coded splits3.csv, same seeding, same MFCC-domain jitter, same
 clean-validation early stopping) except for ONE change: the training set additionally
 includes waveform-domain noisy variants (SNR 30/20/10/5 dB, applied to the audio before
@@ -29,7 +29,13 @@ import pandas as pd
 
 WF_ROOT = Path(__file__).resolve().parent
 RETRAINING_ROOT = WF_ROOT.parent
-PROJECT_ROOT = WF_ROOT.parents[2]
+# This paper lives under papers/; the training data, the ml/ pipeline and the
+# generated/ feature caches belong to the Zelinjak project. Resolve the repository
+# root by walking up to the .git marker so the paths survive further moves.
+_HERE = Path(__file__).resolve()
+REPO_ROOT = next(p for p in _HERE.parents if (p / ".git").exists())
+PROJECT_ROOT = REPO_ROOT / "projects" / "2026-zelinjak-artillery-detection"
+BEC_ROOT = REPO_ROOT / "papers" / "2026-bec-conference"
 sys.path.insert(0, str(PROJECT_ROOT / "ml"))
 
 NOISE_LEVELS = [0.1, 0.2, 0.3, 0.5]  # thesis MFCC-jitter levels, kept identical to arm 1
@@ -71,7 +77,7 @@ def main() -> None:
         "--dataset",
         choices=["old", "new"],
         default="old",
-        help="'old' = original 854-recording corpus; 'new' = new-campaign launches (BEC/new-dataset) with shared negatives.",
+        help="'old' = original 854-recording corpus; 'new' = new-campaign launches (papers/2026-bec-conference/new-dataset) with shared negatives.",
     )
     parser.add_argument("--features", type=Path, default=None, help="Override the per-dataset default feature index.")
     parser.add_argument(
@@ -92,7 +98,7 @@ def main() -> None:
         args.waveform_features = (
             args.waveform_features or PROJECT_ROOT / "generated/features_new_trainaug_seed142/features_manifest.csv"
         )
-        args.splits3 = args.splits3 or PROJECT_ROOT / "BEC/new-dataset/splits3_new.csv"
+        args.splits3 = args.splits3 or BEC_ROOT / "new-dataset/splits3_new.csv"
         output = args.output or WF_ROOT / "models" / f"retrained_wf_new_seed{args.seed}.h5"
     else:
         args.features = args.features or PROJECT_ROOT / "generated/features_seed42/features_manifest.csv"

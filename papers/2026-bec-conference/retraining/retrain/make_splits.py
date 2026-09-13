@@ -7,7 +7,7 @@ evaluation and the ESP32 hardware measurements. The validation set is carved out
 the canonical train partition (stratified by class, fixed seed) and is used only for
 early stopping / checkpoint selection.
 
-Output: BEC/retrain/splits3.csv (recording_id, class_id, split3) — committed to git so
+Output: papers/2026-bec-conference/retrain/splits3.csv (recording_id, class_id, split3) — committed to git so
 the partition is hard-coded, not re-derived at training time.
 """
 
@@ -20,7 +20,13 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 
 RETRAIN_ROOT = Path(__file__).resolve().parent
-PROJECT_ROOT = RETRAIN_ROOT.parents[2]
+# This paper lives under papers/; the training data, the ml/ pipeline and the
+# generated/ feature caches belong to the Zelinjak project. Resolve the repository
+# root by walking up to the .git marker so the paths survive further moves.
+_HERE = Path(__file__).resolve()
+REPO_ROOT = next(p for p in _HERE.parents if (p / ".git").exists())
+PROJECT_ROOT = REPO_ROOT / "projects" / "2026-zelinjak-artillery-detection"
+BEC_ROOT = REPO_ROOT / "papers" / "2026-bec-conference"
 
 VAL_FRACTION = 0.2
 SEED = 42
