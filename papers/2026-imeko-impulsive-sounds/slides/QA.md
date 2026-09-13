@@ -32,11 +32,29 @@ because every method saw the same data.
 ## Method
 
 **"Why does GTCC win?"**
-The gammatone filter bank models the response of the human cochlea. Compared with a
-mel scale it resolves the low frequencies more finely, and that is where the energy of
-a muzzle blast sits. It is also known to be more noise-resistant than MFCC in general
-audio work.
+Lead with what is sourced, and label the rest as your reading:
+
+> The gammatone filter bank was designed to model the response of the human cochlea,
+> and in general audio work it is known to be more robust to noise than MFCC — that is
+> what the abstract says, and it carries over here. We did not isolate the mechanism in
+> this study. My own reading is that the gammatone bank keeps finer detail at low
+> frequencies, where the muzzle blast has most of its energy — but that is a
+> hypothesis, not a result.
+
+Do **not** state the low-frequency explanation as fact. It is plausible, it is not in
+the abstract or the source paper, and Svatoš may be in the room.
 → **backup slide 13.**
+
+**"In your table the SVM beats the NN for LFCC at 30 and 50 ms. So does NN really win?"**
+It does not win every row, and say so:
+
+> Correct — for LFCC the SVM is ahead at 30 and 50 ms, by about three percentage
+> points. The statement in the abstract is about the study as a whole: across all
+> extractors and classes the network comes out slightly ahead, and more so at longer
+> frames. On this one-class table it is a tendency, not a rule.
+
+The abstract's exact wording is "NN achieves slightly better classification success,
+especially with longer frames". Stay inside that.
 
 **"Why not a deep network / a CNN on spectrograms?"**
 With 26 features and a few hundred samples, a shallow network is the right capacity.
@@ -87,6 +105,18 @@ plain cross-correlation (0.84°) and the parabolic variant (0.77°).
 
 ## System and deployment
 
+**"How does the detection itself work? You only showed classification."**
+Fair — the talk is about the second stage. The trigger is prior work:
+
+> Detection is a streaming trigger on each unit: a median-filter impulse detector that
+> estimates the local acoustic background and flags candidate impulsive events. It was
+> validated separately — it detected all tested small-arms gunshots in shooting-range
+> measurements and operated down to an acoustic SNR of about 5 dB. What I showed today
+> is what happens to the candidates it forwards.
+
+Source: Svatoš & Holub, *Smart Acoustic Sensor*, IEEE RTSI 2019 (cited as the trigger
+stage in the BEC 2026 paper). No backup slide — it is one sentence.
+
 **"Does this run in real time? On embedded hardware?"**
 Not in this study — here the sensors forward detected signals to a server. There is
 follow-on work on exactly that question: a compact MFCC-CNN post-trigger classifier
@@ -110,6 +140,19 @@ Not characterized in this study. Say so plainly. Long-range acoustic localizatio
 known to be sensitive to atmosphere and terrain, and that is out of scope here.
 
 ---
+
+## Two things you must find out before Wednesday
+
+These are on the slides and you cannot currently answer a follow-up about them:
+
+1. **`figs/gunshot_char.png` — which weapon, what distance, whose recording?** The
+   slide says "this is a real recording" and the script reads the 45 ms gap off it.
+   The gap between shock wave and muzzle blast is set by geometry, so "what range was
+   that?" is the obvious follow-up. Ask Svatoš.
+2. **The 70 events behind MAE 0.77° — what were they?** `scripts/tdoa_estimation/`
+   holds the data (recorded 2026-04-20, angles set by hand) but not what made the
+   sound. If they were gunshots, say so. If they were test impulses, say that instead
+   — the bearing algorithm does not care, but the audience will.
 
 ## If you do not know
 

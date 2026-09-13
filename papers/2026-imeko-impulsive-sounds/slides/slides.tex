@@ -47,14 +47,16 @@
 
 \begin{frame}[plain]
   \titlepage
-  \note{%
-    \textbf{[0:00--0:30]}\par\medskip
-    Good morning. // My name is Martin Maxa, from the Czech Technical University
-    in Prague, Department of Measurement. // I am presenting joint work with
-    Doctor Jakub Svatoš. //\par\medskip
-    Our topic is acoustic detection, classification and localization of impulsive
-    sounds --- in practice, gunshots. // I will show you how we detect them, how we
-    tell them apart, and how we find where they came from. //\par\medskip
+  \note{
+    \textbf{[0:00--0:45]}\par\medskip
+    Good morning. // My name is Martin Maxa, from the Department of Measurement at the
+    Czech Technical University in Prague. // This is joint work with Doctor Jakub
+    Svatoš. //\par\medskip
+    The subject is the acoustic detection, classification and localization of
+    impulsive sounds, with gunshots as the target class. // The core of the
+    contribution is a comparison of cepstral feature extractors and two classifiers for
+    gunshot classification; localization is covered as the second function of the same
+    sensor network. //\par\medskip
     \textit{(// = pause. [CLICK] = advance the slide.)}
   }
 \end{frame}
@@ -62,31 +64,38 @@
 % ===========================================================================
 \section{Motivation}
 
-\begin{frame}{Why acoustic surveillance}
+\begin{frame}{Motivation and research questions}
   \begin{itemize}
-    \item Shootings in public spaces are more frequent; global gun ownership is rising.
-    \item Growing demand for autonomous security in communal areas --- campuses,
-          hospitals, parks, government facilities.
-    \item Cameras, drones and security personnel give \emph{some} protection, but
-          fall short in high-risk situations with an active shooter.
+    \item Acoustic detection of gunfire complements camera-based surveillance: the
+          acoustic channel is omnidirectional and does not require line of sight.
+    \item Required functions: \textbf{detection} of the impulsive event,
+          \textbf{classification} (ideally down to calibre), and \textbf{localization}
+          of the source --- in outdoor environments that are noisy and reverberant.
   \end{itemize}
   \vfill
-  \begin{block}{What an acoustic system adds}
-    Identifies gunfire, pinpoints its source, and tracks an ongoing threat ---
-    faster detection and shorter response times for security forces.
+  \begin{block}{This study}
+    \begin{enumerate}
+      \item Which cepstral representation separates gunshots from acoustically similar
+            false alarms most reliably?
+      \item Neural network or support vector machine on those features?
+      \item How does the analysis frame length interact with environmental reflections?
+    \end{enumerate}
   \end{block}
   \note{%
-    \textbf{[0:30--1:15]}\par\medskip
-    Shootings in public spaces are becoming more frequent, and gun ownership is
-    rising worldwide. // At the same time there is growing demand for autonomous
-    security in places where people gather --- campuses, hospitals, parks,
-    government buildings. //\par\medskip
-    Cameras, drones and security staff already give some protection. But in a
-    high-risk situation, with an active shooter, they fall short. //
-    {\color{accent}[CUT IF LATE]} A camera has to be pointed the right way. A guard
-    has to be in the right place. //\par\medskip
-    Sound does not care about line of sight. An acoustic system hears the shot and
-    tells you where it came from. //
+    \textbf{[0:45--1:50]}\par\medskip
+    The practical motivation --- the incidence of shootings in public spaces --- is
+    stated in the abstract; I will concentrate on the measurement problem. //\par\medskip
+    Acoustic detection of gunfire complements camera-based surveillance. The acoustic
+    channel has two properties cameras lack: it is omnidirectional, and it does not
+    require line of sight. //
+    {\color{accent}[CUT IF LATE]} The system has to provide three functions ---
+    detection of the impulsive event, classification, ideally down to calibre, and
+    localization of the source --- in outdoor environments that are both noisy and
+    reverberant. //\par\medskip
+    This study addresses three questions. Which cepstral representation separates
+    gunshots from acoustically similar false alarms most reliably. // Whether a neural
+    network or a support vector machine performs better on those features. // And how
+    the analysis frame length interacts with environmental reflections. //
   }
 \end{frame}
 
@@ -106,33 +115,32 @@
               when the bullet is supersonic ($v > c$).
         \pause
         \item \textbf{Muzzle blast} --- gases leaving the barrel, 1--3\,ms; travels
-              at the speed of sound, so it arrives $\approx$45\,ms later.
+              at the speed of sound --- in this recording $\approx$45\,ms behind.
         \item Everything between and after: \gtcc{reflections}.
       \end{itemize}
     \end{column}
   \end{columns}
-  \note<2>{%
-    \textbf{[1:15--2:30]}\par\medskip
-    So what does a gunshot look like to a microphone? // This is a real recording.
-    Two components define the pattern --- and notice that they do not arrive together.
-    //\par\medskip
-    The first spike, at about two and a half milliseconds, is the shock wave. It
-    exists only when the bullet travels faster than sound.
-    {\color{accent}[CUT IF LATE]} The bullet drags a cone of compressed air behind it,
-    and that cone sweeps across the microphone. {\color{accent}[/CUT]} That is the
-    characteristic N shape. //\par\medskip
+  \note<2>{
+    \textbf{[1:50--3:00]}\par\medskip
+    The acoustic signature of a gunshot has two components, shown here on a real
+    recording. //\par\medskip
+    The first, at approximately two and a half milliseconds, is the shock wave. It is
+    present only for supersonic projectiles.
+    {\color{accent}[CUT IF LATE]} It is generated along the trajectory as a Mach cone,
+    and the portion that reaches the microphone has the characteristic N-shaped
+    pressure profile. {\color{accent}[/CUT]} //\par\medskip
     \textbf{[CLICK]}\par\medskip
-    The second spike, forty-five milliseconds later, is the muzzle blast --- the
-    explosive gases leaving the barrel. It leaves the weapon at the instant of firing,
-    but it only travels at the speed of sound, so it arrives late. It lasts one to
-    three milliseconds. //\par\medskip
-    Now look at everything in between and after. That is no longer the gunshot ---
-    those are reflections from the surroundings. Remember that; it comes back at the
-    end of the talk. //
+    The second component --- in this recording about forty-five milliseconds later ---
+    is the muzzle blast: the expansion of propellant gases at the barrel. It originates
+    at the instant of firing but propagates at the speed of sound, hence the delay. Its
+    duration is one to three milliseconds. //\par\medskip
+    The signal between and after the two components is not part of the source
+    signature; it consists of reflections from the surroundings. This is relevant to
+    the choice of frame length, and I return to it in the results. //
   }
 \end{frame}
 
-\begin{frame}{Why naive processing is not enough}
+\begin{frame}{Single-domain analysis is insufficient}
   \begin{itemize}
     \item \textbf{Spectral analysis alone} often captures environmental noise rather
           than the gunshot itself.
@@ -144,15 +152,14 @@
     Effective feature extraction must integrate \emph{both} time and frequency
     domain processing.
   \end{alertblock}
-  \note{%
-    \textbf{[2:30--3:00]}\par\medskip
-    You might think this is easy --- just look at the spectrum, or just look at the
-    waveform. // Neither works on its own. //\par\medskip
-    Spectral analysis alone tends to describe the environment rather than the
-    gunshot. // And the time-domain pattern gets distorted by nonlinear dispersion
-    and by obstacles in the path. //\par\medskip
-    So feature extraction has to combine both domains. That is what the rest of the
-    talk is about. //
+  \note{
+    \textbf{[3:00--3:30]}\par\medskip
+    Neither signal domain is sufficient on its own. //\par\medskip
+    Spectral analysis of a frame tends to characterise the acoustic environment rather
+    than the source. // The time-domain pattern is distorted by nonlinear dispersion
+    during propagation and by obstacles in the path. //\par\medskip
+    Feature extraction therefore has to combine time- and frequency-domain processing
+    --- which is what a cepstral representation does. //
   }
 \end{frame}
 
@@ -196,23 +203,22 @@
     \item Multiple units give broader coverage and adaptability to environments.
     \item Tested with various firearm calibers and ammunition.
   \end{itemize}
-  \note{%
-    \textbf{[3:00--4:00]}\par\medskip
-    Here is the system. // Each sensor is a stand-alone unit. It listens
-    continuously, and when it detects something impulsive, it sends that signal to
-    a remote server. //\par\medskip
-    The server does two things. It classifies the event --- is this a gunshot, and
-    what kind. And it determines where the event happened, in two dimensions.
-    //\par\medskip
-    Why multiple units? Two reasons. Coverage --- one unit hears one neighbourhood.
-    And localization --- you need at least two bearings to get a position, and I will
-    show you that on the next slide. //\par\medskip
-    The system has been tested with several firearm calibers and several types of
-    ammunition. //
+  \note{
+    \textbf{[3:30--4:20]}\par\medskip
+    The system architecture is a distributed network of stand-alone sensor units and a
+    remote server. //\par\medskip
+    Each unit monitors its surroundings continuously; on detecting an impulsive event
+    it transmits the signal segment to the server. // The server performs two
+    functions: classification of the event, and estimation of its position in two
+    dimensions from the data of several units. //\par\medskip
+    Multiple units serve two purposes. Spatial coverage --- and localization, because a
+    two-dimensional position requires at least two bearings. That is the subject of the
+    next slide. //\par\medskip
+    The system has been tested with several firearm calibres and ammunition types. //
   }
 \end{frame}
 
-\begin{frame}{Locating the source}
+\begin{frame}{Localization --- bearing from TDoA}
   \begin{columns}[T,onlytextwidth]
     \begin{column}{0.56\textwidth}
       \includegraphics[width=0.96\textwidth]{figs/tdoa.png}
@@ -231,22 +237,20 @@
       \end{itemize}
     \end{column}
   \end{columns}
-  \note<2>{%
-    \textbf{[4:00--5:00]}\par\medskip
-    So how do we actually find the shooter? //\par\medskip
-    Each sensor unit carries two MEMS microphones, eighteen point six centimetres
-    apart. // The sound reaches one microphone before the other. That delay is
-    tiny --- at most twenty-four samples at forty-four kilohertz --- but it is enough.
-    //\par\medskip
-    From it we compute the bearing to the source, theta: the speed of sound times
-    the delay in samples, divided by the microphone spacing times the sampling
-    frequency. //\par\medskip
+  \note<2>{
+    \textbf{[4:20--5:20]}\par\medskip
+    Localization. // Each sensor unit carries two MEMS microphones at a spacing of
+    0.186 metres, sampled at 44.1 kilohertz. //\par\medskip
+    The time difference of arrival between the two channels --- at most about
+    twenty-four samples for this geometry --- gives the bearing theta to the source
+    through the relation shown: the arcsine of the speed of sound times the delay in
+    samples, over the microphone spacing times the sampling frequency. //\par\medskip
     \textbf{[CLICK]}\par\medskip
-    One unit gives you a direction. Two units give you two directions, and where
-    they cross is the position. //\par\medskip
-    We measured how good that bearing is. Using cross-correlation with parabolic
-    interpolation, over seventy recorded events, the mean absolute error is zero
-    point seven seven degrees. //
+    A single unit thus yields a direction. Two units yield two bearings, and their
+    intersection is the position estimate. //\par\medskip
+    Bearing accuracy was evaluated on seventy recorded events at nine reference angles
+    between minus forty-five and plus sixty degrees. Cross-correlation with parabolic
+    sub-sample interpolation gives a mean absolute error of 0.77 degrees. //
   }
 \end{frame}
 
@@ -283,7 +287,7 @@
   \end{center}
   \vspace{2mm}
   {\scriptsize Block diagram of the feature extraction algorithms (Fig.~1 in the abstract);
-   each branch applies its own filter bank before the DCT.}
+   each branch applies its own filter bank between the power spectrum and the log.}
   \vfill
   \begin{itemize}\small
     \item MFCC was developed for other acoustic applications but works for gunshot
@@ -292,22 +296,20 @@
     \item GFCC and GTCC derive from human auditory response models; \textbf{GTCC is
           more noise-resistant than MFCC}.
   \end{itemize}
-  \note{%
-    \textbf{[5:00--6:15]}\par\medskip
-    Now the classification. // The feature extractor is based on cepstral
-    coefficients. The chain is the same for all of them: cut the signal into
-    frames, take the FFT, take the power, take the logarithm, and finish with a
-    discrete cosine transform. //\par\medskip
-    What differs is one step that is not drawn here --- the filter bank that sits
-    before the DCT. //\par\medskip
-    Mel-frequency coefficients, MFCC, were developed for speech, but they work for
-    gunshots; that has been validated at military shooting ranges. // LFCC uses
-    linear spacing, IMFCC an inverted mel scale. // And GTCC uses a gammatone filter
-    bank, which models the response of the human ear. It is known to be more
-    noise-resistant than MFCC. //\par\medskip
-    We tested all four, at three frame lengths --- fifteen, thirty and fifty
-    milliseconds --- with two classifiers: a neural network and a support vector
-    machine. //
+  \note{
+    \textbf{[5:20--6:25]}\par\medskip
+    Classification. // All four feature extractors share the cepstral processing chain:
+    framing, FFT, power spectrum, logarithm, discrete cosine transform. //\par\medskip
+    They differ in the filter bank applied to the power spectrum before the logarithm
+    --- which is not shown in the diagram. //\par\medskip
+    MFCC uses the mel scale. It was developed for speech, but has been validated for
+    gunshot recognition at military shooting ranges. // LFCC uses linearly spaced
+    filters; IMFCC an inverted mel scale. // GTCC uses a gammatone filter bank derived
+    from a model of the auditory periphery, and is reported to be more robust to noise
+    than MFCC. //\par\medskip
+    The experimental grid is four extractors, three frame lengths --- fifteen, thirty
+    and fifty milliseconds --- and two classifiers: a neural network and a support
+    vector machine. //
   }
 \end{frame}
 
@@ -342,34 +344,31 @@
   \par\vspace{2mm}
   {\scriptsize Table~I in the abstract --- example of classification results for a 9\,mm class.
    Test partition: 118 events, 31 of them 9\,mm.}
-  \note{%
-    \textbf{[6:15--7:45]}\par\medskip
-    This is the result table for the nine-millimetre class. Let me walk you through
-    it. //\par\medskip
-    The rows are grouped by frame length --- fifteen, thirty, fifty milliseconds ---
-    and inside each group you see the four extractors. // The columns are three
-    metrics, each for both classifiers: accuracy, recall, and the Matthews
-    correlation coefficient. //\par\medskip
-    Now look only at the red rows. That is GTCC. // At every single frame length,
-    and for both classifiers, GTCC is the best row in its block. //\par\medskip
-    The best cell in the table is GTCC with the neural network at fifty
-    milliseconds: ninety-nine point one five percent accuracy, ninety-six point
-    seven seven percent recall, and a Matthews coefficient of zero point nine
-    eight. //\par\medskip
-    To put those numbers in context --- the test set has one hundred and eighteen
-    events, thirty-one of them nine-millimetre. So that accuracy is one hundred and
-    seventeen correct out of one hundred and eighteen, and that recall is thirty
-    shots out of thirty-one. //
+  \note{
+    \textbf{[6:25--7:35]}\par\medskip
+    Table one gives the results for the nine-millimetre class. //\par\medskip
+    Rows are grouped by frame length, with the four extractors within each group. //
+    Columns are accuracy, recall, and the Matthews correlation coefficient --- each for
+    the SVM and for the neural network. //\par\medskip
+    The GTCC rows are highlighted. For every frame length, and for both classifiers,
+    GTCC gives the highest value of all three metrics within its group. //\par\medskip
+    The best configuration is GTCC with the neural network at fifty milliseconds:
+    accuracy ninety-nine point one five percent, recall ninety-six point seven seven
+    percent, and an MCC of zero point nine eight. //\par\medskip
+    For scale: the test partition contains one hundred and eighteen events, thirty-one
+    of them nine-millimetre. Those figures correspond to one hundred and seventeen
+    correct decisions out of one hundred and eighteen, and thirty of the thirty-one
+    nine-millimetre shots recalled. //
   }
 \end{frame}
 
-\begin{frame}{What the numbers say}
+\begin{frame}{Discussion}
   \begin{itemize}
     \item \textbf{MFCC, LFCC and IMFCC yield similar results.}
     \item \gtcc{GTCC consistently performs better} across every frame length and both
           classifiers.
-    \item \textbf{NN outperforms SVM} --- better at modelling complex patterns.
-          The gap widens with longer frames.
+    \item \textbf{NN outperforms SVM} --- better at modelling complex patterns,
+          especially with longer frames.
     \item \textbf{Longer frames improve accuracy}, but start to capture environmental
           reflections, which can pull focus away from the gunshot itself.
   \end{itemize}
@@ -377,21 +376,24 @@
   \begin{block}{Best configuration in the table}
     GTCC + NN at 50\,ms --- 99.15\,\% ACC, 96.77\,\% RLC, MCC 0.98.
   \end{block}
-  \note{%
-    \textbf{[7:45--8:45]}\par\medskip
-    Three things come out of this. //\par\medskip
-    First, MFCC, LFCC and IMFCC behave almost identically. Changing the shape of a
-    mel-type filter bank does not buy you much. //\par\medskip
-    Second, GTCC is consistently better --- every frame length, both classifiers.
-    {\color{accent}[CUT IF LATE]} The gammatone filter bank resolves the low
-    frequencies more finely, and that is exactly where the energy of a muzzle blast
-    sits. //\par\medskip
-    Third, the neural network beats the support vector machine, and the gap grows
-    with longer frames. //\par\medskip
-    And about those longer frames --- they do improve accuracy, but remember the
-    reflections I showed you at the beginning. A fifty-millisecond frame starts to
-    include the acoustics of the room instead of the gunshot. So this trend does
-    not continue forever. //
+  \note{
+    \textbf{[7:35--8:45]}\par\medskip
+    Three observations. //\par\medskip
+    First, MFCC, LFCC and IMFCC perform comparably. The choice between mel, linear and
+    inverted-mel spacing has little effect. //\par\medskip
+    Second, GTCC performs consistently better --- at every frame length and for both
+    classifiers.
+    {\color{accent}[CUT IF LATE]} The gammatone bank is derived from an auditory model
+    and is known to be more noise-robust than MFCC; that is the probable explanation,
+    but the mechanism was not isolated in this study. {\color{accent}[/CUT]}
+    //\par\medskip
+    Third, the neural network is slightly ahead of the SVM, particularly at longer
+    frames --- a tendency across the study rather than a rule for every row of this
+    table. //\par\medskip
+    Finally, longer frames improve accuracy, but a fifty-millisecond frame increasingly
+    contains the impulse response of the surroundings rather than the source signature
+    --- the reflections seen on the recording earlier. The trend cannot be extrapolated
+    further. //
   }
 \end{frame}
 
@@ -413,19 +415,20 @@
   \vspace{3mm}
   {\large Thank you --- questions?}\\[2mm]
   {\small\color{gray} svatoja1@fel.cvut.cz \quad maxamart@fel.cvut.cz}
-  \note{%
+  \note{
     \textbf{[8:45--9:30]}\par\medskip
-    To summarise. //\par\medskip
-    We built a distributed network of stand-alone acoustic sensors with a remote
-    server, which detects, classifies and localizes impulsive sounds in two
-    dimensions. //\par\medskip
-    Cepstral coefficients work well as a feature extractor for gunshot
-    classification, with both classifiers. // Gammatone-based coefficients beat the
-    mel-frequency family, and the neural network is slightly better than the SVM,
-    especially at longer frames. //\par\medskip
-    And all of this was validated with real firearms, several calibers and several
-    types of ammunition. //\par\medskip
-    Thank you. I am happy to take questions. //
+    To conclude. //\par\medskip
+    A distributed network of stand-alone acoustic sensors with a remote server performs
+    detection, classification and two-dimensional localization of impulsive sounds.
+    //\par\medskip
+    Cepstral coefficients are an effective feature representation for gunshot
+    classification with both classifiers tested. // Gammatone-frequency coefficients
+    outperform the mel-frequency family, and the neural network achieves slightly
+    higher classification success than the SVM, particularly at longer frames.
+    //\par\medskip
+    The results were obtained on recordings of real firearms of several calibres and
+    ammunition types. //\par\medskip
+    Thank you. //
   }
 \end{frame}
 

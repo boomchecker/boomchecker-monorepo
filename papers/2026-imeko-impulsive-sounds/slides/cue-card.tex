@@ -39,86 +39,93 @@
 \begin{tabular}{@{}>{\raggedright\arraybackslash}p{10mm} >{\raggedright\arraybackslash}p{19mm} >{\raggedright\arraybackslash}p{147mm}@{}}
 
 \cue{0:00}{Title}{%
-  \say{Good morning. My name is Martin Maxa, from the Czech Technical University in
-  Prague, Department of Measurement. I am presenting joint work with Doctor Jakub Svatoš.}
-  \bt detection, classification \textbf{and localization} of impulsive sounds --- in
-  practice, gunshots
-  \bt \say{how we detect them, how we tell them apart, and how we find where they came from}}
+  \say{Good morning. My name is Martin Maxa, from the Department of Measurement at the
+  Czech Technical University in Prague. This is joint work with Doctor Jakub Svatoš.}
+  \bt subject: detection, classification, localization of impulsive sounds ---
+  gunshots as the target class
+  \bt \textbf{core of the contribution:} comparison of cepstral extractors $+$ two
+  classifiers; localization $=$ second function of the same network}
 
-\cue{0:30}{Why}{%
-  \say{Shootings in public spaces are becoming more frequent, and gun ownership is
-  rising worldwide.}
-  \bt demand for autonomous security --- campuses, hospitals, parks, government buildings
-  \bt cameras, drones, guards give \emph{some} protection --- fall short with an active shooter
-  \bt \textbf{a camera has to be pointed the right way; sound does not care about line of sight}}
+\cue{0:45}{Motivation}{%
+  \say{The practical motivation --- the incidence of shootings in public spaces --- is
+  stated in the abstract; I will concentrate on the measurement problem.}
+  \bt acoustic channel complements cameras: \textbf{omnidirectional}, \textbf{no line of sight}
+  \bt \textbf{[CUT]} three functions: detection, classification (to calibre), localization ---
+  in noisy, reverberant outdoor environments
+  \bt \textbf{three questions:} (1) which cepstral representation separates gunshots from
+  similar false alarms, (2) NN or SVM on those features, (3) frame length vs.\ reflections}
 
-\cue{1:15}{Signature}{%
-  \say{So what does a gunshot look like to a microphone? This is a real recording ---
-  and the two components do not arrive together.}
-  \bt \textbf{shock wave first}, $\approx$2.5\,ms --- only if $v>c$ --- bullet drags a cone
-  of compressed air across the mic --- the N shape
-  \bt \textbf{\color{accent}[CLICK]} muzzle blast $\approx$48\,ms, \emph{45\,ms later} ---
-  gases leaving the barrel, 1--3\,ms, travels only at the speed of sound
-  \bt between and after $=$ \textbf{reflections} --- \say{remember that, it comes back at the end}}
+\cue{1:50}{Signature}{%
+  \say{The acoustic signature of a gunshot has two components, shown here on a real
+  recording.}
+  \bt \textbf{shock wave first}, $\approx$2.5\,ms --- supersonic projectiles only ---
+  \textbf{[CUT]} Mach cone along the trajectory, N-shaped pressure profile
+  \bt \textbf{\color{accent}[CLICK]} muzzle blast, \emph{in this recording} $\approx$45\,ms
+  later --- propellant gases at the barrel, speed of sound, 1--3\,ms
+  \bt between and after $=$ \textbf{reflections}, not source signature ---
+  \say{relevant to frame length; I return to it in the results}}
 
-\cue{2:30}{Naive}{%
-  \say{You might think this is easy --- just look at the spectrum, or just look at the
-  waveform. Neither works on its own.}
-  \bt spectrum alone $\to$ describes the environment, not the gunshot
-  \bt time domain $\to$ distorted by nonlinear dispersion and obstacles
-  \bt $\Rightarrow$ feature extraction must combine both domains}
+\cue{3:00}{Single-domain}{%
+  \say{Neither signal domain is sufficient on its own.}
+  \bt spectral analysis of a frame $\to$ characterises the environment, not the source
+  \bt time-domain pattern $\to$ nonlinear dispersion, obstacles in the path
+  \bt $\Rightarrow$ combine both domains --- which is what a cepstral representation does}
 
-\cue{3:00}{System}{%
-  \say{Here is the system. Each sensor is a stand-alone unit.}
-  \bt listens continuously $\to$ sends the detected signal to a remote server
-  \bt server does two things: \textbf{classify} the event, and find \textbf{where} it was, in 2D
-  \bt why several units? coverage --- and you need \emph{two bearings} for a position}
+\cue{3:30}{System}{%
+  \say{The system architecture is a distributed network of stand-alone sensor units and
+  a remote server.}
+  \bt unit monitors continuously $\to$ on an impulsive event, transmits the segment
+  \bt server: \textbf{classification} $+$ \textbf{2D position} from several units
+  \bt several units: coverage --- and a 2D position needs \emph{at least two bearings}}
 
-\cue{4:00}{Localize}{%
-  \say{So how do we actually find the shooter?}
-  \bt two MEMS mics per unit, $d = 0.186$\,m, $f_s = 44.1$\,kHz --- delay is at most
-  $\approx$24 samples, \emph{but that is enough}
+\cue{4:20}{Localize}{%
+  \say{Localization. Each sensor unit carries two MEMS microphones at a spacing of
+  0.186 metres, sampled at 44.1 kilohertz.}
+  \bt TDoA between channels, at most $\approx$24 samples for this geometry
   \bt $\Theta = \arcsin\!\big(c\,\Delta n / (d f_s)\big)$ --- speed of sound $\times$ delay,
   over spacing $\times$ sampling rate
-  \bt \textbf{\color{accent}[CLICK]} one unit $=$ a direction; two units cross $=$ the position
-  \bt measured: cross-correlation $+$ parabolic interpolation, \textbf{MAE $0.77^\circ$},
-  \textbf{70 events}, $-45^\circ$ to $+60^\circ$}
+  \bt \textbf{\color{accent}[CLICK]} one unit $=$ a direction; two bearings intersect $=$
+  position estimate
+  \bt evaluated on \textbf{70 events}, 9 angles, $-45^\circ$ to $+60^\circ$ ---
+  cross-corr $+$ parabolic sub-sample interpolation, \textbf{MAE $0.77^\circ$}}
 
-\cue{5:00}{Features}{%
-  \say{Now the classification. The feature extractor is based on cepstral coefficients.}
-  \bt same chain for all four: frame $\to$ FFT $\to$ power $\to$ log $\to$ DCT
-  \bt \textbf{what differs is the filter bank, and it is not on the diagram}
-  \bt MFCC (from speech, validated on ranges) $|$ LFCC linear $|$ IMFCC inverted $|$
-  \textbf{\color{accent}GTCC gammatone $=$ models the ear}, more noise-resistant
-  \bt tested: 4 extractors $\times$ 3 frame lengths (15/30/50\,ms) $\times$ 2 classifiers}
+\cue{5:20}{Features}{%
+  \say{Classification. All four feature extractors share the cepstral processing chain:
+  framing, FFT, power spectrum, logarithm, discrete cosine transform.}
+  \bt \textbf{they differ in the filter bank} --- power spectrum $\to$ bank $\to$ log ---
+  not in the diagram
+  \bt MFCC mel (speech; validated on ranges) $|$ LFCC linear $|$ IMFCC inverted mel $|$
+  \textbf{\color{accent}GTCC gammatone}, auditory model, reported more noise-robust
+  \bt grid: 4 extractors $\times$ 3 frame lengths (15/30/50\,ms) $\times$ 2 classifiers}
 
-\cue{6:15}{\color{accent}TABLE}{%
-  \say{This is the result table for the nine-millimetre class. Let me walk you through it.}
-  \bt rows grouped by frame length, four extractors inside each $|$ columns $=$
-  ACC, RLC, MCC --- each for SVM and NN
-  \bt \textbf{\say{now look only at the red rows}} --- GTCC is the best row in every single block
-  \bt best cell: \textbf{GTCC $+$ NN at 50\,ms $\to$ 99.15 \,/\, 96.77 \,/\, 0.98}
-  \bt \textbf{context:} test set is 118 events, 31 of them 9\,mm $\Rightarrow$
-  \textbf{117 of 118} correct, recall \textbf{30 of 31}}
+\cue{6:25}{\color{accent}TABLE}{%
+  \say{Table one gives the results for the nine-millimetre class.}
+  \bt rows: frame length, four extractors within $|$ columns: ACC, RLC, MCC $\times$ SVM, NN
+  \bt \textbf{GTCC rows highlighted --- highest value of all three metrics in every group,
+  both classifiers}
+  \bt best: \textbf{GTCC $+$ NN, 50\,ms $\to$ 99.15 \,/\, 96.77 \,/\, 0.98}
+  \bt \textbf{for scale:} 118 test events, 31 of them 9\,mm $\Rightarrow$ \textbf{117 of 118}
+  correct, \textbf{30 of 31} recalled}
 
-\cue{7:45}{Numbers}{%
-  \say{Three things come out of this.}
-  \bt MFCC, LFCC, IMFCC almost identical --- reshaping a mel-type bank buys you little
-  \bt \textbf{GTCC consistently better} --- gammatone resolves the low frequencies finely,
-  and that is where muzzle-blast energy sits
-  \bt \textbf{NN beats SVM}, and the gap grows with longer frames
-  \bt longer frames do help, \emph{but} 50\,ms starts to include the room ---
-  \textbf{the reflections from slide 3}}
+\cue{7:35}{Discussion}{%
+  \say{Three observations.}
+  \bt MFCC, LFCC, IMFCC comparable --- mel / linear / inverted-mel spacing has little effect
+  \bt \textbf{GTCC consistently better}, every frame length, both classifiers ---
+  \textbf{[CUT]} auditory model, known noise-robust: \emph{probable} explanation, mechanism
+  not isolated here
+  \bt \textbf{NN slightly ahead of SVM}, particularly at longer frames --- \emph{tendency
+  across the study, not every row} (LFCC 30/50\,ms goes the other way)
+  \bt longer frames help, \emph{but} 50\,ms increasingly contains the impulse response of
+  the surroundings --- \say{the trend cannot be extrapolated further}}
 
 \cue{8:45}{Conclusion}{%
-  \say{To summarise.}
-  \bt distributed network of stand-alone sensors $+$ server $\to$ detect, classify,
-  localize in 2D
-  \bt cepstral coefficients are an effective extractor, with both classifiers
-  \bt GTCC beats the mel family; NN slightly better, especially at longer frames
-  \bt validated with real firearms, several calibers and ammunition types}
+  \say{To conclude.}
+  \bt distributed network $+$ server $\to$ detection, classification, 2D localization
+  \bt cepstral coefficients effective with both classifiers tested
+  \bt GTCC $>$ mel family; NN slightly higher, particularly at longer frames
+  \bt results on real firearms, several calibres and ammunition types}
 
-\cue{9:30}{}{\say{Thank you --- I am happy to take questions.}}
+\cue{9:30}{}{\say{Thank you.}}
 
 \end{tabular}
 }
@@ -131,16 +138,18 @@ Corpus 371 train \,/\, 118 test, five classes (false alarms 86/21, \textbf{9\,mm
 5.56 NATO SD 100/31, 7.62 Tokarev 55/17, .22 60/18) $|$ 26 features per extractor,
 $\approx$75/25 split $|$ NN: MATLAB Neural Fitting, Levenberg--Marquardt, 370 iterations $|$
 bearing: cross-corr $0.84^\circ$, $+$parabolic $\mathbf{0.77^\circ}$, PBDE $3.24^\circ$,
-PBDE$+$linreg $3.91^\circ$ $|$ backup slides \textbf{11}~setup \textbf{12}~bearing
+PBDE$+$linreg $3.91^\circ$ $|$ detection stage $=$ median-filter trigger, RTSI 2019, down to
+SNR $\approx$5\,dB $|$ backup slides \textbf{11}~setup \textbf{12}~bearing
 \textbf{13}~other~cepstral \textbf{14}~metrics (RLC $=$ recall).
 \par\vspace{1mm}
-\textbf{\color{accent}Running late?} Three sentences are marked \textbf{[CUT IF LATE]} in
-the notes --- \textbf{Why} (camera pointed the right way), \textbf{Signature} (cone of
-compressed air), \textbf{Numbers} (why gammatone wins). All three $\approx$35\,s, and dropping
-them breaks nothing. \textbf{Checkpoint:} start the table at \textbf{6:15}; past 6:45, cut all three.
+\textbf{\color{accent}Running late?} Three passages are marked \textbf{[CUT IF LATE]} in the
+notes --- \textbf{Motivation} (the three functions), \textbf{Signature} (Mach cone),
+\textbf{Discussion} (probable reason GTCC wins). All three $\approx$35\,s; dropping them
+breaks nothing. \textbf{Checkpoint:} start the table at \textbf{6:25}; past 6:55, cut all three.
 \par\vspace{1mm}
 \textbf{\color{accent}Do not guess:} 2D position error in metres, SNR limits of \emph{this}
-classifier, firing distances in this dataset. \say{We did not characterize that in this
-study --- Jakub Svatoš ran the campaign, I can put you in touch.}}
+classifier, firing distances in this dataset, provenance of the waveform on slide 3.
+\say{We did not characterize that in this study --- Jakub Svatoš ran the campaign, I can
+put you in touch.}}
 
 \end{document}
