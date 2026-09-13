@@ -293,8 +293,8 @@
     \item MFCC was developed for other acoustic applications but works for gunshot
           recognition --- validated at military shooting ranges.
     \item LFCC and IMFCC offer alternative filtering approaches.
-    \item GFCC and GTCC derive from human auditory response models; \textbf{GTCC is
-          more noise-resistant than MFCC}.
+    \item GTCC uses a gammatone filter bank derived from an auditory model;
+          \textbf{reported to be more noise-robust than MFCC}.
   \end{itemize}
   \note{
     \textbf{[5:20--6:25]}\par\medskip
@@ -435,7 +435,7 @@
 % ===========================================================================
 \appendix
 
-\begin{frame}{Backup --- experimental setup and dataset}
+\begin{frame}{Appendix --- experimental setup and dataset}
   \begin{columns}[T,onlytextwidth]
     \begin{column}{0.46\textwidth}
       \small
@@ -471,7 +471,7 @@
   \end{columns}
 \end{frame}
 
-\begin{frame}{Backup --- bearing estimation methods}
+\begin{frame}{Appendix --- bearing estimation methods}
   \centering
   \footnotesize
   \begin{tabular}{lrrr}
@@ -510,7 +510,7 @@
   \end{columns}
 \end{frame}
 
-\begin{frame}{Backup --- other cepstral coefficients}
+\begin{frame}{Appendix --- other cepstral coefficients}
   \begin{itemize}
     \item \textbf{LPCC} (Linear Prediction Cepstral Coefficients) and \textbf{PLPC}
           (Perceptual Linear Prediction Coefficients) --- noise elimination, speech
@@ -522,7 +522,7 @@
   \end{itemize}
 \end{frame}
 
-\begin{frame}{Backup --- metrics}
+\begin{frame}{Appendix --- metrics}
   \begin{description}
     \item[ACC] Accuracy --- share of correctly classified events.
     \item[RLC] Recall, also known as \emph{sensitivity} --- share of actual gunshots

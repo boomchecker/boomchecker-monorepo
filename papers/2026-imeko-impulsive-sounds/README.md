@@ -25,10 +25,10 @@ Inside `slides/`:
 | File | What it is |
 |---|---|
 | `slides.tex` | the deck **and** the spoken script (in `\note{}` blocks) |
-| `slides.pdf` | the deck as presented — 10 frames + 4 backup |
+| `slides.pdf` | the deck as presented — 10 frames + 4 appendix |
 | `slides-notes.tex` → `slides-notes.pdf` | 10 pages, script + slide thumbnail — **print this and learn from it** |
 | `cue-card.tex` → `cue-card.pdf` | one dense A4 for the lectern: every slide's opening line verbatim, plus beats and numbers |
-| `QA.md` | expected questions, answers, and which backup slide to jump to |
+| `QA.md` | expected questions, answers, and which appendix slide to jump to |
 | `figs/` | `gunshot_char.png`, `tdoa.png` |
 
 ## Build
@@ -110,7 +110,7 @@ From its Table 2, the labeled corpus is five classes, 371 training and 118 test 
 which makes the headline cell check out exactly: ACC 99.15 % is 117 of 118, and
 RLC 96.77 % is 30 of 31. Also from that paper: 26 features per extractor, an
 approximately 75/25 split, and an NN trained in MATLAB with Levenberg–Marquardt,
-converged after 370 iterations. All of this is on backup slide 11.
+converged after 370 iterations. All of this is on appendix slide 11.
 
 **RLC is Recall** (also called sensitivity), per eqs. (1)–(3) of the same paper — this
 was previously an unverified guess in the deck.
