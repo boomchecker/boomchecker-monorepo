@@ -504,24 +504,22 @@
     \midrule
     Cross-correlation                      & $0.84^\circ$ & $0.41^\circ$ & $7.61^\circ$\\
     \gtcc{Cross-correlation + parabolic interp.} & \gtcc{$0.77^\circ$} & \gtcc{$0.56^\circ$} & \gtcc{$6.67^\circ$}\\
-    Phase-based delay estimation (PBDE)    & $3.24^\circ$ & $1.80^\circ$ & $29.0^\circ$\\
-    PBDE + linear regression               & $3.91^\circ$ & $3.55^\circ$ & $12.15^\circ$\\
     \bottomrule
   \end{tabular}
   \vspace{2mm}
 
   {\scriptsize 70 events, 9 reference angles from $-45^\circ$ to $+60^\circ$,
-   $d = 0.186$\,m, $f_s = 44.1$\,kHz.}
+   $d = 0.186$\,m, $f_s = 44.1$\,kHz. A phase-based delay estimator was also evaluated
+   and performed worse (MAE $3.24^\circ$); cross-correlation was adopted.}
   \vfill
   \begin{columns}[T,onlytextwidth]
     \begin{column}{0.48\textwidth}
-      \small\textbf{PBDE algorithm}
-      \begin{enumerate}\small
-        \item FFT of both channels
-        \item select the relevant frequency bins
-        \item phase angle $\varphi = \arg(S_1 S_2^{*})$
-        \item delay from the phase slope
-      \end{enumerate}
+      \small\textbf{Sub-sample interpolation matters}
+      \begin{itemize}\small
+        \item max.\ delay $\approx$24 samples for this geometry
+        \item parabolic fit on the correlation peak
+        \item $0.84^\circ \rightarrow 0.77^\circ$ MAE
+      \end{itemize}
     \end{column}
     \begin{column}{0.48\textwidth}
       \small\textbf{How many units for 2D?}

@@ -89,7 +89,9 @@ Careful – what was measured is the **bearing**, not the final 2D fix. Say that
 We tried both. Cross-correlation with parabolic interpolation: MAE 0.77°. Phase-based
 delay estimation: 3.24°, and adding linear regression made it worse, 3.91°. The phase
 method was attractive for noisy conditions but did not pay off here.
-→ **appendix slide 12.**
+
+The PBDE rows are **not** on the appendix slide — only the footnote naming the 3.24°
+figure. Say the numbers; do not go hunting for a row that is not there.
 
 **"How many units do you need?"**
 With two microphones per unit, two units are enough for a 2D fix, because each unit
