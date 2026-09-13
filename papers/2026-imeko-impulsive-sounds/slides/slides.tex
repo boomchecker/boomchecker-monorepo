@@ -46,6 +46,12 @@
 \begin{document}
 
 \begin{frame}[plain]
+  % conference logo, pinned to the top-right corner of the page (needs two passes)
+  \begin{tikzpicture}[remember picture,overlay]
+    \node[anchor=north east,inner sep=0pt,xshift=-7mm,yshift=-6mm]
+      at (current page.north east)
+      {\includegraphics[height=22mm]{figs/imeko-logo.png}};
+  \end{tikzpicture}
   \titlepage
   \note{
     \textbf{[0:00--0:45]}\par\medskip
