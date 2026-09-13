@@ -17,7 +17,7 @@
 % Notes build: slides-notes.tex sets \SHOWNOTES and \input's this file, so the
 % spoken script lives in exactly one place -- the \note{} blocks below.
 \usepackage{pgfpages}
-\ifdefined\SHOWNOTES\setbeameroption{show notes}\fi
+\ifdefined\SHOWNOTES\setbeameroption{show only notes}\fi
 
 \definecolor{ctublue}{RGB}{0,101,189}
 \definecolor{accent}{RGB}{200,16,46}
@@ -82,8 +82,9 @@
     security in places where people gather --- campuses, hospitals, parks,
     government buildings. //\par\medskip
     Cameras, drones and security staff already give some protection. But in a
-    high-risk situation, with an active shooter, they fall short. // A camera has to
-    be pointed the right way. A guard has to be in the right place. //\par\medskip
+    high-risk situation, with an active shooter, they fall short. //
+    {\color{accent}[CUT IF LATE]} A camera has to be pointed the right way. A guard
+    has to be in the right place. //\par\medskip
     Sound does not care about line of sight. An acoustic system hears the shot and
     tells you where it came from. //
   }
@@ -116,8 +117,9 @@
     Two components define the pattern --- and notice that they do not arrive together.
     //\par\medskip
     The first spike, at about two and a half milliseconds, is the shock wave. It
-    exists only when the bullet travels faster than sound. The bullet drags a cone of
-    compressed air behind it, and that cone sweeps across the microphone. That is the
+    exists only when the bullet travels faster than sound.
+    {\color{accent}[CUT IF LATE]} The bullet drags a cone of compressed air behind it,
+    and that cone sweeps across the microphone. {\color{accent}[/CUT]} That is the
     characteristic N shape. //\par\medskip
     \textbf{[CLICK]}\par\medskip
     The second spike, forty-five milliseconds later, is the muzzle blast --- the
@@ -380,9 +382,10 @@
     Three things come out of this. //\par\medskip
     First, MFCC, LFCC and IMFCC behave almost identically. Changing the shape of a
     mel-type filter bank does not buy you much. //\par\medskip
-    Second, GTCC is consistently better --- every frame length, both classifiers. The
-    gammatone filter bank resolves the low frequencies more finely, and that is
-    exactly where the energy of a muzzle blast sits. //\par\medskip
+    Second, GTCC is consistently better --- every frame length, both classifiers.
+    {\color{accent}[CUT IF LATE]} The gammatone filter bank resolves the low
+    frequencies more finely, and that is exactly where the energy of a muzzle blast
+    sits. //\par\medskip
     Third, the neural network beats the support vector machine, and the gap grows
     with longer frames. //\par\medskip
     And about those longer frames --- they do improve accuracy, but remember the

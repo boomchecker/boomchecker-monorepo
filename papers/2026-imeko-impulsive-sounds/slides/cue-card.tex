@@ -1,68 +1,146 @@
-% One A4 to hold at the lectern once the talk is memorized.
-% Not a script -- the script is in the \note{} blocks of slides.tex.
-\documentclass[12pt,a4paper]{article}
+% One A4 to hold at the lectern. Dense on purpose: the opening line of every slide is
+% here verbatim, so if the memorized version deserts you mid-talk there is a sentence
+% to grab rather than a keyword to reconstruct from.
+%
+% The full script is in the \note{} blocks of slides.tex -> slides-notes.pdf.
+\documentclass[10pt,a4paper]{article}
 
 \usepackage[T1]{fontenc}
 \usepackage[utf8]{inputenc}
 \usepackage[english]{babel}
-\usepackage[margin=14mm,top=12mm,bottom=12mm]{geometry}
+\usepackage[margin=12mm,top=10mm,bottom=10mm]{geometry}
 \usepackage{xcolor}
-\usepackage{amsmath}
+\usepackage{amsmath,amssymb}
 \usepackage{array}
-\usepackage{booktabs}
 
 \definecolor{ctublue}{RGB}{0,101,189}
 \definecolor{accent}{RGB}{200,16,46}
 
 \renewcommand{\familydefault}{\sfdefault}
 \setlength{\parindent}{0pt}
+\setlength{\tabcolsep}{1.5mm}
 \pagestyle{empty}
 
+% opening line, said as written
+\newcommand{\say}[1]{\textit{\color{black!75}``#1''}}
+% a beat
+\newcommand{\bt}{\newline\raisebox{0.15ex}{\tiny$\blacksquare$}~}
 \newcommand{\cue}[3]{%
-  \textbf{\color{ctublue}#1} & \textbf{#2} & #3 \\[2.9ex]}
+  \textbf{\color{ctublue}#1} & \textbf{#2} & #3 \\[1.5ex]}
 
 \begin{document}
 
 {\large\bfseries Acoustic Detection of Impulsive Sounds}\hfill
-{\normalsize 10 min --- target \textbf{9:30}}
+{\small 10 min --- target \textbf{9:30} --- 2 clicks}
 
-\vspace{1mm}\hrule\vspace{3mm}
+\vspace{0.5mm}\hrule\vspace{2mm}
 
-{\large
-\begin{tabular}{@{}>{\raggedright\arraybackslash}p{14mm} >{\raggedright\arraybackslash}p{28mm} >{\raggedright\arraybackslash}p{128mm}@{}}
-\cue{0:00}{Title}{``Good morning. Martin Maxa, CTU Prague, with Dr.\ Jakub Svatoš.''}
-\cue{0:30}{Why}{shootings up, ownership up $\;|\;$ camera needs line of sight, sound does not}
-\cue{1:15}{Signature}{\textbf{shock wave first} $\approx$2.5\,ms, only if $v>c$
-  \newline \textbf{\color{accent}[CLICK]} $\;$ muzzle blast $\approx$48\,ms $\;|\;$
-  \textbf{between $=$ reflections} (comes back later)}
-\cue{2:30}{Naive}{spectrum $=$ environment $\;|\;$ time domain $=$ dispersion $\;\Rightarrow\;$ need both}
-\cue{3:00}{System}{stand-alone units $\to$ server $\;|\;$ classify $+$ 2D $\;|\;$ coverage \& two bearings}
-\cue{4:00}{Localize}{2 MEMS, $d=0.186$\,m, $f_s=44.1$\,kHz $\;|\;$ $\Theta=\arcsin\!\big(c\,\Delta n/(d f_s)\big)$
-  \newline \textbf{\color{accent}[CLICK]} $\;$ two units cross $\;|\;$ \textbf{MAE $0.77^\circ$, 70 events}}
-\cue{5:00}{Features}{frame $\to$ FFT $\to$ power $\to$ log $\to$ DCT $\;|\;$ \textbf{filter bank is what differs}
-  \newline MFCC / LFCC / IMFCC / \textbf{\color{accent}GTCC} (gammatone $=$ the ear)
-  \newline 3 frame lengths $\times$ 2 classifiers}
-\cue{6:15}{\color{accent}TABLE}{rows $=$ frame length, columns $=$ ACC / RLC / MCC
-  \newline \textbf{look only at the red rows --- best in every block}
-  \newline best: \textbf{GTCC $+$ NN, 50\,ms $\to$ 99.15 / 96.77 / 0.98}
-  \newline context: \textbf{117 of 118} correct, recall \textbf{30 of 31}}
-\cue{7:45}{Numbers}{mel-family all the same $\;|\;$ GTCC always wins $\;|\;$ NN $>$ SVM, gap grows
-  \newline longer frames better \emph{but} start hearing the room}
-\cue{8:45}{Conclusion}{network $\;|\;$ cepstral works $\;|\;$ GTCC $>$ mel, NN $>$ SVM $\;|\;$ real firearms}
-\cue{9:30}{}{``Thank you --- I am happy to take questions.''}
+{\small
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{10mm} >{\raggedright\arraybackslash}p{19mm} >{\raggedright\arraybackslash}p{147mm}@{}}
+
+\cue{0:00}{Title}{%
+  \say{Good morning. My name is Martin Maxa, from the Czech Technical University in
+  Prague, Department of Measurement. I am presenting joint work with Doctor Jakub Svatoš.}
+  \bt detection, classification \textbf{and localization} of impulsive sounds --- in
+  practice, gunshots
+  \bt \say{how we detect them, how we tell them apart, and how we find where they came from}}
+
+\cue{0:30}{Why}{%
+  \say{Shootings in public spaces are becoming more frequent, and gun ownership is
+  rising worldwide.}
+  \bt demand for autonomous security --- campuses, hospitals, parks, government buildings
+  \bt cameras, drones, guards give \emph{some} protection --- fall short with an active shooter
+  \bt \textbf{a camera has to be pointed the right way; sound does not care about line of sight}}
+
+\cue{1:15}{Signature}{%
+  \say{So what does a gunshot look like to a microphone? This is a real recording ---
+  and the two components do not arrive together.}
+  \bt \textbf{shock wave first}, $\approx$2.5\,ms --- only if $v>c$ --- bullet drags a cone
+  of compressed air across the mic --- the N shape
+  \bt \textbf{\color{accent}[CLICK]} muzzle blast $\approx$48\,ms, \emph{45\,ms later} ---
+  gases leaving the barrel, 1--3\,ms, travels only at the speed of sound
+  \bt between and after $=$ \textbf{reflections} --- \say{remember that, it comes back at the end}}
+
+\cue{2:30}{Naive}{%
+  \say{You might think this is easy --- just look at the spectrum, or just look at the
+  waveform. Neither works on its own.}
+  \bt spectrum alone $\to$ describes the environment, not the gunshot
+  \bt time domain $\to$ distorted by nonlinear dispersion and obstacles
+  \bt $\Rightarrow$ feature extraction must combine both domains}
+
+\cue{3:00}{System}{%
+  \say{Here is the system. Each sensor is a stand-alone unit.}
+  \bt listens continuously $\to$ sends the detected signal to a remote server
+  \bt server does two things: \textbf{classify} the event, and find \textbf{where} it was, in 2D
+  \bt why several units? coverage --- and you need \emph{two bearings} for a position}
+
+\cue{4:00}{Localize}{%
+  \say{So how do we actually find the shooter?}
+  \bt two MEMS mics per unit, $d = 0.186$\,m, $f_s = 44.1$\,kHz --- delay is at most
+  $\approx$24 samples, \emph{but that is enough}
+  \bt $\Theta = \arcsin\!\big(c\,\Delta n / (d f_s)\big)$ --- speed of sound $\times$ delay,
+  over spacing $\times$ sampling rate
+  \bt \textbf{\color{accent}[CLICK]} one unit $=$ a direction; two units cross $=$ the position
+  \bt measured: cross-correlation $+$ parabolic interpolation, \textbf{MAE $0.77^\circ$},
+  \textbf{70 events}, $-45^\circ$ to $+60^\circ$}
+
+\cue{5:00}{Features}{%
+  \say{Now the classification. The feature extractor is based on cepstral coefficients.}
+  \bt same chain for all four: frame $\to$ FFT $\to$ power $\to$ log $\to$ DCT
+  \bt \textbf{what differs is the filter bank, and it is not on the diagram}
+  \bt MFCC (from speech, validated on ranges) $|$ LFCC linear $|$ IMFCC inverted $|$
+  \textbf{\color{accent}GTCC gammatone $=$ models the ear}, more noise-resistant
+  \bt tested: 4 extractors $\times$ 3 frame lengths (15/30/50\,ms) $\times$ 2 classifiers}
+
+\cue{6:15}{\color{accent}TABLE}{%
+  \say{This is the result table for the nine-millimetre class. Let me walk you through it.}
+  \bt rows grouped by frame length, four extractors inside each $|$ columns $=$
+  ACC, RLC, MCC --- each for SVM and NN
+  \bt \textbf{\say{now look only at the red rows}} --- GTCC is the best row in every single block
+  \bt best cell: \textbf{GTCC $+$ NN at 50\,ms $\to$ 99.15 \,/\, 96.77 \,/\, 0.98}
+  \bt \textbf{context:} test set is 118 events, 31 of them 9\,mm $\Rightarrow$
+  \textbf{117 of 118} correct, recall \textbf{30 of 31}}
+
+\cue{7:45}{Numbers}{%
+  \say{Three things come out of this.}
+  \bt MFCC, LFCC, IMFCC almost identical --- reshaping a mel-type bank buys you little
+  \bt \textbf{GTCC consistently better} --- gammatone resolves the low frequencies finely,
+  and that is where muzzle-blast energy sits
+  \bt \textbf{NN beats SVM}, and the gap grows with longer frames
+  \bt longer frames do help, \emph{but} 50\,ms starts to include the room ---
+  \textbf{the reflections from slide 3}}
+
+\cue{8:45}{Conclusion}{%
+  \say{To summarise.}
+  \bt distributed network of stand-alone sensors $+$ server $\to$ detect, classify,
+  localize in 2D
+  \bt cepstral coefficients are an effective extractor, with both classifiers
+  \bt GTCC beats the mel family; NN slightly better, especially at longer frames
+  \bt validated with real firearms, several calibers and ammunition types}
+
+\cue{9:30}{}{\say{Thank you --- I am happy to take questions.}}
+
 \end{tabular}
 }
 
-\vfill
-\hrule\vspace{2mm}
-{\small\textbf{\color{accent}If asked, the numbers:}\quad
-dataset 371 train / 118 test, five classes $\;|\;$ 9\,mm: 70 / 31 $\;|\;$
-26 features, 75/25 split $\;|\;$ NN: Levenberg--Marquardt, 370 iterations $\;|\;$
-bearing: cross-corr 0.84$^\circ$, $+$parabolic 0.77$^\circ$, PBDE 3.24$^\circ$ $\;|\;$
-backup slides 11--14}
+\vspace{-1mm}\hrule\vspace{1.5mm}
 
-\vspace{2mm}
-{\small\textbf{Pace:} if you reach the results table after 6:30, skip the second bullet on
-``What the numbers say''.}
+{\footnotesize
+\textbf{\color{accent}If asked, the numbers.}
+Corpus 371 train \,/\, 118 test, five classes (false alarms 86/21, \textbf{9\,mm 70/31},
+5.56 NATO SD 100/31, 7.62 Tokarev 55/17, .22 60/18) $|$ 26 features per extractor,
+$\approx$75/25 split $|$ NN: MATLAB Neural Fitting, Levenberg--Marquardt, 370 iterations $|$
+bearing: cross-corr $0.84^\circ$, $+$parabolic $\mathbf{0.77^\circ}$, PBDE $3.24^\circ$,
+PBDE$+$linreg $3.91^\circ$ $|$ backup slides \textbf{11}~setup \textbf{12}~bearing
+\textbf{13}~other~cepstral \textbf{14}~metrics (RLC $=$ recall).
+\par\vspace{1mm}
+\textbf{\color{accent}Running late?} Three sentences are marked \textbf{[CUT IF LATE]} in
+the notes --- \textbf{Why} (camera pointed the right way), \textbf{Signature} (cone of
+compressed air), \textbf{Numbers} (why gammatone wins). All three $\approx$35\,s, and dropping
+them breaks nothing. \textbf{Checkpoint:} start the table at \textbf{6:15}; past 6:45, cut all three.
+\par\vspace{1mm}
+\textbf{\color{accent}Do not guess:} 2D position error in metres, SNR limits of \emph{this}
+classifier, firing distances in this dataset. \say{We did not characterize that in this
+study --- Jakub Svatoš ran the campaign, I can put you in touch.}}
 
 \end{document}

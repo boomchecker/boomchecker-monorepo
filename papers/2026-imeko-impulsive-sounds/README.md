@@ -26,8 +26,8 @@ Inside `slides/`:
 |---|---|
 | `slides.tex` | the deck **and** the spoken script (in `\note{}` blocks) |
 | `slides.pdf` | the deck as presented — 10 frames + 4 backup |
-| `slides-notes.tex` → `slides-notes.pdf` | slide thumbnail + script per page — **print this and learn from it** |
-| `cue-card.tex` → `cue-card.pdf` | one A4 for the lectern, once it is memorized |
+| `slides-notes.tex` → `slides-notes.pdf` | 10 pages, script + slide thumbnail — **print this and learn from it** |
+| `cue-card.tex` → `cue-card.pdf` | one dense A4 for the lectern: every slide's opening line verbatim, plus beats and numbers |
 | `QA.md` | expected questions, answers, and which backup slide to jump to |
 | `figs/` | `gunshot_char.png`, `tdoa.png` |
 
@@ -52,9 +52,19 @@ The spoken script is in the `\note{}` blocks of `slides.tex`, and nowhere else.
 separate script file** — editing the wording in two places is how you end up
 rehearsing a version that is no longer on screen.
 
-Conventions inside the notes: `//` marks a pause, `[CLICK]` marks an overlay advance
-(there are two, on the signature and localization slides), and each note opens with
-its time window.
+`slides-notes.pdf` is built with `show only notes`, so it is 10 pages — one per
+content slide, each carrying a thumbnail of its slide in the top right corner. It does
+not repeat the full-size slides; for those, print `slides.pdf`.
+
+Conventions inside the notes:
+
+- `//` — pause. There are 57 of them, and they are worth about 40 s of the running
+  time, so they are not decoration.
+- `[CLICK]` — advance the overlay. Two in the deck, on the signature and localization
+  slides.
+- `[CUT IF LATE]` — a sentence that can be dropped live without breaking the argument
+  or the enumeration around it. Three of them, ≈35 s in total. The cue card names them.
+- Each note opens with its time window.
 
 ## What it is about
 
