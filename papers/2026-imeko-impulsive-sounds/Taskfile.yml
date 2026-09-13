@@ -13,11 +13,33 @@ tasks:
       - pdflatex -interaction=nonstopmode -halt-on-error {{.TEX}}
       - pdflatex -interaction=nonstopmode -halt-on-error {{.TEX}}
 
+  notes:
+    desc: Compile the speaker-notes PDF (slide + spoken script per page)
+    dir: '{{.TEX_DIR}}'
+    cmds:
+      - pdflatex -interaction=nonstopmode -halt-on-error slides-notes.tex
+      - pdflatex -interaction=nonstopmode -halt-on-error slides-notes.tex
+
+  cue:
+    desc: Compile the one-page lectern cue card
+    dir: '{{.TEX_DIR}}'
+    cmds:
+      - pdflatex -interaction=nonstopmode -halt-on-error cue-card.tex
+
+  all:
+    desc: Build the deck and both training handouts
+    cmds:
+      - task: build
+      - task: notes
+      - task: cue
+
   clean:
     desc: Remove LaTeX auxiliary files
     dir: '{{.TEX_DIR}}'
     cmds:
       - rm -f {{.JOB}}.aux {{.JOB}}.log {{.JOB}}.out {{.JOB}}.nav {{.JOB}}.snm {{.JOB}}.toc {{.JOB}}.vrb {{.JOB}}.bbl {{.JOB}}.blg {{.JOB}}.synctex.gz
+      - rm -f slides-notes.aux slides-notes.log slides-notes.out slides-notes.nav slides-notes.snm slides-notes.toc slides-notes.vrb
+      - rm -f cue-card.aux cue-card.log cue-card.out
 
   rebuild:
     desc: Clean and compile again

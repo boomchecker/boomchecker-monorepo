@@ -1,0 +1,68 @@
+% One A4 to hold at the lectern once the talk is memorized.
+% Not a script -- the script is in the \note{} blocks of slides.tex.
+\documentclass[12pt,a4paper]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[english]{babel}
+\usepackage[margin=14mm,top=12mm,bottom=12mm]{geometry}
+\usepackage{xcolor}
+\usepackage{amsmath}
+\usepackage{array}
+\usepackage{booktabs}
+
+\definecolor{ctublue}{RGB}{0,101,189}
+\definecolor{accent}{RGB}{200,16,46}
+
+\renewcommand{\familydefault}{\sfdefault}
+\setlength{\parindent}{0pt}
+\pagestyle{empty}
+
+\newcommand{\cue}[3]{%
+  \textbf{\color{ctublue}#1} & \textbf{#2} & #3 \\[2.9ex]}
+
+\begin{document}
+
+{\large\bfseries Acoustic Detection of Impulsive Sounds}\hfill
+{\normalsize 10 min --- target \textbf{9:30}}
+
+\vspace{1mm}\hrule\vspace{3mm}
+
+{\large
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{14mm} >{\raggedright\arraybackslash}p{28mm} >{\raggedright\arraybackslash}p{128mm}@{}}
+\cue{0:00}{Title}{``Good morning. Martin Maxa, CTU Prague, with Dr.\ Jakub Svatoš.''}
+\cue{0:30}{Why}{shootings up, ownership up $\;|\;$ camera needs line of sight, sound does not}
+\cue{1:15}{Signature}{\textbf{shock wave first} $\approx$2.5\,ms, only if $v>c$
+  \newline \textbf{\color{accent}[CLICK]} $\;$ muzzle blast $\approx$48\,ms $\;|\;$
+  \textbf{between $=$ reflections} (comes back later)}
+\cue{2:30}{Naive}{spectrum $=$ environment $\;|\;$ time domain $=$ dispersion $\;\Rightarrow\;$ need both}
+\cue{3:00}{System}{stand-alone units $\to$ server $\;|\;$ classify $+$ 2D $\;|\;$ coverage \& two bearings}
+\cue{4:00}{Localize}{2 MEMS, $d=0.186$\,m, $f_s=44.1$\,kHz $\;|\;$ $\Theta=\arcsin\!\big(c\,\Delta n/(d f_s)\big)$
+  \newline \textbf{\color{accent}[CLICK]} $\;$ two units cross $\;|\;$ \textbf{MAE $0.77^\circ$, 70 events}}
+\cue{5:00}{Features}{frame $\to$ FFT $\to$ power $\to$ log $\to$ DCT $\;|\;$ \textbf{filter bank is what differs}
+  \newline MFCC / LFCC / IMFCC / \textbf{\color{accent}GTCC} (gammatone $=$ the ear)
+  \newline 3 frame lengths $\times$ 2 classifiers}
+\cue{6:15}{\color{accent}TABLE}{rows $=$ frame length, columns $=$ ACC / RLC / MCC
+  \newline \textbf{look only at the red rows --- best in every block}
+  \newline best: \textbf{GTCC $+$ NN, 50\,ms $\to$ 99.15 / 96.77 / 0.98}
+  \newline context: \textbf{117 of 118} correct, recall \textbf{30 of 31}}
+\cue{7:45}{Numbers}{mel-family all the same $\;|\;$ GTCC always wins $\;|\;$ NN $>$ SVM, gap grows
+  \newline longer frames better \emph{but} start hearing the room}
+\cue{8:45}{Conclusion}{network $\;|\;$ cepstral works $\;|\;$ GTCC $>$ mel, NN $>$ SVM $\;|\;$ real firearms}
+\cue{9:30}{}{``Thank you --- I am happy to take questions.''}
+\end{tabular}
+}
+
+\vfill
+\hrule\vspace{2mm}
+{\small\textbf{\color{accent}If asked, the numbers:}\quad
+dataset 371 train / 118 test, five classes $\;|\;$ 9\,mm: 70 / 31 $\;|\;$
+26 features, 75/25 split $\;|\;$ NN: Levenberg--Marquardt, 370 iterations $\;|\;$
+bearing: cross-corr 0.84$^\circ$, $+$parabolic 0.77$^\circ$, PBDE 3.24$^\circ$ $\;|\;$
+backup slides 11--14}
+
+\vspace{2mm}
+{\small\textbf{Pace:} if you reach the results table after 6:30, skip the second bullet on
+``What the numbers say''.}
+
+\end{document}
