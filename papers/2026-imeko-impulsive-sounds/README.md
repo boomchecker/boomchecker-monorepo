@@ -59,8 +59,16 @@ rehearsing a version that is no longer on screen.
 of its slide in the top right corner. It does not repeat the full-size slides; for
 those, print `slides.pdf`.
 
-Four slides have notes too long for one page and are split across two, marked
-`(1/2)`/`(2/2)`: signature, localization, results table, discussion. The continuation
+Covered content is dimmed rather than hidden (`\setbeamercovered{transparent=25}`), so
+a `\pause` greys the later part of a slide instead of making it vanish. There are
+**five**: motivation (research questions), signature (muzzle blast), localization (the
+intersection), features (the four extractors), discussion (the best-configuration
+block). `slides.pdf` is therefore 19 pages for 14 frames.
+
+Five slides have notes too long for one page and are split across two, marked
+`(1/2)`/`(2/2)`: motivation, signature, localization, results table, discussion.
+A frame carrying a `\pause` needs its note pinned to the last overlay (`\note<2>{}`),
+otherwise the note is repeated once per overlay. The continuation
 `\note{}` sits immediately **after** its `\end{frame}` — beamer merges two `\note{}`
 blocks inside the same frame onto one page, so that placement is what forces the break.
 If you rewrite one of those notes, keep an eye on whether the text still fits.

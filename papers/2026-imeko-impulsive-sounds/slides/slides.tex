@@ -27,6 +27,7 @@
 \setbeamerfont{frametitle}{size=\large,series=\bfseries}
 \setbeamertemplate{navigation symbols}{}
 \setbeamertemplate{itemize items}[circle]
+\setbeamercovered{transparent=25}
 \setbeamertemplate{footline}{%
   \hfill\usebeamerfont{footline}\color{gray!70}%
   \small\insertframenumber\,/\,\inserttotalframenumber\hspace*{2ex}\vspace*{1ex}%
@@ -79,6 +80,7 @@
           of the source -- in outdoor environments that are noisy and reverberant.
   \end{itemize}
   \vfill
+  \pause
   \begin{block}{This study}
     \begin{enumerate}
       \item Which cepstral representation separates gunshots from acoustically similar
@@ -87,8 +89,8 @@
       \item How does the analysis frame length interact with environmental reflections?
     \end{enumerate}
   \end{block}
-  \note{%
-    \textbf{[0:45--1:50]}\par\medskip
+  \note<2>{%
+    \textbf{[0:45--1:50]}~{\color{accent}(1/2)}\par\medskip
     This work is part of the development of an acoustic sensor unit for the
     protection of soft targets. //\par\medskip
     Acoustic detection of gunfire complements camera-based surveillance. The acoustic
@@ -98,12 +100,17 @@
     detection of the impulsive event, classification, ideally down to calibre, and
     localization of the source -- in outdoor environments that are both noisy and
     reverberant. //\par\medskip
+  }
+\end{frame}
+
+\note{
+    \textbf{[0:45--1:50]}~{\color{accent}(2/2)}\par\medskip
+    \textbf{[CLICK]}\par\medskip
     This study addresses three questions. Which cepstral representation separates
     gunshots from acoustically similar false alarms most reliably. // Whether a neural
     network or a support vector machine performs better on those features. // And how
     the analysis frame length interacts with environmental reflections. //
   }
-\end{frame}
 
 % ===========================================================================
 \section{Signal}
@@ -308,6 +315,7 @@
   {\scriptsize Block diagram of the feature extraction algorithms; each branch applies
    its own filter bank between the power spectrum and the log.}
   \vfill
+  \pause
   \begin{itemize}\small
     \item MFCC was developed for other acoustic applications but works for gunshot
           recognition -- validated at military shooting ranges.
@@ -315,12 +323,13 @@
     \item GTCC uses a gammatone filter bank derived from an auditory model;
           \textbf{reported to be more noise-robust than MFCC}.
   \end{itemize}
-  \note{
+  \note<2>{
     \textbf{[5:20--6:25]}\par\medskip
     Classification. // All four feature extractors share the cepstral processing chain:
     framing, FFT, power spectrum, logarithm, discrete cosine transform. //\par\medskip
     They differ in the filter bank applied to the power spectrum before the logarithm
     -- which is not shown in the diagram. //\par\medskip
+    \textbf{[CLICK]}\par\medskip
     MFCC uses the mel scale. It was developed for speech, but has been validated for
     gunshot recognition at military shooting ranges. // LFCC uses linearly spaced
     filters; IMFCC an inverted mel scale. // GTCC uses a gammatone filter bank derived
@@ -399,10 +408,11 @@
           reflections, which can pull focus away from the gunshot itself.
   \end{itemize}
   \vfill
+  \pause
   \begin{block}{Best configuration in the table}
     GTCC + NN at 50\,ms -- 99.15\,\% ACC, 96.77\,\% RLC, MCC 0.98.
   \end{block}
-  \note{
+  \note<2>{
     \textbf{[7:35--8:45]}~{\color{accent}(1/2)}\par\medskip
     Three observations. //\par\medskip
     First, MFCC, LFCC and IMFCC perform comparably. The choice between mel, linear and
@@ -421,6 +431,7 @@
     Third, the neural network is slightly ahead of the SVM, particularly at longer
     frames -- a tendency across the study rather than a rule for every row of this
     table. //\par\medskip
+    \textbf{[CLICK]}\par\medskip
     Finally, longer frames improve accuracy, but a fifty-millisecond frame increasingly
     contains the impulse response of the surroundings rather than the source signature
     -- the reflections seen on the recording earlier. The trend cannot be extrapolated

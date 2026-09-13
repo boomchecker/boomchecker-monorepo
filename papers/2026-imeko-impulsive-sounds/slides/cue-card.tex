@@ -31,7 +31,7 @@
 \begin{document}
 
 {\large\bfseries Acoustic Detection of Impulsive Sounds}\hfill
-{\small 10 min -- target \textbf{9:30} -- 2 clicks}
+{\small 10 min -- target \textbf{9:30} -- \textbf{5 clicks}}
 
 \vspace{0.5mm}\hrule\vspace{2mm}
 
@@ -52,8 +52,8 @@
   \bt acoustic channel complements cameras: \textbf{omnidirectional}, \textbf{no line of sight}
   \bt \textbf{[CUT]} three functions: detection, classification (to calibre), localization --
   in noisy, reverberant outdoor environments
-  \bt \textbf{three questions:} (1) which cepstral representation separates gunshots from
-  similar false alarms, (2) NN or SVM on those features, (3) frame length vs.\ reflections}
+  \bt \textbf{\color{accent}[CLICK]} \textbf{three questions:} (1) which cepstral
+  representation separates gunshots from similar false alarms, (2) NN or SVM on those features, (3) frame length vs.\ reflections}
 
 \cue{1:50}{Signature}{%
   \say{Both detection and localization depend on what the signal actually looks like,
@@ -97,7 +97,8 @@
   framing, FFT, power spectrum, logarithm, discrete cosine transform.}
   \bt \textbf{they differ in the filter bank} -- power spectrum $\to$ bank $\to$ log --
   not in the diagram
-  \bt MFCC mel (speech; validated on ranges) $|$ LFCC linear $|$ IMFCC inverted mel $|$
+  \bt \textbf{\color{accent}[CLICK]} MFCC mel (speech; validated on ranges) $|$ LFCC linear $|$
+  IMFCC inverted mel $|$
   \textbf{\color{accent}GTCC gammatone}, auditory model, reported more noise-robust
   \bt grid: 4 extractors $\times$ 3 frame lengths (15/30/50\,ms) $\times$ 2 classifiers}
 
@@ -120,8 +121,9 @@
   not isolated here
   \bt \textbf{NN slightly ahead of SVM}, particularly at longer frames -- \emph{tendency
   across the study, not every row} (LFCC 30/50\,ms goes the other way)
-  \bt longer frames help, \emph{but} 50\,ms increasingly contains the impulse response of
-  the surroundings -- \say{the trend cannot be extrapolated further}}
+  \bt \textbf{\color{accent}[CLICK]} longer frames help, \emph{but} 50\,ms increasingly
+  contains the impulse response of the surroundings -- \say{the trend cannot be
+  extrapolated further}}
 
 \cue{8:45}{Conclusion}{%
   \say{To conclude.}
