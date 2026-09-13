@@ -1,0 +1,7 @@
+version: "3"
+
+includes:
+  imeko26:
+    taskfile: ./2026-imeko-impulsive-sounds/Taskfile.yml
+    dir: ./2026-imeko-impulsive-sounds
+    optional: true

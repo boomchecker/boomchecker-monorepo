@@ -1,0 +1,280 @@
+\documentclass[aspectratio=169,11pt]{beamer}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[english]{babel}
+\usepackage{booktabs}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,fit,backgrounds}
+
+% ---------------------------------------------------------------------------
+% Clean, theme-light setup: no navigation clutter, one accent colour.
+% ---------------------------------------------------------------------------
+\usetheme{default}
+\usecolortheme{default}
+\definecolor{ctublue}{RGB}{0,101,189}
+\definecolor{accent}{RGB}{200,16,46}
+\setbeamercolor{structure}{fg=ctublue}
+\setbeamercolor{title}{fg=ctublue}
+\setbeamercolor{frametitle}{fg=ctublue}
+\setbeamerfont{frametitle}{size=\large,series=\bfseries}
+\setbeamertemplate{navigation symbols}{}
+\setbeamertemplate{itemize items}[circle]
+\setbeamertemplate{footline}{%
+  \hfill\usebeamerfont{footline}\color{gray!70}%
+  \small\insertframenumber\,/\,\inserttotalframenumber\hspace*{2ex}\vspace*{1ex}%
+}
+
+\newcommand{\gtcc}[1]{\textbf{\color{accent}#1}}
+
+% ---------------------------------------------------------------------------
+
+\title[Acoustic Detection of Impulsive Sounds]{Acoustic-Based Detection, Classification,\\and Localization of Impulsive Sounds}
+\author{Jakub Svatoš \and \underline{Martin Maxa}}
+\institute{Czech Technical University in Prague\\Faculty of Electrical Engineering, Department of Measurement}
+\date{September 16, 2026}
+
+\begin{document}
+
+\begin{frame}[plain]
+  \titlepage
+\end{frame}
+
+% ===========================================================================
+\section{Motivation}
+
+\begin{frame}{Why acoustic surveillance}
+  \begin{itemize}
+    \item Shootings in public spaces are more frequent; global gun ownership is rising.
+    \item Growing demand for autonomous security in communal areas --- campuses,
+          hospitals, parks, government facilities.
+    \item Cameras, drones and security personnel give \emph{some} protection, but
+          fall short in high-risk situations with an active shooter.
+  \end{itemize}
+  \vfill
+  \begin{block}{What an acoustic system adds}
+    Identifies gunfire, pinpoints its source, and tracks an ongoing threat ---
+    faster detection and shorter response times for security forces.
+  \end{block}
+\end{frame}
+
+% ===========================================================================
+\section{Signal}
+
+\begin{frame}{The acoustic signature of a gunshot}
+  Two components define the pattern:
+  \vfill
+  \begin{columns}[T,onlytextwidth]
+    \begin{column}{0.48\textwidth}
+      \textbf{Muzzle blast}
+      \begin{itemize}
+        \item Explosive gases expanding from the barrel.
+        \item Travels at the speed of sound in the bullet's direction.
+        \item Lasts 1--3\,ms, often resembling an ``N'' shape.
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \textbf{Shock wave (``N-wave'')}
+      \begin{itemize}
+        \item Appears when bullet speed exceeds the speed of sound ($v > c$).
+        \item Produced by compression and expansion shocks.
+      \end{itemize}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Why naive processing is not enough}
+  \begin{itemize}
+    \item \textbf{Spectral analysis alone} often captures environmental noise rather
+          than the gunshot itself.
+    \item \textbf{Time-domain patterns} get distorted by nonlinear dispersion and
+          obstacles.
+  \end{itemize}
+  \vfill
+  \begin{alertblock}{Consequence}
+    Effective feature extraction must integrate \emph{both} time and frequency
+    domain processing.
+  \end{alertblock}
+\end{frame}
+
+% ===========================================================================
+\section{System}
+
+\begin{frame}{Proposed system architecture}
+  \begin{center}
+  \begin{tikzpicture}[
+      node distance=8mm,
+      sensor/.style={draw=ctublue,thick,rounded corners,fill=ctublue!8,
+                     minimum width=20mm,minimum height=9mm,font=\small},
+      server/.style={draw=accent,very thick,rounded corners,fill=accent!8,
+                     minimum width=30mm,minimum height=13mm,font=\small\bfseries},
+      link/.style={-{Latex[length=2mm]},draw=gray,thick}
+    ]
+    \node[sensor] (s1) {Sensor 1};
+    \node[sensor,below=of s1] (s2) {Sensor 2};
+    \node[sensor,below=of s2] (s3) {Sensor $N$};
+    \node[server,right=28mm of s2] (srv) {Remote server};
+
+    \draw[link] (s1) -- (srv);
+    \draw[link] (s2) -- (srv);
+    \draw[link] (s3) -- (srv);
+
+    \node[right=10mm of srv,align=left,font=\small] (out) {
+      Event classification\\[2pt]
+      2D localization\\(triangulation)};
+    \draw[link] (srv) -- (out);
+
+    \begin{scope}[on background layer]
+      \node[fit=(s1)(s3),draw=gray!40,dashed,rounded corners,
+            inner sep=4mm,label={[font=\scriptsize\color{gray}]below:stand-alone units}] {};
+    \end{scope}
+  \end{tikzpicture}
+  \end{center}
+  \vfill
+  \begin{itemize}\small
+    \item Each sensor continuously monitors its surroundings and transmits detected
+          signals to the server for advanced processing.
+    \item Multiple units give broader coverage and adaptability to environments.
+    \item Tested with various firearm calibers and ammunition.
+  \end{itemize}
+\end{frame}
+
+% ===========================================================================
+\section{Features}
+
+\begin{frame}{Feature extraction --- cepstral coefficients}
+  \begin{center}
+  \begin{tikzpicture}[
+      node distance=6mm,
+      blk/.style={draw=ctublue,thick,rounded corners,fill=ctublue!8,
+                  minimum height=8mm,font=\scriptsize,text width=15mm,align=center},
+      featbox/.style={draw=accent,thick,rounded corners,fill=accent!8,
+                  minimum height=7mm,font=\scriptsize\bfseries,text width=13mm,align=center},
+      ar/.style={-{Latex[length=1.6mm]},draw=gray,semithick}
+    ]
+    \node[blk] (fr) {Framing the signal};
+    \node[blk,right=of fr] (fft) {FFT};
+    \node[blk,right=of fft] (pw) {power};
+    \node[blk,right=of pw] (lg) {log};
+    \node[blk,right=of lg] (dct) {DCT};
+
+    \draw[ar] (fr) -- (fft);
+    \draw[ar] (fft) -- (pw);
+    \draw[ar] (pw) -- (lg);
+    \draw[ar] (lg) -- (dct);
+
+    \node[featbox,right=10mm of dct,yshift=13.5mm] (o1) {MFCC};
+    \node[featbox,right=10mm of dct,yshift=4.5mm]  (o2) {LFCC};
+    \node[featbox,right=10mm of dct,yshift=-4.5mm] (o3) {IMFCC};
+    \node[featbox,right=10mm of dct,yshift=-13.5mm](o4) {GTCC};
+    \foreach \o in {o1,o2,o3,o4} \draw[ar] (dct.east) -- (\o.west);
+  \end{tikzpicture}
+  \end{center}
+  \vspace{2mm}
+  {\scriptsize Block diagram of the feature extraction algorithms (Fig.~1 in the abstract);
+   each branch applies its own filter bank before the DCT.}
+  \vfill
+  \begin{itemize}\small
+    \item MFCC was developed for other acoustic applications but works for gunshot
+          recognition --- validated at military shooting ranges.
+    \item LFCC and IMFCC offer alternative filtering approaches.
+    \item GFCC and GTCC derive from human auditory response models; \textbf{GTCC is
+          more noise-resistant than MFCC}.
+  \end{itemize}
+\end{frame}
+
+% ===========================================================================
+\section{Results}
+
+\begin{frame}{Classification results --- 9\,mm class}
+  \centering
+  \footnotesize
+  \begin{tabular}{ll rr rr rr}
+    \toprule
+    & & \multicolumn{2}{c}{ACC (\%)} & \multicolumn{2}{c}{RLC (\%)} & \multicolumn{2}{c}{MCC (--)}\\
+    \cmidrule(lr){3-4}\cmidrule(lr){5-6}\cmidrule(lr){7-8}
+    Frame & Extractor & SVM & NN & SVM & NN & SVM & NN\\
+    \midrule
+    15\,ms & MFCC  & 83,90 & 85,59 & 80,65 & 67,74 & 0,62 & 0,62\\
+           & LFCC  & 83,90 & 83,90 & 80,65 & 64,52 & 0,62 & 0,57\\
+           & IMFCC & 85,59 & 90,68 & 83,87 & 87,10 & 0,66 & 0,77\\
+           & \gtcc{GTCC} & \gtcc{93,22} & \gtcc{97,46} & \gtcc{87,10} & \gtcc{93,55} & \gtcc{0,82} & \gtcc{0,93}\\
+    \midrule
+    30\,ms & MFCC  & 84,75 & 87,29 & 67,74 & 87,10 & 0,60 & 0,70\\
+           & LFCC  & 87,29 & 83,90 & 70,97 & 70,97 & 0,66 & 0,59\\
+           & IMFCC & 85,59 & 92,37 & 67,74 & 80,65 & 0,62 & 0,80\\
+           & \gtcc{GTCC} & \gtcc{97,46} & \gtcc{98,31} & \gtcc{90,32} & \gtcc{93,55} & \gtcc{0,93} & \gtcc{0,96}\\
+    \midrule
+    50\,ms & MFCC  & 84,75 & 93,22 & 74,19 & 90,32 & 0,61 & 0,83\\
+           & LFCC  & 88,98 & 86,44 & 77,42 & 77,42 & 0,71 & 0,66\\
+           & IMFCC & 89,83 & 90,68 & 74,19 & 80,65 & 0,73 & 0,76\\
+           & \gtcc{GTCC} & \gtcc{97,46} & \gtcc{99,15} & \gtcc{90,32} & \gtcc{96,77} & \gtcc{0,93} & \gtcc{0,98}\\
+    \bottomrule
+  \end{tabular}
+  \vspace{2mm}
+  {\scriptsize Table~I in the abstract --- example of classification results for a 9\,mm class.}
+\end{frame}
+
+\begin{frame}{What the numbers say}
+  \begin{itemize}
+    \item \textbf{MFCC, LFCC and IMFCC yield similar results.}
+    \item \gtcc{GTCC consistently performs better} across every frame length and both
+          classifiers.
+    \item \textbf{NN outperforms SVM} --- better at modelling complex patterns.
+          The gap widens with longer frames.
+    \item \textbf{Longer frames improve accuracy}, but start to capture environmental
+          reflections, which can pull focus away from the gunshot itself.
+  \end{itemize}
+  \vfill
+  \begin{block}{Best configuration in the table}
+    GTCC + NN at 50\,ms --- 99,15\,\% ACC, 96,77\,\% RLC, MCC 0,98.
+  \end{block}
+\end{frame}
+
+% ===========================================================================
+\section{Conclusion}
+
+\begin{frame}{Conclusion}
+  \begin{itemize}
+    \item A distributed network of stand-alone acoustic sensors with a remote server
+          detects, classifies and localizes impulsive sounds in 2D.
+    \item Cepstral coefficients are an effective feature extractor for gunshot
+          classification with both NN and SVM.
+    \item GTCC beats Mel-frequency based coefficients; NN achieves slightly better
+          classification success, especially with longer frames.
+    \item Validated with various firearm calibers and ammunition.
+  \end{itemize}
+  \vfill
+  \centering
+  \vspace{3mm}
+  {\large Thank you --- questions?}\\[2mm]
+  {\small\color{gray} svatoja1@fel.cvut.cz}
+\end{frame}
+
+% ===========================================================================
+\appendix
+
+\begin{frame}{Backup --- other cepstral coefficients}
+  \begin{itemize}
+    \item \textbf{LPCC} (Linear Prediction Cepstral Coefficients) and \textbf{PLPC}
+          (Perceptual Linear Prediction Coefficients) --- noise elimination, speech
+          recognition.
+    \item \textbf{GFCC} (Greenwood Function Cepstral Coefficients) --- derived from
+          human auditory response models, used for classifying animal sounds.
+    \item \textbf{GTCC} (Gammatone-Frequency Cepstral Coefficients) --- same family,
+          greater resistance to noise than MFCC.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Backup --- metrics}
+  \begin{description}
+    \item[ACC] Accuracy --- share of correctly classified events.
+    \item[RLC] Recall --- share of actual gunshots that were detected.
+    \item[MCC] Matthews Correlation Coefficient --- balanced measure robust to class
+      imbalance; $+1$ perfect, $0$ random.
+  \end{description}
+  \vfill
+  {\small\color{gray} TODO: confirm these expansions match the definitions used in the paper.}
+\end{frame}
+
+\end{document}

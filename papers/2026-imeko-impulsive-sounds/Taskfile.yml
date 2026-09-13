@@ -1,0 +1,26 @@
+version: "3"
+
+vars:
+  TEX_DIR: slides
+  TEX: slides.tex
+  JOB: slides
+
+tasks:
+  build:
+    desc: Compile slides/slides.tex to slides/slides.pdf
+    dir: '{{.TEX_DIR}}'
+    cmds:
+      - pdflatex -interaction=nonstopmode -halt-on-error {{.TEX}}
+      - pdflatex -interaction=nonstopmode -halt-on-error {{.TEX}}
+
+  clean:
+    desc: Remove LaTeX auxiliary files
+    dir: '{{.TEX_DIR}}'
+    cmds:
+      - rm -f {{.JOB}}.aux {{.JOB}}.log {{.JOB}}.out {{.JOB}}.nav {{.JOB}}.snm {{.JOB}}.toc {{.JOB}}.vrb {{.JOB}}.bbl {{.JOB}}.blg {{.JOB}}.synctex.gz
+
+  rebuild:
+    desc: Clean and compile again
+    cmds:
+      - task: clean
+      - task: build
