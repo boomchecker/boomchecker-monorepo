@@ -1,8 +1,8 @@
 # Q&A preparation
 
-Answer, then the appendix slide to jump to. Appendix slides are frames 11–14 of
-`slides.pdf` (experimental setup, bearing estimation, other cepstral coefficients,
-metrics).
+Answer, then the appendix slide to jump to. The appendix is the last four pages of
+`slides.pdf` (PDF pages 17–20 at the moment; the footer does not number them):
+A1 experimental setup, A2 bearing estimation, A3 other cepstral coefficients, A4 metrics.
 
 Every number below is sourced. Where it is not, the entry says so – do not improvise
 a figure on stage.
@@ -21,7 +21,7 @@ Answer it with the numbers, then concede the limitation yourself:
 > It is a small corpus – that is the honest limitation of the study, and it is why we
 > report Matthews correlation alongside accuracy rather than accuracy alone.
 
-→ **appendix slide 11.** Source: Svatoš & Holub 2024, Table 2.
+→ **appendix A1 (setup).** Source: Svatoš & Holub 2024, Table 2.
 
 Conceding the dataset size is stronger than defending it. The claim the paper makes is
 *relative* – GTCC beats the mel family – and that comparison holds on a small corpus
@@ -43,7 +43,7 @@ Lead with what is sourced, and label the rest as your reading:
 
 Do **not** state the low-frequency explanation as fact. It is plausible, it is not in
 the abstract or the source paper, and Svatoš may be in the room.
-→ **appendix slide 13.**
+→ **appendix A3 (other cepstral).**
 
 **"In your table the SVM beats the NN for LFCC at 30 and 50 ms. So does NN really win?"**
 It does not win every row, and say so:
@@ -69,7 +69,7 @@ rather than the gunshot. You can see that tail in the measured waveform on slide
 
 **"What is RLC?"**
 Recall, also called sensitivity – the share of actual gunshots of that class that were
-detected. → **appendix slide 14.** Source: Svatoš & Holub 2024, eqs. (1)–(3).
+detected. → **appendix A4 (metrics).** Source: Svatoš & Holub 2024, eqs. (1)–(3).
 
 ---
 
@@ -83,7 +83,7 @@ Careful – what was measured is the **bearing**, not the final 2D fix. Say that
 > gives a mean absolute error of 0.77°. The 2D position error depends on the baseline
 > between units and the geometry, and we do not have a characterized figure for it.
 
-→ **appendix slide 12.**
+→ **appendix A2 (bearing).**
 
 **"Why cross-correlation rather than the phase-based method?"**
 We tried both. Cross-correlation with parabolic interpolation: MAE 0.77°. Phase-based
@@ -96,7 +96,7 @@ figure. Say the numbers; do not go hunting for a row that is not there.
 **"How many units do you need?"**
 With two microphones per unit, two units are enough for a 2D fix, because each unit
 already gives a bearing. With one microphone per unit you would need three units for
-time-of-arrival, or four for TDoA. → **appendix slide 12.**
+time-of-arrival, or four for TDoA. → **appendix A2 (bearing).**
 
 **"What limits the bearing resolution?"**
 Microphone spacing of 0.186 m at 44.1 kHz gives a maximum delay of about 24 samples
@@ -131,7 +131,7 @@ to it freely.)*
 At a military shooting range, sensor at a fixed position with clear line of sight to
 every firing position. Four weapons: 9 mm, 5.56 NATO SD, 7.62 mm Tokarev and .22, each
 with a single ammunition type, plus a false-alarm class of gunshot-like impulsive
-events. → **appendix slide 11.**
+events. → **appendix A1 (setup).**
 
 **"What counts as a false alarm?"**
 Impulsive events with a gunshot-like pattern – door impacts, shouts, and similar. They

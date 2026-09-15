@@ -6,7 +6,10 @@
 \usepackage{booktabs}
 \usepackage{graphicx}
 \usepackage{tikz}
-\usetikzlibrary{arrows.meta,positioning,fit,backgrounds}
+\usetikzlibrary{arrows.meta,positioning,fit,backgrounds,calc}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
+\usepgfplotslibrary{groupplots}
 
 % --------------------------------------------------
 % Theme: metropolis, tuned to the CTU palette.
@@ -18,6 +21,7 @@
 \usepackage[sfdefault,lining]{FiraSans}
 \usepackage{FiraMono}
 \usepackage{newtxsf}
+\usepackage{fontawesome5}
 % Stop the frame count (and therefore the progress bar) at the last main frame:
 % the appendix frames are numbered separately and do not dilute the bar.
 \usepackage{appendixnumberbeamer}
@@ -33,6 +37,9 @@
 \definecolor{ink}{RGB}{35,38,45}
 \definecolor{paper}{RGB}{255,255,255}
 \definecolor{panel}{RGB}{240,244,249}
+\definecolor{gray1}{HTML}{3D414B}
+\definecolor{gray2}{HTML}{767B86}
+\definecolor{gray3}{HTML}{AEB2BA}
 
 \setbeamercolor{normal text}{fg=ink,bg=paper}
 \setbeamercolor{structure}{fg=ctublue}
@@ -75,6 +82,30 @@
 
 \newcommand{\gtcc}[1]{\textbf{\color{accent}#1}}
 
+% Icon tile for the motivation slide: \fnode{x}{icon}{label}{sub-caption}
+\newcommand{\fnode}[4]{\node[text width=34mm,align=center,inner sep=0pt] at (#1,0)
+  {{\color{ctublue}\Large #2}\\[2pt]{\small\bfseries #3}\\[1pt]{\scriptsize\color{ink!65}#4}};}
+
+% Styles for the results chart (defined here: `#1' is not allowed inside a frame body).
+\pgfplotsset{
+  resslide/.style={
+    width=0.44\textwidth,height=0.47\textwidth,
+    xmin=10,xmax=62,ymin=0.5,ymax=1.02,
+    xtick={15,30,50},xticklabels={15\,ms,30\,ms,50\,ms},
+    ytick={0.5,0.6,0.7,0.8,0.9,1.0},
+    yticklabel style={/pgf/number format/fixed,/pgf/number format/precision=1},
+    tick label style={font=\scriptsize,color=ink!70},
+    axis line style={draw=none},
+    tick style={draw=none},
+    ymajorgrids,grid style={ink!12,line width=0.4pt},
+    title style={font=\small\bfseries,color=ink,yshift=-1ex},
+    clip=false,
+    every axis plot/.append style={line width=1pt,mark=*,mark size=1.6pt},
+  },
+  dim/.style={color=#1,mark options={fill=#1}},
+}
+\tikzset{lbl/.style={font=\scriptsize,anchor=west,xshift=2pt,color=#1}}
+
 % --------------------------------------------------
 
 \title[Acoustic Detection of Impulsive Sounds]{Acoustic-Based Detection, Classification,\\and Localization of Impulsive Sounds}
@@ -109,16 +140,15 @@
         {\usebeamerfont{date}\usebeamercolor[fg]{date}\color{paper!80}\insertdate\par}
       };
   \end{tikzpicture}
-  \note{
-    \textbf{[0:00--0:45]}\par\medskip
-    Good morning. // My name is Martin Maxa, from the Department of Measurement --
-    here at this faculty. // I worked on this together with Jakub Svatoš, from the same
+    \note{
+\textbf{[0:00--0:45]}\par\medskip
+    Good morning. // My name is Martin Maxa, from the Department of Measurement here at
+    this faculty. // I worked on this together with Jakub Svatoš, from the same
     department. //\par\medskip
-    The subject is the acoustic detection, classification and localization of
-    impulsive sounds, with gunshots as the target class. // The core of the
-    contribution is a comparison of cepstral feature extractors and two classifiers for
-    gunshot classification; localization is covered as the second function of the same
-    sensor network. //\par\medskip
+    Today I will talk about acoustic detection, classification and localization of
+    impulsive sounds, with gunshots as the target class. //\par\medskip
+    The main focus is gunshot classification: we compare different cepstral features
+    and two classifiers. // I will also briefly show the localization. //\par\medskip
     \textit{(// = pause. [CLICK] = advance the slide.)}
   }
 \end{frame}
@@ -130,10 +160,18 @@
   \begin{itemize}
     \item Acoustic detection of gunfire complements camera-based surveillance: the
           acoustic channel is omnidirectional and does not require line of sight.
-    \item Required functions: \textbf{detection} of the impulsive event,
-          \textbf{classification} (ideally down to calibre), and \textbf{localization}
-          of the source -- in outdoor environments that are noisy and reverberant.
+    \item Three required functions, in outdoor environments that are noisy and
+          reverberant:
   \end{itemize}
+  \vspace{-1mm}
+  % the three functions as a quiet icon row
+  \begin{center}
+  \begin{tikzpicture}
+    \fnode{0}{\faWaveSquare}{detection}{of the impulsive event}
+    \fnode{4.4cm}{\faTags}{classification}{ideally down to calibre}
+    \fnode{8.8cm}{\faMapMarker*}{localization}{of the source, in 2D}
+  \end{tikzpicture}
+  \end{center}
   \vfill
   \pause
   \begin{block}{This study}
@@ -144,27 +182,26 @@
       \item How does the analysis frame length interact with environmental reflections?
     \end{enumerate}
   \end{block}
-  \note<2>{%
-    \textbf{[0:45--1:50]}~{\color{accent}(1/2)}\par\medskip
-    This work is part of the development of an acoustic sensor unit for the
-    protection of soft targets. //\par\medskip
-    Acoustic detection of gunfire complements camera-based surveillance. The acoustic
-    channel has two properties cameras lack: it is omnidirectional, and it does not
-    require line of sight. //
-    {\color{accent}[CUT IF LATE]} The system has to provide three functions --
-    detection of the impulsive event, classification, ideally down to calibre, and
-    localization of the source -- in outdoor environments that are both noisy and
-    reverberant. //\par\medskip
+    \note<2>{
+\textbf{[0:45--1:50]}~{\color{accent}(1/2)}\par\medskip
+    This work is part of the development of an acoustic sensor system for the
+    protection of soft targets. // Acoustic detection can complement camera-based
+    surveillance. // Sound is omnidirectional, and it does not need a
+    direct line of sight. //\par\medskip
+    {\color{accent}[CUT IF LATE]} The complete system should detect an impulsive event, classify it,
+    ideally down to the calibre, and localize its source. // It should also work
+    outdoors, where there is noise and many reflections. {\color{accent}[/CUT]} //
   }
 \end{frame}
 
 \note{
-    \textbf{[0:45--1:50]}~{\color{accent}(2/2)}\par\medskip
+\textbf{[0:45--1:50]}~{\color{accent}(2/2)}\par\medskip
     \textbf{[CLICK]}\par\medskip
-    This study addresses three questions. Which cepstral representation separates
-    gunshots from acoustically similar false alarms most reliably. // Whether a neural
-    network or a support vector machine performs better on those features. // And how
-    the analysis frame length interacts with environmental reflections. //
+    We focus on three questions. //\par\medskip
+    First, which cepstral representation works best for separating gunshots from
+    similar impulsive sounds? // Second, which classifier performs better: a neural
+    network or a support vector machine? // And third, how does the frame length affect
+    the results? //
   }
 
 % ===========================================================================
@@ -189,32 +226,26 @@
       \end{itemize}
     \end{column}
   \end{columns}
-  \note<2>{
-    \textbf{[1:50--3:00]}~{\color{accent}(1/2)}\par\medskip
-    Both detection and localization depend on what the signal actually looks like, so
-    let us start there. //\par\medskip
-    A gunshot recording contains one or two components, depending on the speed of the
-    projectile. A subsonic shot produces the muzzle blast alone; a supersonic
-    projectile adds a shock wave ahead of it. // The recording shown here is a
-    supersonic shot, so both are present. //\par\medskip
-    The first, at approximately two and a half milliseconds, is the shock wave.
-    {\color{accent}[CUT IF LATE]} It is generated along the trajectory as a Mach cone,
-    and the portion that reaches the microphone has the characteristic N-shaped
-    pressure profile. {\color{accent}[/CUT]} //\par\medskip
+    \note<2>{
+\textbf{[1:50--3:00]}~{\color{accent}(1/2)}\par\medskip
+    Let us first look at the signal of a gunshot. //\par\medskip
+    A gunshot has one or two components, depending on the projectile speed. // A
+    subsonic shot has only the muzzle blast; a supersonic projectile also produces a
+    shock wave. // This recording is a supersonic shot, so we see both. //\par\medskip
+    The first component, at about two and a half milliseconds, is the shock wave. //
+    {\color{accent}[CUT IF LATE]} It is produced along the projectile trajectory and has a
+    characteristic N-shaped pressure profile. {\color{accent}[/CUT]} //
   }
 \end{frame}
 
 \note{
-    \textbf{[1:50--3:00]}~{\color{accent}(2/2)}\par\medskip
+\textbf{[1:50--3:00]}~{\color{accent}(2/2)}\par\medskip
     \textbf{[CLICK]}\par\medskip
-    The muzzle blast -- in this recording about forty-five milliseconds later -- is the
-    expansion of propellant gases at the barrel. This component is present for every
-    shot, subsonic or supersonic. It originates at the instant of firing but propagates
-    at the speed of sound, which is why it arrives after the shock wave. Its duration is
-    one to three milliseconds. //\par\medskip
-    The signal between and after the two components is not part of the source
-    signature; it consists of reflections from the surroundings. This is relevant to
-    the choice of frame length, and I return to it in the results. //
+    The second one, about forty-five milliseconds later, is the muzzle blast. // It
+    comes from the gases at the barrel and is present in every gunshot. //\par\medskip
+    Between and after these two components, we mainly see reflections from the
+    surroundings. // They matter for the choice of frame length, and I will return to
+    them in the results. //
   }
 
 \begin{frame}{Single-domain analysis is insufficient}
@@ -229,14 +260,14 @@
     Effective feature extraction must integrate \emph{both} time and frequency
     domain processing.
   \end{alertblock}
-  \note{
-    \textbf{[3:00--3:30]}\par\medskip
-    Neither signal domain is sufficient on its own. //\par\medskip
-    Spectral analysis of a frame tends to characterise the acoustic environment rather
-    than the source. // The time-domain pattern is distorted by nonlinear dispersion
-    during propagation and by obstacles in the path. //\par\medskip
-    Feature extraction therefore has to combine time- and frequency-domain processing
-    -- which is what a cepstral representation does. //
+    \note{
+\textbf{[3:00--3:30]}\par\medskip
+    This also shows why one signal domain alone is not enough. //\par\medskip
+    The spectrum often describes the environment more than the gunshot itself. // The
+    time-domain shape changes during propagation and because of obstacles.
+    //\par\medskip
+    So we need features that combine both domains, and cepstral features do exactly
+    that. //
   }
 \end{frame}
 
@@ -280,18 +311,17 @@
     \item Multiple units give broader coverage and adaptability to environments.
     \item Tested with various firearm calibers and ammunition.
   \end{itemize}
-  \note{
-    \textbf{[3:30--4:20]}\par\medskip
-    The system architecture is a distributed network of stand-alone sensor units and a
-    remote server. //\par\medskip
-    Each unit monitors its surroundings continuously; on detecting an impulsive event
-    it transmits the signal segment to the server. // The server performs two
-    functions: classification of the event, and estimation of its position in two
-    dimensions from the data of several units. //\par\medskip
-    Multiple units serve two purposes. Spatial coverage -- and localization, because a
-    two-dimensional position requires at least two bearings. That is the subject of the
-    next slide. //\par\medskip
-    The system has been tested with several firearm calibres and ammunition types. //
+    \note{
+\textbf{[3:30--4:20]}\par\medskip
+    Now let us look at the proposed system. // It consists of several independent
+    sensor units connected to a remote server. //\par\medskip
+    Each sensor continuously monitors its surroundings. // When it detects an impulsive
+    event, it sends the recorded signal to the server. // The server then performs two
+    main tasks: classification of the event and localization of the sound source.
+    //\par\medskip
+    Several units give wider coverage and allow us to estimate the source position.
+    //\par\medskip
+    The system was tested with several firearm calibres and ammunition types. //
   }
 \end{frame}
 
@@ -314,85 +344,134 @@
       \end{itemize}
     \end{column}
   \end{columns}
-  \note<2>{
-    \textbf{[4:20--5:20]}~{\color{accent}(1/2)}\par\medskip
-    Localization. // Each sensor unit carries two MEMS microphones, almost twenty
-    centimetres apart, sampled at 44.1 kilohertz. //\par\medskip
-    The time difference of arrival between the two channels -- at most about
-    twenty-four samples for this geometry -- gives the bearing theta to the source
-    through the relation shown: the arcsine of the speed of sound times the delay in
-    samples, over the microphone spacing times the sampling frequency. //\par\medskip
+    \note<2>{
+\textbf{[4:20--5:20]}~{\color{accent}(1/2)}\par\medskip
+    First, I will briefly explain the localization. //\par\medskip
+    Each sensor unit has two MEMS microphones, about twenty centimetres apart, sampled
+    at 44.1 kilohertz. //\par\medskip
+    We measure the time difference of arrival between the two microphones. // From this
+    delay, we can calculate the direction to the source using the equation shown here. //
   }
 \end{frame}
 
 \note{
-    \textbf{[4:20--5:20]}~{\color{accent}(2/2)}\par\medskip
+\textbf{[4:20--5:20]}~{\color{accent}(2/2)}\par\medskip
     \textbf{[CLICK]}\par\medskip
-    A single unit thus yields a direction. Two units yield two bearings, and their
-    intersection is the position estimate. //\par\medskip
-    Bearing accuracy was evaluated on seventy recorded events at nine reference angles
-    between minus forty-five and plus sixty degrees. Cross-correlation with parabolic
-    sub-sample interpolation gives a mean absolute error of 0.77 degrees. //
+    One sensor unit therefore gives us one direction. // With two sensor units, we get
+    two directions, and their intersection gives us the estimated source position.
+    //\par\medskip
+    We tested this on seventy events at nine reference angles. // Using cross-correlation with parabolic interpolation, we achieved a mean
+    absolute error of zero point seven seven degrees. //
   }
 
 % ===========================================================================
 \section{Features}
 
 \begin{frame}{Feature extraction -- cepstral coefficients}
-  \begin{center}
+  % The pipeline of Fig. 1 in the abstract, turned horizontal and scaled to the
+  % whole slide, with the real filter banks in place of a generic block.
+  \vfill
+  \centering
   \begin{tikzpicture}[
-      node distance=6mm,
       blk/.style={draw=ctublue,thick,rounded corners,fill=ctublue!8,
-                  minimum height=7mm,font=\scriptsize,text width=15mm,align=center},
-      featbox/.style={draw=accent,thick,rounded corners,fill=accent!8,
-                  minimum height=5.5mm,font=\scriptsize\bfseries,text width=13mm,align=center},
-      ar/.style={-{Latex[length=1.6mm]},draw=gray,semithick}
+                  minimum height=8.5mm,minimum width=12mm,font=\small,align=center},
+      outbox/.style={draw=ctublue,thick,rounded corners,fill=ctublue!8,
+                  minimum height=8.5mm,minimum width=14mm,font=\small\bfseries},
+      bank/.style={inner sep=0pt,anchor=center},
+      banklbl/.style={font=\scriptsize\color{ink!80},anchor=north,inner sep=1pt},
+      ar/.style={-{Latex[length=1.8mm]},draw=gray,semithick},
+      bus/.style={draw=gray,semithick}
     ]
-    \node[blk] (fr) {Framing the signal};
-    \node[blk,right=of fr] (fft) {FFT};
-    \node[blk,right=of fft] (pw) {power};
-    \node[blk,right=of pw] (lg) {log};
-    \node[blk,right=of lg] (dct) {DCT};
-
+    % ---- shared front end ---------------------------------------------------
+    % waveform glyph
+    \node[draw=ink!25,thick,rounded corners,fill=paper,minimum width=14mm,minimum height=8mm] (sig) {};
+    \begin{scope}[shift={(sig.center)},x=1mm,y=1mm]
+      \foreach \x/\h in {-5.5/0.6,-5/1.0,-4.5/1.4,-4/2.6,-3.5/1.6,-3/0.9,-2.5/1.3,-2/0.7,
+                         -1.5/0.5,-1/0.4,-0.5/0.6,0/0.5,0.5/0.4,1/0.3,1.5/0.5,2/1.9,
+                         2.5/1.1,3/0.6,3.5/0.8,4/0.5,4.5/0.4,5/0.3,5.5/0.2}
+        \draw[ctublue,line width=0.5pt,line cap=round] (\x,-\h) -- (\x,\h);
+    \end{scope}
+    \node[blk,right=4mm of sig,text width=15mm] (fr) {Framing\\the signal};
+    \node[blk,right=4mm of fr] (fft) {FFT};
+    \draw[ar] (sig) -- (fr);
     \draw[ar] (fr) -- (fft);
-    \draw[ar] (fft) -- (pw);
-    \draw[ar] (pw) -- (lg);
-    \draw[ar] (lg) -- (dct);
 
-    \node[featbox,right=10mm of dct,yshift=10.5mm] (o1) {MFCC};
-    \node[featbox,right=10mm of dct,yshift=3.5mm]  (o2) {LFCC};
-    \node[featbox,right=10mm of dct,yshift=-3.5mm] (o3) {IMFCC};
-    \node[featbox,right=10mm of dct,yshift=-10.5mm](o4) {GTCC};
-    \foreach \o in {o1,o2,o3,o4} \draw[ar] (dct.east) -- (\o.west);
+    % ---- four branches (revealed on click) ------------------------------------
+    \coordinate (busx) at ($(fft.east)+(3mm,0)$);
+    \foreach \i/\file/\lbl/\post/\name/\col in {%
+        1/fb_mel/mel scale/log/MFCC/ctublue,
+        2/fb_lin/linear/log/LFCC/ctublue,
+        3/fb_imel/inverted mel/log/IMFCC/ctublue,
+        4/fb_gtcc/gammatone (ERB)/power/GTCC/accent}{
+      \coordinate (row\i) at ($(busx)+(0,{(2.5-\i)*13mm})$);
+      \node[bank] (bank\i) at ($(row\i)+(21mm,0)$)
+        {\includegraphics[width=30mm]{figs/\file.pdf}};
+      \node[banklbl] at (bank\i.south) {\lbl};
+      \node[blk,right=3mm of bank\i] (post\i) {\post};
+      \node[blk,right=3mm of post\i] (dct\i) {DCT};
+      \node[outbox,right=3mm of dct\i,draw=\col,fill=\col!8,text=\col] (out\i) {\name};
+      \draw[ar] (row\i) -- (bank\i.west);
+      \draw[ar] (bank\i.east) -- (post\i);
+      \draw[ar] (post\i) -- (dct\i);
+      \draw[ar] (dct\i) -- (out\i);
+    }
+    \draw[bus] (fft.east) -- (busx);
+    \draw[bus] (row1) -- (row4);
   \end{tikzpicture}
-  \end{center}
-  \vspace{-1mm}
-  {\scriptsize\color{ink!70} Shared cepstral chain; each branch applies its own filter
-   bank between the power spectrum and the log.}
-  \vspace{1mm}
-  \pause
-  \begin{itemize}\small
-    \item MFCC was developed for other acoustic applications but works for gunshot
-          recognition -- validated at military shooting ranges.
-    \item LFCC and IMFCC offer alternative filtering approaches.
-    \item GTCC uses a gammatone filter bank derived from an auditory model;
-          \textbf{reported to be more noise-robust than MFCC}.
-  \end{itemize}
-  \note<2>{
-    \textbf{[5:20--6:25]}\par\medskip
-    Classification. // All four feature extractors share the cepstral processing chain:
-    framing, FFT, power spectrum, logarithm, discrete cosine transform. //\par\medskip
-    They differ in the filter bank applied to the power spectrum before the logarithm
-    -- which is not shown in the diagram. //\par\medskip
-    \textbf{[CLICK]}\par\medskip
-    MFCC uses the mel scale. It was developed for speech, but has been validated for
-    gunshot recognition at military shooting ranges. // LFCC uses linearly spaced
-    filters; IMFCC an inverted mel scale. // GTCC uses a gammatone filter bank derived
-    from a model of the auditory periphery, and is reported to be more robust to noise
-    than MFCC. //\par\medskip
-    The experimental grid is four extractors, three frame lengths -- fifteen, thirty
-    and fifty milliseconds -- and two classifiers: a neural network and a support
-    vector machine. //
+  \vfill
+    \note{
+\textbf{[5:20--5:50]}\par\medskip
+    Now I will move to the main part of the work: classification. //\par\medskip
+    We compared four different cepstral feature extractors. // All of them use the same
+    chain: framing, FFT, a filter bank, and then a logarithm and a discrete cosine
+    transform. //\par\medskip
+    The main difference is the filter bank. // You can see all four filter banks here,
+    drawn on the same frequency axis. //
+  }
+\end{frame}
+
+\begin{frame}{Feature extraction -- the four filter banks}
+  \hyphenpenalty=10000 \exhyphenpenalty=10000
+  \vfill
+  \centering
+  \begin{tikzpicture}[
+      card/.style={draw=ink!25,thick,rounded corners,fill=paper,anchor=north,
+                   text width=28mm,minimum height=38mm,align=center,inner sep=1.8mm,
+                   font=\small}
+    ]
+    \node[card] (c1) at (0,0) {%
+      \includegraphics[width=28mm]{figs/fb_mel.pdf}\\[2pt]
+      \textbf{MFCC} -- mel scale\\[2pt]
+      {\footnotesize\color{ink!70}dense at low frequencies; speech-born,
+       validated on gunshots at military ranges}};
+    \node[card,anchor=north west] at ($(c1.north east)+(3.5mm,0)$) (c2) {%
+      \includegraphics[width=28mm]{figs/fb_lin.pdf}\\[2pt]
+      \textbf{LFCC} -- linear\\[2pt]
+      {\footnotesize\color{ink!70}equally spaced filters, uniform resolution across
+       the band}};
+    \node[card,anchor=north west] at ($(c2.north east)+(3.5mm,0)$) (c3) {%
+      \includegraphics[width=28mm]{figs/fb_imel.pdf}\\[2pt]
+      \textbf{IMFCC} -- inverted mel\\[2pt]
+      {\footnotesize\color{ink!70}mirror of the mel scale: dense at high
+       frequencies}};
+    \node[card,anchor=north west,draw=accent] at ($(c3.north east)+(3.5mm,0)$) (c4) {%
+      \includegraphics[width=28mm]{figs/fb_gtcc.pdf}\\[2pt]
+      \gtcc{GTCC} -- gammatone\\[2pt]
+      {\footnotesize\color{ink!70}auditory model, ERB spacing;
+       \textbf{reported more noise-robust than MFCC}}};
+  \end{tikzpicture}
+  \par\vspace{3mm}
+  {\scriptsize\color{ink!70} Experimental grid: 4 extractors $\times$ 3 frame lengths
+   (15 / 30 / 50\,ms) $\times$ 2 classifiers (NN, SVM).}
+  \vfill
+    \note{
+\textbf{[5:50--6:25]}\par\medskip
+    MFCC uses the mel scale, with dense filters at low frequencies. // It comes from
+    speech processing, but it also works for gunshots. //\par\medskip
+    LFCC uses linearly spaced filters, while IMFCC uses an inverted mel scale, with
+    dense filters at high frequencies. //\par\medskip
+    GTCC uses a gammatone filter bank based on a model of the human auditory system. //
+    It is also reported to be more robust to noise than MFCC. //
   }
 \end{frame}
 
@@ -429,30 +508,71 @@
   \par\vspace{1mm}
   {\scriptsize\color{ink!70} Classification results for the 9\,mm class.
    Test partition: 118 events, 31 of them 9\,mm.}
-  \note{
-    \textbf{[6:25--7:35]}~{\color{accent}(1/2)}\par\medskip
-    Table one gives the results for the nine-millimetre class. //\par\medskip
-    Rows are grouped by frame length, with the four extractors within each group. //
-    Columns are accuracy, recall, and the Matthews correlation coefficient -- each for
-    the SVM and for the neural network. //\par\medskip
-    The Matthews coefficient condenses the whole confusion matrix into one value
-    between minus one and plus one; unlike accuracy it is not inflated by unbalanced
-    classes, which is why it is reported here. //\par\medskip
+    \note{
+\textbf{[6:25--6:40]}\par\medskip
+    This table shows the complete classification results for the nine-millimetre
+    class. // The GTCC rows are highlighted. //\par\medskip
+    I will not go through the numbers here -- let us look at the same data in a chart. //
+  }
+\end{frame}
+
+\begin{frame}{Classification results -- MCC at a glance}
+  % Emphasis chart: GTCC in the accent colour, the three mel-family extractors in
+  % greys with direct labels. Two small multiples share the y axis.
+  \centering
+  \begin{tikzpicture}
+    \begin{groupplot}[group style={group size=2 by 1,horizontal sep=16mm,
+                                   ylabels at=edge left,yticklabels at=edge left},resslide,
+                      ylabel={MCC (--)},ylabel style={font=\scriptsize,color=ink!70}]
+      % ---------------- SVM ----------------
+      \nextgroupplot[title=SVM]
+      \addplot[dim=gray3] coordinates {(15,0.62) (30,0.60) (50,0.61)}
+        node[lbl=gray1,yshift=-3pt] {MFCC};
+      \addplot[dim=gray2] coordinates {(15,0.62) (30,0.66) (50,0.71)}
+        node[lbl=gray1,yshift=-3pt] {LFCC};
+      \addplot[dim=gray1] coordinates {(15,0.66) (30,0.62) (50,0.73)}
+        node[lbl=gray1,yshift=3pt] {IMFCC};
+      \addplot[color=accent,line width=1.8pt,mark size=2.2pt,mark options={fill=accent}]
+        coordinates {(15,0.82) (30,0.93) (50,0.93)}
+        node[lbl=accent,font=\scriptsize\bfseries] {GTCC};
+      % ---------------- NN -----------------
+      \nextgroupplot[title=NN]
+      \addplot[dim=gray3] coordinates {(15,0.62) (30,0.70) (50,0.83)}
+        node[lbl=gray1] {MFCC};
+      \addplot[dim=gray2] coordinates {(15,0.57) (30,0.59) (50,0.66)}
+        node[lbl=gray1] {LFCC};
+      \addplot[dim=gray1] coordinates {(15,0.77) (30,0.80) (50,0.76)}
+        node[lbl=gray1] {IMFCC};
+      \addplot[color=accent,line width=1.8pt,mark size=2.2pt,mark options={fill=accent}]
+        coordinates {(15,0.93) (30,0.96) (50,0.98)}
+        node[lbl=accent,font=\scriptsize\bfseries] {GTCC};
+    \end{groupplot}
+  \end{tikzpicture}
+  \par\vspace{1mm}
+  {\scriptsize\color{ink!70} MCC for the 9\,mm class by frame length -- the same data
+   as the table (118 test events, 31 of them 9\,mm).}
+    \note{
+\textbf{[6:40--7:35]}~{\color{accent}(1/2)}\par\medskip
+    This chart shows the same results, but only the Matthews correlation coefficient.
+    // MCC considers the whole confusion matrix, so it is less affected by class
+    imbalance than accuracy. //\par\medskip
+    The red line is GTCC. // It is on top in both panels and for every frame length.
+    //\par\medskip
+    The neural network gives better results than the SVM, and the difference grows with
+    longer frames. //
   }
 \end{frame}
 
 \note{
-    \textbf{[6:25--7:35]}~{\color{accent}(2/2)}\par\medskip
-    The GTCC rows are highlighted. For every frame length, and for both classifiers,
-    GTCC gives the highest value of all three metrics within its group. //\par\medskip
-    The best configuration is GTCC with the neural network at fifty milliseconds:
-    accuracy ninety-nine point one five percent, recall ninety-six point seven seven
-    percent, and an MCC of zero point nine eight. //\par\medskip
-    For scale: the test partition contains one hundred and eighteen events, thirty-one
-    of them nine-millimetre. Those figures correspond to one hundred and seventeen
-    correct decisions out of one hundred and eighteen, and thirty of the thirty-one
-    nine-millimetre shots recalled. //
+\textbf{[6:40--7:35]}~{\color{accent}(2/2)}\par\medskip
+    The best configuration is GTCC with the neural network and a fifty-millisecond
+    frame. // It reaches an accuracy of ninety-nine point one five percent, a recall of
+    ninety-six point seven seven percent, and an MCC of zero point nine eight.
+    //\par\medskip
+    That is one hundred and seventeen correct decisions out of one hundred and
+    eighteen test events. //
   }
+
 
 \begin{frame}{Discussion}
   \begin{itemize}
@@ -469,30 +589,28 @@
   \begin{block}{Best configuration in the table}
     GTCC + NN at 50\,ms -- 99.15\,\% ACC, 96.77\,\% RLC, MCC 0.98.
   \end{block}
-  \note<2>{
-    \textbf{[7:35--8:45]}~{\color{accent}(1/2)}\par\medskip
-    Three observations. //\par\medskip
-    First, MFCC, LFCC and IMFCC perform comparably. The choice between mel, linear and
-    inverted-mel spacing has little effect. //\par\medskip
-    Second, GTCC performs consistently better -- at every frame length and for both
-    classifiers.
-    {\color{accent}[CUT IF LATE]} The gammatone bank is derived from an auditory model
-    and is known to be more noise-robust than MFCC; that is the probable explanation,
-    but the mechanism was not isolated in this study. {\color{accent}[/CUT]}
-    //\par\medskip
+    \note<2>{
+\textbf{[7:35--8:45]}~{\color{accent}(1/2)}\par\medskip
+    From these results, we can make three main observations. //\par\medskip
+    First, MFCC, LFCC and IMFCC give similar results, so the filter spacing makes
+    little difference. //\par\medskip
+    Second, GTCC performs clearly better. //
+    {\color{accent}[CUT IF LATE]} One possible reason is that the gammatone filter bank is based on an
+    auditory model and is known to be more robust to noise. // However, we did not study
+    this mechanism directly. {\color{accent}[/CUT]} //
   }
 \end{frame}
 
 \note{
-    \textbf{[7:35--8:45]}~{\color{accent}(2/2)}\par\medskip
-    Third, the neural network is slightly ahead of the SVM, particularly at longer
-    frames -- a tendency across the study rather than a rule for every row of this
-    table. //\par\medskip
+\textbf{[7:35--8:45]}~{\color{accent}(2/2)}\par\medskip
+    Third, the neural network performs slightly better than the SVM, especially with
+    longer frames. // This is a general trend, not true for every single result.
+    //\par\medskip
     \textbf{[CLICK]}\par\medskip
-    Finally, longer frames improve accuracy, but a fifty-millisecond frame increasingly
-    contains the impulse response of the surroundings rather than the source signature
-    -- the reflections seen on the recording earlier. The trend cannot be extrapolated
-    further. //
+    Finally, longer frames generally improve the classification accuracy. // But with a
+    fifty-millisecond frame, we already start to include more reflections from the
+    environment, not only the gunshot itself. // So even longer frames would not
+    necessarily help. //
   }
 
 % ===========================================================================
@@ -513,19 +631,17 @@
   \vspace{3mm}
   {\large Thank you -- questions?}\\[2mm]
   {\small\color{gray} svatoja1@fel.cvut.cz \quad maxamart@fel.cvut.cz}
-  \note{
-    \textbf{[8:45--9:30]}\par\medskip
+    \note{
+\textbf{[8:45--9:30]}\par\medskip
     To conclude. //\par\medskip
-    A distributed network of stand-alone acoustic sensors with a remote server performs
-    detection, classification and two-dimensional localization of impulsive sounds.
-    //\par\medskip
-    Cepstral coefficients are an effective feature representation for gunshot
-    classification with both classifiers tested. // Gammatone-frequency coefficients
-    outperform the mel-frequency family, and the neural network achieves slightly
-    higher classification success than the SVM, particularly at longer frames.
-    //\par\medskip
-    The results were obtained on recordings of real firearms of several calibres and
-    ammunition types. //\par\medskip
+    We presented a distributed acoustic sensor system for the detection,
+    classification and localization of impulsive sounds. //\par\medskip
+    For gunshot classification, cepstral features work well with both tested
+    classifiers. // Among the tested features, GTCC gives the best results. // The
+    neural network also performs slightly better than the SVM, especially with longer
+    frames. //\par\medskip
+    The system was evaluated on real firearms with several calibres and ammunition
+    types. //\par\medskip
     Thank you. //
   }
 \end{frame}
