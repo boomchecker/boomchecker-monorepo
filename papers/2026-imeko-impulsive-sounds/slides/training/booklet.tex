@@ -73,145 +73,146 @@ breaking the argument.\quad Numbers table on the last page.
 \thumb{1}
 {\Large\raggedright\sloppy\setlength{\parskip}{6pt}
 Good morning.\par
-My name is Martin Maxa, from the Department of Measurement here at this faculty.\par
-I worked on this together with Jakub Svatoš, from the same department.\par
-Today I will talk about acoustic detection, classification and localization of impulsive sounds, with gunshots as the target class.\par
-The main focus is gunshot classification: we compare different cepstral features and two classifiers.\par
-I will also briefly show the localization.\par
+I'm Martin Maxa from the Department of Measurement, here at this faculty.\par
+This is joint work with Jakub Svatoš from the same department.\par
+Today I'll talk about detecting, classifying and localizing impulsive sounds – in our case, gunshots.\par
+The main part is gunshot classification, where we compare different cepstral features and two classifiers.\par
+And I'll briefly show how the system localizes the source.\par
 }
 \newpage
 \slidehead{2}{Motivation and research questions}{0:45–1:50}{Part A -- full text}
 \thumb{3}
 {\Large\raggedright\sloppy\setlength{\parskip}{6pt}
-This work is part of the development of an acoustic sensor system for the protection of soft targets.\par
-Acoustic detection can complement camera-based surveillance.\par
-Sound is omnidirectional, and it does not need a direct line of sight.\par
-{\color{ink!55}\itshape \cutopen{}The complete system should detect an impulsive event, classify it, ideally down to the calibre, and localize its source.}\par
-{\color{ink!55}\itshape It should also work outdoors, where there is noise and many reflections.\cutclose{}}\par
+This work is part of a larger project – an acoustic sensor system for protecting soft targets.\par
+Acoustic detection is a good complement to cameras.\par
+Sound is omnidirectional, and you don't need a line of sight.\par
+{\color{ink!55}\itshape \cutopen{}The full system has to detect an impulsive event, classify it – ideally down to the calibre – and localize the source.}\par
+{\color{ink!55}\itshape And it has to work outdoors, with noise and a lot of reflections.\cutclose{}}\par
 \click
-We focus on three questions.\par
-First, which cepstral representation works best for separating gunshots from similar impulsive sounds?\par
-Second, which classifier performs better: a neural network or a support vector machine?\par
+In this study we ask three questions.\par
+First, which cepstral features best separate gunshots from similar impulsive sounds?\par
+Second, which classifier works better – a neural network or a support vector machine?\par
 And third, how does the frame length affect the results?\par
 }
 \newpage
 \slidehead{3}{The acoustic signature of a gunshot}{1:50–3:00}{Part A -- full text}
 \thumb{5}
 {\Large\raggedright\sloppy\setlength{\parskip}{6pt}
-Let us first look at the signal of a gunshot.\par
+Let's start with the signal of a gunshot.\par
 A gunshot has one or two components, depending on the projectile speed.\par
-A subsonic shot has only the muzzle blast; a supersonic projectile also produces a shock wave.\par
-This recording is a supersonic shot, so we see both.\par
-The first component, at about two and a half milliseconds, is the shock wave.\par
-{\color{ink!55}\itshape \cutopen{}It is produced along the projectile trajectory and has a characteristic N-shaped pressure profile.\cutclose{}}\par
+A subsonic shot has only the muzzle blast.\par
+A supersonic one also has a shock wave.\par
+This recording is a supersonic shot, so we can see both.\par
+The first one, at about two and a half milliseconds, is the shock wave.\par
+{\color{ink!55}\itshape \cutopen{}It's created along the bullet's path and has the typical N-shape.\cutclose{}}\par
 \click
 The second one, about forty-five milliseconds later, is the muzzle blast.\par
-It comes from the gases at the barrel and is present in every gunshot.\par
-Between and after these two components, we mainly see reflections from the surroundings.\par
-They matter for the choice of frame length, and I will return to them in the results.\par
+It comes from the gases leaving the barrel, and every gunshot has it.\par
+Everything between and after them is mostly reflections from the surroundings.\par
+This matters for the frame length, and I'll come back to it in the results.\par
 }
 \newpage
 \slidehead{4}{Single-domain analysis is insufficient}{3:00–3:30}{Part A -- full text}
 \thumb{6}
 {\Large\raggedright\sloppy\setlength{\parskip}{6pt}
-This also shows why one signal domain alone is not enough.\par
-The spectrum often describes the environment more than the gunshot itself.\par
-The time-domain shape changes during propagation and because of obstacles.\par
+This also shows why one domain alone is not enough.\par
+The spectrum often tells you more about the environment than about the gunshot.\par
+And the waveform changes as the sound travels and hits obstacles.\par
 So we need features that combine both domains, and cepstral features do exactly that.\par
 }
 \newpage
 \slidehead{5}{Proposed system architecture}{3:30–4:20}{Part A -- full text}
 \thumb{7}
 {\Large\raggedright\sloppy\setlength{\parskip}{6pt}
-Now let us look at the proposed system.\par
-It consists of several independent sensor units connected to a remote server.\par
-Each sensor continuously monitors its surroundings.\par
+Now to the system itself.\par
+It's a set of independent sensor units connected to a remote server.\par
+Each unit continuously monitors its surroundings.\par
 When it detects an impulsive event, it sends the recorded signal to the server.\par
-The server then performs two main tasks: classification of the event and localization of the sound source.\par
-Several units give wider coverage and allow us to estimate the source position.\par
-The system was tested with several firearm calibres and ammunition types.\par
+The server then does two things – it classifies the event and localizes the source.\par
+More units mean wider coverage, and they let us estimate the position of the source.\par
+We tested the system with several calibres and types of ammunition.\par
 }
 \newpage
 \slidehead{6}{Localization – bearing from TDoA}{4:20–5:20}{Part A -- full text}
 \thumb{9}
 {\Large\raggedright\sloppy\setlength{\parskip}{6pt}
-First, I will briefly explain the localization.\par
+Let me briefly explain the localization first.\par
 Each sensor unit has two MEMS microphones, about twenty centimetres apart, sampled at 44.1 kilohertz.\par
 We measure the time difference of arrival between the two microphones.\par
-From this delay, we can calculate the direction to the source using the equation shown here.\par
+From this delay we get the direction to the source, using the equation here.\par
 \click
-One sensor unit therefore gives us one direction.\par
-With two sensor units, we get two directions, and their intersection gives us the estimated source position.\par
+So one unit gives us one direction.\par
+With two units we get two directions, and where they cross is the position of the source.\par
 We tested this on seventy events at nine reference angles.\par
-Using cross-correlation with parabolic interpolation, we achieved a mean absolute error of zero point seven seven degrees.\par
+With cross-correlation and parabolic interpolation, the mean absolute error was zero point seven seven degrees.\par
 }
 \newpage
 \slidehead{7}{Feature extraction – cepstral coefficients}{5:20–5:50}{Part A -- full text}
 \thumb{10}
 {\Large\raggedright\sloppy\setlength{\parskip}{6pt}
-Now I will move to the main part of the work: classification.\par
+Now to the main part – classification.\par
 We compared four different cepstral feature extractors.\par
-All of them use the same chain: framing, FFT, a filter bank, and then a logarithm and a discrete cosine transform.\par
+They all use the same chain – framing, FFT, a filter bank, then a logarithm and a DCT.\par
 The main difference is the filter bank.\par
-You can see all four filter banks here, drawn on the same frequency axis.\par
+Here you can see all four filter banks on the same frequency axis.\par
 }
 \newpage
 \slidehead{8}{Feature extraction – the four filter banks}{5:50–6:25}{Part A -- full text}
 \thumb{11}
 {\Large\raggedright\sloppy\setlength{\parskip}{6pt}
 MFCC uses the mel scale, with dense filters at low frequencies.\par
-It comes from speech processing, but it also works for gunshots.\par
-LFCC uses linearly spaced filters, while IMFCC uses an inverted mel scale, with dense filters at high frequencies.\par
-GTCC uses a gammatone filter bank based on a model of the human auditory system.\par
-It is also reported to be more robust to noise than MFCC.\par
+It comes from speech processing, but it works for gunshots too.\par
+LFCC has linearly spaced filters, and IMFCC uses an inverted mel scale, dense at high frequencies.\par
+GTCC uses a gammatone filter bank, which is based on a model of human hearing.\par
+It's also reported to be more robust to noise than MFCC.\par
 }
 \newpage
 \slidehead{9}{Classification results – 9 mm class}{6:25–6:40}{Part A -- full text}
 \thumb{12}
 {\Large\raggedright\sloppy\setlength{\parskip}{6pt}
-This table shows the complete classification results for the nine-millimetre class.\par
+This is the full table of results for the nine-millimetre class.\par
 The GTCC rows are highlighted.\par
-I will not go through the numbers here – let us look at the same data in a chart.\par
+I won't go through the numbers – let's look at the same data as a chart.\par
 }
 \newpage
 \slidehead{10}{Classification results – MCC at a glance}{6:40–7:35}{Part A -- full text}
 \thumb{13}
 {\Large\raggedright\sloppy\setlength{\parskip}{6pt}
-This chart shows the same results, but only the Matthews correlation coefficient.\par
-MCC considers the whole confusion matrix, so it is less affected by class imbalance than accuracy.\par
+Here are the same results, just the Matthews correlation coefficient.\par
+MCC takes the whole confusion matrix into account, so it's less affected by class imbalance than accuracy.\par
 The red line is GTCC.\par
-It is on top in both panels and for every frame length.\par
-The neural network gives better results than the SVM, and the difference grows with longer frames.\par
+It's on top in both panels, at every frame length.\par
+The neural network does better than the SVM, and the gap grows with longer frames.\par
 The best configuration is GTCC with the neural network and a fifty-millisecond frame.\par
-It reaches an accuracy of ninety-nine point one five percent, a recall of ninety-six point seven seven percent, and an MCC of zero point nine eight.\par
-That is one hundred and seventeen correct decisions out of one hundred and eighteen test events.\par
+That gives ninety-nine point one five percent accuracy, ninety-six point seven seven percent recall, and an MCC of zero point nine eight.\par
+In other words, one hundred and seventeen correct decisions out of one hundred and eighteen.\par
 }
 \newpage
 \slidehead{11}{Discussion}{7:35–8:45}{Part A -- full text}
 \thumb{15}
 {\Large\raggedright\sloppy\setlength{\parskip}{6pt}
-From these results, we can make three main observations.\par
+Three things to take from this.\par
 First, MFCC, LFCC and IMFCC give similar results, so the filter spacing makes little difference.\par
-Second, GTCC performs clearly better.\par
-{\color{ink!55}\itshape \cutopen{}One possible reason is that the gammatone filter bank is based on an auditory model and is known to be more robust to noise.}\par
-{\color{ink!55}\itshape However, we did not study this mechanism directly.\cutclose{}}\par
-Third, the neural network performs slightly better than the SVM, especially with longer frames.\par
-This is a general trend, not true for every single result.\par
+Second, GTCC is clearly better.\par
+{\color{ink!55}\itshape \cutopen{}One likely reason is that the gammatone bank comes from a hearing model and is known to be more robust to noise.}\par
+{\color{ink!55}\itshape But we didn't test that directly.\cutclose{}}\par
+Third, the neural network is slightly better than the SVM, especially with longer frames.\par
+That's a general trend, not true for every single result.\par
 \click
-Finally, longer frames generally improve the classification accuracy.\par
-But with a fifty-millisecond frame, we already start to include more reflections from the environment, not only the gunshot itself.\par
-So even longer frames would not necessarily help.\par
+And finally, longer frames generally improve accuracy.\par
+But at fifty milliseconds, the frame already contains more and more reflections, not just the gunshot itself.\par
+So even longer frames wouldn't necessarily help.\par
 }
 \newpage
 \slidehead{12}{Conclusion}{8:45–9:30}{Part A -- full text}
 \thumb{16}
 {\Large\raggedright\sloppy\setlength{\parskip}{6pt}
-To conclude.\par
-We presented a distributed acoustic sensor system for the detection, classification and localization of impulsive sounds.\par
-For gunshot classification, cepstral features work well with both tested classifiers.\par
-Among the tested features, GTCC gives the best results.\par
-The neural network also performs slightly better than the SVM, especially with longer frames.\par
-The system was evaluated on real firearms with several calibres and ammunition types.\par
+To sum up.\par
+We presented a distributed acoustic sensor system that detects, classifies and localizes impulsive sounds.\par
+For gunshot classification, cepstral features work well with both classifiers.\par
+GTCC gives the best results of the four.\par
+And the neural network is slightly better than the SVM, especially with longer frames.\par
+All of this was tested on real firearms, with several calibres and types of ammunition.\par
 Thank you.\par
 }
 \newpage
@@ -219,145 +220,146 @@ Thank you.\par
 \thumb{1}
 {\large\ttfamily\raggedright\linespread{1.5}\selectfont\setlength{\parskip}{7pt}
 G m.\par
-M n i M M, f t D o M h a t f.\par
-I w o t t w J S, f t s d.\par
-T I w t a a d, c a l o i s, w g a t t c.\par
-T m f i g c: w c d c f a t c.\par
-I w a b s t l.\par
+I'm M M f t D o M, h a t f.\par
+T i j w w J S f t s d.\par
+T I'll t a d, c a l i s – i o c, g.\par
+T m p i g c, w w c d c f a t c.\par
+A I'll b s h t s l t s.\par
 }
 \newpage
 \slidehead{2}{Motivation and research questions}{0:45–1:50}{Part B -- first letters}
 \thumb{3}
 {\large\ttfamily\raggedright\linespread{1.5}\selectfont\setlength{\parskip}{7pt}
-T w i p o t d o a a s s f t p o s t.\par
-A d c c c-b s.\par
-S i o, a i d n n a d l o s.\par
-{\color{ink!55}T c s s d a i e, c i, i d t t c, a l i s.}\par
-I s a w o, w t i n a m r.\par
+T w i p o a l p – a a s s f p s t.\par
+A d i a g c t c.\par
+S i o, a y don't n a l o s.\par
+{\color{ink!55}T f s h t d a i e, c i – i d t t c – a l t s.}\par
+A i h t w o, w n a a l o r.\par
 \click
-W f o t q.\par
-F, w c r w b f s g f s i s?\par
-S, w c p b: a n n o a s v m?\par
+I t s w a t q.\par
+F, w c f b s g f s i s?\par
+S, w c w b – a n n o a s v m?\par
 A t, h d t f l a t r?\par
 }
 \newpage
 \slidehead{3}{The acoustic signature of a gunshot}{1:50–3:00}{Part B -- first letters}
 \thumb{5}
 {\large\ttfamily\raggedright\linespread{1.5}\selectfont\setlength{\parskip}{7pt}
-L u f l a t s o a g.\par
+Let's s w t s o a g.\par
 A g h o o t c, d o t p s.\par
-A s s h o t m b; a s p a p a s w.\par
-T r i a s s, s w s b.\par
-T f c, a a t a a h m, i t s w.\par
-{\color{ink!55}I i p a t p t a h a c N-s p p.}\par
+A s s h o t m b.\par
+A s o a h a s w.\par
+T r i a s s, s w c s b.\par
+T f o, a a t a a h m, i t s w.\par
+{\color{ink!55}It's c a t bullet's p a h t t N-s.}\par
 \click
 T s o, a f-f m l, i t m b.\par
-I c f t g a t b a i p i e g.\par
-B a a t t c, w m s r f t s.\par
-T m f t c o f l, a I w r t t i t r.\par
+I c f t g l t b, a e g h i.\par
+E b a a t i m r f t s.\par
+T m f t f l, a I'll c b t i i t r.\par
 }
 \newpage
 \slidehead{4}{Single-domain analysis is insufficient}{3:00–3:30}{Part B -- first letters}
 \thumb{6}
 {\large\ttfamily\raggedright\linespread{1.5}\selectfont\setlength{\parskip}{7pt}
-T a s w o s d a i n e.\par
-T s o d t e m t t g i.\par
-T t-d s c d p a b o o.\par
+T a s w o d a i n e.\par
+T s o t y m a t e t a t g.\par
+A t w c a t s t a h o.\par
 S w n f t c b d, a c f d e t.\par
 }
 \newpage
 \slidehead{5}{Proposed system architecture}{3:30–4:20}{Part B -- first letters}
 \thumb{7}
 {\large\ttfamily\raggedright\linespread{1.5}\selectfont\setlength{\parskip}{7pt}
-N l u l a t p s.\par
-I c o s i s u c t a r s.\par
-E s c m i s.\par
+N t t s i.\par
+It's a s o i s u c t a r s.\par
+E u c m i s.\par
 W i d a i e, i s t r s t t s.\par
-T s t p t m t: c o t e a l o t s s.\par
-S u g w c a a u t e t s p.\par
-T s w t w s f c a a t.\par
+T s t d t t – i c t e a l t s.\par
+M u m w c, a t l u e t p o t s.\par
+W t t s w s c a t o a.\par
 }
 \newpage
 \slidehead{6}{Localization – bearing from TDoA}{4:20–5:20}{Part B -- first letters}
 \thumb{9}
 {\large\ttfamily\raggedright\linespread{1.5}\selectfont\setlength{\parskip}{7pt}
-F, I w b e t l.\par
+L m b e t l f.\par
 E s u h t MEMS m, a t c a, s a 44.1 k.\par
 W m t t d o a b t t m.\par
-F t d, w c c t d t t s u t e s h.\par
+F t d w g t d t t s, u t e h.\par
 \click
-O s u t g u o d.\par
-W t s u, w g t d, a t i g u t e s p.\par
+S o u g u o d.\par
+W t u w g t d, a w t c i t p o t s.\par
 W t t o s e a n r a.\par
-U c-c w p i, w a a m a e o z p s s d.\par
+W c-c a p i, t m a e w z p s s d.\par
 }
 \newpage
 \slidehead{7}{Feature extraction – cepstral coefficients}{5:20–5:50}{Part B -- first letters}
 \thumb{10}
 {\large\ttfamily\raggedright\linespread{1.5}\selectfont\setlength{\parskip}{7pt}
-N I w m t t m p o t w: c.\par
+N t t m p – c.\par
 W c f d c f e.\par
-A o t u t s c: f, FFT, a f b, a t a l a a d c t.\par
+T a u t s c – f, FFT, a f b, t a l a a DCT.\par
 T m d i t f b.\par
-Y c s a f f b h, d o t s f a.\par
+H y c s a f f b o t s f a.\par
 }
 \newpage
 \slidehead{8}{Feature extraction – the four filter banks}{5:50–6:25}{Part B -- first letters}
 \thumb{11}
 {\large\ttfamily\raggedright\linespread{1.5}\selectfont\setlength{\parskip}{7pt}
 MFCC u t m s, w d f a l f.\par
-I c f s p, b i a w f g.\par
-LFCC u l s f, w IMFCC u a i m s, w d f a h f.\par
-GTCC u a g f b b o a m o t h a s.\par
-I i a r t b m r t n t MFCC.\par
+I c f s p, b i w f g t.\par
+LFCC h l s f, a IMFCC u a i m s, d a h f.\par
+GTCC u a g f b, w i b o a m o h h.\par
+It's a r t b m r t n t MFCC.\par
 }
 \newpage
 \slidehead{9}{Classification results – 9 mm class}{6:25–6:40}{Part B -- first letters}
 \thumb{12}
 {\large\ttfamily\raggedright\linespread{1.5}\selectfont\setlength{\parskip}{7pt}
-T t s t c c r f t n-m c.\par
+T i t f t o r f t n-m c.\par
 T GTCC r a h.\par
-I w n g t t n h – l u l a t s d i a c.\par
+I won't g t t n – let's l a t s d a a c.\par
 }
 \newpage
 \slidehead{10}{Classification results – MCC at a glance}{6:40–7:35}{Part B -- first letters}
 \thumb{13}
 {\large\ttfamily\raggedright\linespread{1.5}\selectfont\setlength{\parskip}{7pt}
-T c s t s r, b o t M c c.\par
-MCC c t w c m, s i i l a b c i t a.\par
+H a t s r, j t M c c.\par
+MCC t t w c m i a, s it's l a b c i t a.\par
 T r l i GTCC.\par
-I i o t i b p a f e f l.\par
-T n n g b r t t SVM, a t d g w l f.\par
+It's o t i b p, a e f l.\par
+T n n d b t t SVM, a t g g w l f.\par
 T b c i GTCC w t n n a a f-m f.\par
-I r a a o n-n p o f p, a r o n-s p s s p, a a MCC o z p n e.\par
-T i o h a s c d o o o h a e t e.\par
+T g n-n p o f p a, n-s p s s p r, a a MCC o z p n e.\par
+I o w, o h a s c d o o o h a e.\par
 }
 \newpage
 \slidehead{11}{Discussion}{7:35–8:45}{Part B -- first letters}
 \thumb{15}
 {\large\ttfamily\raggedright\linespread{1.5}\selectfont\setlength{\parskip}{7pt}
-F t r, w c m t m o.\par
+T t t t f t.\par
 F, MFCC, LFCC a IMFCC g s r, s t f s m l d.\par
-S, GTCC p c b.\par
-{\color{ink!55}O p r i t t g f b i b o a a m a i k t b m r t n.}\par
-H, w d n s t m d.\par
-T, t n n p s b t t SVM, e w l f.\par
-T i a g t, n t f e s r.\par
+S, GTCC i c b.\par
+{\color{ink!55}O l r i t t g b c f a h m a i k t b m r t n.}\par
+B w didn't t t d.\par
+T, t n n i s b t t SVM, e w l f.\par
+That's a g t, n t f e s r.\par
 \click
-F, l f g i t c a.\par
-B w a f-m f, w a s t i m r f t e, n o t g i.\par
-S e l f w n n h.\par
+A f, l f g i a.\par
+B a f m, t f a c m a m r, n j t g i.\par
+S e l f wouldn't n h.\par
 }
 \newpage
 \slidehead{12}{Conclusion}{8:45–9:30}{Part B -- first letters}
 \thumb{16}
 {\large\ttfamily\raggedright\linespread{1.5}\selectfont\setlength{\parskip}{7pt}
-T c.\par
-W p a d a s s f t d, c a l o i s.\par
-F g c, c f w w w b t c.\par
-A t t f, GTCC g t b r.\par
-T n n a p s b t t SVM, e w l f.\par
-T s w e o r f w s c a a t.\par
+T s u.\par
+W p a d a s s t d, c a l i s.\par
+F g c, c f w w w b c.\par
+GTCC g t b r o t f.\par
+A t n n i s b t t SVM, e w l f.\par
+A o t w t o r f, w s c a t o a.\par
 T y.\par
 }
 \newpage
@@ -366,12 +368,12 @@ T y.\par
 \vspace{4mm}{\Large\raggedright\bfseries Good morning.\par}
 \vspace{6mm}{\color{ink!40}\Huge\ldots}\par
 \vfill
-{\Large\raggedright\bfseries I will also briefly show the localization.\par}
+{\Large\raggedright\bfseries And I'll briefly show how the system localizes the source.\par}
 \vspace{8mm}
 \newpage
 \slidehead{2}{Motivation and research questions}{0:45–1:50}{Part C -- anchors only}
 \thumb{3}
-\vspace{4mm}{\Large\raggedright\bfseries This work is part of the development of an acoustic sensor system for the protection of soft targets.\par}
+\vspace{4mm}{\Large\raggedright\bfseries This work is part of a larger project – an acoustic sensor system for protecting soft targets.\par}
 \vspace{6mm}{\color{ink!40}\Huge\ldots}\par
 \vfill
 {\Large\raggedright\bfseries And third, how does the frame length affect the results?\par}
@@ -379,15 +381,15 @@ T y.\par
 \newpage
 \slidehead{3}{The acoustic signature of a gunshot}{1:50–3:00}{Part C -- anchors only}
 \thumb{5}
-\vspace{4mm}{\Large\raggedright\bfseries Let us first look at the signal of a gunshot.\par}
+\vspace{4mm}{\Large\raggedright\bfseries Let's start with the signal of a gunshot.\par}
 \vspace{6mm}{\color{ink!40}\Huge\ldots}\par
 \vfill
-{\Large\raggedright\bfseries They matter for the choice of frame length, and I will return to them in the results.\par}
+{\Large\raggedright\bfseries This matters for the frame length, and I'll come back to it in the results.\par}
 \vspace{8mm}
 \newpage
 \slidehead{4}{Single-domain analysis is insufficient}{3:00–3:30}{Part C -- anchors only}
 \thumb{6}
-\vspace{4mm}{\Large\raggedright\bfseries This also shows why one signal domain alone is not enough.\par}
+\vspace{4mm}{\Large\raggedright\bfseries This also shows why one domain alone is not enough.\par}
 \vspace{6mm}{\color{ink!40}\Huge\ldots}\par
 \vfill
 {\Large\raggedright\bfseries So we need features that combine both domains, and cepstral features do exactly that.\par}
@@ -395,26 +397,26 @@ T y.\par
 \newpage
 \slidehead{5}{Proposed system architecture}{3:30–4:20}{Part C -- anchors only}
 \thumb{7}
-\vspace{4mm}{\Large\raggedright\bfseries Now let us look at the proposed system.\par}
+\vspace{4mm}{\Large\raggedright\bfseries Now to the system itself.\par}
 \vspace{6mm}{\color{ink!40}\Huge\ldots}\par
 \vfill
-{\Large\raggedright\bfseries The system was tested with several firearm calibres and ammunition types.\par}
+{\Large\raggedright\bfseries We tested the system with several calibres and types of ammunition.\par}
 \vspace{8mm}
 \newpage
 \slidehead{6}{Localization – bearing from TDoA}{4:20–5:20}{Part C -- anchors only}
 \thumb{9}
-\vspace{4mm}{\Large\raggedright\bfseries First, I will briefly explain the localization.\par}
+\vspace{4mm}{\Large\raggedright\bfseries Let me briefly explain the localization first.\par}
 \vspace{6mm}{\color{ink!40}\Huge\ldots}\par
 \vfill
-{\Large\raggedright\bfseries Using cross-correlation with parabolic interpolation, we achieved a mean absolute error of zero point seven seven degrees.\par}
+{\Large\raggedright\bfseries With cross-correlation and parabolic interpolation, the mean absolute error was zero point seven seven degrees.\par}
 \vspace{8mm}
 \newpage
 \slidehead{7}{Feature extraction – cepstral coefficients}{5:20–5:50}{Part C -- anchors only}
 \thumb{10}
-\vspace{4mm}{\Large\raggedright\bfseries Now I will move to the main part of the work: classification.\par}
+\vspace{4mm}{\Large\raggedright\bfseries Now to the main part – classification.\par}
 \vspace{6mm}{\color{ink!40}\Huge\ldots}\par
 \vfill
-{\Large\raggedright\bfseries You can see all four filter banks here, drawn on the same frequency axis.\par}
+{\Large\raggedright\bfseries Here you can see all four filter banks on the same frequency axis.\par}
 \vspace{8mm}
 \newpage
 \slidehead{8}{Feature extraction – the four filter banks}{5:50–6:25}{Part C -- anchors only}
@@ -422,36 +424,36 @@ T y.\par
 \vspace{4mm}{\Large\raggedright\bfseries MFCC uses the mel scale, with dense filters at low frequencies.\par}
 \vspace{6mm}{\color{ink!40}\Huge\ldots}\par
 \vfill
-{\Large\raggedright\bfseries It is also reported to be more robust to noise than MFCC.\par}
+{\Large\raggedright\bfseries It's also reported to be more robust to noise than MFCC.\par}
 \vspace{8mm}
 \newpage
 \slidehead{9}{Classification results – 9 mm class}{6:25–6:40}{Part C -- anchors only}
 \thumb{12}
-\vspace{4mm}{\Large\raggedright\bfseries This table shows the complete classification results for the nine-millimetre class.\par}
+\vspace{4mm}{\Large\raggedright\bfseries This is the full table of results for the nine-millimetre class.\par}
 \vspace{6mm}{\color{ink!40}\Huge\ldots}\par
 \vfill
-{\Large\raggedright\bfseries I will not go through the numbers here – let us look at the same data in a chart.\par}
+{\Large\raggedright\bfseries I won't go through the numbers – let's look at the same data as a chart.\par}
 \vspace{8mm}
 \newpage
 \slidehead{10}{Classification results – MCC at a glance}{6:40–7:35}{Part C -- anchors only}
 \thumb{13}
-\vspace{4mm}{\Large\raggedright\bfseries This chart shows the same results, but only the Matthews correlation coefficient.\par}
+\vspace{4mm}{\Large\raggedright\bfseries Here are the same results, just the Matthews correlation coefficient.\par}
 \vspace{6mm}{\color{ink!40}\Huge\ldots}\par
 \vfill
-{\Large\raggedright\bfseries That is one hundred and seventeen correct decisions out of one hundred and eighteen test events.\par}
+{\Large\raggedright\bfseries In other words, one hundred and seventeen correct decisions out of one hundred and eighteen.\par}
 \vspace{8mm}
 \newpage
 \slidehead{11}{Discussion}{7:35–8:45}{Part C -- anchors only}
 \thumb{15}
-\vspace{4mm}{\Large\raggedright\bfseries From these results, we can make three main observations.\par}
+\vspace{4mm}{\Large\raggedright\bfseries Three things to take from this.\par}
 \vspace{6mm}{\color{ink!40}\Huge\ldots}\par
 \vfill
-{\Large\raggedright\bfseries So even longer frames would not necessarily help.\par}
+{\Large\raggedright\bfseries So even longer frames wouldn't necessarily help.\par}
 \vspace{8mm}
 \newpage
 \slidehead{12}{Conclusion}{8:45–9:30}{Part C -- anchors only}
 \thumb{16}
-\vspace{4mm}{\Large\raggedright\bfseries To conclude.\par}
+\vspace{4mm}{\Large\raggedright\bfseries To sum up.\par}
 \vspace{6mm}{\color{ink!40}\Huge\ldots}\par
 \vfill
 {\Large\raggedright\bfseries Thank you.\par}
