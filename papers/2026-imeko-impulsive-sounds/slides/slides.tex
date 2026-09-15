@@ -1,4 +1,4 @@
-\documentclass[aspectratio=169,11pt]{beamer}
+\documentclass[aspectratio=169,10pt]{beamer}
 
 \usepackage[T1]{fontenc}
 \usepackage[utf8]{inputenc}
@@ -9,10 +9,18 @@
 \usetikzlibrary{arrows.meta,positioning,fit,backgrounds}
 
 % --------------------------------------------------
-% Clean, theme-light setup: no navigation clutter, one accent colour.
+% Theme: metropolis, tuned to the CTU palette.
+%   * frame title in a solid CTU-blue bar, thin progress bar under it
+%   * Fira Sans (pdflatex build via the `fira` package) + newtxsf for sans math
+%   * one accent colour (accent red), reserved for GTCC / the highlighted result
 % --------------------------------------------------
-\usetheme{default}
-\usecolortheme{default}
+\usetheme[progressbar=frametitle,numbering=fraction,block=fill,sectionpage=none]{metropolis}
+\usepackage[sfdefault,lining]{FiraSans}
+\usepackage{FiraMono}
+\usepackage{newtxsf}
+% Stop the frame count (and therefore the progress bar) at the last main frame:
+% the appendix frames are numbered separately and do not dilute the bar.
+\usepackage{appendixnumberbeamer}
 
 % Notes build: slides-notes.tex sets \SHOWNOTES and \input's this file, so the
 % spoken script lives in exactly one place -- the \note{} blocks below.
@@ -20,18 +28,50 @@
 \ifdefined\SHOWNOTES\setbeameroption{show only notes}\fi
 
 \definecolor{ctublue}{RGB}{0,101,189}
+\definecolor{ctunavy}{RGB}{0,55,110}
 \definecolor{accent}{RGB}{200,16,46}
+\definecolor{ink}{RGB}{35,38,45}
+\definecolor{paper}{RGB}{255,255,255}
+\definecolor{panel}{RGB}{240,244,249}
+
+\setbeamercolor{normal text}{fg=ink,bg=paper}
 \setbeamercolor{structure}{fg=ctublue}
-\setbeamercolor{title}{fg=ctublue}
-\setbeamercolor{frametitle}{fg=ctublue}
+\setbeamercolor{alerted text}{fg=accent}
+\setbeamercolor{example text}{fg=ctublue}
+\setbeamercolor{frametitle}{fg=paper,bg=ctublue}
+\setbeamercolor{progress bar}{fg=accent,bg=ctublue!30}
+\setbeamercolor{progress bar in head/foot}{fg=accent,bg=ctublue!30}
+\setbeamercolor{block title}{fg=ctublue,bg=panel}
+\setbeamercolor{block body}{bg=panel}
+\setbeamercolor{block title alerted}{fg=paper,bg=accent}
+\setbeamercolor{block body alerted}{bg=accent!8}
+\setbeamercolor{footline}{fg=ink!55}
+\setbeamercolor{page number in head/foot}{fg=ink!55}
+\setbeamercolor{title}{fg=paper}
+\setbeamercolor{subtitle}{fg=paper}
+\setbeamercolor{author}{fg=paper}
+\setbeamercolor{institute}{fg=paper}
+\setbeamercolor{date}{fg=paper}
+
 \setbeamerfont{frametitle}{size=\large,series=\bfseries}
+\setbeamerfont{block title}{series=\bfseries}
+\setbeamerfont{footline}{size=\scriptsize}
+\setbeamerfont{page number in head/foot}{size=\scriptsize}
+\setbeamerfont{title}{size=\LARGE,series=\bfseries}
+\setbeamerfont{author}{size=\normalsize}
+\setbeamerfont{institute}{size=\small}
+\setbeamerfont{date}{size=\small}
+
 \setbeamertemplate{navigation symbols}{}
-\setbeamertemplate{itemize items}[circle]
+\setbeamertemplate{itemize items}{\textcolor{ctublue}{\raisebox{0.15ex}{\rule{0.7ex}{0.7ex}}}}
+\setbeamertemplate{enumerate items}[default]
+\setbeamertemplate{frame footer}{\insertshorttitle\ \textperiodcentered\ IMEKO TC4 2026}
 \setbeamercovered{transparent=25}
-\setbeamertemplate{footline}{%
-  \hfill\usebeamerfont{footline}\color{gray!70}%
-  \small\insertframenumber\,/\,\inserttotalframenumber\hspace*{2ex}\vspace*{1ex}%
-}
+\metroset{progressbar=frametitle}
+\makeatletter
+\setlength{\metropolis@progressinheadfoot@linewidth}{1.2pt}
+\setlength{\metropolis@frametitle@padding}{1.5ex}
+\makeatother
 
 \newcommand{\gtcc}[1]{\textbf{\color{accent}#1}}
 
@@ -46,14 +86,29 @@
 
 \begin{document}
 
-\begin{frame}[plain]
-  % conference logo, pinned to the top-right corner of the page (needs two passes)
+
+\begin{frame}[plain,noframenumbering]
+  % Full-bleed CTU-blue background with the lion watermark; text set on top of it.
   \begin{tikzpicture}[remember picture,overlay]
-    \node[anchor=north east,inner sep=0pt,xshift=-7mm,yshift=-6mm]
-      at (current page.north east)
-      {\includegraphics[height=22mm]{figs/imeko-logo.png}};
+    \node[anchor=south west,inner sep=0pt] at (current page.south west)
+      {\includegraphics[width=\paperwidth,height=\paperheight]{figs/title-bg.png}};
+    % logos: CTU top-left, IMEKO top-right (needs two passes)
+    \node[anchor=north west,inner sep=0pt,xshift=9mm,yshift=-7mm] at (current page.north west)
+      {\includegraphics[height=12mm]{figs/electrical_engeneering_negativ.pdf}};
+    \node[anchor=north east,inner sep=0pt,xshift=-9mm,yshift=-6mm] at (current page.north east)
+      {\includegraphics[height=20mm]{figs/imeko-logo.png}};
+    % text block, anchored below the logo row
+    \node[anchor=north west,text width=0.80\paperwidth,align=left,xshift=9mm,yshift=-24mm]
+      at (current page.north west) {%
+        {\usebeamerfont{title}\usebeamercolor[fg]{title}\inserttitle\par}
+        \vspace{7mm}
+        {\usebeamerfont{author}\usebeamercolor[fg]{author}\insertauthor\par}
+        \vspace{1.5mm}
+        {\usebeamerfont{institute}\usebeamercolor[fg]{institute}\insertinstitute\par}
+        \vspace{7mm}
+        {\usebeamerfont{date}\usebeamercolor[fg]{date}\color{paper!80}\insertdate\par}
+      };
   \end{tikzpicture}
-  \titlepage
   \note{
     \textbf{[0:00--0:45]}\par\medskip
     Good morning. // My name is Martin Maxa, from the Department of Measurement --
@@ -117,11 +172,11 @@
 
 \begin{frame}{The acoustic signature of a gunshot}
   \begin{columns}[T,onlytextwidth]
-    \begin{column}{0.62\textwidth}
-      \vspace{-2mm}
+    \begin{column}{0.58\textwidth}
+      \vspace{-3mm}
       \includegraphics[width=\textwidth]{figs/gunshot_char.png}
     \end{column}
-    \begin{column}{0.36\textwidth}
+    \begin{column}{0.40\textwidth}
       \vspace{2mm}
       {\small One or two components, depending on projectile speed:}
       \begin{itemize}\small
@@ -191,11 +246,11 @@
 \begin{frame}{Proposed system architecture}
   \begin{center}
   \begin{tikzpicture}[
-      node distance=8mm,
+      node distance=5mm,
       sensor/.style={draw=ctublue,thick,rounded corners,fill=ctublue!8,
-                     minimum width=20mm,minimum height=9mm,font=\small},
+                     minimum width=20mm,minimum height=8mm,font=\small},
       server/.style={draw=accent,very thick,rounded corners,fill=accent!8,
-                     minimum width=30mm,minimum height=13mm,font=\small\bfseries},
+                     minimum width=30mm,minimum height=12mm,font=\small\bfseries},
       link/.style={-{Latex[length=2mm]},draw=gray,thick}
     ]
     \node[sensor] (s1) {Sensor 1};
@@ -214,11 +269,11 @@
 
     \begin{scope}[on background layer]
       \node[fit=(s1)(s3),draw=gray!40,dashed,rounded corners,
-            inner sep=4mm,label={[font=\scriptsize\color{gray}]below:stand-alone units}] {};
+            inner sep=3mm,label={[font=\scriptsize\color{gray},yshift=1mm]below:stand-alone units}] {};
     \end{scope}
   \end{tikzpicture}
   \end{center}
-  \vfill
+  \vspace{-2mm}
   \begin{itemize}\small
     \item Each sensor continuously monitors its surroundings and transmits detected
           signals to the server for advanced processing.
@@ -288,9 +343,9 @@
   \begin{tikzpicture}[
       node distance=6mm,
       blk/.style={draw=ctublue,thick,rounded corners,fill=ctublue!8,
-                  minimum height=8mm,font=\scriptsize,text width=15mm,align=center},
+                  minimum height=7mm,font=\scriptsize,text width=15mm,align=center},
       featbox/.style={draw=accent,thick,rounded corners,fill=accent!8,
-                  minimum height=7mm,font=\scriptsize\bfseries,text width=13mm,align=center},
+                  minimum height=5.5mm,font=\scriptsize\bfseries,text width=13mm,align=center},
       ar/.style={-{Latex[length=1.6mm]},draw=gray,semithick}
     ]
     \node[blk] (fr) {Framing the signal};
@@ -304,17 +359,17 @@
     \draw[ar] (pw) -- (lg);
     \draw[ar] (lg) -- (dct);
 
-    \node[featbox,right=10mm of dct,yshift=13.5mm] (o1) {MFCC};
-    \node[featbox,right=10mm of dct,yshift=4.5mm]  (o2) {LFCC};
-    \node[featbox,right=10mm of dct,yshift=-4.5mm] (o3) {IMFCC};
-    \node[featbox,right=10mm of dct,yshift=-13.5mm](o4) {GTCC};
+    \node[featbox,right=10mm of dct,yshift=10.5mm] (o1) {MFCC};
+    \node[featbox,right=10mm of dct,yshift=3.5mm]  (o2) {LFCC};
+    \node[featbox,right=10mm of dct,yshift=-3.5mm] (o3) {IMFCC};
+    \node[featbox,right=10mm of dct,yshift=-10.5mm](o4) {GTCC};
     \foreach \o in {o1,o2,o3,o4} \draw[ar] (dct.east) -- (\o.west);
   \end{tikzpicture}
   \end{center}
-  \vspace{2mm}
-  {\scriptsize Block diagram of the feature extraction algorithms; each branch applies
-   its own filter bank between the power spectrum and the log.}
-  \vfill
+  \vspace{-1mm}
+  {\scriptsize\color{ink!70} Shared cepstral chain; each branch applies its own filter
+   bank between the power spectrum and the log.}
+  \vspace{1mm}
   \pause
   \begin{itemize}\small
     \item MFCC was developed for other acoustic applications but works for gunshot
@@ -347,6 +402,8 @@
 \begin{frame}{Classification results -- 9\,mm class}
   \centering
   \footnotesize
+  \vspace{-2mm}
+  \renewcommand{\arraystretch}{0.95}
   \begin{tabular}{ll rr rr rr}
     \toprule
     & & \multicolumn{2}{c}{ACC (\%)} & \multicolumn{2}{c}{RLC (\%)} & \multicolumn{2}{c}{MCC (--)}\\
@@ -369,8 +426,8 @@
            & \gtcc{GTCC} & \gtcc{97.46} & \gtcc{99.15} & \gtcc{90.32} & \gtcc{96.77} & \gtcc{0.93} & \gtcc{0.98}\\
     \bottomrule
   \end{tabular}
-  \par\vspace{2mm}
-  {\scriptsize Classification results for the 9\,mm class.
+  \par\vspace{1mm}
+  {\scriptsize\color{ink!70} Classification results for the 9\,mm class.
    Test partition: 118 events, 31 of them 9\,mm.}
   \note{
     \textbf{[6:25--7:35]}~{\color{accent}(1/2)}\par\medskip

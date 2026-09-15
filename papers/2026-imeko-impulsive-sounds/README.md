@@ -29,10 +29,10 @@ Inside `slides/`:
 |---|---|
 | `slides.tex` | the deck **and** the spoken script (in `\note{}` blocks) |
 | `slides.pdf` | the deck as presented – 10 frames + 4 appendix |
-| `slides-notes.tex` → `slides-notes.pdf` | 14 pages, script + slide thumbnail – **print this and learn from it** |
+| `slides-notes.tex` → `slides-notes.pdf` | 15 pages, script + slide thumbnail – **print this and learn from it** |
 | `cue-card.tex` → `cue-card.pdf` | one dense A4 for the lectern: every slide's opening line verbatim, plus beats and numbers |
 | `QA.md` | expected questions, answers, and which appendix slide to jump to |
-| `figs/` | `gunshot_char.png`, `tdoa.png` |
+| `figs/` | `gunshot_char.png`, `tdoa.png`, logos (`imeko-logo.png`, `electrical_engeneering_negativ.pdf`) and the title background `title-bg.png` |
 
 ## Build
 
@@ -47,6 +47,18 @@ task clean
 Needs `pdflatex`, `beamer` and `pgfpages` – all in the `sw-devcontainer`; on a bare
 system run `task latex:setup` from the repository root.
 
+## Look of the deck
+
+The deck uses the `metropolis` beamer theme tuned to the CTU palette: frame titles in a
+solid CTU-blue bar with a thin red progress bar underneath, Fira Sans body text (via
+the `fira` package, so the build stays on `pdflatex`), `newtxsf` for sans-serif math,
+and one accent colour – the red – reserved for GTCC and the highlighted result. The
+title slide is a full-bleed CTU-blue background with the lion watermark
+(`figs/title-bg.png`, cropped to 16:9 from the earlier TDoA deck) and the FEL and IMEKO
+logos (the FEL logo is the official negative vector version). The title frame is `noframenumbering` and `appendixnumberbeamer` stops the count at
+the conclusion, so the footer counts 9 frames and the progress bar reaches 100 % on the
+last main slide; appendix frames are numbered separately.
+
 ## The script lives in one place
 
 The spoken script is in the `\note{}` blocks of `slides.tex`, and nowhere else.
@@ -55,7 +67,7 @@ The spoken script is in the `\note{}` blocks of `slides.tex`, and nowhere else.
 separate script file** – editing the wording in two places is how you end up
 rehearsing a version that is no longer on screen.
 
-`slides-notes.pdf` is built with `show only notes`: 14 pages, each carrying a thumbnail
+`slides-notes.pdf` is built with `show only notes`: 15 pages, each carrying a thumbnail
 of its slide in the top right corner. It does not repeat the full-size slides; for
 those, print `slides.pdf`.
 
