@@ -147,24 +147,25 @@ We tested this on seventy events at nine reference angles.\par
 With cross-correlation and parabolic interpolation, the mean absolute error was zero point seven seven degrees.\par
 }
 \newpage
-\slidehead{7}{Feature extraction – cepstral coefficients}{5:20–5:50}{Part A -- full text}
+\slidehead{7}{Feature extraction – four cepstral representations}{5:20–5:55}{Part A -- full text}
 \thumb{10}
 {\Large\raggedright\sloppy\setlength{\parskip}{6pt}
 Now to the main part – classification.\par
-We compared four different cepstral feature extractors.\par
-They all use the same chain – framing, FFT, a filter bank, then a logarithm and a DCT.\par
-The main difference is the filter bank.\par
-Here you can see all four filter banks on the same frequency axis.\par
-}
-\newpage
-\slidehead{8}{Feature extraction – the four filter banks}{5:50–6:25}{Part A -- full text}
-\thumb{11}
-{\Large\raggedright\sloppy\setlength{\parskip}{6pt}
+We compared four cepstral feature extractors.\par
+They differ in the filter bank they use.\par
 MFCC uses the mel scale, with dense filters at low frequencies.\par
 It comes from speech processing, but it works for gunshots too.\par
 LFCC has linearly spaced filters, and IMFCC uses an inverted mel scale, dense at high frequencies.\par
 GTCC uses a gammatone filter bank, which is based on a model of human hearing.\par
 It's also reported to be more robust to noise than MFCC.\par
+}
+\newpage
+\slidehead{8}{Feature extraction – the processing chain}{5:55–6:25}{Part A -- full text}
+\thumb{11}
+{\Large\raggedright\sloppy\setlength{\parskip}{6pt}
+And this is how the features are computed.\par
+All four use the same chain – framing, FFT, the filter bank, then a logarithm and a DCT.\par
+The filter bank is the only place where they differ, and here you can see all four of them on the same frequency axis.\par
 }
 \newpage
 \slidehead{9}{Classification results – 9 mm class}{6:25–6:40}{Part A -- full text}
@@ -294,24 +295,25 @@ W t t o s e a n r a.\par
 W c-c a p i, t m a e w z p s s d.\par
 }
 \newpage
-\slidehead{7}{Feature extraction – cepstral coefficients}{5:20–5:50}{Part B -- first letters}
+\slidehead{7}{Feature extraction – four cepstral representations}{5:20–5:55}{Part B -- first letters}
 \thumb{10}
 {\large\ttfamily\raggedright\linespread{1.5}\selectfont\setlength{\parskip}{7pt}
 N t t m p – c.\par
-W c f d c f e.\par
-T a u t s c – f, FFT, a f b, t a l a a DCT.\par
-T m d i t f b.\par
-H y c s a f f b o t s f a.\par
-}
-\newpage
-\slidehead{8}{Feature extraction – the four filter banks}{5:50–6:25}{Part B -- first letters}
-\thumb{11}
-{\large\ttfamily\raggedright\linespread{1.5}\selectfont\setlength{\parskip}{7pt}
+W c f c f e.\par
+T d i t f b t u.\par
 MFCC u t m s, w d f a l f.\par
 I c f s p, b i w f g t.\par
 LFCC h l s f, a IMFCC u a i m s, d a h f.\par
 GTCC u a g f b, w i b o a m o h h.\par
 It's a r t b m r t n t MFCC.\par
+}
+\newpage
+\slidehead{8}{Feature extraction – the processing chain}{5:55–6:25}{Part B -- first letters}
+\thumb{11}
+{\large\ttfamily\raggedright\linespread{1.5}\selectfont\setlength{\parskip}{7pt}
+A t i h t f a c.\par
+A f u t s c – f, FFT, t f b, t a l a a DCT.\par
+T f b i t o p w t d, a h y c s a f o t o t s f a.\par
 }
 \newpage
 \slidehead{9}{Classification results – 9 mm class}{6:25–6:40}{Part B -- first letters}
@@ -411,20 +413,20 @@ T y.\par
 {\Large\raggedright\bfseries With cross-correlation and parabolic interpolation, the mean absolute error was zero point seven seven degrees.\par}
 \vspace{8mm}
 \newpage
-\slidehead{7}{Feature extraction – cepstral coefficients}{5:20–5:50}{Part C -- anchors only}
+\slidehead{7}{Feature extraction – four cepstral representations}{5:20–5:55}{Part C -- anchors only}
 \thumb{10}
 \vspace{4mm}{\Large\raggedright\bfseries Now to the main part – classification.\par}
 \vspace{6mm}{\color{ink!40}\Huge\ldots}\par
 \vfill
-{\Large\raggedright\bfseries Here you can see all four filter banks on the same frequency axis.\par}
+{\Large\raggedright\bfseries It's also reported to be more robust to noise than MFCC.\par}
 \vspace{8mm}
 \newpage
-\slidehead{8}{Feature extraction – the four filter banks}{5:50–6:25}{Part C -- anchors only}
+\slidehead{8}{Feature extraction – the processing chain}{5:55–6:25}{Part C -- anchors only}
 \thumb{11}
-\vspace{4mm}{\Large\raggedright\bfseries MFCC uses the mel scale, with dense filters at low frequencies.\par}
+\vspace{4mm}{\Large\raggedright\bfseries And this is how the features are computed.\par}
 \vspace{6mm}{\color{ink!40}\Huge\ldots}\par
 \vfill
-{\Large\raggedright\bfseries It's also reported to be more robust to noise than MFCC.\par}
+{\Large\raggedright\bfseries The filter bank is the only place where they differ, and here you can see all four of them on the same frequency axis.\par}
 \vspace{8mm}
 \newpage
 \slidehead{9}{Classification results – 9 mm class}{6:25–6:40}{Part C -- anchors only}

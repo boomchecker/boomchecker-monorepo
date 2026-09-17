@@ -92,13 +92,14 @@
   \textbf{MAE $0.77^\circ$}}
 
 \cue{5:20}{Features}{%
-  \say{Now to the main part -- classification. We compared four different cepstral feature
-  extractors.}
-  \bt same chain: framing, FFT, \textbf{filter bank}, log, DCT $|$ \textbf{main difference
-  $=$ the filter bank}, all four on the slide
-  \bt \textbf{\color{accent}NEXT} (5:50) MFCC mel, dense low (from speech; works for gunshots
-  too) $|$ LFCC linear $|$ IMFCC inverted mel, dense high $|$ \textbf{\color{accent}GTCC
-  gammatone}, model of human hearing, more noise-robust $|$ (grid $4\times3\times2$ is on the slide)}
+  \say{Now to the main part -- classification. We compared four cepstral feature
+  extractors. They differ in the filter bank they use.}
+  \bt MFCC mel, dense low (from speech; works for gunshots too) $|$ LFCC linear $|$ IMFCC
+  inverted mel, dense high $|$ \textbf{\color{accent}GTCC gammatone}, model of human hearing,
+  more noise-robust $|$ (grid $4\times3\times2$ is on the slide)
+  \bt \textbf{\color{accent}NEXT} (5:55) \say{And this is how the features are computed.}
+  same chain: framing, FFT, \textbf{filter bank}, log, DCT $|$ \textbf{filter bank $=$ the only
+  difference}, all four on the same frequency axis}
 
 \cue{6:25}{\color{accent}TABLE $\to$ CHART}{%
   \say{This is the full table of results for the nine-millimetre class.}

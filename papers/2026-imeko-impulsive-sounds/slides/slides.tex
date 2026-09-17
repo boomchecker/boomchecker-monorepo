@@ -272,41 +272,47 @@
 \section{System}
 
 \begin{frame}{Proposed system architecture}
+  \vspace{-2mm}
   \begin{center}
   \begin{tikzpicture}[
-      node distance=5mm,
-      sensor/.style={draw=ctublue,thick,rounded corners,fill=ctublue!8,
-                     minimum width=20mm,minimum height=8mm,font=\small},
+      node distance=4mm,
+      % each sensor node is the photo of the unit (ESP32 board, MEMS mic on each arm)
+      sensor/.style={inner sep=0pt,anchor=center},
+      sensorlbl/.style={font=\scriptsize\color{ink!70},anchor=north,inner sep=1pt},
       server/.style={draw=accent,very thick,rounded corners,fill=accent!8,
                      minimum width=30mm,minimum height=12mm,font=\small\bfseries},
       link/.style={-{Latex[length=2mm]},draw=gray,thick}
     ]
-    \node[sensor] (s1) {Sensor 1};
-    \node[sensor,below=of s1] (s2) {Sensor 2};
-    \node[sensor,below=of s2] (s3) {Sensor $N$};
-    \node[server,right=28mm of s2] (srv) {Remote server};
+    \node[sensor] (s1) {\includegraphics[width=34mm]{figs/system-wbg.png}};
+    \node[sensor,below=of s1] (s2) {\includegraphics[width=34mm]{figs/system-wbg.png}};
+    \node[sensor,below=of s2] (s3) {\includegraphics[width=34mm]{figs/system-wbg.png}};
+    \node[sensorlbl] at (s1.south) {Sensor 1};
+    \node[sensorlbl] at (s2.south) {Sensor 2};
+    \node[sensorlbl] at (s3.south) {Sensor $N$};
+    \node[server,right=22mm of s2] (srv) {Remote server};
 
-    \draw[link] (s1) -- (srv);
-    \draw[link] (s2) -- (srv);
-    \draw[link] (s3) -- (srv);
+    \draw[link] (s1.east) -- (srv);
+    \draw[link] (s2.east) -- (srv);
+    \draw[link] (s3.east) -- (srv);
 
-    \node[right=10mm of srv,align=left,font=\small] (out) {
+    \node[right=8mm of srv,align=left,font=\small] (out) {
       Event classification\\[2pt]
       2D localization\\(triangulation)};
     \draw[link] (srv) -- (out);
 
     \begin{scope}[on background layer]
       \node[fit=(s1)(s3),draw=gray!40,dashed,rounded corners,
-            inner sep=3mm,label={[font=\scriptsize\color{gray},yshift=1mm]below:stand-alone units}] {};
+            inner sep=2.5mm,label={[font=\scriptsize\color{gray},yshift=1mm]below:stand-alone
+            units -- ESP32, two MEMS microphones}] {};
     \end{scope}
   \end{tikzpicture}
   \end{center}
   \vspace{-2mm}
   \begin{itemize}\small
-    \item Each sensor continuously monitors its surroundings and transmits detected
-          signals to the server for advanced processing.
-    \item Multiple units give broader coverage and adaptability to environments.
-    \item Tested with various firearm calibers and ammunition.
+    \item Each unit monitors its surroundings continuously and sends detected events to
+          the server for processing.
+    \item Several units give wider coverage and the position of the source.
+    \item Tested with various firearm calibres and ammunition.
   \end{itemize}
       \note{
 \textbf{[3:30--4:20]}\par\medskip
@@ -363,7 +369,55 @@
 % ===========================================================================
 \section{Features}
 
-\begin{frame}{Feature extraction -- cepstral coefficients}
+\begin{frame}{Feature extraction -- four cepstral representations}
+  \hyphenpenalty=10000 \exhyphenpenalty=10000
+  \vfill
+  \centering
+  \begin{tikzpicture}[
+      card/.style={draw=ink!25,thick,rounded corners,fill=paper,anchor=north,
+                   text width=28mm,minimum height=38mm,align=center,inner sep=1.8mm,
+                   font=\small}
+    ]
+    \node[card] (c1) at (0,0) {%
+      \includegraphics[width=28mm]{figs/fb_mel.pdf}\\[2pt]
+      \textbf{MFCC} -- mel scale\\[2pt]
+      {\footnotesize\color{ink!70}dense at low frequencies; speech-born,
+       validated on gunshots at military ranges}};
+    \node[card,anchor=north west] at ($(c1.north east)+(3.5mm,0)$) (c2) {%
+      \includegraphics[width=28mm]{figs/fb_lin.pdf}\\[2pt]
+      \textbf{LFCC} -- linear\\[2pt]
+      {\footnotesize\color{ink!70}equally spaced filters, uniform resolution across
+       the band}};
+    \node[card,anchor=north west] at ($(c2.north east)+(3.5mm,0)$) (c3) {%
+      \includegraphics[width=28mm]{figs/fb_imel.pdf}\\[2pt]
+      \textbf{IMFCC} -- inverted mel\\[2pt]
+      {\footnotesize\color{ink!70}mirror of the mel scale: dense at high
+       frequencies}};
+    \node[card,anchor=north west,draw=accent] at ($(c3.north east)+(3.5mm,0)$) (c4) {%
+      \includegraphics[width=28mm]{figs/fb_gtcc.pdf}\\[2pt]
+      \gtcc{GTCC} -- gammatone\\[2pt]
+      {\footnotesize\color{ink!70}auditory model, ERB spacing;
+       \textbf{reported more noise-robust than MFCC}}};
+  \end{tikzpicture}
+  \par\vspace{3mm}
+  {\scriptsize\color{ink!70} Experimental grid: 4 extractors $\times$ 3 frame lengths
+   (15 / 30 / 50\,ms) $\times$ 2 classifiers (NN, SVM).}
+  \vfill
+      \note{
+\textbf{[5:20--5:55]}\par\medskip
+    Now to the main part -- classification. //\par\medskip
+    We compared four cepstral feature extractors. // They differ in the filter bank
+    they use. //\par\medskip
+    MFCC uses the mel scale, with dense filters at low frequencies. // It comes from
+    speech processing, but it works for gunshots too. //\par\medskip
+    LFCC has linearly spaced filters, and IMFCC uses an inverted mel scale, dense at
+    high frequencies. //\par\medskip
+    GTCC uses a gammatone filter bank, which is based on a model of human hearing. //
+    It's also reported to be more robust to noise than MFCC. //
+  }
+\end{frame}
+
+\begin{frame}{Feature extraction -- the processing chain}
   % The pipeline of Fig. 1 in the abstract, turned horizontal and scaled to the
   % whole slide, with the real filter banks in place of a generic block.
   \vfill
@@ -416,57 +470,11 @@
   \end{tikzpicture}
   \vfill
       \note{
-\textbf{[5:20--5:50]}\par\medskip
-    Now to the main part -- classification. //\par\medskip
-    We compared four different cepstral feature extractors. // They all use the same
-    chain -- framing, FFT, a filter bank, then a logarithm and a DCT. //\par\medskip
-    The main difference is the filter bank. // Here you can see all four filter banks on
-    the same frequency axis. //
-  }
-\end{frame}
-
-\begin{frame}{Feature extraction -- the four filter banks}
-  \hyphenpenalty=10000 \exhyphenpenalty=10000
-  \vfill
-  \centering
-  \begin{tikzpicture}[
-      card/.style={draw=ink!25,thick,rounded corners,fill=paper,anchor=north,
-                   text width=28mm,minimum height=38mm,align=center,inner sep=1.8mm,
-                   font=\small}
-    ]
-    \node[card] (c1) at (0,0) {%
-      \includegraphics[width=28mm]{figs/fb_mel.pdf}\\[2pt]
-      \textbf{MFCC} -- mel scale\\[2pt]
-      {\footnotesize\color{ink!70}dense at low frequencies; speech-born,
-       validated on gunshots at military ranges}};
-    \node[card,anchor=north west] at ($(c1.north east)+(3.5mm,0)$) (c2) {%
-      \includegraphics[width=28mm]{figs/fb_lin.pdf}\\[2pt]
-      \textbf{LFCC} -- linear\\[2pt]
-      {\footnotesize\color{ink!70}equally spaced filters, uniform resolution across
-       the band}};
-    \node[card,anchor=north west] at ($(c2.north east)+(3.5mm,0)$) (c3) {%
-      \includegraphics[width=28mm]{figs/fb_imel.pdf}\\[2pt]
-      \textbf{IMFCC} -- inverted mel\\[2pt]
-      {\footnotesize\color{ink!70}mirror of the mel scale: dense at high
-       frequencies}};
-    \node[card,anchor=north west,draw=accent] at ($(c3.north east)+(3.5mm,0)$) (c4) {%
-      \includegraphics[width=28mm]{figs/fb_gtcc.pdf}\\[2pt]
-      \gtcc{GTCC} -- gammatone\\[2pt]
-      {\footnotesize\color{ink!70}auditory model, ERB spacing;
-       \textbf{reported more noise-robust than MFCC}}};
-  \end{tikzpicture}
-  \par\vspace{3mm}
-  {\scriptsize\color{ink!70} Experimental grid: 4 extractors $\times$ 3 frame lengths
-   (15 / 30 / 50\,ms) $\times$ 2 classifiers (NN, SVM).}
-  \vfill
-      \note{
-\textbf{[5:50--6:25]}\par\medskip
-    MFCC uses the mel scale, with dense filters at low frequencies. // It comes from
-    speech processing, but it works for gunshots too. //\par\medskip
-    LFCC has linearly spaced filters, and IMFCC uses an inverted mel scale, dense at
-    high frequencies. //\par\medskip
-    GTCC uses a gammatone filter bank, which is based on a model of human hearing. //
-    It's also reported to be more robust to noise than MFCC. //
+\textbf{[5:55--6:25]}\par\medskip
+    And this is how the features are computed. //\par\medskip
+    All four use the same chain -- framing, FFT, the filter bank, then a logarithm and
+    a DCT. // The filter bank is the only place where they differ, and here you can see
+    all four of them on the same frequency axis. //
   }
 \end{frame}
 
