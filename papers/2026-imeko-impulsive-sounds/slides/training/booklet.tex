@@ -166,6 +166,8 @@ It's also reported to be more robust to noise than MFCC.\par
 And this is how the features are computed.\par
 All four use the same chain – framing, FFT, the filter bank, then a logarithm and a DCT.\par
 The filter bank is the only place where they differ, and here you can see all four of them on the same frequency axis.\par
+The coefficients then go to a classifier.\par
+We tested two – a neural network and a support vector machine – with three frame lengths, fifteen, thirty and fifty milliseconds.\par
 }
 \newpage
 \slidehead{9}{Classification results – 9 mm class}{6:25–6:40}{Part A -- full text}
@@ -314,6 +316,8 @@ It's a r t b m r t n t MFCC.\par
 A t i h t f a c.\par
 A f u t s c – f, FFT, t f b, t a l a a DCT.\par
 T f b i t o p w t d, a h y c s a f o t o t s f a.\par
+T c t g t a c.\par
+W t t – a n n a a s v m – w t f l, f, t a f m.\par
 }
 \newpage
 \slidehead{9}{Classification results – 9 mm class}{6:25–6:40}{Part B -- first letters}
@@ -426,7 +430,7 @@ T y.\par
 \vspace{4mm}{\Large\raggedright\bfseries And this is how the features are computed.\par}
 \vspace{6mm}{\color{ink!40}\Huge\ldots}\par
 \vfill
-{\Large\raggedright\bfseries The filter bank is the only place where they differ, and here you can see all four of them on the same frequency axis.\par}
+{\Large\raggedright\bfseries We tested two – a neural network and a support vector machine – with three frame lengths, fifteen, thirty and fifty milliseconds.\par}
 \vspace{8mm}
 \newpage
 \slidehead{9}{Classification results – 9 mm class}{6:25–6:40}{Part C -- anchors only}

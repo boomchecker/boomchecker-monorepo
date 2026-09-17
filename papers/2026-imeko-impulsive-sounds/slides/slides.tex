@@ -424,9 +424,9 @@
   \centering
   \begin{tikzpicture}[
       blk/.style={draw=ctublue,thick,rounded corners,fill=ctublue!8,
-                  minimum height=8.5mm,minimum width=12mm,font=\small,align=center},
+                  minimum height=8.5mm,minimum width=10mm,font=\small,align=center},
       outbox/.style={draw=ctublue,thick,rounded corners,fill=ctublue!8,
-                  minimum height=8.5mm,minimum width=14mm,font=\small\bfseries},
+                  minimum height=8.5mm,minimum width=12.5mm,font=\small\bfseries},
       bank/.style={inner sep=0pt,anchor=center},
       banklbl/.style={font=\scriptsize\color{ink!80},anchor=north,inner sep=1pt},
       ar/.style={-{Latex[length=1.8mm]},draw=gray,semithick},
@@ -434,15 +434,15 @@
     ]
     % ---- shared front end ---------------------------------------------------
     % waveform glyph
-    \node[draw=ink!25,thick,rounded corners,fill=paper,minimum width=14mm,minimum height=8mm] (sig) {};
+    \node[draw=ink!25,thick,rounded corners,fill=paper,minimum width=12mm,minimum height=8mm] (sig) {};
     \begin{scope}[shift={(sig.center)},x=1mm,y=1mm]
       \foreach \x/\h in {-5.5/0.6,-5/1.0,-4.5/1.4,-4/2.6,-3.5/1.6,-3/0.9,-2.5/1.3,-2/0.7,
                          -1.5/0.5,-1/0.4,-0.5/0.6,0/0.5,0.5/0.4,1/0.3,1.5/0.5,2/1.9,
                          2.5/1.1,3/0.6,3.5/0.8,4/0.5,4.5/0.4,5/0.3,5.5/0.2}
         \draw[ctublue,line width=0.5pt,line cap=round] (\x,-\h) -- (\x,\h);
     \end{scope}
-    \node[blk,right=4mm of sig,text width=15mm] (fr) {Framing\\the signal};
-    \node[blk,right=4mm of fr] (fft) {FFT};
+    \node[blk,right=2.5mm of sig,text width=15.5mm] (fr) {Framing\\the signal};
+    \node[blk,right=3mm of fr] (fft) {FFT};
     \draw[ar] (sig) -- (fr);
     \draw[ar] (fr) -- (fft);
 
@@ -454,12 +454,12 @@
         3/fb_imel/inverted mel/log/IMFCC/ctublue,
         4/fb_gtcc/gammatone (ERB)/power/GTCC/accent}{
       \coordinate (row\i) at ($(busx)+(0,{(2.5-\i)*13mm})$);
-      \node[bank] (bank\i) at ($(row\i)+(21mm,0)$)
-        {\includegraphics[width=30mm]{figs/\file.pdf}};
+      \node[bank] (bank\i) at ($(row\i)+(16mm,0)$)
+        {\includegraphics[width=25mm]{figs/\file.pdf}};
       \node[banklbl] at (bank\i.south) {\lbl};
-      \node[blk,right=3mm of bank\i] (post\i) {\post};
-      \node[blk,right=3mm of post\i] (dct\i) {DCT};
-      \node[outbox,right=3mm of dct\i,draw=\col,fill=\col!8,text=\col] (out\i) {\name};
+      \node[blk,right=2.5mm of bank\i] (post\i) {\post};
+      \node[blk,right=2.5mm of post\i] (dct\i) {DCT};
+      \node[outbox,right=2.5mm of dct\i,draw=\col,fill=\col!8,text=\col] (out\i) {\name};
       \draw[ar] (row\i) -- (bank\i.west);
       \draw[ar] (bank\i.east) -- (post\i);
       \draw[ar] (post\i) -- (dct\i);
@@ -467,6 +467,16 @@
     }
     \draw[bus] (fft.east) -- (busx);
     \draw[bus] (row1) -- (row4);
+    % the coefficients go to one of two classifiers
+    \coordinate (outx) at ($(out1.east)+(3mm,0)$);
+    \draw[bus] (out1.east |- row1) -- (outx |- row1);
+    \draw[bus] (outx |- row1) -- (outx |- row4);
+    \foreach \i in {2,3,4} \draw[bus] (out\i.east) -- (outx |- row\i);
+    \coordinate (outmid) at ($(outx |- row1)!0.5!(outx |- row4)$);
+    \node[draw=ink!45,thick,rounded corners,fill=paper,align=center,font=\small,
+          minimum height=14mm,text width=13mm,anchor=west] (clf) at ($(outmid)+(2.5mm,0)$)
+          {Classifier\\[2pt]{\footnotesize NN\\SVM}};
+    \draw[ar] (outmid) -- (clf.west);
   \end{tikzpicture}
   \vfill
       \note{
@@ -474,7 +484,10 @@
     And this is how the features are computed. //\par\medskip
     All four use the same chain -- framing, FFT, the filter bank, then a logarithm and
     a DCT. // The filter bank is the only place where they differ, and here you can see
-    all four of them on the same frequency axis. //
+    all four of them on the same frequency axis. //\par\medskip
+    The coefficients then go to a classifier. // We tested two -- a neural network and a
+    support vector machine -- with three frame lengths, fifteen, thirty and fifty
+    milliseconds. //
   }
 \end{frame}
 
