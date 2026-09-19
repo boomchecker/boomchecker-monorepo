@@ -1,0 +1,22 @@
+# Evidence / Experiment Plan Memory
+
+## Status
+- `confirmed`: No experiments have been run for this paper yet; this file tracks what exists already vs. what needs to be produced.
+- `confirmed`: The simulation results of the internal report (SISO 24.5 dB, sum-first 6.7 dB, MISO 4x4 21.3 dB) are not in the paper. The paper reports the real-drone measurement only.
+
+## Existing Assets to Reuse or Extend
+- `confirmed`: `projects/2026-maxam-fxlms-filter/csrc/` — fixed-point (Q15) FxLMS C core (SISO, sum-first, MISO configurations), with C unit tests.
+- `confirmed`: `projects/2026-maxam-fxlms-filter/python/lms_demo.py` — Python harness building a synthetic drone-reference + primary-path + optional wanted-signal scenario, producing WAVs/plots/`metrics.json` (attenuation in dB, tail MSE).
+- `confirmed`: `projects/2026-maxam-fxlms-filter/drone-spectrum/` — DADS dataset spectral analysis (average PSD for drone vs. non-drone recordings), already used to justify BPF-band focus for ANC.
+- `confirmed`: `projects/2026-maxam-fxlms-filter/report/main.tex` — earlier Czech-language internal report describing the FxLMS ANC demo (MISO 4x4 achieved 21.3 dB attenuation vs. 6.7 dB for sum-first vs. 24.5 dB for single-motor SISO in that internal report — needs re-verification, not yet English/paper-ready, and uses a synthetic/simulated acoustic path only).
+- `confirmed`: `papers/2026-bec-conference/` over `projects/2026-zelinjak-artillery-detection/` — impulsive artillery-event classifier (MFCC + compact CNN), robustness-to-noise evaluation, and ESP32-S3 TFLite Micro deployment; candidate downstream detector for a "noise suppression improves detection" story.
+
+## Gaps to Close
+- `confirmed`: Current FxLMS results use a simulated/synthetic secondary acoustic path, not measured on real hardware. A real measurement campaign is required and is the blocking item for the paper; it is unfinished.
+- `to-verify`: Measurement campaign details (rig, drone, microphone placement, reference signal source, environment, event source) are not recorded here yet.
+- `to-verify`: No end-to-end evaluation yet connecting FxLMS-suppressed audio to actual impulsive-event detection metrics (accuracy/F1 before vs. after suppression) — this is likely the key new experiment for this paper.
+- `to-verify`: Need a clear noise-suppression evaluation protocol (attenuation vs. SNR sweep, multiple noise references/actuator counts) with reproducible metrics for a paper table.
+- `to-verify`: Decide on embedded/real-time feasibility claims (would reuse the fixed-point C core and possibly report cycle counts/latency on a target MCU).
+
+## Transfer Requirements
+- `to-verify`: Any numeric claim carried over from the internal Czech report (`projects/2026-maxam-fxlms-filter/report/main.tex`) must be re-verified/re-run before being cited in the English paper.

@@ -9,3 +9,7 @@ includes:
     taskfile: ./2026-imeko-impulsive-sounds/Taskfile.yml
     dir: ./2026-imeko-impulsive-sounds
     optional: true
+  dronenoise:
+    taskfile: ./2027-wip-drone-noise-suppression/Taskfile.yml
+    dir: ./2027-wip-drone-noise-suppression
+    optional: true
