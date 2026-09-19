@@ -21,6 +21,10 @@ includes:
     taskfile: ./scripts/Taskfile.yml
     dir: ./scripts
     optional: true
+  papers:
+    taskfile: ./papers/Taskfile.yml
+    dir: ./papers
+    optional: true
 
 tasks:
   setup:

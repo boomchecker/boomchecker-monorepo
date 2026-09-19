@@ -1,0 +1,19 @@
+# LaTeX auxiliary files
+*.aux
+*.log
+*.out
+*.nav
+*.snm
+*.toc
+*.vrb
+*.bbl
+*.blg
+*.synctex.gz
+
+# Reference literature kept locally for writing the talk -- not ours to redistribute,
+# and 13 MB of it. The slides do not depend on these files; only the extracted
+# figures under slides/figs/ are tracked.
+slides/AI-Based_Acoustic_Surveillance_System_for_Smart_Cities.pdf
+slides/F3-DP-2023-Jabali-Michel-jabaliDP.pdf
+slides/Svatos_2024_Meas._Sci._Technol._35_076122.pdf
+slides/prezentace_konference.pdf

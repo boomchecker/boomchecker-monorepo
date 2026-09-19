@@ -1,0 +1,11 @@
+version: "3"
+
+includes:
+  bec26:
+    taskfile: ./2026-bec-conference/Taskfile.yml
+    dir: ./2026-bec-conference
+    optional: true
+  imeko26:
+    taskfile: ./2026-imeko-impulsive-sounds/Taskfile.yml
+    dir: ./2026-imeko-impulsive-sounds
+    optional: true
