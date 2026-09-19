@@ -1,0 +1,54 @@
+version: '3'
+
+vars:
+  PYTHON: python
+  ANALYSIS_DIR: src/analysis
+  DATA_DIR: data
+  MODEL_DIR: models
+
+tasks:
+  setup:
+    desc: Nainstaluje potřebné Python závislosti
+    cmds:
+      - "{{.PYTHON}} -m pip install pandas numpy scikit-learn joblib librosa soundfile setuptools<70 pyarrow"
+
+  inspect:
+    desc: Prozkoumá strukturu parquet souborů a extrahuje ukázky
+    cmds:
+      - "{{.PYTHON}} {{.ANALYSIS_DIR}}/inspect_parquet.py"
+
+  train:
+    desc: Natrénuje SVM model na dostupných datech
+    cmds:
+      - "{{.PYTHON}} {{.ANALYSIS_DIR}}/train_svm.py"
+
+  validate:
+    desc: Validuje natrénovaný model na novém souboru (train-00036)
+    cmds:
+      - "{{.PYTHON}} {{.ANALYSIS_DIR}}/validate_on_new_data.py"
+
+  export:
+    desc: Exportuje natrénovaný model do C hlavičkového souboru
+    cmds:
+      - "{{.PYTHON}} {{.ANALYSIS_DIR}}/export_model.py"
+
+  download-cmsis:
+    desc: Stáhne CMSIS-DSP knihovnu z GitHubu
+    cmds:
+      - "{{.PYTHON}} {{.ANALYSIS_DIR}}/download_cmsis.py"
+
+  gen-parity:
+    desc: Generuje testovací data pro ověření parity MFCC mezi Pythonem a C
+    cmds:
+      - "{{.PYTHON}} {{.ANALYSIS_DIR}}/generate_parity_test.py"
+
+  check-parity:
+    desc: Ověří paritu MFCC příznaků (pro budoucí použití)
+    cmds:
+      - "{{.PYTHON}} {{.ANALYSIS_DIR}}/validate_drone_data.py"
+
+  clean:
+    desc: Vymaže dočasná data a vzorky
+    cmds:
+      - powershell -Command "if (Test-Path {{.DATA_DIR}}/samples) { Remove-Item -Recurse -Force {{.DATA_DIR}}/samples }"
+      - powershell -Command "if (Test-Path {{.MODEL_DIR}}/*.pkl) { Remove-Item {{.MODEL_DIR}}/*.pkl }"
