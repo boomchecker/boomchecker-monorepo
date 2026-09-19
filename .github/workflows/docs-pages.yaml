@@ -13,6 +13,9 @@ on:
       # mkdoxy's input (see mkdocs.yml's `src-dirs`): a C comment here is part of
       # the rendered docs, so it can break the --strict build too.
       - 'scripts/median-filter/csrc/**'
+      # Snippet source pulled into docs/scripts/lms-filter.md by
+      # pymdownx.snippets: moving or deleting it fails the --strict build.
+      - 'projects/2026-maxam-fxlms-filter/README.md'
       - '.github/workflows/docs-pages.yaml'
   workflow_dispatch:
 

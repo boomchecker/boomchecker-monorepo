@@ -1,4 +1,4 @@
 !!! note "Source of truth"
-    This page is included from `scripts/lms-filter/README.md`. Edit it there.
+    This page is included from `projects/2026-maxam-fxlms-filter/README.md`. Edit it there.
 
---8<-- "scripts/lms-filter/README.md"
+--8<-- "projects/2026-maxam-fxlms-filter/README.md"

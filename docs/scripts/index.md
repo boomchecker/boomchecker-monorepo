@@ -6,7 +6,7 @@ the **`sw-devcontainer`**; most have a `task setup` that creates a Python virtua
 | Tool | Language | Purpose |
 | ---- | -------- | ------- |
 | **median-filter** | C core + Python harness | Median-based impulse [peak detector](peak-detector.md). C API: [reference](../peak_detector/links.md). |
-| **lms-filter** | C core + Python | Fixed-point [FxLMS](lms-filter.md) active-noise-control demo (SISO + multichannel). |
+| **2026-maxam-fxlms-filter** | C core + Python | Fixed-point [FxLMS](lms-filter.md) active-noise-control demo (SISO + multichannel). Lives in `projects/`, not `scripts/`. |
 | **tdoa_estimation** | Python | [TDOA / Angle-of-Arrival](tdoa.md) analysis (cross-correlation, parabolic interpolation, phase delay). |
 
 ## Running a script
