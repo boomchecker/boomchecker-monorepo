@@ -1,9 +1,9 @@
 # Writing Plan Memory
 
 ## Drafting Strategy
-- `confirmed`: Use `article/article_main.tex` (currently a section skeleton) as scaffold.
+- `confirmed`: Conference paper, 5 pages max. `article/article_main.tex` holds the background (Sections I to IV: intro, multirotor propulsion and ESCs, noise sources, motor-derived references, FxLMS, evaluation methodology), about 2.5 pages, condensed from `projects/2026-maxam-fxlms-filter/report/main.tex` and `motory-pruzkum.md`. The background must stay within 3 pages; Results and Conclusion are empty placeholders for the real-drone measurement.
 - `to-verify`: Target length depends on the venue's page limit (see `submission_guidelines.md`), unknown until a venue is picked; assume something tighter than BEC's 4-6 pages and keep the story tight from the start.
-- `confirmed`: Reuse the FxLMS/ANC framing and DADS spectral-analysis material already written (in Czech) in `scripts/lms-filter/report/main.tex` as source material, but rewrite in English and re-verify all numbers.
+- `confirmed`: The simulation results of the Czech report (SISO 24.5 dB, sum-first 6.7 dB, MISO 4x4 21.3 dB) are not in the paper at all, not even commented out. The paper's claims come from the real-drone measurement. Do not bring them back without asking.
 - `to-verify`: Decide narrative shape with the user: (a) pure ANC/noise-suppression paper evaluated by attenuation metrics only, vs. (b) two-stage paper connecting suppression to downstream impulsive-event detection performance (reusing the `papers/2026-bec-conference/` classifier). Option (b) is more novel but needs the new end-to-end experiment noted in `experiment_plan.md`.
 
 ## Section-Level Build Order (draft)

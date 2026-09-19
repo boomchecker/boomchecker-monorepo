@@ -7,7 +7,7 @@ look up what we published and where its sources live.
 |---|---|---|---|---|---|
 | 2026 | BEC 2026 (paper 53) | Artillery Launch Detection | Zelinjak, Maxa | published | [`2026-bec-conference/`](2026-bec-conference/) |
 | 2026 | IMEKO *(exact venue to be confirmed)* | Acoustic-Based Detection, Classification, and Localization of Impulsive Sounds | Svatoš, Maxa | presented 2026-09-16 | [`2026-imeko-impulsive-sounds/`](2026-imeko-impulsive-sounds/) |
-| *TBD* | *not chosen yet* | Drone Ego-Noise Suppression for Impulsive Event Detection | Maxa | scaffold; waiting on the measurement campaign | [`wip-drone-noise-suppression/`](wip-drone-noise-suppression/) |
+| 2027 (planned) | *not chosen yet* | Drone Ego-Noise Suppression for Impulsive Event Detection | Maxa | scaffold; waiting on the measurement campaign | [`2027-wip-drone-noise-suppression/`](2027-wip-drone-noise-suppression/) |
 
 ## Where a new contribution goes
 

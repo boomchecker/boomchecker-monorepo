@@ -10,3 +10,6 @@
 # Build output. The skeleton PDF carries no content worth reviewing in git;
 # track it (like papers/2026-bec-conference/) once there is a real draft.
 article/article_main.pdf
+
+# TikZ block diagram built from its .tex source by `task figures`.
+article/figs/fxlms_schema.pdf
