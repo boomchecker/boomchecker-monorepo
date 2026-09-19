@@ -1,0 +1,21 @@
+menu "Gunshot classifier data link"
+
+    config APP_DATA_LINK_USB_SERIAL_JTAG
+        bool "Use native USB-Serial/JTAG for MFCC data link instead of UART0"
+        default n
+        help
+            This board exposes two USB-C ports: one wired to the native
+            USB-Serial/JTAG peripheral (used by esptool for flashing/monitor),
+            and one wired to UART0 through a discrete USB-to-UART bridge chip.
+
+            By default (n), the classifier data link (init_uart / the receive
+            loop in main.cpp) uses the physical UART0 pins, matching the
+            original wiring for a real deployment where a host talks to the
+            board over that dedicated UART port.
+
+            Enable this (y) to instead exchange MFCC data over the same native
+            USB-Serial/JTAG port already used for flashing - convenient when
+            only that port is connected (e.g. no separate UART-to-USB adapter
+            wired up), such as during PC-vs-ESP32 validation.
+
+endmenu

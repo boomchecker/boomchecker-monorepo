@@ -1,0 +1,6 @@
+out/
+*.png
+*.json
+.mplconfig/
+.env
+*.pkl

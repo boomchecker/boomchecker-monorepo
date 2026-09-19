@@ -1,0 +1,131 @@
+name: Test BoomLink Protocol Build
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.gitmodules'
+      # A nanopb submodule version bump changes this gitlink, not
+      # .gitmodules (which only changes on a url/path edit) - without this,
+      # the only CI that actually runs generated encode/decode logic
+      # wouldn't notice a nanopb update that changes decode behaviour (e.g.
+      # bounds handling, unknown-field skipping).
+      - 'fw/bom-stm32node/third_party/nanopb'
+      - 'fw/common/boomlink/**'
+      - '.github/workflows/test-boomlink-protocol-build.yaml'
+
+permissions:
+  contents: read
+
+jobs:
+  # A separate job rather than a step in test-build: ruff needs nothing the
+  # cmake steps produce, and nothing they produce needs ruff. As a step it
+  # had to either run last (so a style nit waits behind a full
+  # configure+build+ctest) or first (so a style nit SUPPRESSES all C build
+  # and test feedback for that push) - as its own job neither blocks the
+  # other, both results land on the same push, and wall-clock is lower than
+  # either ordering.
+  lint:
+    name: Lint (ruff)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          # No submodules: ruff only reads fw/common/boomlink/{tests,linkframe}.
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: fw/common/boomlink/requirements.txt
+
+      - name: Install Python dependencies
+        working-directory: ./fw/common/boomlink
+        run: pip install --quiet -r requirements.txt
+
+      - name: Lint
+        working-directory: ./fw/common/boomlink
+        # ruff is configured (pyproject.toml) and available via `task lint`
+        # for local use, but nothing previously ran it in CI - so it could
+        # only ever catch a style issue if a developer remembered to run it
+        # by hand. Matches `task lint` exactly.
+        run: ruff check tests linkframe
+
+  test-build:
+    name: Build and test (host, Debug)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          # This job only reads the checkout to configure/build/test; it
+          # never needs authenticated git access afterwards.
+          persist-credentials: false
+
+      - name: Install Ninja
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: fw/common/boomlink/requirements.txt
+
+      - name: Install Python dependencies
+        working-directory: ./fw/common/boomlink
+        run: pip install --quiet -r requirements.txt
+
+      - name: Register GCC problem matcher
+        # Without this, a compiler warning is neither a failure nor an
+        # annotation - just text buried in a log nobody opens. That matters
+        # because -Werror deliberately does NOT cover the four generated
+        # *.pb.c (they are machine output from a vendored generator, so a
+        # submodule bump should not hard-fail the build), and the claim that
+        # warnings there are "still visible" is only true if something
+        # surfaces them. This makes them PR annotations.
+        run: echo "::add-matcher::.github/problem-matchers/gcc.json"
+
+      - name: Configure
+        working-directory: ./fw/common/boomlink
+        run: cmake --preset Debug
+
+      - name: Build
+        working-directory: ./fw/common/boomlink
+        run: cmake --build --preset Debug
+
+      - name: Test
+        working-directory: ./fw/common/boomlink
+        run: ctest --preset Debug --output-on-failure
+
+      # The Nanopb-free boundary (boomlink.md section 9) is verified by the
+      # `boomlink_no_nanopb_dependency` CTest test, which the Test step above
+      # already runs - deliberately not by a bespoke step here. A boundary
+      # checked only in CI gives a developer no signal until after they push,
+      # and an earlier version of exactly that step failed OPEN: `if nm <file> |
+      # grep ...` reports success when nm cannot read the file, because `set -e`
+      # is suspended inside an `if` condition and pipefail returns grep's benign
+      # "no match". See tests/check_no_nanopb.sh.
+
+      - name: Build summary
+        run: |
+          echo "### ✅ Build and tests successful!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- Nanopb code generated from fw/common/boomlink/proto/*.proto ✓" >> $GITHUB_STEP_SUMMARY
+          echo "- boomlink_protocol (host-native) built ✓" >> $GITHUB_STEP_SUMMARY
+          echo "- boomlink_linkframe built, verified free of Nanopb symbols ✓" >> $GITHUB_STEP_SUMMARY
+          echo "- the encoder's compile-time output bound verified from both C and C++ (an undersized caller buffer must be rejected, for the right reason, at more than one optimization level) ✓" >> $GITHUB_STEP_SUMMARY
+          echo "- the link frame encoder's output bound verified for C++ callers, both directions ✓" >> $GITHUB_STEP_SUMMARY
+          echo "- C self-test + Python cross-language/compatibility suite passed ✓" >> $GITHUB_STEP_SUMMARY
+          echo "- built with AddressSanitizer + UndefinedBehaviorSanitizer (BOOMLINK_SANITIZE, on by default for the Debug preset) ✓" >> $GITHUB_STEP_SUMMARY
+          echo "- warnings are errors in the hand-written sources (BOOMLINK_WERROR, on by default for the Debug preset); the generated *.pb.c build with -Wall -Wextra and surface as annotations ✓" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "ruff lint runs as its own job (see the Lint check on this run)." >> $GITHUB_STEP_SUMMARY

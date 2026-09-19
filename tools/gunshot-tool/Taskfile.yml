@@ -1,0 +1,40 @@
+version: "3"
+
+vars:
+  PYTHON: '{{if eq OS "windows"}}venv/Scripts/python{{else}}venv/bin/python3{{end}}'
+  PIP: '{{if eq OS "windows"}}venv/Scripts/pip{{else}}venv/bin/pip3{{end}}'
+
+tasks:
+  default:
+    desc: Show available tasks
+    cmds:
+      - task --list
+
+  venv:
+    desc: Create Python virtual environment
+    cmds:
+      - python3 -m venv venv
+    status:
+      - '{{.PYTHON}} --version'
+
+  system-deps:
+    desc: Install system tkinter package (needed for the Browse file/folder dialogs, e.g. on WSL)
+    platforms: [linux]
+    cmds:
+      - sudo apt-get install -y python3-tk
+    status:
+      - python3 -c "import tkinter"
+
+  install:
+    desc: Install dependencies into venv
+    deps: [venv, system-deps]
+    cmds:
+      - '{{.PIP}} install -r requirements.txt'
+    sources:
+      - requirements.txt
+
+  run:
+    desc: Create venv, install deps and run the Streamlit app
+    deps: [install]
+    cmds:
+      - '{{.PYTHON}} -m streamlit run app.py'

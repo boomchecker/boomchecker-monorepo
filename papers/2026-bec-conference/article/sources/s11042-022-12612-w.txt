@@ -1,0 +1,1316 @@
+Multimedia Tools and Applications (2022) 81:30387–30412
+https://doi.org/10.1007/s11042-022-12612-w
+
+
+
+
+Sound of guns: digital forensics of gun audio samples
+meets artiﬁcial intelligence
+
+Simone Raponi1           · Gabriele Oligeri1 · Isra Mohamed Ali1
+
+Received: 31 January 2021 / Revised: 11 January 2022 / Accepted: 9 February 2022 /
+Published online: 6 April 2022
+© The Author(s) 2022
+
+Abstract
+Classifying a weapon based on its muzzle blast is a challenging task that has significant
+applications in various security and military fields. Most of the existing works rely on ad-
+hoc deployment of spatially diverse microphone sensors to capture multiple replicas of the
+same gunshot, which enables accurate detection and identification of the acoustic source.
+However, carefully controlled setups are difficult to obtain in scenarios such as crime scene
+forensics, making the aforementioned techniques inapplicable and impractical. We intro-
+duce a novel technique that requires zero knowledge about the recording setup and is
+completely agnostic to the relative positions of both the microphone and shooter. Our solu-
+tion can identify the category, caliber, and model of the gun, reaching over 90% accuracy
+on a dataset composed of 3655 samples that are extracted from YouTube videos. Our results
+demonstrate the effectiveness and efficiency of applying Convolutional Neural Network
+(CNN) in gunshot classification eliminating the need for an ad-hoc setup while significantly
+improving the classification performance.
+
+Keywords Multimedia Forensics · AI-driven Forensics · Gun Audio Sample
+Classification · Convolutional Neural Network
+
+
+1 Introduction
+
+Gunshot analysis have received significant attention from both the military and scientific
+communities. Acoustic analysis of gunshots can provide useful information, such as the
+
+
+ Simone Raponi
+    sraponi@hbku.edu.qa
+
+    Gabriele Oligeri
+    goligeri@hbku.edu.qa
+
+    Isra Mohamed Ali
+    isali@hbku.edu.qa
+
+
+1   Division of Information and Computing Technology, College of Science and Engineering,
+    Hamad Bin Khalifa University, Doha, Qatar
+30388                                         Multimedia Tools and Applications (2022) 81:30387–30412
+
+
+position of the shooter, the projectile trajectory, the caliber of the gun, and the gun model.
+Although acoustical evidence may significantly contribute to audio forensic reconstruction
+and analysis, the forensic analysis of gunshots is characterized by many challenges due to
+the broadcast and noisy nature of the acoustic channel.
+   Consider a scenario where a microphone is deployed in a close neighborhood to the
+shooter. The recorded audio sample can be significantly affected by the environmental
+surroundings, such as trees, foliage, and buildings, which attenuate and reflect the main
+component of the shock wave. The resulting audio sample may feature different echoes of
+the gunshot that are characterized by different attenuation factors as a function of their paths.
+This naive approach is impractical, which motivated the development of more complex
+ad-hoc acoustic data acquisition strategies over the last decade.
+   To mitigate echoes and overcome the intrinsic lack of information, that the aforemen-
+tioned scenario suffers from, additional microphones are deployed. The comparison of
+multiple replicas of the same gunshot enables shooter localization and weapon identifi-
+cation. The physical characteristics of acoustic propagation can be exploited to infer the
+position of the shooter and the category of the gun. Multiple spatially diverse acoustic
+sources enable the estimation of Time of Arrival (ToA), Time of Arrival (ToA), and Time
+Difference of Arrival (TDoA). The obtained recordings can be modeled by geometrical
+acoustics that enable the localization of the shooter. Furthermore, multiple replicas of the
+same acoustic source allow to filter out echoes and background noise affecting a subset
+of the deployed microphones, thus enabling a deep characterization for both the time and
+frequency domains.
+   Acoustic acquisition via Wireless Sensor Network (WSN) requires a specialized infras-
+tructure overlay to enable sensor communication, data processing, and computation distri-
+bution. Solutions that rely on the spatial diversity provided by the WSN introduce several
+types of burdens. Firstly, each soldier has to carry a wearable device equipped with a micro-
+phone and other sensors, such as a compass, to collect meaningful information about Angle
+of Arrival (AoA), Time of Arrival (ToA), and Time Difference of Arrival (TDoA). Secondly,
+in a military scenario, the WSN should feature a jamming-resistant communication proto-
+col and non-interfering radio channels. Both assumptions are difficult to achieve given the
+resource constraints of WSNs in terms of CPU, battery, and memory. In most cases, WSNs
+cannot afford the computational burden of multimedia processing. Therefore, the captured
+data should be first off-loaded to a remote server, then downloaded and distributed again.
+This represents a challenge from the connectivity perspective since, in many cases, military
+WSNs are unattended or provided with a discontinued link to the control center.
+   In this work, we do not rely on ad-hoc acquisition setups, but we exploit publicly avail-
+able audio recordings of gunshots, considering their temporal and spectral representations.
+Spectral analysis of sound has been adopted in many contexts to detect and identify recurrent
+patterns. In particular, the combination of time-frequency decomposition of audio samples
+with Convolutional Neural Network (CNN) provides promising performance in detecting
+recurrent patterns [21]. The CNN is trained over several “images” constituted by a three-
+dimensional representation of time, frequency, and amplitude. The result is a robust solution
+that can “recognize” the same sound by cross-matching similar images.
+
+Contribution We propose an inexpensive solution that is able to detect and identify gun-
+shots without resorting to any ad-hoc infrastructure. Contrary to other studies, our solution
+requires only an audio sample of a gunshot that can be easily obtained by any commer-
+cially available microphone. Our approach is agnostic to the microphone position with
+respect to the shooter, and it does not require multiple spatially different replicas of the
+Multimedia Tools and Applications (2022) 81:30387–30412                                    30389
+
+
+gunshot; we consider recordings from mono-channel setups with different sample rates. We
+proved the effectiveness of our solution by considering 3655 samples of gunshots consti-
+tuted by 30 pistols, 18 rifles, and 11 shotguns for a total of 7 different calibers. The proposed
+approach guarantees an accuracy higher than 90% for all of the considered cases, namely,
+the category, model and caliber of the gun.
+
+
+Paper organization The remainder of this paper is organized as follows. Section 2 sum-
+marizes recent contributions in the field of weapon classification. Section 3 introduces the
+background concepts related to frequency domain analysis, CNNs, and acoustic character-
+istics of gunshots. Section 4 describes our dataset and Section 5 discusses the the dataset
+generation process. The neural network architecture is presented in Section 6. Section 7
+shows the performance of our solution. Finally, Section 8 draws some concluding remarks.
+
+
+2 Related work
+
+Firearm classification based on the acoustic evidence generated by its discharge has long
+been investigated, but not extensively studied in the literature. Proposed solutions vary in
+many aspects, including the source of acoustic data, the type of analysis applied, the type of
+features extracted, and the application area. Table 1 summarizes prior studies, that provide
+gunshot classification and firearm identification, according to these aspects.
+    The source of the data is characterized by the type, the quality, and the environmental
+conditions of the deployed audio recording setup, which defines the amount of information
+that can be leveraged for classification. Most of the gunshot recordings used in the literature
+are either obtained under carefully controlled conditions, where a distributed set of micro-
+phone sensors are deployed [15, 22, 25], or extracted from a conventional recording device
+in less controlled environments [3, 8–10, 16].
+    In the former case, where a WASN is deployed, spatial information can be obtained by
+performing array processing and triangulation techniques. Direction of Arrival (DoA) and
+ToA estimation methods are applied to the obtained audio signals to determine the projec-
+tile speed and trajectory, as well as to infer the position of the shooter. Such information
+may also provide discriminant features, such as the bullet speed [22], that can be used to
+identify the firearm category. Furthermore, the distributed nature of the recording setup pro-
+vides spatial diversity, where multiple acoustic observations from different locations of the
+same gunshot are obtained, which can be leveraged to increase the classification accuracy.
+Sánchez-Hevia et al. [25] exploited this feature and proposed a multi-observation weapon
+classification system that leverages various classifier ensembles to enhance classic decision
+fusion techniques. Each node in the sensor network produces a classification decision using
+Least Squares Linear Discriminant Analysis (LS-LDA). The decisions are later fused using
+a Maximum Likelihood-based fusion rule that weights the decision of each node based on
+its location.
+    The main constraint induced by this type of analysis is the requirement of spatial infor-
+mation, which can only be obtained by deploying a distributed sensor network. Therefore,
+limiting the applicability of gunshot detection and firearm classification to a carefully con-
+trolled recording setup only. Consequently, various pattern recognition approaches were
+proposed that identify the firearm category in the absence of spatial information. The most
+used classifiers for firearm identification are Gaussian Mixtures Model (GMM) [3, 8, 9] and
+Hidden Markov Model (HMM) [10, 16].
+Table 1 Prior gunshot classification approaches
+                                                                                                                                                30390
+
+
+
+Name             Technique/Classifier             Features             Dataset              Result               Varying      No Ad-Hoc Setup
+                                                                                                                 conditions
+
+[8]              Hierarchical                     Cepstral             50-100 gunshots      90% (category)       ✗            ✓
+                 GMM                                                   of 10 gun types      85% (caliber)
+                 classification
+[9]              Exemplar                         Cepstral             100 gunshots of      95-100%   (cat-      ✓            ✗
+                 embedding                                             20 gun types         egory) 60-72%
+                 using       hierar-                                                        (model)
+                 chical       GMM
+                 classification
+[22]             DoA & ToA esti-                  Projectile speed     194 gunshots of 4    86% (caliber)        -            ✗
+                 mation                                                gun types
+[16]             HMM        using                 None                 ∼46 gunshots of      95.65% (model)       ✗            ✓
+                 Non-parametric                                        5 gun types
+                 Bayesian
+                 techniques
+[3]              Hierarchical                     Cepstral & Tem-      230 gunshots of 5    96.29% (category)    ✗            ✓
+                 GMM                              poral                gun types
+                 classification
+[10]             HMM classifi-                    Spectral & Tem-      372 gunshots of 4    80% (model)          -            ✓
+                 cation & Viterbi                 poral                handgun types
+                 based decoding
+[25]             LS-LDA & Max-                    Cepstral, Spectral   840 gunshots of      94.1% (model)        ✓            ✗
+                 imum Likelihood                  & Temporal           14 gun types
+                 decision fusion
+Our              Convolutional                    Spectral & Tem-      3655 gunshots of     90% for Cate-        ✓            ✓
+solution         Neural Networks                  poral                59 gun types (pis-   gory, Caliber, and
+                                                                       tols, rifles, and    Model
+                                                                       shotguns)
+                                                                                                                                                Multimedia Tools and Applications (2022) 81:30387–30412
+Multimedia Tools and Applications (2022) 81:30387–30412                                     30391
+
+
+    Most of these approaches can be described as frame-based feature classification approaches
+[3, 8–10], where the time-domain acoustic signal is subdivided into a sequence of short-time
+windowed frames. From each frame, a set of predetermined features is extracted and used
+for gunshot classification. The most common extracted features are statistical measures
+of the spectrum and intensity of the signal, in addition to perceptual features such as
+Mel-Frequency Cepstrum Coefficient (MFCC) or Perceptual Linear Prediction Coefficients
+(PLP). Temporal features, such as energy and Zero Crossing Rate (ZCR), are also used, but
+only in conjunction with spectral or perceptual features.
+    Morton et al. [16] proposed an alternative classification approach that does not rely on
+frame-based features aiming to eliminate the dependency on performance-driven param-
+eters, which are often optimized over a finite training set. They proposed modeling each
+firearm category as an HMM with AutoRegressive (AR) source densities using non-
+parametric Bayesian priors to allow automated model order selection. The AR defines a set
+of energy and spectral characteristics of the captured gunshot, while the HMM identifies
+the transitions of these states.
+    The aforementioned techniques may perform adequately in matched experimental condi-
+tions, however, their effectiveness could reduce significantly when capture conditions vary
+in challenging unstructured environments, where noise and distortion are present. Although
+Khan et al. [9] addressed this problem by using an exemplary embedding approach to
+bridge between varying recording conditions, the achieved classification accuracy is rela-
+tively low (i.e., 60-72%). The authors used a dataset of 100 gunshot samples obtained from
+20 different firearm models, where each model is represented by 5 to 15 gunshot samples.
+The different conditions included in their experiments were simulated, namely, “Room
+Reverb”, “Concert Reverb”, and “Doppler Effect”, which may not match real-life environ-
+mental conditions and do not include directional variations. Furthermore, their approach
+assumes prior knowledge of the recording conditions which is not always possible, espe-
+cially in audio forensic reconstruction analysis.
+    Our solution, being the only one considering varying environment conditions and not
+requiring an ad-hoc setup, outperforms the state of the art studies in terms of dataset rich-
+ness, including the number of gunshots samples and range of weapon models, reaching 90%
+accuracy.
+
+
+3 Background
+
+3.1 Spectrogram
+
+A spectrogram is one of the most widely adopted visual representations of the frequencies
+spectrum of a signal over time. Being defined as an intensity plot of the Short-Time Fourier
+Transform (STFT) magnitude, a spectrogram is usually portrayed as a bi-dimensional graph,
+where one axis (usually the x-axis) represents time and the other axis (usually the y-axis)
+represents frequencies. An example of spectrogram is depicted in Fig. 1. Each intersection
+between time and frequency is assigned a color that refers to the Power Spectral Density
+(PSD) of that specific frequency at that particular time, which is considered a third dimen-
+sion of the graph. To compute the spectrogram of a signal y, the signal is divided into
+shorter fixed-length segments y1 , . . . , yn , and the Fourier transform is applied separately to
+each segment. The spectrogram describes the changes of the signal frequencies spectrum
+as a function of time. This implies that, if the time is discrete, the data to be transformed
+may be partitioned into overlapping frames. The STFT is applied to each of the frames and
+30392                                                      Multimedia Tools and Applications (2022) 81:30387–30412
+
+
+
+                                                                                                    -40
+                            21.82
+
+                                                                                                    -60
+                            18.18
+          Frequency [KHz]
+
+
+
+
+                                                                                                    -80
+                            14.55
+
+                                                                                                    -100
+                            10.91
+
+                                                                                                    -120
+                             7.27
+
+                                                                                                    -140
+                             3.64
+
+
+                                       0.005        0.009            0.014          0.018
+                                                       Time (s)
+
+Fig. 1 Example of a gunshot spectrogram. The x-axis represents the time expressed in seconds, while the
+y-axis represents the frequencies expressed in kHz. The color represents the PSD at the given time-frequency
+
+
+the result, consisting of both phase and magnitude for each intersection between time and
+frequency, is stored in a matrix, as showed in (2).
+                                                            ∞
+                                                            
+                                    ST F T {yn }(m, ω) =          yn w[n − m]e−j ωn                           (1)
+                                                           n=−∞
+
+                       spectrogram{yn }(m, ω) = |ST F T {yn }(m, ω)|2                       (2)
+where yn represents the signal, w(◦) is the window function, while m and ω represent the
+time and the frequency in the discrete domain, respectively.
+   The result, i.e., the squared magnitude of the STFT, consists of a bi-dimensional matrix
+that maps the audio frequencies to the time-localized points [20], i.e., the spectrogram
+representation of the power spectral density of the function.
+   The visual representation of audio traces through spectrograms have been extensively
+leveraged in the literature in the context of audio classification [6], sound event classifica-
+tion [2], emotion recognition [26], human activity recognition [20], cross-modality feature
+learning [19], and gunshot classification [18].
+
+3.2 Convolutional neural network
+
+A CNN belongs to the class of deep neural networks that have one or more convolutional
+layers (i.e., layers that perform convolution operations) [13]. A convolution is a linear opera-
+tion that consists of a slide of a parametric-sized filter over the input representation (usually
+a visual image). The application of the same filter to different overlapping filter-sized por-
+tions of the input generates a feature map. There are several types of filters, also known
+as operators. Each filter tries to identify a specific feature within the input representation.
+For example, the Sobel, the Prewitt, and the Canny operators highlight edges, the Harris
+and the Shi and Tomasi operators highlight corners, etc. One of the most powerful features
+Multimedia Tools and Applications (2022) 81:30387–30412                                               30393
+
+
+of CNNs, that is also the reason behind their wide adoption, is the ability to automatically
+apply an extensive number of filters to the input representation in parallel, thus highlighting
+specific features in every part of the input image simultaneously.
+   CNNs can be seen as regularized versions, that discourage learning complex models, of
+multilayer perceptrons. While in multilayer perceptrons several fully connected layers are
+used—a layer is fully connected if all the neurons it is composed of are connected to all
+the neurons of the next layer, CNNs exploit a hierarchical structure that allows building
+complex patterns by using small and simple patterns.
+   Figure 2 depicts a typical architecture of a CNN. The dimension of the input image (in
+this case representing a handwritten digit), keeps decreasing while going deeper in the
+neural network, while the number of filters, thus the features the architecture desires to
+highlight, increases. A CNN usually has three types of layers: (i) convolutional layers, to
+perform the convolution operations to the input, (ii) pooling layers, to discretize the input
+and reduce the number of learnable parameters; and (iii) fully connected layers, that are
+essentially feed-forward neural networks, usually placed at the end of the architecture. The
+goal of the fully connected layers is to hold the high-level features found during the con-
+volutions and try to learn non-linear combinations of these features before assigning the
+input image a label. Details about these layers contextualized in our model are provided in
+Section 6.1.
+   One of the fundamental decisions to be taken when designing a CNN, or generically a
+neural network, concerns the representation of the input data. Several input representations
+are available in the literature, each bringing its advantages and drawbacks. Although for
+visual images the choice is straightforward, for audio samples numerous alternatives are
+possible, including MFCC, raw digitized sample stream, machine discovered features, and
+hand-crafted features. Even if the best input representation to adopt is strongly dependant on
+the problem to solve, several studies in the literature show that feeding CNN with spectro-
+grams is effective in many fields, including musical onset detection [27], human detection
+and activity classification [11], music classification [1], and other interesting activities [32].
+
+3.3 Guns and gunshots
+
+Gunshots are the result of multiple acoustic events, namely, the muzzle blast created by the
+explosion inside the barrel and the ballistic shockwave that is generated by the supersonic
+projectile. These phenomena are the results of many characteristics and variables that even-
+tually sum up and generate the acoustic blast, which include the firearm type, model, barrel
+length, ammunition type, powder quantity, weight and shape of the projectile, and possibly
+
+
+
+
+Fig. 2 Example of a CNN. LeNet-5 [14] is able to identify handwritten digits for zip code recognition in the
+postal service
+30394                                               Multimedia Tools and Applications (2022) 81:30387–30412
+
+
+others. The aim of this work is to estimate at what extent it is possible to use a gunshot
+as a unique fingerprint that uniquely identifies one or more of the aforementioned vari-
+ables. Figure 3 summarizes the most important characteristics affecting the acoustic blast
+generated by a gun.
+   Our observation is that different configurations of the aforementioned parameters may
+lead to unique gunshot patterns that can be detected by analyzing the frequency-time decom-
+position of the gunshot blast. In the next sections, we demonstrate how Convolutional
+Neural Networks (CNNs) can be effectively used to detect these patterns, thus uniquely
+identifying the category of gun, the caliber, and finally, the model of the gun.
+
+
+4 Dataset description
+
+Table 2 shows the dataset considered in this work. We collected the samples from several
+YouTube videos, such as C4Defense, hickok45, EmanuelRJSniper, mixup98, OneGear, and
+ReloaderJoe. Our choice of guns takes into account two main aspects: the Category of Guns
+and the Caliber.
+
+Category of guns We considered 30 different pistols, 18 rifles, and 11 shotguns. As for
+pistols, we considered 22 revolvers and 10 semiautomatic.
+
+Caliber We took into account the most popular calibers in U.S. and world-wide [29, 31],
+such as 9mm and .45acp for automatic pistols, .44M and .357M for revolvers, 7.62x39 and
+5.56NATO for rifles, and 12 gauge caliber for shotguns.
+
+4.1 Muzzle blast: preliminary considerations
+
+When a gun is fired, there are two distinct acoustic phenomena, the muzzle blast and the
+ballistic shockwave [23]. The latter is generated by the bullet that compresses the air in front
+of itself creating a sonic boom that propagates with a shape of a cone where the vertex is the
+bullet itself. Conversely, the muzzle blast is a high energy acoustic signal originated by the
+gun’s muzzle with a spherical wavefront, propagating at the speed of sound, and with center
+the muzzle of the gun. The ballistic shockwave is a very important source of information to
+
+
+                       Shotgun
+
+
+
+                         Pistol                                                 Bullet mass
+
+
+                                                                                Gun powder
+
+
+                                                                     Caliber
+
+
+
+                         Rifle
+
+
+
+Fig. 3 Variables taken into account in our analysis: category of firearm, caliber, and gun model
+Multimedia Tools and Applications (2022) 81:30387–30412                             30395
+
+Table 2 Dataset: Gun Model, Caliber, and number of extracted samples
+
+Gun model                                 Caliber           Category   N. Samples    ID
+
+Glock 45                                  9mm               Pistol     154           24
+Beretta 98 FS                             9mm               Pistol     29            2
+Beretta 92 FS                             9mm               Pistol     361           11
+Beretta PX4 Storm                         9mm               Pistol     164           12
+Glock 21                                  .45acp            Pistol     145           22
+M&P Shield                                .45acp            Pistol     77            27
+Colt 1911                                 .45acp            Pistol     81            34
+Walther PPQ                               .45acp            Pistol     115           57
+Glock 30S                                 .45acp            Pistol     103           23
+S&W 629 4-inch                            .44M              Pistol     97            5
+S&W 629 TrailBoss                         .44M              Pistol     62            6
+S&W 629 Performance Center                .44M              Pistol     42            7
+S&W 629-8                                 .44M              Pistol     48            47
+S&W 69                                    .44M              Pistol     35            49
+S&W 69 2.75-inch                          .44M              Pistol     35            50
+Charter Arms .44 Special Bulldog          .44M              Pistol     40            15
+S&W Model 29 Dirty Harry                  .44M              Pistol     42            21
+S&W Model 29 4-inch                       .44M              Pistol     51            32
+Ruger Redhawk Big Game Hunt               .44M              Pistol     23            42
+Ruger Super Black Hawk                    .44M              Pistol     25            44
+Ruger Red Hawk 8-shots                    .357M             Pistol     48            41
+S&W 357Magnum                             .357M             Pistol     73            4
+Chiappa Rhino                             .357M             Pistol     47            16
+Coonan 1911                               .357M             Pistol     56            17
+Ruger GP100 Match Champion                .357M             Pistol     36            38
+Ruger SP101                               .357M             Pistol     45            43
+S&W Model 19 3-inch                       .357M             Pistol     42            45
+S&W Model 27                              .357M             Pistol     42            46
+S&W Model 66                              .357M             Pistol     54            48
+Dan Wesson Revolver                       .357M             Pistol     30            19
+CZ Bren 2 MS                              7.62x39           Rifle      49            1
+PWS MK107                                 7.62x39           Rifle      73            3
+CZ 527                                    7.62x39           Rifle      38            13
+Century Arms C39 AK-47                    7.62x39           Rifle      37            14
+Maadi AK47                                7.62x39           Rifle      60            28
+Micro Draco AK47 Pistol                   7.62x39           Rifle      44            29
+N-PAP AK                                  7.62x39           Rifle      46            33
+Ruger American Ranch Rifle                7.62x39           Rifle      38            37
+Ruger Mini 30                             7.62x39           Rifle      51            40
+SKS                                       7.62x39           Rifle      26            59
+Daniel Defense M4 A1 SOCOM                5.56 NATO         Rifle      68            20
+Ruger AR                                  5.56 NATO         Rifle      78            36
+Ruger Mini-14                             5.56 NATO         Rifle      60            39
+30396                                        Multimedia Tools and Applications (2022) 81:30387–30412
+
+Table 2   (continued)
+
+Gun model                              Caliber            Category         N. Samples          ID
+
+Ruger AR556 MPR                        5.56 NATO          Rifle            30                  35
+SIG 556 Classic SWAT Model             5.56 NATO          Rifle            72                  51
+Springfield Armory Saint               5.56 NATO          Rifle            68                  54
+Tactical Edge Warfighter               5.56 NATO          Rifle            49                  56
+M&P 15 Sport II                        5.56 NATO          Rifle            84                  26
+Benelli M2 SBS                         12                 Shotgun          44                  8
+Benelli M4                             12                 Shotgun          45                  9
+Benelli Nova                           12                 Shotgun          36                  10
+DP-12                                  12                 Shotgun          74                  18
+Kel-Tec SG12                           12                 Shotgun          52                  25
+Winchester Model 12                    12                 Shotgun          46                  31
+SRM 1216                               12                 Shotgun          34                  52
+Serbu Super Shorty                     12                 Shotgun          33                  53
+Standard Manufacturing SKO Shorty      12                 Shotgun          47                  55
+Winchester SXP Defender                12                 Shotgun          36                  58
+Winchester Model 12 SlugFest           12                 Shotgun          35                  30
+
+
+
+locate a sniper in an open field [24, 30]. However, to achieve that, the ballistic shockwave
+has to be sampled from different locations requiring an array of microphones. The ballistic
+shockwave cannot be observed for subsonic projectiles such as those used in shotguns and
+pistols.
+    Given the aforementioned considerations, we focus on the muzzle blast and the echoes
+associated with it. In the following, we discuss and highlight three critical parameters that
+have to be carefully set in order to maximize the detection performance of a neural network:
+(i) muzzle blast duration, (ii) number of frequency bins, and (iii) the number of time slots.
+    Figure 4 shows the acoustic signal amplitude recorded from a Beretta PX4 Storm, 9mm.
+The muzzle blast lasts for a few milliseconds (up to 5ms in the figure), depending on the
+model of gun and caliber. We also observe some echo effects (Echo 1, Echo 2, and Echo 3)
+at 10ms, 22ms, and 63ms due to reflections of the sound from obstacles around the shooter.
+We highlight that this is consistent with previous findings from other studies [23], while the
+muzzle blast duration will be a critical parameter from the analysis carried out in this work.
+    Figure 5 shows the PSD as a function of time and frequency (spectrogram) associated
+with the muzzle blast in Fig. 4. We consider both the bi-dimensional and the three-
+dimensional representation of the spectrogram. We observe that the muzzle blast (time less
+than 5ms) takes all the frequency components between 0 and 24KHz with a significant
+power spanning between -30dB (lower frequencies) and -80dB (higher frequencies). As
+soon as the blast finishes, the echoes take the frequencies less than 18KHz with a decreasing
+power between -40dB and -60dB. The aforementioned spectrogram components constitute
+the input for the training process of our neural network.
+    We identify two more critical parameters affecting our algorithm performance: the num-
+ber of frequency bins and the number of time slots. For our analysis, we adopted the
+spectrogram function of MATLAB-R2019b considering as input the acoustic sample (0.1
+seconds from the beginning of the blast), a window of size w = 44 to divide the signal into
+segments and performing windowing according to the Hann function, no = w/2 as the
+Multimedia Tools and Applications (2022) 81:30387–30412                                            30397
+
+
+                              1
+                                    Echo 1 Echo 2                  Echo 3
+
+                            0.5
+         Signal amplitude
+
+
+
+
+                              0
+
+
+
+                            -0.5
+
+
+
+                             -1
+                             0.000 0.010 0.021 0.031 0.042 0.052 0.063 0.073 0.083 0.094
+                                                        Time (s)
+
+Fig. 4 Acoustic signal amplitude of a muzzle blast for a Beretta PX4 Storm, 9mm
+
+
+number of overlapping samples between adjacent segments, f l = 65 as the FFT length, and
+f s = 48000 as the number of samples per seconds acquired by the microphone. Assuming
+the previous parameters, the spectrogram function returns the PSD of (f l+1)/2 frequencies
+and  length(x)−no
+          w−no      time bins, where x is the vector of the acoustic samples being equal to
+0.21·f s = 10080 sample—we considered the first 0.21 seconds after the first abrupt change
+as per Fig. 4. For instance, in the previous example, the frequency range (0 to 24KHz) has
+been divided into 33 bins, while the time has been divided into 46 slots.
+
+4.2 Quality of the audio samples
+
+In the following, we provide a quantitative analysis of the quality of the collected audio
+samples. As a quality metric, we consider the Signal-to-Noise Ratio (SNR) computed on
+each muzzle blast from the actual starting of the blast for a period of 400ms. For each audio
+
+
+
+
+Fig. 5 Spectrogram of a muzzle blast: bi-dimensional and three-dimensional PSD of a muzzle blast (Beretta
+PX4 Storm, 9mm) as a function of time and frequency
+30398                                              Multimedia Tools and Applications (2022) 81:30387–30412
+
+
+sample, we consider a pre-defined reference noise pattern constituted by random samples
+of amplitude 0.1, i.e., one-tenth of the maximum signal amplitude taken by the micro-
+phone. The previous sound pressure is equivalent to a classical background noise that can
+be sampled from an outdoor environment characterized by a gentle wind. Figure 6 shows
+the probability distribution function associated with the SNR computed as described before.
+The overall audio quality is very high since the muzzle blast is +20dB higher than the refer-
+ence noise pattern. We observe that even the echoes can be easily identified from the noise
+reference.
+
+
+5 Dataset generation
+
+We generated a dataset of 3655 samples extracted from videos found on YouTube. Each of
+the collected audio samples has a sample rate of either 48000 or 44100 samples per second.
+Generating a dataset of gunshots extracted from YouTube videos involves the following steps:
+•   Audio extraction. We performed the audio extraction (MP3 format) from the selected
+    videos using the youtube-dl [33] and ffmpeg [4] tools.
+•   Abrupt change detection. A preliminary filtering is performed by identifying abrupt
+    changes in the audio signal.
+•   Gunshot detection. Gunshots are detected among blasts by relying on a SVM learning
+    algorithm.
+   In the following, we describe the procedure of automatically extracting gunshots from
+an audio trace focusing on Blast detection and Gunshot detection.
+
+5.1 Identiﬁcation of abrupt changes in an audio trace
+
+To detect abrupt changes in an audio trace, we computed the variance over a sliding window
+of 5ms, equivalent to either 220 or 240 samples depending on the quality of the audio
+
+
+
+                              0.06
+                  Frequency
+
+
+
+
+                              0.04
+
+
+
+                              0.02
+                                                                Main
+                                                    Echos
+                                                                blast
+                                0
+                                     0   5    10        15       20        25       30
+                                         Signal-to-Noise Ratio (dB)
+Fig. 6 Sound quality analysis: SNR of a main blast and its associated echos assuming a reference random
+noise of amplitude one tenth of the microphone saturation threshold
+Multimedia Tools and Applications (2022) 81:30387–30412                                        30399
+
+
+trace, i.e., 44100 or 48000 samples per second, respectively. Subsequently, we searched for
+the peaks adopting windows of size 0.3 seconds and a minimum peak prominence of 0.3.
+Figure 7 shows the three computation stages from the sound pressure to the blast sequences
+that are passing by the moving window averaging. This figure refers to two sound chunks
+extracted from an audio trace, where the first part (i.e., 0 ≤ t ≤ 5.5 seconds) is a sequence
+of gunshots, while the second part (i.e., t > 5 seconds) is mainly constituted by voice. We
+stress that the main aim of this part is to detect abrupt changes in the sound pressure, while
+subsequently we will show how gunshots are identified.
+
+5.2 Gunshot detection
+
+Gunshot detection is performed via a human-assisted supervised learning approach. The
+intention is to have a growing training set of actual gunshots that is supervised by the
+user. The user checks for both false positives and false negatives by listening to the newly
+generated samples in the training set. Figure 8 shows the training, validation, and testing
+procedures. We assume that the training set is populated with an initial dataset of actual
+gunshots that have been manually selected. In our case, we started from an initial dataset of
+10 gunshot samples only. At each cycle, a new model is trained with the current training set
+(Step 1 in Fig. 8). Subsequently (Step 2 in Fig. 8), new samples are selected from the list
+that is generated by the procedure presented in Section 5.1. Finally, the generated samples
+are tested with the current training set. The output is assessed by the supervisor (Step 3 in
+Fig. 8), and the verified samples are added to the training set (Step 4 in Fig. 8).
+
+Classiﬁcation performance To assess the quality of the classification procedure, we con-
+sidered 6 additional videos (V1, . . . , V6) downloaded from YouTube, which are not included
+in the training set. For each video, we detected the abrupt changes according to the proce-
+dure presented in Section 5.1, and we executed the gunshot detection procedure presented in
+Fig. 8. As for the Training Set, we considered the one we generated from the samples found
+in Table 2. Figure 9 shows the frequency of the similarity indexes provided by the SVM
+classifier for the Shot and No-Shot audio samples with red crosses and green circles, respec-
+tively. The similarity indexes were categorized into bin width of 10, where each cross/circle
+
+
+
+
+Fig. 7 Detection of abrupt changes in audio traces: from sound pressure to abrupt change detection by
+computing moving variance and peak detection
+30400                                                        Multimedia Tools and Applications (2022) 81:30387–30412
+
+
+
+
+           Training Set                               4. Adding
+
+
+                                                                     Supervisor
+
+
+                                                                             3. Evaluating
+
+
+
+                                                      1. Training                   2. Testing
+
+                                                                       SVM
+                                                                                                 Chunks DB
+                                                                     Classifier
+
+
+Fig. 8 Gunshot detection via human-assisted supervised learning. The SVM classifier is trained by verified
+samples of gunshots. When new gunshot samples are tested, the output of the classifier is verified (by the
+user) and added to the Training Set
+
+
+aggregates adjacent similarity indexes. Figure 9 represents the decision after one iteration
+of the procedure presented in Fig. 8. The decision Shot vs No-Shot is taken as a function
+of the threshold T hr, which has been empirically set to zero. We observed that 96% of the
+No-Shot samples feature a similarity index of -189.5, while the remaining 4% are spread
+between -178.9 and -0.55. There are no samples from the No-Shot class with a similarity
+index that is greater than 0. As for the Shot class, the samples are distributed between 0.41
+and 275, with frequencies between 1% and 11%. Even in this case, we highlight that there
+are no samples from the Shot class with a similarity index that is less than 0.
+   To precisely assess the effectiveness of our solution, we manually checked all of the
+classified samples, namely, Shot vs No-Shot. Table 3 shows the result of our analysis. For
+each video, we report the number of detected abrupt changes (N ), the threshold used by the
+SVM classifier (T hr = 0), True Positive (T P ), False Positive (F P ), True Negative (T N ),
+False Negative (F N ), the actual number of gunshots (Actual), and the overall accuracy of
+the detection algorithm. As previously stated, during our evaluation, we considered only
+
+
+                                      100
+
+
+                                      10-1
+                          Frequency
+
+
+
+
+                                      10-2
+
+
+                                      10-3
+                                                                                   Shots
+                                                                                   No-Shots
+                                      10-4
+                                        -200   -100         0         100         200        300
+                                                Similarity Index (from SVM)
+
+Fig. 9 Gunshot detection performance: frequency distribution of Shot and No-Shot samples as a function of
+their similarity index
+Multimedia Tools and Applications (2022) 81:30387–30412                                       30401
+
+Table 3 Shot detection performance considering 6 videos
+
+           N            Thr        TP         FP          TN      FN        Actual        Accuracy
+
+V1         643          0          24         2           617     0         24            0.99
+V2         385          0          4          0           365     16        20            0.96
+V3         79           0          5          0           74      0         5             1
+V4         32           0          5          0           27      0         5             1
+V5         1860         0          88         0           1772    0         88            1
+V6         1932         0          31         0           1897    4         35            0.99
+
+
+
+one iteration as depicted in Fig. 8. We would like to highlight that the proposed algorithm
+achieves the main purpose of generating a dataset of gunshot samples (i) in a fast and effi-
+cient way and (ii) with the minimum amount of false positives. The output of this phase will
+be the training set to be used by the CNN.
+   At this stage, we aim at minimizing the number of F P , which might bias the subsequent
+training process. We also aim at maximizing the process efficiency of creating a large dataset
+of gunshot samples. Therefore, the task of the supervisor resorts mainly to listening to a
+very few samples (T P + F P ) despite the dataset N , in order to remove the F P , which are
+overall very few: only 2 out of 4931 samples. Conversely, we observe that our approach
+might lose some good samples (F N = 16 + 4). However, these samples do not affect the
+performance of our solution hence we consider them not important.
+   The above procedure has been applied to each audio sample found in Table 2 to generate
+a dataset of actual gunshot samples, that is, one dataset for each gun model.
+
+
+6 Overall architecture
+
+Figure 10 depicts the overall architecture of our CNN consisting of five layers with weights:
+the first four are convolutional layers, while the last one is a fully connected layer. The
+output of the fully connected layer is fed to a 7-way softmax, that outputs the probability
+distribution over the 7 class labels. The details of our architecture, including information
+about the layers and their learnable parameters, are reported in Appendix A.
+    Considering the dimension of the starting image and the need to give importance also to
+peripheral pixels, every convolution of our architecture makes use of padding to avoid losing
+information. By adding additional pixels to the border, every convolution layer outputs an
+image with the same number of pixels as the one fed into that layer. Furthermore, in our
+CNN architecture, we make use of a stride of 1 during convolutions, and a stride of 2 during
+the Max Pooling application. The stride is a critical hyperparameter in the context of CNN,
+as it allows us to specify the number of cells by which filters (e.g., convolution filters,
+pooling filters) slides over the image. If the stride is equal to 2, the filter starts from the top
+left corner and moves over the image with jumps of 2 units at a time. By considering square
+filters (i.e., f xf ) and square initial images (i.e., nxn), after having specified the dimension
+of the filters f, whether they are convolutional filters or pooling filters, the stride parameter
+s, the dimensions of the initial images n, and the padding p, it is possible to calculate the
+dimension of the square output image of a layer as:
+                                                            
+                                            n + 2p − f
+                                                         +1                                     (3)
+                                                 s
+30402                                             Multimedia Tools and Applications (2022) 81:30387–30412
+
+
+
+
+Fig. 10 Structure and details of our Convolutional Neural Network
+
+
+   Our choice to keep a unit stride during the convolutions and a stride equals to 2 during
+the pooling is guided by the intention of not losing information during convolution phases,
+while exploiting the pooling technique to summarize the features, thus reducing the input
+dimensionality.
+   The first convolutional layer filters the 36 x 99 x 1 spectrogram image with 40 kernels of
+size 3 x 3 x 1, without any stride and with ‘same’ padding. Setting the padding to “same”
+allows the classifier to calculate and add the padding so that the output has the same size as
+the input. The second convolutional layer takes as input the normalized (40 channels) and
+pooled (3x3 max pooling, stride = 2) output of the first convolutional layer and filters it with
+80 kernels of size 3 x 3 x 40. The third convolutional layer takes as input the normalized (80
+channels) and pooled (3x3 max pooling, stride = 2) output of the second convolutional layer
+and filters it with 160 kernels of size 3 x 3 x 80. The fourth convolutional layer takes as
+input the normalized (160 channels) and pooled (3x3 max pooling, stride = 2) output of the
+third convolutional layer and filters it with additional 160 kernels of size 3 x 3 x 160. The
+normalized (160 channels) and pooled (1x13 max pooling, stride = 2) output of the fourth
+convolutional layer is fed to a 7-neuron fully connected layer that, in turn, outputs the result
+to a 7-way softmax, that produces a distribution over the 7 class labels.
+
+6.1 CNN details
+
+Activation Function Our neural network relies on the ReLU activation function [17] after
+each convolution. The ReLU activation function, whose operation is simplified in (4),
+outputs the maximum value between zero and the input value.
+                                      
+                                        x if x ≥ 0,
+                              f (x) =                                             (4)
+                                        0 otherwise
+Multimedia Tools and Applications (2022) 81:30387–30412                                  30403
+
+
+   Although the literature uses other variants (e.g., Tanh, SoftSign, Sigmoid), several studies
+show that ReLU outperforms the competitors in terms of performance [5, 13].
+
+Regularization Our neural network relies on Dropout [28] regularization to reduce the like-
+lihood of overfitting. The Dropout regularization technique allows the neural network to
+randomly cut out units (together with their connections) during the training phase with a
+given probability. This discourages neurons to rely on the presence of particular other neu-
+rons and forces them to find more robust features with different ones [13], thus reducing the
+probability of learning the training set by heart.
+
+Normalization Training neural network without normalization leads to the internal covari-
+ate shift phenomena, where the distribution of each layer’s input change during training, thus
+requiring a more sophisticated tuning of the parameters. To mitigate this issue we add Batch
+Normalization layers after each convolution. The Batch Normalization technique [7] per-
+forms the normalization for each training mini-batch, allowing the usage of higher learning
+rates and reducing the need for a cherry-picking tuning of the parameters. As summarized
+in the (7), Batch Normalization normalizes the output of an activation layer by subtracting
+the mean and dividing by the standard deviation of the batch.
+   Given a mini-batch β = x1 , ..., xm :
+                                                    1 
+                                                          m
+                                           μβ ←         xi                                 (5)
+                                                    m
+                                                          i=1
+
+                                              1 
+                                                   m
+                                      σβ2 ←      (xi − μβ )2                               (6)
+                                              m
+                                                  i=1
+                                                x i − μβ
+                                           x̂ ←                                           (7)
+                                                   σβ2 + 
+where  is defined as a constant to add to the mini-batch variances, specified as a scalar ≥
+10−5 .
+   Although the Batch Normalization technique brings a slight regularization effect to
+the neural network, in some cases eliminating the need for Dropout [7], we find that the
+combined use of the Batch Normalization and Dropout aids generalization [13].
+
+Discretization The application of discretization techniques to an input representation con-
+sists of reducing its dimensionality to evaluate the features within the obtained, summarized
+sub-regions. This process allows us to mitigate the overfitting of the training set and to
+reduce the number of parameters to be learned for the training, thus reducing the over-
+all computational cost. To attain these benefits, in our architecture we use a Max Pooling
+sample-based discretization process layer after each activation layer. Max Pooling applies
+a max filter to non-overlapping sub-regions of the input feature map, whose dimension is
+dictated by the dimension of the filter. When Max Pooling is applied, the passage of the
+moving filter onto a sub-region produces, as output, a value, consisting of the maximum
+value of that sub-region.
+
+Output As for the output layer, our neural network architecture relies on the commonly
+used softmax function. The softmax function, taking as input a vector of real numbers,
+produces a probability distribution proportional to the exponential of the input numbers.
+30404                                        Multimedia Tools and Applications (2022) 81:30387–30412
+
+
+In detail, the input real numbers are mapped in a (0,1) interval that sums up to one, thus
+allowing to treat the output provided by the softmax function as probabilities.
+   In general, given a vector of real numbers v = (v1 , . . . , vK ) ∈ IRK , the standard unit
+softmax function σ : IRK → IRK is defined by:
+                                                  e vi
+                                    σ (v)i = K                                            (8)
+                                                        vj
+                                                 j =1 e
+
+6.2 Learning details
+
+Table 4 summarizes the training options of our network, that are detailed in the following.
+
+Optimizer An optimizer is defined as an algorithm (or a method) used to tune the parame-
+ters of a neural network with the goal of reducing the loss function. In our architecture, we
+rely on the Adam optimizer [12], an extensively adopted optimizer that inherits the advan-
+tages of both RMSProp and SGD with momentum (i.e., SGD where each gradient update is
+a linear combination of the previous gradient updates) optimizers. From RMSProp it inherits
+the squared gradients to scale the learning rate, while from SGD with momentum it inherits
+the concept of the moving average of the gradients. An empirical analysis conducted in [12]
+shows that Adam outperforms the other optimizers, thus working better in practice. As rec-
+ommended in the original paper (whose algorithm is reported below with our parameters), in
+our implementation we set to 0.9 the gradient decay factor β1 , to 0.999 the squared gradient
+decay factor β2 , and to 10−8 the denominator offset (to avoid divisions by zero), respec-
+tively. However, although the original paper recommends using an initial learning rate of
+10−3 , we empirically found (relying on the grid search hyperparameter tuning technique)
+that setting this value to x ∗ 10−4 , x ∈ [1, 3] provides better results.
+Multimedia Tools and Applications (2022) 81:30387–30412                                       30405
+
+Table 4 Training options of our
+network                               Option                        Value
+
+                                      Optimizer                     Adam
+                                      InitialLearnRate              x ∗ 10−4 , x ∈ [1, 3]
+                                      MaxEpochs                     50
+                                      MiniBatchSize                 8
+                                      Shuffle                       Every Epoch
+                                      Plots                         Training Progress
+                                      Validation Data               Random 20% of the data
+                                      Validation Frequency          |training set| / miniBatchSize
+
+
+
+
+Number of Epochs An epoch is defined as a single pass through the training set, i.e., 1
+forward pass and 1 backward pass for all the training samples. A forward pass is defined as
+the calculation process to obtain the output values from inputs data, from the first layer to
+the last layers, while a backward pass is defined as the process of changing the weights (i.e.,
+learning) by relying on an optimization algorithm (e.g., the gradient descent algorithm) from
+the last layer backward to the first layer. We empirically set as 50 the max number of epochs,
+since each of the subsequent epochs does not bring any benefit to our model learning.
+
+Mini-Batch Size Using mini-batch that consists of processing small subsets of training sam-
+ples in every iteration, instead of processing them all together. The choice of mini-batch
+size (e.g., the number of training samples to process) does not affect the performance of the
+model in terms of accuracy, but affects the resource required during the training process. A
+larger mini-batch size requires more memory and takes more time per epoch, but allows the
+classifier to better optimize the vectorization (i.e., the linear transformation of a matrix into
+a column vector), while a smaller mini-batch size requires less memory but loses the speed-
+up given by vectorization. In our model, we set the mini-batch size to 8, to better optimize
+the resources of our server.
+
+Shuﬄe The “shuffle” option allows shuffling the order of which training samples are fed
+to the model, with the goal of reducing variance, thus reducing overfitting. Shuffling the
+training samples becomes crucial in case mini-batches are used, due to the need to avoid
+having batches containing highly correlated samples that would slow down (or, in many
+cases, compromise) the performance of the model. In our model, we shuffle the training
+data before each training epoch, as well as the validation data before each validation.
+
+Plot The “plot” option in Matlab provides several pieces of information to be taken into
+account during the training process. Information include, but are not limited to, the mini-
+batch training loss and accuracy, the smoothed training loss and accuracy (i.e., the result of
+the application of a smoothing algorithm to the training accuracy), the validation loss and
+accuracy, hardware resources, etc.
+
+Validation Data The validation data, also known as validation set, refers to a subset of sam-
+ples separated from the training set, that the model will rely on to evaluate the effectiveness
+of its training. In our case, by following the 80/20 rule, the validation set is represented by
+20% of the whole dataset.
+30406                                                      Multimedia Tools and Applications (2022) 81:30387–30412
+
+
+Validation Frequency The validation frequency represents the number of iterations between
+                                                                      |training set|
+evaluations of validation metrics. We empirically set this value to  miniBatchSize  .
+
+
+7 Performance
+
+7.1 Category of gun identiﬁcation
+
+In this section, we consider the neural network previously introduced to infer the Category
+of gun. We reconsider Table 2 and we divide the dataset into three classes, namely, Pis-
+tols, Rifles, and Shotguns, according to the gun models in the dataset. Figure 11 shows the
+confusion matrix computed as the average of 50 training and validation runs.
+   The accuracy acc can be computed according to (9).
+
+                                                           1 CN
+                                                   acc =        xii                                           (9)
+                                                           N
+                                                               i=1
+
+where N = 720 is the total number of samples, NC = 3 is the number of classes, and xii
+is the i th diagonal element of the confusion matrix, yielding to acc ≈ 0.92. The confusion
+matrix in Fig. 11 also reports summaries of columns and rows, predicted and true classes,
+respectively.
+    We observe that the classification error spans between 4.4% and 12.9% for Pistol and
+Rifle classes, respectively. The class Rifle (an actual gunshot from a rifle) is incorrectly
+classified as either Pistol (4 times) or Shotgun (21 times) in the 12.9% of the cases. The same
+type of analysis can be performed column-wise, where the prediction error spans between
+1.2% and 24.1%. As an example, we observe that a prediction on class Shotgun is wrong in
+the 24.1% of the cases (6 times for Pistol and 21 times for Rifle).
+    Finally, we observe that while the Pistol class is likely to be correctly classified all the
+times, the vast majority of errors are happening between the Rifle and Shotgun classes.
+
+
+                                                      Guns' Categories
+
+                                 Pistol   412         13             6      95.6%      4.4%
+
+
+                                  Rifle     4        169           21       87.1% 12.9%
+                  True Class
+
+
+
+
+                               Shotgun      1         9            85       89.5% 10.5%
+
+
+                                          98.8% 88.5% 75.9%
+
+
+                                          1.2%      11.5% 24.1%
+
+                                          Pistol     Rifle Shotgun
+                                                       Predicted Class
+Fig. 11 Confusion matrix associated with the classification of the Category of Guns
+Multimedia Tools and Applications (2022) 81:30387–30412                                         30407
+
+
+7.2 Caliber identiﬁcation
+
+In this section, we report the performance of our classification algorithm when considering
+7 different calibers from Table 2. We group the video chunks based on gun caliber, obtaining
+7 different classes, namely, 12, 357M, 44M, 45acp, 556NATO, 762x39, and 9mm. Figure 12
+shows the confusion matrix computed as the average of 50 training and validation runs. The
+overall accuracy computed according to (9) sums up to acc ≈ 0.9. Best and worst perfor-
+mance are achieved by 9mm and 762x39, respectively. In particular, class 762x39 is wrongly
+predicted 8 times as class 556NATO. Classes 556NATO and 762x39 are intrinsically simi-
+lar, since both are from class Rifle. Therefore, they are prone to be confused. Nevertheless,
+we observe that this phenomenon is very limited since we have 3 cases of 556NATO classi-
+fied as 762x39, and 8 cases for the opposite configuration. We also observe that 556NATO
+and 762x39 classes experience a significant amount of misclassifications with classes 12
+and 357M. Conversely, class 44M and 9mm are the most likely to be correctly classified
+with 94.8% and 93.6%, respectively.
+
+Highlights By combining Figs. 11 and 12 we can draw some interesting observations. Rifle
+class is misclassified for class Shotgun 21 times (the opposite is happening 9 times) in
+Fig. 11, while 7+4=11 times (4+5=9 times) in Fig. 12. We think that the error is not due to
+a specific caliber, either the 556NATO or the 762x39, but to the feature similarities between
+the two classes: Shotgun and Rifle classes.
+   The pistol class is also misclassified as Rifle class 15 times. By looking into the details
+of Fig. 12, we observe that the major source of misclassifications is coming from the 357M
+class, classified 4 times as 556NATO and 1 time as 762x39. We observe that the 357M is
+the most powerful among the pistol calibers hence it is the closest to Rifle class in terms of
+bullet size, pressure, and barrel diameter.
+   Finally, we observe that our solution is particularly robust in detecting pistols. In partic-
+ular, one of the most adopted worldwide caliber (9mm) is characterized by a very limited
+number of misclassifications (9 out of 167 total). The same considerations apply to classes
+44M and 45acp.
+
+                                                     Guns' Calibers
+                                     12 84 2        7 4                           86.6% 13.4%
+
+                                  357M 2 77 3       4 1 1                         87.5% 12.5%
+
+                                   44M     1 92 3         1                       94.8% 5.2%
+                  True Class
+
+
+
+
+                                  45acp       9 93        2                       89.4% 10.6%
+
+                               556NATO 4 2         93 3                           91.2% 8.8%
+
+                                 762x39 5 3         8 75                          82.4% 17.6%
+
+                                   9mm     1 5 3         132                      93.6% 6.4%
+
+
+                                      88.4% 89.5% 84.4% 93.9% 83.0% 90.4% 97.1%
+
+                                      11.6% 10.5% 15.6% 6.1% 17.0% 9.6% 2.9%
+
+
+                                       1 2 5 7 M 4 4 M acp ATO x39 mm
+                                          3          45 6N 762 9
+                                                      55
+                                                     Predicted Class
+Fig. 12 Confusion matrix associated with the classification of the Calibers of Guns
+30408                                        Multimedia Tools and Applications (2022) 81:30387–30412
+
+
+7.3 Model identiﬁcation
+
+In this section, we consider all of the gun models previously introduced in Table 2 with the
+aim of classifying each of them. The total number of classes sums up to 59, which is the
+number of gun models considered throughout this paper. We report the confusion matrix
+associated with the aforementioned classification in Appendix B. The accuracy sums up
+to acc ≈ 0.90 and the maximum number of misclassifications (per model) never exceeds
+2. We observe that class 38 (Ruger GP100 Match Champion) is never correctly classified.
+Finally, we highlight that the number of samples for the validation process is small (20% of
+each gun model in Table 2). Nevertheless, the diagonal of the matrix in Appendix B collects
+the vast majority of the samples confirming the effectiveness of our model. We are confident
+that a larger data sample can increase the accuracy performance and effectiveness of gun
+model detection from gunshot sounds.
+
+7.4 Testing
+
+To validate our methodology, we tested the model against a new set of audio samples taken
+from videos different than the ones considered before with varying conditions, including
+the background noise and relative positions between the microphone and the shooter. We
+consider a total of 115 audio samples constituted by 13 Pistols (Beretta 92 FS), 59 Rifles
+(Ruger AR, Daniel Defense M4 A1 SOCOM, Maadi AK-47) and 44 Shotguns (Maverick
+88, Winchester Model 300 Defender). We observe that Pistol and Rifle classification is
+characterized by high performance, where only 4 Rifles samples are misclassified for Pistol.
+As for the Shotgun class, we highlight that the two shotguns considered are not in the
+training set (Table 2) because we did not find any valid samples from additional videos.
+Although the audio samples are coming from different shotgun models, our algorithm can
+still detect the caliber with high probability (only 8 audio samples are misclassified), which
+verifies the effectiveness and correctness of our algorithm. Finally, we observe that the
+overall accuracy is consistent with the validation process and sums up to about 0.9.
+
+
+8 Conclusion
+
+Although scenarios requiring in-depth digital forensic of gunshots are countless, includ-
+ing military operations, mass-shooting, and possibly others, current solutions are far from
+reaching an adequate accuracy under real conditions.
+   In this paper, we have proposed an effective and efficient methodology to uniquely fin-
+gerprint gunshots enabling the identification of the category, caliber, and the model of the
+gun with an accuracy higher than 90% regardless of the capture conditions. Unlike exist-
+ing solutions, our technique requires neither ad-hoc deployment of microphone networks,
+nor specific sample quality, and is agnostic to the microphone position with respect to the
+shooter. We have demonstrated that forensic analysis in the time-frequency domain of a
+single gunshot audio sample recorded by a commercial microphone (44100 samples per sec-
+onds) can be effectively used to infer the gun model (and other related characteristics). The
+proposed solution may lead to new insights and further developments in the area of weapon
+classification considering more samples, different noise levels, and a much larger weapon
+database.
+Multimedia Tools and Applications (2022) 81:30387–30412   30409
+
+
+Appendix A: Making up layers of our architecture
+                                                                                                                                            Guns' Models
+              1 10
+              2      6
+                                                                                                                                                                                                                                                                                                                                                  30410
+
+
+              3          14
+              4               8                                                       2                            1                                                     1                 1        1
+              5                   18   1
+              6                        12                                                                   1
+              7                             7                                                                                                                                                           1
+              8                                 8
+              9                                     4   1                                                                                           1                         1                                                          1
+             10                                     1   2                                                                                           1                         1                                                          1
+             11                                             72
+             12                                                  31                                         2
+             13                                                       7
+             14                                                           7
+             15                                                               7
+             16                                                                   8                                                                                                                                                 1
+             17               1                                                       7                                                                                  1                 1        1
+             18                                     1   1                                 10                                                        1                                                           1                                1
+             19                                                                                5
+             20                                                                                    13
+             21                                                                                         6                                               2
+             22                        1                         1                                          26
+             23                                                                                             1 19
+             24               1                                                                         1          28                                   1
+             25                                                                                                         10
+             26                                                                                                              16
+             27                                                                                                                   13                                                                    1                       1
+             28                                                                                                                        12
+             29                                                                                                                             9
+             30                                                                                                                                 5                                                                                                     1
+             31                                     1   1                                                                                           7                                                                                    1
+             32                                                                                         2          1                                    7
+
+
+
+
+True Class
+             33                                                                                                                                             8                                                                       1
+             34                                                                                         1                                               1       14
+             35                                                                                                                                                      6
+             36                                                                                                                                                          14                2
+             37                                                                                                                                                               6
+             38
+             39                                                                                                                                                                       11
+             40                                                                                                                                                          2                 8
+             41                                                                                                                                                                                11               1                                1
+             42               1                                                       1                                                                                                             7
+             43                                                                                                                                                                                         5
+             44                                                                                                                                                                                             8
+             45                                                                                                                                                                                                 7
+             46                                                                                                                                                                                                     9
+             47                                 1                                                  1                                                                              1                                     8
+             48                                                                                                                                                                                                             7
+             49                                                                                                                   1                                                                     1                       5
+             50                                                                                                                                             1                                                                       12
+             51                                     1                                                                                                                         1                                                          4
+             52                                                                                                                                                                                                                              6
+             53                                                                                                              1                                                                                                                   12
+             54                                                                                                                                 1                                                                                                     7            1
+             55                                                                                                              1                                                                                                                            8
+             56                                                                                                                   1                                                                                             1                             21
+             57                                                                                                                                                                                                                                       1            5
+             58                                                                                                                                                                                                                                                        5
+
+
+
+
+                1    2   3    4   5    6    7   8   9   10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52 53 54 55 56 57 58
+                                                                                                                                                                                                                                                                           Appendix B: Confusion matrix associated with gun model classiﬁcation
+
+
+
+
+                                                                                                                                            Predicted Class
+                                                                                                                                                                                                                                                                                                                                                  Multimedia Tools and Applications (2022) 81:30387–30412
+Multimedia Tools and Applications (2022) 81:30387–30412                                                 30411
+
+
+Acknowledgments This publication was partially supported by the following awards: NPRP12S-0125-
+190013 from QNRF-Qatar National Research Fund, a member of The Qatar Foundation, and the Innova-
+tion Research Project “Anti-Spoofers - GPS Spoofing Detection Exploiting Crowd-Sourced Information”
+awarded by the HBKU Innovation Center. The information and views set out in this publication are those of
+the authors and do not necessarily reflect the official opinion of the QNRF.
+
+Funding Open Access funding provided by the Qatar National Library.
+
+Declarations This publication was partially supported by the following awards: NPRP12S-0125-190013
+from QNRF-Qatar National Research Fund, a member of The Qatar Foundation, and the Innovation Research
+Project “Anti-Spoofers - GPS Spoofing Detection Exploiting Crowd-Sourced Information” awarded by the
+HBKU Innovation Center.
+
+Open Access This article is licensed under a Creative Commons Attribution 4.0 International License, which
+permits use, sharing, adaptation, distribution and reproduction in any medium or format, as long as you give
+appropriate credit to the original author(s) and the source, provide a link to the Creative Commons licence,
+and indicate if changes were made. The images or other third party material in this article are included in the
+article’s Creative Commons licence, unless indicated otherwise in a credit line to the material. If material is
+not included in the article’s Creative Commons licence and your intended use is not permitted by statutory
+regulation or exceeds the permitted use, you will need to obtain permission directly from the copyright holder.
+To view a copy of this licence, visit http://creativecommons.org/licenses/by/4.0/.
+
+
+
+References
+
+ 1. Costa YMG, Oliveira LS, Silla CN (2017) An evaluation of convolutional neural networks for music
+    classification using spectrograms. Appl Soft Comput 52:28–38
+ 2. Dennis J, Tran HD, Li H (2011) Spectrogram image feature for sound event classification in mismatched
+    conditions. IEEE Signal Process Lett 18(2):130–133
+ 3. Djeddou M, Touhami T (2013) Classification and modeling of acoustic gunshot signatures. Arab J Sci
+    Eng 38(12):3399–3406
+ 4. Ffmpeg. https://www.ffmpeg.org/, Accessed: 2020-08-10
+ 5. Glorot X, Bengio Y (2010) Understanding the difficulty of training deep feedforward neural networks.
+    In: Teh YW, Titterington M (eds) Proceedings of the thirteenth international conference on artificial
+    intelligence and statistics, proceedings of machine learning research, vol 9. PMLR, Chia Laguna Resort,
+    pp 249–256
+ 6. Hershey S, Chaudhuri S, Ellis DPW, Gemmeke JF, Jansen A, Moore RC, Plakal M, Platt D, Saurous RA,
+    Seybold B, Slaney M, Weiss RJ, Wilson K (2017) CNN architectures for large-scale audio classification.
+    In: 2017 IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP), pp 131–
+    135
+ 7. Ioffe S, Szegedy C (2015) Batch normalization: Accelerating deep network training by reducing internal
+    covariate shift. In: Bach F, Blei D (eds) Proceedings of the 32nd international conference on machine
+    learning, Proceedings of Machine Learning Research, vol 37. PMLR, Lille, pp 448–456
+ 8. Khan S, Divakaran A, Sawhney HS (2009) Weapon identification using hierarchical classification of
+    acoustic signatures. In: Sensors, and command, control, communications, and intelligence (C3I) tech-
+    nologies for homeland security and homeland defense VIII, vol 7305. International Society for Optics
+    and Photonics, p 730510
+ 9. Khan S, Divakaran A, Sawhney HS (2010) Weapon identification across varying acoustic conditions
+    using an exemplar embedding approach. In: Sensors, and command, control, communications, and intel-
+    ligence (C3I) technologies for homeland security and homeland defense IX, vol 7666. International
+    Society for Optics and Photonics, p 76662B
+10. Kiktova E, Lojka M, Pleva M, Juhar J, Cizmar A (2015) Gun type recognition from gunshot audio
+    recordings. In: 3rd International Workshop on Biometrics and Forensics (IWBF 2015). IEEE, pp 1–6
+11. Kim Y, Moon T (2016Jan) Human detection and activity classification based on micro-doppler
+    signatures using deep convolutional neural networks. IEEE Geosci Remote Sens Lett 13(1):8–12
+12. Kingma DP, Ba J (2014) Adam: A method for stochastic optimization. CoRR arXiv:1412.6980
+13. Krizhevsky A, Sutskever I, Hinton GE (2012) Imagenet classification with deep convolutional neural
+    networks. In: Proceedings of the 25th international conference on neural information processing systems
+    - Volume 1, NIPS’12. Curran Associates Inc., USA, pp 1097–1105
+30412                                              Multimedia Tools and Applications (2022) 81:30387–30412
+
+
+14. Lecun Y, Bottou L, Bengio Y, Haffner P (1998Nov) Gradient-based learning applied to document
+    recognition. Proc IEEE 86(11):2278–2324
+15. Libal U, Spyra K (2014) Wavelet based shock wave and muzzle blast classification for different
+    supersonic projectiles. Expert Syst Appl 41(11):5097–5104
+16. Morton Jr K D, Torrione PA, Collins L (2011) Classification of acoustic gunshot signatures using a non-
+    parametric bayesian signal model. In: Sensors, and command, control, communications, and intelligence
+    (C3I) technologies for homeland security and homeland defense X, vol 8019. International Society for
+    Optics and Photonics, p 80190T
+17. Nair V, Hinton GE (2010) Rectified linear units improve restricted boltzmann machines. In: Proceedings
+    of the 27th International Conference on Machine Learning, ICML’10. Omnipress, USA, pp 807–814
+18. Navrátil M, Křesálek V, Dostálek P (2011) Neural network classification of gunshots using spectral
+    characteristics. In: Proceedings of the 13th WSEAS International Conference on Automatic Con-
+    trol, Modelling and Simulation, ACMOS’11. World Scientific and Engineering Academy and Society
+    (WSEAS), Stevens Point, pp 262–267
+19. Ngiam J, Khosla A, Kim M, Nam J, Lee H, Ng AY (2011) Multimodal deep learning. In: Proceedings
+    of the 28th international conference on machine learning (ICML-11), pp 689–696
+20. Ravi D, Wong C, Lo B, Yang G (2016June) Deep learning for human activity recognition: A resource
+    efficient implementation on low-power devices. In: 2016 IEEE 13th International Conference on
+    Wearable and Implantable Body Sensor Networks (BSN), pp 71–76
+21. Saleem S, Subhan F, Naseer N, Bais A, Imtiaz A (2020) Forensic speaker recognition: A new method
+    based on extracting accent and language information from short utterances. Forensic Science Inter-
+    national: Digital Investigation 34:300982. [Online]. Available: http://www.sciencedirect.com/science/
+    article/pii/S2666281720300500
+22. Sallai J, Hedgecock W, Volgyesi P, Nadas A, Balogh G, Ledeczi A (2011) Weapon classification and
+    shooter localization using distributed multichannel acoustic sensors. J Syst Archit 57(10):869–885
+23. Sallai J, Hedgecock W, Volgyesi P, Nadas A, Balogh G, Ledeczi A (2011) Weapon classification and
+    shooter localization using distributed multichannel acoustic sensors. J Syst Archit 57(10):869–885
+24. Sallai J, Lédeczi A, Völgyesi P (2011) Acoustic shooter localization with a minimal number of single-
+    channel wireless sensor nodes. In: Proceedings of the 9th ACM Conference on Embedded Networked
+    Sensor Systems, SenSys ’11. ACM, New York, pp 96–107
+25. Sánchez-Hevia HA, Ayllón D, Gil-Pita R, Rosa-Zurera M (2017) Maximum likelihood decision fusion
+    for weapon classification in wireless acoustic sensor networks. IEEE/ACM Trans Audio Speech Lang
+    Process (TASLP) 25(6):1172–1182
+26. Satt A, Rozenberg S, Hoory R (2017) Efficient emotion recognition from speech using deep learning on
+    spectrograms. In: INTERSPEECH
+27. Schlüter J, Böck S (2014) Improved musical onset detection with convolutional neural networks. In:
+    2014 IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP), pp 6979–
+    6983
+28. Srivastava N, Hinton G, Krizhevsky A, Sutskever I, Salakhutdinov R (2014) Dropout: A simple way to
+    prevent neural networks from overfitting. J Mach Learn Res 15(1):1929–1958
+29. Top 5 most popular calibers for handguns. https://www.guns.com/news/2019/06/25/top-5-most-popular-
+    calibers-for-handguns, Accessed: 2020-08-10
+30. Volgyesi P, Balogh G, Nadas A, Nash CB, Ledeczi A (2007) Shooter localization and weapon classifi-
+    cation with soldier-wearable networked sensors. In: Proceedings of the 5th international conference on
+    mobile systems, applications and services, MobiSys ’07. ACM, New York, pp 113–126
+31. What are the most popular calibers in the us? http://knowledgeglue.com/what-are-the-most-popular-
+    calibers-in-the-us, Accessed: 2020-08-10
+32. Wyse LL (2017) Audio spectrogram representations for processing with convolutional neural networks.
+    arXiv:1706.09559
+33. youtube-dl, https://github.com/ytdl-org/youtube-dl, Accessed: 2020-08-10
+
+Publisher’s note Springer Nature remains neutral with regard to jurisdictional claims in published maps
+and institutional affiliations.
+

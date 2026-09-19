@@ -1,0 +1,781 @@
+                                                                                                                                                         TinyChirp: Bird Song Recognition Using TinyML
+                                                                                                                                                         Models on Low-power Wireless Acoustic Sensors
+                                                                                                                                                         Z. Huang∗ , A. Tousnakhoff∗ , P. Kozyr† , R. Rehausen‡ , F. Bießmann†¶ R. Lachlan§ , C. Adjih∥ , E. Baccelli∥∗
+                                                                                                                                                                                          ∗ Freie Universität Berlin † Berlin University of Applied Sciences
+                                                                                                                                                                                            ‡ Woks Audio GmbH § Royal Holloway University of London
+                                                                                                                                                                                                   ¶ Einstein Center for Digital Future ∥ Inria, France
+
+
+
+
+                                                                                                                                                          Abstract—Monitoring biodiversity at scale is challenging. De-             with RAM memory budgets in the order of 500 kiloBytes [1],
+                                                                                                                                                       tecting and identifying species in fine grained taxonomies requires          which yields specific constraints on software embedded on
+2024 IEEE 5th International Symposium on the Internet of Sounds (IS2) | 979-8-3503-6652-5/24/$31.00 ©2024 IEEE | DOI: 10.1109/IS262782.2024.10704131
+
+
+
+
+                                                                                                                                                       highly accurate machine learning (ML) methods. Training such                 such devices [2].
+                                                                                                                                                       models requires large high quality data sets. And deploying
+                                                                                                                                                       these models to low power devices requires novel compression                    Meanwhile, as Artificial Intelligence (AI) achieves excellent
+                                                                                                                                                       techniques and model architectures. While species classification             performance in pattern recognition of audio and biosignals,
+                                                                                                                                                       methods have profited from novel data sets and advances in ML                more and more bioacoustic researchers leverage Machine
+                                                                                                                                                       methods, in particular neural networks, deploying these state-of-            Learning (ML) related methods to improve accuracy and
+                                                                                                                                                       the-art models to low power devices remains difficult. Here we               efficiency. However, until recently, such ML models, e.g.
+                                                                                                                                                       present a comprehensive empirical comparison of various tinyML
+                                                                                                                                                       neural network architectures and compression techniques for                  BirdNET [3] were confined to lab use only, as their resource
+                                                                                                                                                       species classification. We focus on the example of bird song                 requirements (GigaBytes of RAM) are way beyond the capac-
+                                                                                                                                                       detection, and more concretely on a data set curated for studying            ity of microcontroller-based hardware available on sensors in
+                                                                                                                                                       the corn bunting bird species. We publish the data set along with            the field. However, recent advances in TinyML, a lively field of
+                                                                                                                                                       all the code and experiments of this study. In our experiments               research targeting machine learning for microcontrollers, offer
+                                                                                                                                                       we comparatively evaluate predictive performance, memory and
+                                                                                                                                                       time complexity of spectrogram-based methods and of more                     a glimpse of hope that pattern recognition of bioacoustic sig-
+                                                                                                                                                       recent approaches operating directly on the raw audio signal. Our            nals might become possible, over longer periods, as required
+                                                                                                                                                       results demonstrate that TinyChirp – our approach – can robustly             by the aforementioned use cases.
+                                                                                                                                                       detect individual bird species with precisions over 0.98 and reduce             Paper Contributions. In this paper, we explore the pos-
+                                                                                                                                                       energy consumption compared to state-of-the-art, such that an                sibility of using TinyML in practice, on common low-power
+                                                                                                                                                       autonomous recording unit lifetime on a single battery charge is
+                                                                                                                                                       extended from 2 weeks to 8 weeks, almost an entire season.
+                                                                                                                                                                                                                                    microcontroller hardware, for a concrete use case: monitoring
+                                                                                                                                                          Index Terms—TinyML, Microcontroller, Acoustic Sensors, Ma-                corn bunting birds’ songs, in a rural area in the UK, over
+                                                                                                                                                       chine Learning                                                               several months in a row, using a fleet of energy-efficient
+                                                                                                                                                                                                                                    acoustic sensors. We aim to answer the following questions:
+                                                                                                                                                                               I. I NTRODUCTION                                     (Q1) Can we pre-screen the audio on the low-power sensor
+                                                                                                                                                          The typical data pipeline with bio-acoustic research requires             node, so as to only store the targeted bird songs on each
+                                                                                                                                                       the deployment of sensors, in which each node is battery-                    sensor? (Q2) How does that extend the device’s lifetime, in
+                                                                                                                                                       powered and left in the field to record environmental sound,                 terms of memory and energy budgets? More in detail, our
+                                                                                                                                                       continuously, for a long period (e.g. for a whole season).                   contributions are as follows:
+                                                                                                                                                                                                                                       • We propose a pipeline to record, recognize and store
+                                                                                                                                                       Thereafter, the recorded data is manually collected by re-
+                                                                                                                                                       searchers on-site, from each node, and further analyzed in                         specific bird songs on low-power microcontroller-based
+                                                                                                                                                       laboratory. In the case of avian species for instance, only the                    devices, which can be further scale-up to universal
+                                                                                                                                                       targeted bird species is relevant within the recorded data, and                    species;
+                                                                                                                                                                                                                                       • We developed a neural network with high accuracy on
+                                                                                                                                                       the rest of the data is to be discarded ultimately. This is both a
+                                                                                                                                                       cumbersome process and a waste of resources, not only at this                      bird song recognition. Furthermore, we optimize the
+                                                                                                                                                       downstream stage in the lab, but also upstream in the field, on                    network with partial convolution technology to minimize
+                                                                                                                                                       each node, while recording large amounts of irrelevant data.                       the memory consumption on deployment;
+                                                                                                                                                                                                                                       • We propose a two-stage binary classification approach to
+                                                                                                                                                       In this pipeline, continuous recording of audio thus creates a
+                                                                                                                                                       bottleneck in terms of memory and energy budgets available                         reduce computational and storage cost and enhance the
+                                                                                                                                                       on individual sensors – typically limited to a small battery,                      overall accuracy;
+                                                                                                                                                                                                                                       • We provide experimental results on both the classification
+                                                                                                                                                       and an SD card, respectively, driven by rudimentary software
+                                                                                                                                                       running on a low-power microcontroller. Such hardware is                           performance of models and resource consumption on
+                                                                                                                                                       very energy-efficient, but very limited in memory resources,                       low-power devices;
+                                                                                                                                                                                                                                       • We publish a new data set of curated audio recordings
+                                                                                                                                                         Corresponding author: zhaolan.huang@fu-berlin.de.                                snippets of corn bunting bird songs;
+
+
+
+
+                                                                                                                                                          Authorized licensed use limited to: CZECH TECHNICAL UNIVERSITY. Downloaded on June 01,2026 at 21:06:28 UTC from IEEE Xplore. Restrictions apply.
+  •   We provide open source code1 to reproduce the results                  Google AudioSet [3] and Urbansound8K [8] datasets are often
+      on common Microcontroller Units (MCUs).                                used to include non-bird species sounds.
+
+            II. BACKGROUND & R ELATED W ORK                                  C. Tiny Machine Learning (TinyML)
+A. Bird Song Recognition                                                        For models to operate on low-power devices, they must be
+                                                                             compact and computationally efficient. Studies have demon-
+   Bird song detection has seen significant recent advances
+                                                                             strated the use of lightweight CNNs for various Internet
+using various machine learning techniques. The common
+                                                                             of Sounds applications [13]–[18]. Other model architectures,
+prevalent approach uses deep learning methods on prepro-
+                                                                             such as tiny vision transformers have also been employed for
+cessed audio, which transforms the signal into a spectrogram
+                                                                             audio classification tasks in various studies [19]–[23]. More-
+using Short-Time Fourier Transform (STFT) [4]. This process
+                                                                             over, various quantization techniques are applied to models,
+effectively redefines the audio recognition task as an image
+                                                                             aiming to reduce their size to fit within the constraints of low-
+recognition task operating on a (log) Mel spectrogram [5],
+                                                                             power devices [24]–[26].
+[6]. Convolutional Neural Networks (CNNs) [4], [5], [7] and
+                                                                                Creating spectrograms from audio signals can be power-
+Residual Neural Networks (ResNets) [6], [8] are widely uti-
+                                                                             intensive; hence, some studies use instead raw time-series
+lized for such image recognition tasks in bird song detection.
+                                                                             data as input for neural networks [27]–[29]. Notably, raw
+BirdNET [3], a well-known neural network for bird song
+                                                                             audio signals have been used for urban sound analysis [25],
+recognition, is derived from the family of residual networks
+                                                                             [30]. The advantages of using time-series data include reduced
+and can recognize 6,000 of the world’s most common species
+                                                                             computational load and suitability for TinyML on low-power
+at the time of writing.
+                                                                             devices.
+   Another approach involves transforming the audio signal
+                                                                                In a nutshell: the integration of TinyML and acoustic sensors
+into Mel-Frequency Cepstral Coefficients (MFCCs), which are
+                                                                             has become a hot topic in the field of Internet of Sounds [31].
+then used as input for bird song classification [7], [9], [10].
+                                                                             As demonstrated in prior bioacoustic applications such as
+Alternatively, feature extraction using wavelet decomposition
+                                                                             [4], [32], [33], TinyML promises to offer new, appealing
+can be employed for this purpose [11]. Additionally, certain
+                                                                             combinations of high accuracy and resource-efficiency.
+studies combine different architectures [5], [9]. While these
+methods are effective for bird song recognition, their computa-              D. Embedded Software Platforms for TinyML
+tional requirements are typically too demanding for execution
+                                                                                The widely used model transpiler TVM (Tensor Virtual Ma-
+on microcontrollers.
+                                                                             chine [34]) has recently been extended with uTVM, providing
+   In this work we focus on bird songs, rather than calls.
+                                                                             automated transpilation and compilation for models output by
+The main reasons for this are the higher complexity of bird
+                                                                             major ML frameworks (TFLM, Pytorch, etc.). As such uTVM
+songs, their role in sexual selection, and the generally richer
+                                                                             exposes low-level routines and optimizes these for execution
+behavioral information they provide.
+                                                                             on different processing units, including for targets such as a
+B. Bioacoustic Audio Datasets                                                large variety of microcontrollers. Prior works such as [35], [36]
+                                                                             or MLPerfTiny [37] focused on the production, performance
+   High-quality and diverse datasets are crucial for training
+                                                                             and analysis of standard benchmark suites of representative
+models to accurately recognize birds and differentiate between
+                                                                             TinyML tasks on different microcontrollers. Conversely, prior
+species by their unique songs. The Xeno-canto database2 is
+                                                                             work such as U-TOE [38] or RIOT-ML [39] provide embedded
+one of the largest and most comprehensive collections of bird
+                                                                             operating system integration of TinyML, facilitating TinyML
+sounds, containing over 500,000 recordings from more than
+                                                                             benchmarking and continuous deployment over low-power
+10,000 species. Another extensive collection of bird audio
+                                                                             wireless network links such as IEEE 802.15.4 or BLE.
+recordings is available in the Macaulay Library3 , renowned for
+its high-quality bird audio recordings and detailed metadata.                         III. B IOACOUSTIC M ONITORING S CENARIO
+The combination of the Macaulay Library and Xeno-canto
+                                                                                As depicted in Figure 1, a network of battery-powered,
+audio recordings was used to train BirdNet [3]. In [5], the
+                                                                             autonomous recording units (ARUs, i.e. microcontroller-based
+public dataset CLO-43DS contains recordings of 43 different
+                                                                             acoustic sensors) is deployed across a monitored area. An
+North American wood-warblers. Another notable collection is
+                                                                             example of ARU is given in [40].
+the Birdsdata dataset with 20 bird species from the Beijing
+                                                                                These sensors remain in the field for an entire season, typi-
+Academy of Artificial Intelligence (BAAI) repository [6],
+                                                                             cally around six months. Locations are often remote and hard
+[8], [9]. The BEANS benchmark [12], designed to evaluate
+                                                                             to access and devices may be distributed over a relatively wide
+ML algorithms for bioacoustics tasks across various species,
+                                                                             area, making visiting them time-consuming. Birds typically do
+includes 12 public datasets on birds, mammals, anurans, and
+                                                                             not sing consistently during the whole day, while each bird has
+insects. To complement datasets focused on bird species, the
+                                                                             several different song types that need to be regularly sampled.
+ 1 see https://github.com/TinyPART/TinyChirp                                 Moreover, each individual bird moves around its individual
+ 2 see https://www.xeno-canto.org                                            territory, singing from a range of song posts, not all of which
+ 3 see https://www.macaulaylibrary.org/                                      will be adequately recorded from any one location.
+
+
+
+
+   Authorized licensed use limited to: CZECH TECHNICAL UNIVERSITY. Downloaded on June 01,2026 at 21:06:28 UTC from IEEE Xplore. Restrictions apply.
+               ARU                                       ARU                 potentially requiring a complex structure with a large size. On
+                                                                             the other hand, the limited resource budget allows only simple
+                                                ARU                          models to be deployed on Internet of Things (IoT) devices.
+                                                                               Thus we considered two orthogonal types of metrics to
+                                                                             evaluate the prediction performance on bird song classification
+                                                                             and resource usage on low-power IoT devices of TinyML
+                                                      Store
+                                                                             models. Preliminary results are presented in Section X.
+                               Classification
+                                                                             A. On-device Resource Usage
+                                                      Discard
+                                                                                We performed extensive profiling of all models on low-
+Fig. 1. Top: Low-power autonomous recording units (ARU) distributed          power devices to capture their effective memory and time
+spatially to monitor birds. Bottom: audio sample classification on an ARU.   complexity in a real-world application scenario. The metrics
+                                                                             are helpful to investigate the energy efficiency of the models,
+                                                                             complementing the commonly used metrics for predictive
+   On the network aspect, the sensors are distributed approxi-               performance.
+mately evenly, ensuring that each sensor can be wireless con-                   Memory (RAM) Consumption – This metric measures the
+nected by more than two neighboring sensors. This arrange-                   amount of dynamic memory space (primary RAM) consumed
+ment facilitates approximate triangulation through distance                  by the model during inference. It reflects the memory footprint
+estimation based on signal strength. The placement process                   of the model activation and is important for low-power devices
+can be streamlined using LEDs and a basic ultra-low-power                    that have limited memory resources.
+wireless protocol, such as IEEE 802.15.4 or LoRa. For space                     Storage (Flash memory) Consumption – This metric
+reason, we do not detail network aspects in the paper, but                   quantifies the amount of storage space, typically in terms of
+rather focus on the on-device machine learning aspects.                      Flash memory region, required to store the compute instruction
+   Although our work is designed around one very spe-                        and associated parameters.
+cific real-world research scenario (monitoring common Corn                      Computational Latency – This metric measures the time
+Bunting bird songs) the architectures should be readily appli-               consumption of performing inference for each input sample at
+cable to other audio data classification tasks.                              the model level. It reflects the inference speed of the model
+                                                                             on the low-power device and plays a crucial role in real-time
+A. Corn Bunting Monitoring Use-Case
+                                                                             or latency-sensitive applications.
+   SongBeam [40] microcontroller-based recorders have been                      Energy Consumption – This metric is crucial for battery-
+used to monitor corn bunting (Emberiza calandra) birds in                    operated and resource-constrained devices, where efficient
+Oxfordshire, UK. A set of 30-40 devices have been deployed                   energy usage can significantly impact device longevity and
+since 2022, currently comprising 3 complete breeding seasons                 performance. Energy consumption encompasses both active
+(February - July).                                                           power (when the device is triggered to perform tasks) and
+   SongBeam devices are based on an ARM Cortex-M micro-                      idle power (when the device is in sleep mode).
+controller, run on 4 D-cell batteries and record 4-channel WAV
+files onto 128 GB microSD cards. To maintain such a fleet of                 B. On-device Prediction Performance
+sensors, devices are currently checked approximately every 2                    Accuracy – It is defined as the ratio of correctly predicted
+weeks, especially because memory space is soon exhausted on                  instances to the total instances in the dataset. While accuracy
+the microSD cards.                                                           is intuitive, it can be misleading, especially in highly imbal-
+   The above deployment has been used to produce a sig-                      anced datasets. To address this limitation, accuracy should be
+nificant part of the dataset we present in Section V-A. Our                  combined with other metrics that offer a more detailed view
+experience using SongBeam and a preliminary analysis of                      of model performance.
+the raw dataset we produced shows that less than 10% of                         Precision and Recall – They are two fundamental met-
+recording time contains useful recordings. Given the extended                rics of classification models used to evaluate the ability to
+deployment period (6 months), remaining low-power while                      distinguish true positives (TP) from false positives (FP) and
+improving storage efficiency is thus paramount.                              false negatives (FN), particularly in the context of imbalanced
+   This description of the limitations of using SongBeam                     datasets.
+recorders to monitor corn buntings is likely to apply to                        F-Score – There is often a trade-off between precision and
+many biomonitoring scenarios: solar power may allow for                      recall; increasing one can lead to a decrease in the other.
+extending deployment lifetime in remote locations, but storage               As two common instances, F1 -score weighs them evenly,
+of recordings is a limiting factor.                                          while F2 -score treats recall as two times more important than
+                                                                             precision, applying in scenarios where false positives are more
+                     IV. E VALUATION M ETRICS                                tolerant than false negatives.
+ On the one hand, as the basic part of bird song recording, the                 Receiver Operating Characteristic (ROC) Curve – While
+model should identify the target bird song as much as possible,              the above metrics are sensitive to class imbalance – which
+
+
+
+
+   Authorized licensed use limited to: CZECH TECHNICAL UNIVERSITY. Downloaded on June 01,2026 at 21:06:28 UTC from IEEE Xplore. Restrictions apply.
+occurs in many species classification and detection tasks –                        and human-related sounds, such as church bells, trucks,
+there are other metrics that are more robust towards class                         etc.
+imbalance. The receiver-operator characteristic (ROC) curve                     After gathering all audio recordings from the above li-
+depicts the True Positive Rate (TPR) and False Positive Rate                 braries, we used BirdNET with the confidence threshold at
+(FPR) across different decision thresholds.                                  0.92 to identify and chop corn-bunting segments from all
+                                                                             datasets, and labeled them as target bird songs; all segments
+                        V. M ETHODOLOGY
+                                                                             were truncated or zero-padded to the length of 3 seconds. This
+   We used a combination of project-specific and publicly                    high confidence threshold is intended to minimize incorrect
+accessible data to train and validate our classification mod-                labels, although it does not entirely eliminate the label noise,
+els. In the data pre-processing phase, the raw audio signals                 which could potentially skew the performance metrics of our
+were further segmented, labeled, down-sampled and divided                    models, particularly in cases where the models are trained
+into different groups to generate classification datasets. The               on mislabeled data. Meanwhile, we chose other 3-s segments
+corresponding Mel-spectrograms of the pre-processed audio                    randomly and ensured no overlap with corn-bunting segments,
+segments were also created for spectral-based methods (mod-                  with labeled as non-target bird songs. To avoid data leakage,
+els). During the pre-processing stage, we conducted a pilot                  we implement an additional function that segments occurring
+analysis to establish guidelines and determine specific hyper-               sequentially in the source audio file were not distributed
+parameters for downsampling and spectrogram generation.                      across the training, validation and test sets. Table I shows the
+                                                                             distribution of target and non-target segments over all datasets.
+A. Data Acquisition
+   The publicly accessible data originated from Macaulay,                    B. Data Pre-processing
+Xeno-Canto, Google AudioSet, while the project-specific data                    This phase contains the following steps:
+were previously collected in a long-term research of bird song
+patterns. In order to ensure generalization across a wide variety               1) We divided the segments into training, validation and
+of conditions for the target species, the corn bunting, we                          test sets with the ratio of 80 : 10 : 10.
+gathered as many recordings as possible from a heterogeneous                    2) All segments were downsampled to 16 kHz using zero-
+suite of publicly available repositories, in addition to the                        order holder. These downsampled segments constituted
+custom data set collected. We aimed at increasing precision of                      the audio (waveform) dataset.
+all models by including a wide variety of non-target sounds.                    3) We transformed the downsampled audio segments into
+Our data set is made publicly available4 .                                          Mel-Spectrograms, and grouped them with the same
+                                                                                    splitting ratio to form the spectral dataset.
+   • Oxfordshire Corn Buntings. This project-specific library
+     contains recordings of corn buntings along a transect of                   Pilot Analysis – We averaged the STFT spectrograms
+     approximately 20 km in Southern England. Corn buntings                  of target and non-target segments in the training dataset
+     sing in a mosaic-like pattern of geographical variation                 to investigate their frequency characteristics, as depicted in
+     called dialects; our sample contains approximately 6                    Figure 2. Obviously, a bright band lays on the spectrogram
+     different dialects. The recordings were performed with                  of target segments roughly between 4000 and 8000 Hz, hints
+     directional parabolic microphones as described in [40].                 that a sample rate with 16 kHz should be sufficient to preserve
+   • Macaulay Library. This library contains the necessary
+                                                                             all frequency components of corn-bunting song according
+     audio recordings for our target species as well as the                  to Nyquist–Shannon theorem. A highpass filter can also be
+     other identified species. There are a total of 278 entries of           applied to eliminate low-frequency noise without damaging
+     audio recordings for the target species. For other species              target songs. Thus, we downsampled the segments from 48
+     as non-target, we limit the selection to a maximum of                   kHz to 16 kHz to reduce the resource consumption and
+     30 recordings per species and choose those with the                     improve the efficiency of classification phase. In the baseline
+     highest average community rating, acquiring a total of                  model we also designed a highpass filter to enhance Signal-
+     1468 recordings.                                                        to-noise ratio (SNR).
+   • Xeno-Canto. This library also contains recordings of tar-
+                                                                                Mel-Spectrogram – Mel-spectrogram is commonly used
+     get species and other species. We retrieved the recordings              in audio classification tasks due to its ability to closely
+     only marked with song and rated with the best quality                   approximate human auditory perception. To create log Mel-
+     level, resulting in 303 recordings of target species and                spectrograms, we first generated magnitude spectrograms of
+     9622 recordings of other species as non-target.                         STFT for all downsampled audio segments. The STFT was
+   • Google AudioSet. This dataset provides environmental
+                                                                             performed with a Hann window with a width of 1024 samples
+     sounds which contain non-bird sounds. We create a list                  and a step size of 256 samples. This process generated 184
+     of excluded categories to avoid overlap with other bird                 window frames and 513 frequency bins. Thereafter, the mag-
+     sounds. This data set includes weather-related sounds,                  nitude spectrograms were mapped onto the Mel scales with
+     such as rain, wind, thunderstorms, insects, other animal                80 Mel bins. In creating the Mel-spectrograms, we employed
+                                                                             a sampling rate of 16 kHz and focused on the frequency
+  4 see https://github.com/TinyPART/TinyChirp/tree/main/datasets             range of 80-8000 Hz. This also allows ML models to capture
+
+
+
+
+   Authorized licensed use limited to: CZECH TECHNICAL UNIVERSITY. Downloaded on June 01,2026 at 21:06:28 UTC from IEEE Xplore. Restrictions apply.
+                                      Average STFT Spectrogram of Target Segments                             where x(n) and N denote the data points and the length
+                        24000                                                                  +0 dB
+                         8000                                                                                 of a segment, respectively. We define two thresholds: tlow
+       Frequency (Hz)    4000                                                                  -10 dB
+                         2000                                                                                 and thigh . If P is smaller than tlow , the MCU remains in
+                         500                                                                   -20 dB         the idle/low-power state, and the audio sample is discarded
+                                                                                                              directly. Else, P is compared to thigh . Depending on this
+                          100                                                                  -30 dB
+                            0                                                                                 result, and on the decision strategy (see below), the audio
+                                    Average STFT Spectrogram of Non-Target Segments            -40 dB         sample is either stored or further analyzed via inference using
+                        24000
+                         8000                                                                                 the machine learning model. Both tlow and thigh were tuned on
+                         4000                                                                  -50 dB
+       Frequency (Hz)
+
+
+
+
+                         2000                                                                                 training dataset for optimized recall and F2 -score, respectively.
+                                                                                               -60 dB
+                         500                                                                                  The evaluation results are presented in Table IV.
+                         100                                                                   -70 dB
+                                                                                                              B. TinyChirp Decision Strategy
+                           0
+                                0        0.5      1       1.5        2        2.5          3
+                                                        Time (s)                                                 We employ a double-phase approach for enhanced accuracy
+                                                                                                              and efficiency of bird song recognition, combining the baseline
+      Fig. 2. Average STFT of target and non-target audio segments.                                           with a TinyML model for further verification. The process is
+                                                                                                              as follows:
+                                           TABLE I                                                               1) Step 1: Baseline Filtering – Pre-screening is conducted
+                          DATA DISTRIBUTION OVER DIFFERENT DATASETS .
+                                                                                                                    using the baseline pre-processing step described in Sec-
+                    Dataset                                        # Target         # Non-Target
+                                                                                                                    tion VI-A, designed to provide a quick and efficient
+                                                                                                                    preliminary analysis. If P is smaller than tlow , the
+                    Oxfordshire Corn Buntings                      1566             0
+                    Macaulay Library                               1059             2057                            microcontroller remains in the idle/low-power state, the
+                    Xeno-Canto                                     2111             2621                            audio sample is discarded and the process aborts. Else
+                    Google AudioSet                                0                4651                            proceed to Step 2.
+                    Summary                                        4736             9329                         2) Step 2: Inference-based Classification – If the power-
+                                                                                                                    saving flag is set and if P is smaller than thigh a
+                                                                                                                    TinyML-based classification with higher accuracy is
+subtle patterns outside the primary band (4000 Hz to 8000                                                           conducted via model inference. If the audio sample is
+Hz), adapt to variations, and improve overall classification                                                        not classified as the target, the audio sample is discarded
+accuracy by leveraging information that a simple filter might                                                       and the process aborts. Else proceed to Step 3.
+overlook. Lastly, we converted the Mel-spectrograms into a                                                       3) Step 3: Storage – Without further processing, the audio
+logarithmic magnitude scale to obtain log Mel-spectrograms,                                                         sample is logged, i.e. stored on the SD card.
+with the shape of 184 × 80.                                                                                      Note that the decision strategy can therefore be configured
+                                                                                                              with two ”knobs”. On one hand the power-saving flag de-
+                           VI. BASELINE & D ECISION S TRATEGY                                                 termines skipping (or not) some of the computation and can
+   We propose an approach to optimizing the screening process                                                 thus decrease energy consumption. On the other hand, different
+by combining a high-speed signal processing step (hereafter                                                   TinyML models can be inserted in Step 2.
+named ”baseline”) with the precision of an TinyML model, en-                                                     Next, we thus study two families of TinyML models for
+suring reliable results while maintaining resource-consumption                                                Step 2: the first category of model takes a Mel-Spectrogram
+efficiency.                                                                                                   as input, while the second category of model takes time-series
+                                                                                                              as input. Table II presents a summary of the explored TinyML
+A. Baseline                                                                                                   model structures.
+   We developed a lightweight pre-selector signal processing                                                      VII. C LASSIFICATION BASED ON S PECTROGRAMS
+step, not relying on machine learning. First, the audio segments                                                 In contrast to the computer vision community, where the
+are normalized by min-max schema. Thereafter, a 9th-order                                                     transition from frequency decomposition based feature extrac-
+highpass Butterworth filter with the cut-off frequency of                                                     tion to neural feature extraction on raw image data introduced
+7000 Hz5 is imposed on the normalized segments, in order to                                                   in 2012 led to a significant increase in predictive performance
+suppress noise and non-relative sound in low-frequency and                                                    [41], neural feature extraction on raw audio time series did not
+to preserve only target components. Finally, we calculate the                                                 contribute to a comparable breakthrough yet. Instead most ML
+signal power P of the filtered segments,                                                                      techniques for audio pattern recognition (somewhat surpris-
+                                                                                                              ingly) were relying on image processing pipelines. Basically,
+                                                             N
+                                                       1 X                                                    image classification is performed, using a neural network,
+                                               P =           x(n)2 ,                                    (1)
+                                                       N n=1                                                  analyzing the spectrogram rendering of the audio trace.
+                                                                                                                 Unlike the spatial dimensions in image classification, the
+   5 The parameters of the filter were determined by hyper-parameter search                                   axes of the input represent time and frequency in audio clas-
+for optimized F2 -score on training dataset.                                                                  sification. Moreover, the pattern structure differs significantly:
+
+
+
+
+   Authorized licensed use limited to: CZECH TECHNICAL UNIVERSITY. Downloaded on June 01,2026 at 21:06:28 UTC from IEEE Xplore. Restrictions apply.
+natural objects in images often have well-defined, closed                                                    TABLE II
+contours, while spectrograms of sounds tend to be wide-band                           T INY ML M ODELS : S TRUCTURE AND C HARACTERISTICS .
+and sparsely distributed across the frequency-time domain.                    Model                Layer                        Input Shape    Output Shape
+These distinctions require tailored approaches to effectively
+                                                                              CNN-Mel
+model and interpret the data in audio classification tasks.                                        3 × 3 Conv2D + ReLU          184 × 80 × 1   182 × 78 × 4
+                                                                              (25.6K parameters)
+   For this reason, we initially consider the below two models,                                    MaxPooling                   182 × 78 × 4   91 × 39 × 4
+                                                                                                   3 × 3 Conv2D + ReLU          91 × 39 × 4    89 × 37 × 4
+based on state-of-the-art neural network architectures.                                            MaxPooling                   89 × 37 × 4    44 × 18 × 4
+   CNN-Mel – This model contains two 2D convolutional                                              Reshape                      44 × 18 × 4    3168 × 1
+                                                                                                   FC + ReLU                    3168 × 1       8×1
+layers for Mel-spectral inputs as feature extraction and two                                       FC + Softmax                 8×1            2×1
+fully connected layers as classifier. The output of the classifier                                 Same as SqueezeNet [42];
+                                                                              SqueezeNet-Mel
+are normalized by Softmax function as well.                                   (727K parameters)
+                                                                                                   Input and output layer are   184 × 80 × 1   2×1
+                                                                                                   tailored to fit the data.
+   SqueezeNet-Mel – This model is based on SqueezeNet
+[42], an advanced backbone focused on optimizing the ef-                      CNN-Time
+                                                                                                   3 × 1 Conv1D + ReLU          1 × 48000      4 × 48000
+                                                                              (748 parameters)
+ficiency of computer vision applications by strategically re-                                      MaxPooling                   4 × 48000      4 × 24000
+ducing parameters, with comparable performance to AlexNet                                          3 × 1 Conv1D                 4 × 24000      8 × 24000
+                                                                                                   Dropout 0.25                 8 × 12000      8 × 12000
+[41]. It leverages a so-called Fire module to achieve higher                                       Average Pooling              8 × 12000      8×1
+efficiency compared to standard convolutions with only a slight                                    FC + ReLU                    8×1            64 × 1
+                                                                                                   FC + Softmax                 64 × 1         2×1
+decrease in accuracy. We aligned its input shape with the Mel-
+                                                                              Transformer-Time
+spectrogram and tailored the output for binary classification.                                     Conv1D + ReLU                1 × 48000      16 × 48000
+                                                                              (1.6K parameters)
+   Limitations of Spectrograms on Microcontrollers Prac-                                           MaxPooling                   16 × 48000     16 × 24000
+                                                                                                   Dropout 0.25                 16 × 48000     16 × 24000
+tical experience on low-power microcontroller-based devices                                        Average Pooling              16 × 24000     16 × 1
+has shown however that producing and manipulating mel-                                             SingleHeadTransformer        16 × 1         16 × 1
+                                                                                                   FC + Softmax                 16 × 1         2×1
+spectrograms from audio signal streams on such devices is
+                                                                                                   SqueezeNet as backbone;
+problematic. It inserts an additional step in the processing                  SqueezeNet-Time      Conv2D → Conv1D;
+                                                                                                                                1 × 48000      2×1
+pipeline, which increases latency and memory requirements.                    (31.1K parameters)   reduce filter number
+                                                                                                   by 70%.
+Prior work (such as [43], section 6.2) concludes that the CPU
+bottleneck is not just the model inference time, but also the
+spectrogram calculation, which, compared to inference alone,                                             TABLE III
+almost doubles latency. Other previous work such as [44]                     L IGHTWEIGHT VARIANT OF THE F IRE MODULE OF 1D S QUEEZE N ET. T HE
+                                                                              NUMBER OF FILTERS IN ORIGINAL S QUEEZE N ET IS REPRESENTED BY x.
+measures on a quite powerful STM32F7 microcontroller that
+computing and writing in memory the mel-spectrogram of
+                                                                                           Name               Layer        Number of filters
+30 columns and 40 frequency bands takes approximately 1
+                                                                                           Squeeze 1 × 1      Conv1D       3 × ⌊0.3 × x⌋
+second. Note that these spectrogram dimensions are much                                    Expand 1 × 1       Conv1D       4 × ⌊0.3 × x⌋
+smaller than our requirements (184 columns × 80 frequency                                  Expand 3 × 1       Conv1D       4 × ⌊0.3 × x⌋
+bands) hence even more latency can be expected in our case.
+For these reasons, we next explore pipelines which skip the
+spectral pre-processing stage as described below.
+                                                                             volutional and pooling layers serve as feature extraction to
+      VIII. C LASSIFICATION BASED ON T IME - SERIES                          transfer raw audio signal into embeddings for the transformer.
+                                                                             The activations of the fully connected layer are normalized by
+   Contrary to the models described in the previous section
+                                                                             Softmax function as well.
+and inspired by the success of neural feature extraction in the
+                                                                                SqueezeNet-Time – This model is based on SqueezeNet
+computer vision domain [41], the pipelines we aim at next
+                                                                             [42]. We tailored this basis to align the input shape with
+take directly the raw audio signal time-series as input. More
+                                                                             the audio segment, and narrowed the output channels for
+precisely, we designed the three models described below. We
+                                                                             binary classification. To adapt the backbone to time-series
+inserted the dropouts before average pooling to gain a more
+                                                                             input, all 2D convolutional layers are replaced by temporal
+stable output [45].
+                                                                             convolutional layers. Furthermore, to have a more compact
+   CNN-Time – This simple model performs feature extrac-
+                                                                             structure, we decreased the filter number of all convolutional
+tion with two sequential (1D) temporal convolutional layers
+                                                                             layers by roughly 70%, as presented in Table III.
+followed by average pooling. A max pooling is inserted in-
+between to reduce the dimension of feature maps and enhance
+the non-linearity of the network. Two fully connected layers                  IX. A DDITIONAL M ODEL O PTIMIZATIONS FOR T INY ML
+act as classifier at the end of the network, with the probability
+outputs normalized by Softmax function.                                        In this study, we used two optimization techniques to
+   Transformer-Time – Inspired by [46], we designed an                       compress the models and further reduce their memory con-
+efficient, attention-based model with only one temporal con-                 sumption: model quantization on the one hand and on the
+volutional layer and one single-head transformer. The con-                   other hand partial convolution, as described below.
+
+
+
+
+   Authorized licensed use limited to: CZECH TECHNICAL UNIVERSITY. Downloaded on June 01,2026 at 21:06:28 UTC from IEEE Xplore. Restrictions apply.
+A. Model Quantization                                                                         Classic Convolution              Partial Convolution
+
+   Quantization reduces the model size and inference time by                         Input
+                                                                                                                      Input
+converting the weights and activations from higher precision                         Conv1D
+                                                                                                                      Conv1D
+(e.g., 32-bit floating-point) to lower precision (e.g., 8-bit
+                                                                                                      ......                         ......
+integer) [47]. In this study we adopted Post-Training Quan-
+tization (PTQ) with weights and activations quantized in 8-bit                       Conv1D                           Conv1D
+                                                                                                                         +         ......
+integer. To avoid substantial loss of prediction performance,                                         ......
+                                                                                                                      Avg. Pooling
+
+the training dataset was used to find the optimal scale factor
+                                                                                                                              Sliding Window
+and zero-point of the activations [48].                                              Avg. Pooling                             Variables in Memory
+                                                                                                      ......
+
+B. Partial Convolution
+   We observed that the outputs of the Conv1D layer require                  Fig. 3. Partial convolution reduces memory consumption by applying small
+significant memory, which impedes deployment on resource-                    sliding window on inputs.
+constrained tiny devices. As presented in Table II, the peak
+memory consumption occurs at the first Conv1D layer both
+in CNN-Time and Transformer-Time with 768 kB and 3                           implementation more suitable for tiny devices. We applied this
+MB, respectively. This indicates that deployment on resource-                strategy to the Conv1D layers combined with average pooling
+constrained tiny devices is impractical.                                     in the CNN-Time and Transformer-Time architectures.
+   To address this issue and inspired by [49], we exploited the                       X. T INY C HIRP P ERFORMANCE E VALUATION
+fact that average pooling can be computed iteratively point-by-
+point on the output channels of the final Conv1D layer over                     In the following, we conducted a comprehensive evaluation
+a small sliding window of inputs. Each point in the output                   of the discriminative performance of TinyChirp with different
+channels depends only on a small subset (kernel window) of                   TinyML models, as well as of resource consumption and
+the outputs from the previous layer. That is, for a block of                 computation time on typical low-power boards based on
+L Conv1D layers following by an average pooling layer, its                   microcontrollers.
+output y can be iteratively computed on the input sequence                   A. Classification Performance Comparison
+x(n), n = 1 . . . N as following:
+                                                                                Our evaluation process began with the generation of ROC
+                                1 L                                          curves and the corresponding Area Under the Curves (AUCs)
+      yj (k) = yj (k − 1) +         A (k),                            (2)
+                               NL j                                          on the training dataset, providing a clear picture of the models’
+           k = 1 . . . NL , j = 1 . . . CL .                                 abilities to distinguish between classes. As shown in Figure 4,
+                 Cl−1                                                        the spectrogram-based models – CNN-Mel and SqueezeNet-
+                 X                             Kl
+     Alc (n) =          Wcl (i) · [Al−1
+                                    i (n −        )···                (3)    Mel – achieved the best classification performance with AUCs
+                 i=1
+                                               2                             of 1.0 and 0.99, respectively, followed by time-series models
+                                               Kl T                          – CNN-Time and Transformer-Time – both with 0.98 AUC.
+                  Al−1          l−1
+                   i (n) · · · Ai (n +           )]                          Unexpectedly, with a more complex structure, SqueezeNet-
+                                               2
+     A0 (n) = x(n),                                                   (4)    Time performs worst (lower AUC than the baseline).
+           l = 1 . . . L, c = 1 . . . Cl , n = 1 . . . Nl , N0 = N              We next measured accuracy, precision, recall, F1 - and F2 -
+                                                                             score, shown in Figure 5. Spectrogram-based models achieve
+where yj (NL ) is the result of the average pooling of the j-                the highest metrics for the whole range of threshold values. For
+th channel; Alc (n) denotes the n-th point in channel c of the               time-series models, Transformer-Time worked overall better
+l-th Conv1D layer calculated with kernel weights W . Each                    than CNN-Time; Again, SqueezeNet-Time performs worst
+Conv1D layer contains Cl channels with filter size of K l and                (consistent with the above ROC analysis).
+output size of Nl . Without loss of generality, the formula of                  Next, we focused on finding the threshold settings for
+partial convolution contains only the linear components and                  optimal F2 -score prioritizing recall, i.e. reducing the likelihood
+considers only one-dimension case for the sake of simplicity;                of mistakenly discarding records of the targeted bird). The
+it can be generalized in high-dimension and integrated with                  results are shown in Table IV for training data, thereafter
+non-linear building blocks (e.g., stride, non-linear activations,            verified on test (previously unseen) data as shown in Table V.
+pooing layers, etc.).                                                        Note that this threshold influences energy consumption: more
+   Figure 3 provides a comparison between classic convolution                target bird classification leads to more energy consumption (as
+and partial convolution. Unlike classic convolution where                    data needs to we stored on to SD card in this case).
+entire channels (C ×N ) are computed and stored before being                    These results are promising and allowing to focus only
+processed by the next layer, partial convolution requires only               on the relevant audio segments (10% of the total recording
+a small part of the channels (C × K, K << N ) for each layer.                time), as the classification performance is compelling. Thus,
+In our case with K = 3 and N = 48000, it can be expected                     TinyChirp can save 90% of SD card space compared to the ini-
+roughly 16000× smaller memory consumption, making the                        tial monitoring scenario (Section III-A), potentially extending
+
+
+
+
+   Authorized licensed use limited to: CZECH TECHNICAL UNIVERSITY. Downloaded on June 01,2026 at 21:06:28 UTC from IEEE Xplore. Restrictions apply.
+                           1.0                                                                                                    TABLE V
+                                                                                                          E VALUATION ON TEST DATASET USING MODEL THRESHOLD t FOR
+                                                                                                                            OPTIMIZED F2 - SCORES .
+                           0.8
+                                                                                                            Model                Accuracy   Precision   Recall   F2
+      True Positive Rate
+
+
+                           0.6                                                                              Baseline tlow        0.44       0.37        0.99     0.74
+                                                                                                            Power-saving thigh   0.78       0.62        0.82     0.77
+                           0.4                                                                              SqueezeNet-Mel       0.99       0.96        1.00     0.99
+                                                            CNN-Time, AUC: 0.98                             CNN-Mel              0.99       0.98        0.99     0.99
+                                                            Transformer-Time, AUC: 0.98                     CNN-Time             0.94       0.86        0.98     0.95
+                           0.2                              SqueezeNet-Time, AUC: 0.81
+                                                            CNN-Mel, AUC: 1.00                              Transformer-Time     0.93       0.90        0.91     0.91
+                                                            SqueezeNet-Mel, AUC: 0.99                       SqueezeNet-Time      0.79       0.61        1.00     0.88
+                                                            Baseline, AUC: 0.84
+                           0.0
+                              0.0   0.2        0.4            0.6          0.8            1.0
+                                              False Positive Rate
+                                                                                                       MCU’s lowest power mode (idle stage) was measured as the
+Fig. 4. ROC curves of TinyML models and the corresponding AUCs,                                        reference of absence of sound with sufficient intensity.
+evaluating on training dataset.
+                                                                                                          Measurement Results on Microcontrollers – The first
+                                                                                                       striking observation is that SqueezeNet-Time and SqueezeNet-
+                             TABLE IV
+    M ODEL THRESHOLD AND PREDICTION METRICS FOR OPTIMIZED
+                                                                                                       Mel were not deployable due to out-of-memory (OOM) (ex-
+          F2 - SCORES , EVALUATING ON TRAINING DATASET.                                                ceded memory budget) and were thus excluded in this exper-
+                                                                                                       iment. All other models fit in the constraints of memory and
+  Model                              Threshold (t)      Acc.        Precision    Recall         F2     storage budget, even when discounting the memory footprint
+  Baseline tlow                      1.00 × 10−7        0.44        0.38         0.99           0.75   of the OS and the network stack for wireless communication.
+  Power-saving thigh                 1.29 × 10−5        0.77        0.62         0.80           0.76
+                                                                                                          The resource footprint of different stages and models mea-
+  SqueezeNet-Mel                     0.01               0.99        0.98         1.00           0.99   sured on an nrf52840dk board are shown in Table VI. We
+  CNN-Mel                            0.27               1.00        0.99         1.00           1.00
+  CNN-Time                           0.23               0.92        0.82         0.98           0.94   observe that the model inference stage takes the bulk of the
+  Transformer-Time                   0.27               0.95        0.89         0.98           0.96   overall energy consumption, as it requires the most process
+  SqueezeNet-Time                    0.01               0.78        0.60         1.00           0.88
+                                                                                                       time and MCU in full power mode. As expected, the idle
+                                                                                                       stage requires the least power, as all peripherals and the MCU
+the deployment time to 18 weeks. However, complementary                                                are in the lowest power (standby) mode (until woken up by
+experiments must now be carried out on targeted hardware,                                              sound with sufficient amplitude).
+so as to evaluate other key metrics: computation time, energy                                             Spectrogram vs Time-series – Considering only the pre-
+consumption and memory footprint on typical microcontroller-                                           diction performance in Section X-A, it would seem natural to
+based devices. The next sections focus on that part.                                                   choose CNN-Mel as the best candidate, since it also provides
+                                                                                                       the best inference latency. However, taking pre-processing
+B. Performance Evaluation on Microcontrollers                                                          time into account (which for CNN-Mel includes producing
+   Experimental Setup – For our measurements, we used a                                                a spectrogram) shows a different picture. It takes roughly
+common low-power off-the-shelf board: the nRF52840 Devel-                                              2.4 seconds in total for a 3-second audio snippet, which is
+opment kit (nrf52840dk). This board is based on an ARM                                                 dangerously near the real-time constraint and costs high power
+Cortex-M4 processor (core frequency at 64 MHz), with a                                                 consumption. With the best prediction performance and the
+typical memory budget: 1 MB of Flash memory and 256 kB                                                 lowest total compute latency among time-series models, the
+of RAM. As embedded software base we used RIOT-ML [39].                                                Transformer-Time now appears like the best choice to deploy
+Throughout the experiments, we monitored the (RAM/Flash)                                               on tiny devices.
+resource footprint using built-in diagnostic tools provided by                                            Next, we consider jointly the overall resource consumption
+RIOT-ML and RIOT [50], as well as external measurement                                                 and the classification performance to discuss variants for the
+equipment as described below.                                                                          decision strategy described in Section VI-B:
+   Energy consumption was measured using an ampermeter to                                                 Baseline Only – With the Baseline tlow (Step 1 and
+gauge the board’s energy efficiency. This involved recording                                           Step 3 only) setting, the required computational resources are
+the current draw of the MCU and the external storage system                                            minimal, while achieving a recall of 0.99; however, due to the
+(SD card) in different stages. We used a voltage regulator                                             low precision, many false positives are stored, leading to the
+to supply 3.3 V Direct Current (DC) output and a logger to                                             lowest storage efficiency.
+capture detailed current profiles over time.                                                              TinyChirp Skipping Baseline – With this variant, the
+   Scope of the Measurements – Besides the model in-                                                   TinyML model is applied immediately, without pre-screening
+ference stage, we also considered the resource footprint of                                            by the baseline (Step 2 and Step 3 Only), leading to high pre-
+pre-processing during bird song recognition. Pre-processing                                            dictive performance and high storage efficiency, but requiring
+refers to down-sampling and calculation of Mel-spectrogram                                             higher energy consumption. Even when using the Transformer-
+as described in Section V-B. Also, the energy consumption in                                           Time with the lowest energy footprint, this requires more than
+
+
+
+
+   Authorized licensed use limited to: CZECH TECHNICAL UNIVERSITY. Downloaded on June 01,2026 at 21:06:28 UTC from IEEE Xplore. Restrictions apply.
+                        Accuracy                         Precision                     Recall                         F1                       F2
+               1.0                             1.0                          1.0                         1.0                        1.0
+
+               0.8                             0.8                          0.8                         0.8                        0.8
+
+               0.6                             0.6                          0.6                         0.6                        0.6
+
+               0.4                             0.4                          0.4                         0.4                        0.4
+
+               0.2                             0.2                          0.2                         0.2                        0.2
+
+               0.0                             0.0                          0.0                         0.0                        0.0
+                  0.0       0.5         1.0       0.0       0.5       1.0      0.0       0.5      1.0      0.0        0.5    1.0      0.0    0.5          1.0
+                             t                               t                            t                            t                      t
+                                  CNN-Time               Transformer-Time            SqueezeNet-Time             CNN-Mel       SqueezeNet-Mel
+
+             Fig. 5. Accuracy, recall, precision, F -scores of TinyML models on different threshold values t, evaluating on training dataset.
+
+                                                                        TABLE VI
+                                              R ESOURCE CONSUMPTION OF T INY ML MODELS ON NRF 52840 DK BOARD .
+
+                                                                                             Latency (ms)                               Energy (mJ)
+                     Model / Stage                   Memory (kB)     Storage (kB)                                   Power (mW)
+                                                                                        Inference    Preprocess                     Inference    Total
+                     Baseline                        67.216          20.34              213.755     2.0             9.900           2.116        2.136
+                     CNN-Mel                         104.328         37.868             406.146     1980.259        17.820          7.238        42.525
+                     SqueezeNet-Mel                  OOM             -                  -           -               -               -
+                     CNN-Time                        75.564          24.104             1490.687    2.0             17.160          25.580       25.614
+                     Transformer-Time                83.468          24.712             1079.293    2.0             17.820          19.233       19.268
+                     SqueezeNet-Time                 OOM
+                     Idle                            -               -                  -           -               6.270           -
+                     OS with Network Stack           7.556           35.808             -           -               -               -
+
+
+
+
+9 times the energy required for the baseline. This variant is                               used so far, our approach TinyChirp can extend from 2 weeks
+ideal for devices currently running out of storage space while                              to 18 weeks – almost a full season – the time intervals until
+still with substantial battery left.                                                        which researchers must harvest overfull data storage embedded
+   TinyChirp – This variant refers to the full series of Step 1-3                           on the recording units deployed in the field. Our experiments
+described in Section VI-B, whereby the samples not discarded                                also observe hands-on how performing inference directly on
+by the baseline are double-checked by the TinyML model.                                     the audio time-series is the better approach on microcontroller-
+This approach offers a good compromise of compute, storage                                  based hardware, compared to inference on mel-sepctrograms
+and energy footprint, by discarding early, without impacting                                typically used in audio pattern recognition. Looking beyond
+too much the overall prediction performance achievable by the                               monitoring Corn Bunting birds’ songs, TinyChirp is applicable
+TinyML model on its own.                                                                    to a wider range of similar bioacoustic use cases using a
+   TinyChirp with Power-saving – This variant (Step 1-3                                     large variety of low-power microcontroller-based hardware,
+with the power-saving flag enabled) provides a more energy-                                 based on our general-purpose TinyML approach and our
+efficient twist to TinyChirp. However, the overall precision is                             open-source code implementation integrated into the RIOT
+determined by the threshold setting thigh , which causes an                                 operating system.
+extra 40% of false positives to be stored onto the SD card,
+                                                                                                                 ACKNOWLEDGMENT
+leading to lower storage efficiency. This variant seems more
+suitable for currently running out of battery, but with still                                  The research leading to these results partly received funding
+sufficient storage resources.                                                               from the MESRI-BMBF German/French cybersecurity pro-
+                                                                                            gram under grant agreements No. ANR-20-CYAL-0005 and
+                       XI. C ONCLUSION                                                      16KIS1395K. We acknowledge the receipt of media from
+   In this paper we present an empirical study of a bioacoustic                             the Macaulay Library at the Cornell Lab of Ornithology and
+monitoring use case showing that machine learning is usable                                 the Xeno-Canto database. Felix Bießmann received support
+directly on autonomous recording units based on low-power                                   from the Einstein Center Digital Future, Berlin, the German
+microcontrollers. We focused on a concrete use-case: mon-                                   Research Foundation (DFG) (528483508 - FIP 12), the Federal
+itoring Corn Bunting birds in rural UK. We publish a data                                   Ministry of Economic Affairs and Climate Action (RIWWER
+set of the recordings, based on which we demonstrated that                                  01MD22007H), the German Federal Ministry of the Environ-
+TinyML can perform on-device high accuracy classification for                               ment (GCA 67KI2022A) and the German Federal Ministry of
+bird song classification. Compared to the traditional approach                              Education and Research (KIP-SDM 16SV8856).
+
+
+
+
+   Authorized licensed use limited to: CZECH TECHNICAL UNIVERSITY. Downloaded on June 01,2026 at 21:06:28 UTC from IEEE Xplore. Restrictions apply.
+                              R EFERENCES                                             and other Affiliated Events (PerCom Workshops), Mar. 2024, pp. 487–
+                                                                                      492.
+ [1] C. Bormann et al., “Terminology for Constrained-Node Networks,” RFC         [30] J. Sang et al., “Convolutional Recurrent Neural Networks for Urban
+     7228, May 2014.                                                                  Sound Classification Using Raw Waveforms,” in 2018 26th European
+ [2] O. Hahm et al., “Operating Systems for Low-end devices in the Internet           Signal Processing Conference (EUSIPCO), Sep. 2018, pp. 2444–2448.
+     of Things: a survey,” IEEE Internet of Things Journal, 2015.                [31] L. Turchet et al., “The internet of sounds: Convergent trends, insights,
+ [3] S. Kahl et al., “BirdNET: A deep learning solution for avian diversity           and future directions,” IEEE Internet of Things Journal, vol. 10, no. 13,
+     monitoring,” Ecological Informatics, vol. 61, p. 101236, Mar. 2021.              pp. 11 264–11 292, 2023.
+ [4] S. Disabato et al., “Birdsong Detection at the Edge with Deep Learning,”    [32] L. Schulthess et al., “Tinybird-ml: An ultra-low power smart sensor
+     in IEEE SMARTCOMP. Irvine, CA, USA: IEEE, Aug. 2021, pp. 9–16.                   node for bird vocalization analysis and syllable classification,” in 2023
+ [5] J. Xie et al., “Investigation of Different CNN-Based Models for Im-              IEEE International Symposium on Circuits and Systems (ISCAS). IEEE,
+     proved Bird Sound Classification,” IEEE Access, 2019.                            2023, pp. 1–5.
+ [6] H. Xiao et al., “AMResNet: An automatic recognition model of bird           [33] J. Miquel et al., “Energy-efficient audio processing at the edge for
+     sounds in real environment,” Applied Acoustics, Dec. 2022.                       biologging applications,” Journal of Low Power Electronics and Ap-
+ [7] M. T. Garcı́a-Ordás et al., “Multispecies bird sound recognition using a        plications, vol. 13, no. 2, p. 30, 2023.
+     fully convolutional neural network,” Applied Intelligence, Oct. 2023.       [34] T. Chen et al., “TVM: An automated End-to-End optimizing compiler
+ [8] S. Hu et al., “Deep learning bird song recognition based on MFF-                 for deep learning,” in 13th USENIX Symposium on Operating Systems
+     ScSEnet,” Ecological Indicators, vol. 154, p. 110844, Oct. 2023.                 Design and Implementation (OSDI 18), 2018, pp. 578–594.
+                                                                                 [35] C. R. Banbury et al., “Benchmarking tinyml systems: Challenges and
+ [9] S. Zhang et al., “A Novel Bird Sound Recognition Method Based on
+                                                                                      direction,” arXiv preprint arXiv:2003.04821, 2020.
+     Multifeature Fusion and a Transformer Encoder,” Sensors, Sep. 2023.
+                                                                                 [36] F. M. Polo et al., “tinyBenchmarks: Evaluating LLMs with fewer
+[10] D. Stowell et al., “Automatic acoustic detection of birds through deep
+                                                                                      examples,” Preprint arXiv:2402.14992, Feb. 2024.
+     learning: the first Bird Audio Detection challenge,” Methods in Ecology
+                                                                                 [37] C. Banbury et al., “Mlperf tiny benchmark,” arXiv preprint
+     and Evolution, Mar. 2019, arXiv:1807.05812 [cs, eess].
+                                                                                      arXiv:2106.07597, 2021.
+[11] A. Selin et al., “Wavelets in Recognition of Bird Sounds,” EURASIP
+                                                                                 [38] Z. Huang et al., “U-TOE: Universal TinyML On-Board Evaluation
+     Journal on Advances in Signal Processing, Dec. 2006.
+                                                                                      Toolkit for Low-Power IoT,” in Proceedings of IFIP/IEEE PEMWN,
+[12] M. Hagiwara et al., “Beans: The benchmark of animal sounds,” 2022.               2023.
+[13] M. Maayah et al., “LimitAccess: on-device TinyML based robust speech        [39] Z. Huang et al., “RIOT-ML: toolkit for over-the-air secure updates and
+     recognition and age classification,” Discover Artificial Intelligence,           performance evaluation of TinyML models,” Annals of Telecommunica-
+     vol. 3, no. 1, p. 8, Feb. 2023.                                                  tions, pp. 1–15, 2024.
+[14] O. Atanane et al., “Smart Buildings: Water Leakage Detection Using          [40] L. Zandberg et al., “SongBeam: an automated recorder using beamform-
+     TinyML,” Sensors, vol. 23, no. 22, p. 9210, Nov. 2023.                           ing to make high-quality recordings,” Open Science Framework Preprint,
+[15] G. Donati et al., “Tiny Deep Learning Architectures Enabling Sensor-             2023.
+     Near Acoustic Data Processing and Defect Localization,” Computers,          [41] A. Krizhevsky et al., “Imagenet classification with deep convolutional
+     vol. 12, no. 7, p. 129, Jun. 2023.                                               neural networks,” Advances in neural information processing systems,
+[16] K. Fang et al., “A Fall Detection using Sound Technology Based on                vol. 25, 2012.
+     TinyML,” in Proceedings of ITME, Wuyishan, China, Nov. 2021.                [42] F. N. Iandola et al., “Squeezenet: Alexnet-level accuracy with 50x fewer
+[17] M. S. Hussain et al., “SwishNet: A Fast Convolutional Neural Network             parameters and < 0.5 mb model size,” Preprint arXiv:1602.07360, 2016.
+     for Speech, Music and Noise Classification and Segmentation,” 2018.         [43] J. O. Nordby, “Environmental sound classification on microcontrollers
+[18] F. Zhu-Zhou et al., “Computationally constrained audio-based violence            using convolutional neural networks,” Master’s thesis, Norwegian Uni-
+     detection through transfer learning and data augmentation techniques,”           versity of Life Sciences, 2019.
+     Applied Acoustics, vol. 213, p. 109638, Oct. 2023.                          [44] J. Wang et al., “Keyword spotting system and evaluation of pruning
+[19] Jinyang Yu et al., “Tiny Audio Spectrogram Transformer: Mobilevit                and quantization methods on low-power edge microcontrollers,” arXiv
+     for Low-Complexity Acoustic Scene Classification with Decoupled                  preprint arXiv:2208.02765, 2022.
+     Knowledge Distillation,” 2023.                                              [45] B. J. Kim et al., “How to use dropout correctly on residual networks
+[20] P. Busia et al., “A Tiny Transformer for Low-Power Arrhythmia Clas-              with batch normalization,” in PMLR, 2023.
+     sification on Microcontrollers,” 2024.                                      [46] D. Elliott et al., “Tiny transformers for environmental sound classifica-
+[21] Y. Liang et al., “MCUFormer: Deploying Vision Transformers on                    tion at the edge,” arXiv preprint arXiv:2103.12157, 2021.
+     Microcontrollers with Limited Memory,” 2023.                                [47] M. Nagel et al., “A white paper on neural network quantization,” arXiv
+[22] Z. Yao et al., “A CNN-Transformer Deep Learning Model for Real-                  preprint arXiv:2106.08295, 2021.
+     time Sleep Stage Classification in an Energy-Constrained Wireless           [48] B. Jacob et al., “Quantization and training of neural networks for
+     Device * ,” in 2023 11th International IEEE/EMBS Conference on Neural            efficient integer-arithmetic-only inference,” in Proceedings of the IEEE
+     Engineering (NER). Baltimore, MD, USA: IEEE, Apr. 2023, pp. 1–4.                 Conference on Computer Vision and Pattern Recognition, 2018.
+[23] S. Wyatt et al., “Environmental Sound Classification with Tiny Trans-       [49] H. Pinckaers et al., “Streaming convolutional neural networks for end-
+     formers in Noisy Edge Environments,” in Proceedings of WF-IoT, Jun.              to-end learning with multi-megapixel images,” IEEE Transactions on
+     2021, pp. 309–314.                                                               Pattern Analysis and Machine Intelligence, 2020.
+[24] G. Xiao et al., “SmoothQuant: Accurate and Efficient Post-Training          [50] E. Baccelli et al., “RIOT: An open source operating system for low-end
+     Quantization for Large Language Models,” 2022.                                   embedded devices in the IoT,” IEEE Internet of Things Journal, 2018.
+[25] J. Park et al., “Urban Noise Analysis and Emergency Detection System
+     using Lightweight End-to-End Convolutional Neural Network,” Interna-
+     tional Journal of Computers Communications & Control, vol. 18, no. 5,
+     Aug. 2023.
+[26] I. Choi et al., “Reducing Energy Consumption and Health Hazards of
+     Electric Liquid Mosquito Repellents through TinyML,” Sensors, vol. 22,
+     no. 17, p. 6421, Jan. 2022.
+[27] S. Abdoli et al., “End-to-end environmental sound classification using
+     a 1D convolutional neural network,” Expert Systems with Applications,
+     vol. 136, pp. 252–263, Dec. 2019.
+[28] A. Sawhney et al., “Latent feature extraction for musical genres from
+     raw audio,” in Proceedings of the 32nd Conference on Neural Informa-
+     tion Processing Systems (NIPS 2018), 2021, pp. 2–8.
+[29] Shalini Mukhopadhyay et al., “Time Series Classification on Edge
+     with Lightweight Attention Networks,” in 2024 IEEE International
+     Conference on Pervasive Computing and Communications Workshops
+
+
+
+
+   Authorized licensed use limited to: CZECH TECHNICAL UNIVERSITY. Downloaded on June 01,2026 at 21:06:28 UTC from IEEE Xplore. Restrictions apply.
+

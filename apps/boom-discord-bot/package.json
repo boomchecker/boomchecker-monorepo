@@ -1,0 +1,22 @@
+{
+  "name": "boom-discord-bot",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Discord slash-command transport that fires a Claude Code Routine to create Linear issues",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.scripts.json",
+    "test": "vitest run",
+    "register:commands": "tsx scripts/register-commands.ts"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250620.0",
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3",
+    "vitest": "^3.0.5",
+    "wrangler": "^4.0.0"
+  }
+}

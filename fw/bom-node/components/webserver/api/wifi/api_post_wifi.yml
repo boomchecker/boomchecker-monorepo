@@ -1,0 +1,16 @@
+components:
+  schemas:
+    WifiConfig:
+      type: object
+      properties:
+        ssid:
+          type: string
+          description: SSID of the WiFi network
+          example: "my_wifi_network"
+        password:
+          type: string
+          description: Password of the WiFi network
+          example: "my_wifi_password"
+      required:
+        - ssid
+        - password

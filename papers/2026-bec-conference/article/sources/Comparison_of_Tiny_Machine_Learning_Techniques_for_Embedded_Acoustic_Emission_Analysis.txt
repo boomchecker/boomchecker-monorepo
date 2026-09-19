@@ -1,0 +1,498 @@
+                                                                                                                                                                                      2024 IEEE 10th World Forum on Internet of Things (WF-IoT)
+
+
+
+
+                                                                                                                                                Comparison of Tiny Machine Learning Techniques
+                                                                                                                                                   for Embedded Acoustic Emission Analysis
+                                                                                                                                                              Uditha Muthumala, Yuxuan Zhang, Luciano Sebastian Martinez-Rau and Sebastian Bader
+                                                                                                                                                                                         Department of Computer and Electrical Engineering
+2024 IEEE 10th World Forum on Internet of Things (WF-IoT) | 979-8-3503-7301-1/24/$31.00 ©2024 IEEE | DOI: 10.1109/WF-IoT62078.2024.10811219
+
+
+
+
+                                                                                                                                                                                            Mid Sweden University, Sundsvall, Sweden
+                                                                                                                                                                                                      sebastian.bader@miun.se
+
+
+                                                                                                                                                 Abstract—This paper compares machine learning approaches
+                                                                                                                                              with different input data formats for the classification of acoustic
+                                                                                                                                              emission (AE) signals. AE signals are a promising monitoring
+                                                                                                                                              technique in many structural health monitoring applications.
+                                                                                                                                              Machine learning has been demonstrated as an effective data
+                                                                                                                                              analysis method, classifying different AE signals according to the
+                                                                                                                                              damage mechanism they represent. These classifications can be
+                                                                                                                                              performed based on the entire AE waveform or specific features
+                                                                                                                                              that have been extracted from it. However, it is currently unknown
+                                                                                                                                              which of these approaches is preferred. With the goal of model
+                                                                                                                                              deployment on resource-constrained embedded Internet of Things
+                                                                                                                                              (IoT) systems, this work evaluates and compares both approaches
+                                                                                                                                              in terms of classification accuracy, memory requirement, process-             Fig. 1: Overview of an example AE waveform with key
+                                                                                                                                              ing time, and energy consumption. To accomplish this, features                properties.
+                                                                                                                                              are extracted and carefully selected, neural network models are
+                                                                                                                                              designed and optimized for each input data scenario, and the
+                                                                                                                                              models are deployed on a low-power IoT node. The comparative
+                                                                                                                                              analysis reveals that all models can achieve high classification              This technology can be applied to concrete structures to detect
+                                                                                                                                              accuracies of over 99%, but that embedded feature extraction                  defects during construction [5], provide in-service structural in-
+                                                                                                                                              is computationally expensive. Consequently, models utilizing the
+                                                                                                                                                                                                                            tegrity assessment to identify deterioration [4], monitor bridges
+                                                                                                                                              raw AE signal as input have the fastest processing speed and
+                                                                                                                                              thus the lowest energy consumption, which comes at the cost of                to ensure structural safety, and survey dams to detects leakage
+                                                                                                                                              a larger memory requirement.                                                  or structural problems [1].
+                                                                                                                                                 Index Terms—TinyML, acoustic emission, machine learning,                      The captured signals contain essential information affected
+                                                                                                                                              structural health monitoring, feature extraction                              by the damage type. Figure 1 illustrates an exemplar AE
+                                                                                                                                                                                                                            signal with several parameters that can be extracted from
+                                                                                                                                                                      I. I NTRODUCTION                                      the waveform, representing the signal’s various characteristics,
+                                                                                                                                                 Acoustic emissions (AE) are a widely used non-destructive                  including amplitude, rise time, frequency, absolute energy,
+                                                                                                                                              testing (NDT) method for identifying damages within concrete                  energy, signal strength, and central frequency [6], [7]. Con-
+                                                                                                                                              structures [1]. The stress waves formed by the formation                      ventional approaches to AE damage classification rely on the
+                                                                                                                                              and propagation of cracks are the primary signs of potential                  manual interpretation of these waveform parameters [8] or the
+                                                                                                                                              structural failure. As a result, this technique is well suited for            application of statistical thresholds. Manual interpretation is
+                                                                                                                                              detecting such problems at an early stage. Researchers and                    subjective to human expertise and prone to error, becoming
+                                                                                                                                              engineers can identify, localize, and characterize the type of                impractical for complex structures due to time and expertise
+                                                                                                                                              damage and provide correct measures to address the issue.                     constraints [9]. Statistical thresholds may fail to capture the
+                                                                                                                                                 The damage mechanism in concrete involves microscopic                      full range of damage types or their variability, leading to
+                                                                                                                                              strains during loading, leading to crack formation and propa-                 misclassifications [9].
+                                                                                                                                              gation [2]. These cracks release energy through stress waves,                    The advancement of machine learning (ML) has revolution-
+                                                                                                                                              ranging from 10 kHz to 1 MHz [3]. Characteristics of these AE                 ized AE signal analysis. ML models, such as neural networks,
+                                                                                                                                              signals, such as amplitude, frequency content, and rise time,                 support vector machines, and decision trees, have demonstrated
+                                                                                                                                              are influenced by the damage type, loading conditions, and                    their ability to learn from large datasets of AE data, enabling
+                                                                                                                                              material properties [4]. For example, tensile cracking generates              accurate and efficient damage classification [10]. These ML
+                                                                                                                                              higher-frequency AE signals than compressive cracking. These                  models can handle complex signal patterns and noise, pro-
+                                                                                                                                              signals can be captured using piezoelectric transducers, which                viding superior performance compared to traditional methods.
+                                                                                                                                              transform the elastic waves’ mechanical energy into electrical                However, implementing ML in AE analysis is not without
+                                                                                                                                              energy. The stethoscope-like structure of these sensors is thus               challenges. Current ML models often have large sizes and
+                                                                                                                                              able to capture the emissions from the structures correctly.                  computational requirements, making them impractical for real-
+
+
+                                                                                                                                              979-8-3503-7301-1/24/$31.00 ©2024 IEEE                                  444
+                                                                                                                                                  Authorized licensed use limited to: CZECH TECHNICAL UNIVERSITY. Downloaded on May 16,2026 at 13:25:20 UTC from IEEE Xplore. Restrictions apply.
+                                        2024 IEEE 10th World Forum on Internet of Things (WF-IoT)
+
+
+
+time monitoring applications [11]. Additionally, integrating                     For classification, only measurements from the sensor with
+ML models into microcontrollers, commonly used in real-                       the highest signal-to-noise ratio have been selected. Each signal
+time structural health monitoring (SHM) systems, can be                       was down-sampled to 1 000 data points to facilitate more
+challenging [12].                                                             efficient processing. Prior to further processing, the dataset has
+   Traditionally, a common approach was to use the extracted                  been partitioned with a 70%, 15%, and 15% ratio for training,
+features of AE waveforms as the input to ML algorithms.                       validation, and testing, respectively. This partition results in
+However, more recently it has been demonstrated that ML                       10 500 samples allocated for training and 2 250 samples each
+models can extract the relevant information from the raw                      for validation and testing.
+signal waveform [11], [13], [14]. This paper aims to investigate
+which of the two approaches is preferable from an accuracy
+                                                                              B. Feature Extraction
+and energy consumption point of view when aiming for an
+IoT-based real-time implementation. While ML models such                         Feature extraction is a common approach to reduce data
+as neural networks will be significantly smaller and require                  dimensions of the ML model input. This process involves
+less computation when operating on individual features rather                 converting raw time-series data into essential features that
+than raw signals, the feature extraction itself will require                  effectively summarize critical information of the signals. The
+extra computation and energy. Both approaches are deployed                    goal is to simplify the input data while keeping the most
+on a resource-constrained microcontroller, enabling real-time                 relevant information, aiding a more efficient classification.
+damage detection and classification. The models are evaluated                 A comprehensive suite of 28 features has been identified
+in terms of accuracy, model size, inference time, number of                   for AE signal analysis, including statistical, temporal, fre-
+parameters, memory, and energy per inference, demonstrating                   quency domain, and wavelet-domain features. These features
+that raw-signal models have significant advantages.                           are initially extracted using the Time Series Feature Extraction
+   The remainder of this paper is organized as follows. Section               Library (TSFEL) in Python [16], and are later implemented
+II describes the applied method and its implementation, includ-               as C code for use on the low-power embedded system. The
+ing the utilized dataset, feature extraction and selection, as well           chosen features are designed to reflect the AE signals’ unique
+as ML model design and deployment. Afterwards, Section III                    characteristics accurately.
+presents and discusses the obtained results, first for the models                Basic statistical features such as the mean, median, standard
+in general, and then with respect to their deployment. Finally,               deviation, variance, maxima, minima, skewness, and kurtosis
+we conclude the study in Section IV.                                          provide an overview of the signal’s central tendency, variabil-
+         II. M ETHODOLOGY AND I MPLEMENTATION                                 ity, and distribution shape. The mean and median relate to
+                                                                              the average and center value of the signal, respectively, while
+   The method in this article follows the typical design process
+                                                                              standard deviation and variance measure the spread of signal
+of Tiny Machine Learning (TinyML) applications. It consists
+                                                                              values. Skewness and kurtosis give insights into the signal’s
+of feature extraction, feature selection, model design, training
+                                                                              distribution asymmetry and tail heaviness.
+and validation, as well as deployment and testing of the
+generated model. The model architecture that has been used is                    Temporal features like absolute energy, zero crossing rate,
+a feed-forward Artificial Neural Network (ANN). As the target                 auto-correlation, root mean square (RMS), peak-to-peak dis-
+platform for the model, an Arduino Nano 33 BLE Sense was                      tance, slope, and counts of positive and negative turning points
+chosen, encompassing a low-power nRF52840 microcontroller                     are extracted too. They capture the time-based dynamics of
+with a ARM Cortex-M4 core. This microcontroller represents                    the signal. Absolute energy shows the signal’s total energy,
+a standard-class microcontroller in many IoT applications.                    RMS reflects its general magnitude, and zero crossing indicates
+                                                                              how often the signal changes sign. Auto-correlation assesses
+A. Acoustic Emission Dataset                                                  the similarity between the signal and its delayed version,
+   This paper utilizes a public dataset containing AE signals                 indicating patterns or periodicity. Peak-to-peak distance and
+collected from a 15 cm3 non-reinforced concrete block. The                    slope provide information on amplitude changes and rate of
+dataset is described in detail in [15]. The dataset was created               change, respectively, while turning points help identify signal
+using a controlled experimental setup that employed five asym-                anomalies.
+metrically positioned piezoelectric AE sensors. AE signals                       Frequency domain features, including the FFT mean coef-
+were collected at a 5 MHz sampling rate with 12-bit resolution,               ficient, spectral entropy, fundamental frequency, spectral cen-
+while the concrete block was stressed with a hydraulic press.                 troid, roll-off, and bandwidth, delve deeper into the signal’s
+The dataset contains 15 000 AE events, each with a duration                   frequency content. The FFT mean coefficient averages the
+of 2 ms, initially comprising 10 000 data points per signal. The              Fourier Transform coefficients to highlight dominant frequen-
+signals reflect three distinct damage types, tensile, shear, and              cies. Spectral entropy evaluates the frequency distribution’s
+mixed, and are labeled accordingly. The dataset is thoroughly                 unpredictability, indicating signal complexity. The fundamental
+balanced, with an equal distribution of 5 000 samples for each                frequency, spectral centroid, roll-off, and bandwidth describe
+damage type, providing a comprehensive representation of the                  how energy is distributed across frequencies, shedding light
+individual damage scenarios.                                                  on the signal’s harmonic structure and frequency range. A
+
+
+                                                                        445
+    Authorized licensed use limited to: CZECH TECHNICAL UNIVERSITY. Downloaded on May 16,2026 at 13:25:20 UTC from IEEE Xplore. Restrictions apply.
+                                                                  2024 IEEE 10th World Forum on Internet of Things (WF-IoT)
+
+
+                                                                                                                                                             Fully connected   Fully connected   Fully connected
+                                                     slope                                                             skewness                                                                                       class
+                                                median                                                               kurtosis           (a)   1000 samples     1000 x 64          64 x 32            32 x 3
+                                                                                                                                                                                                                   probabilities
+                                                skewness                                                    abs_energy
+                                                mean                                                        autocorr                                             ReLU              ReLU             SoftMax
+                                            wavelet_entropy                                                 rms
+                                            pk_pk_distance                                                 var
+                                           max                                                             std                                               Fully connected   Fully connected   Fully connected
+                                          mfcc_mean                                                    wavelet_abs_mean
+                                         spectral_bandwidth                                       wavelet_std                                                                                                         class
+                                         spectral_entropy                                         wavelet_var                           (b)    6 features        6 x 64           64 x 96            96 x 3
+                                                                                                                                                                                                                   probabilities
+                                       zero_cross                                                 wavelet_energy
+                                       min                                                        negative_turning                                               ReLU              ReLU             SoftMax
+                                      wavelet_std                                                positive_turning
+                                      fft_mean_coeff                                            zero_cross
+                                     spectral_centroid                                       fft_mean_coeff                                                  Fully connected   Fully connected   Fully connected
+                                     wavelet_abs_mean                                      fundamental_frequency
+                                     wavelet_var                                          spectral_entropy                                                                                                            class
+                                    wavelet_energy                                      mean                                            (c)    8 features        8 x 64           64 x 128          128 x 3
+                                                                                                                                                                                                                   probabilities
+                                   negative_turning                                  spectral_centroid                                                           ReLU              ReLU             SoftMax
+                                  positive_turning                                  spectral_rolloff
+                           fundamental_frequency                                  spectral_bandwidth
+                        spectral_rolloff                                         mfcc_mean
+                       std                                                       pk_pk_distance                                     Fig. 3: Architectures of the three ANN models for different
+                     rms                                                       wavelet_entropy
+                   var                                                         min
+       autocorr                                                                max                                                  input data (a) raw AE signals, (b) 6 time- and frequency-
+      abs_energy                                                       slope
+  kurtosis                                                         median                                                           domain features, and (c) 8 time-domain features.
+        101           102             103             104     0.00 0.05 0.10 0.15 0.20 0.25 0.30 0.35 0.40
+                     Value (log)                                                            Value
+
+                            (a)                                                             (b)                                     every possible feature combination with a manually defined
+Fig. 2: Feature ranking according to (a) Chi-square test and                                                                        maximum set size of ten features. This analysis was conducted
+(b) mutual information.                                                                                                             on the entire set of 28 features, but was also applied to
+                                                                                                                                    specific sub-categories, such as only statistical and temporal
+                                                                                                                                    features, assuming that frequency-domain features are more
+Fourier transformation is applied to convert the signal into the                                                                    computationally expensive.
+frequency domain before calculating the above features.                                                                                The feature selection approach suggested two suitable sets
+   Wavelet features such as the wavelet absolute mean, energy,                                                                      of input features. One set only contains time-domain (i.e.,
+entropy, standard deviation, and variance have been shown to                                                                        temporal and statistical) features, and is composed of 8 in-
+be useful for AE signals, which often show non-stationary                                                                           dividual features: ’mean’, ’standard deviation’, ’skewness’,
+behavior. These features allow multi-resolution analysis where                                                                      ’kurtosis’, ’zero-crossing rate’, ’root mean square’, ’peak-
+the wavelet absolute mean and energy focus on the wavelet                                                                           to-peak distance’, and ’positive turning’. The other set also
+coefficients’ average magnitude and energy. Wavelet entropy is                                                                      contains frequency-domain features and is composed of 6 indi-
+similar to spectral entropy but measures complexity or disorder                                                                     vidual features: ’variance’, ’kurtosis’, ’peak-to-peak distance’,
+in the wavelet domain. Wavelet standard deviation and variance                                                                      ’negative turning’, and ’FFT mean coefficient’.
+indicate the spread of wavelet coefficients.
+                                                                                                                                    D. Artificial Neural Network Model Design
+C. Feature Selection                                                                                                                   The design of the ANNs has been tailored to the unique
+   Selecting the right features is a crucial step that significantly                                                                characteristics of input data to provide the best performance
+influences the system’s performance. The combination of input                                                                       for each input condition. As a result, three distinct ANNs
+features will not only determine the classifier’s accuracy, but                                                                     have been implemented and optimized, namely one for the
+the feature extraction will also require computational time and                                                                     raw AE signal input (raw-signal model), one for the 8 time-
+thus consume energy. For a resource-constrained embedded                                                                            domain features (8-feature model), and one for the 6 time- and
+system, this means that we want to identify the smallest feature                                                                    frequency-domain features (6-feature model). The raw-signal
+set that still provides sufficient classification accuracy.                                                                         model uses a 1000x1 input vector, containing all samples of the
+   This study initially employed the chi-square test and mutual                                                                     down-sampled signal. As such, for this model no prior feature
+information for feature selection, ranking features based on                                                                        extraction is necessary. The architectures of all three ANNs
+their predictive abilities. The chi-square test operates on the                                                                     are depicted in Fig. 3. Each model is comprised of an input
+principle that a high score indicates a strong relationship with                                                                    layer, two hidden layers, and an output layer. The input layer
+the target class, while mutual information measures the amount                                                                      size is defined by the input data, and the output layer size is
+of information shared between a feature and the target class,                                                                       three (i.e., according to the three damage types). The number
+with higher values suggesting a better predictive potential.                                                                        of neurons in the hidden layers is optimized for each model
+However, applying these methods to the AE dataset provided                                                                          respectively. Moreover, the hidden layers use ReLU activation
+inconsistent results as shown in Fig. 2. Some parameters                                                                            functions, whereas the output layer uses SoftMax. The models
+ranked high in one method, but low in the other (e.g., slope,                                                                       are implemented in Python using TensorFlow with the Keras
+median, kurtosis).                                                                                                                  API.
+   A more sophisticated method was adopted to address this                                                                             Keras Tuner is used to automate the optimization of hyper-
+issue, involving recursive feature elimination (RFE) with a                                                                         parameters for each model [17]. Keras Tuner systematically
+decision tree algorithm. Decision trees are naturally suited                                                                        explores various combinations of neurons in each layer, as well
+for feature selection because they rely on information gained                                                                       as the learning rates, thereby determining the most effective
+for making splits. The RFE process thoroughly examined                                                                              model parameters through an objective performance metric.
+
+
+                                                                                                                                  446
+      Authorized licensed use limited to: CZECH TECHNICAL UNIVERSITY. Downloaded on May 16,2026 at 13:25:20 UTC from IEEE Xplore. Restrictions apply.
+                                                    2024 IEEE 10th World Forum on Internet of Things (WF-IoT)
+
+
+
+
+                                                    700                                                               700                                                             700
+
+
+
+
+                                                                                                                                        Tensile
+      Tensile
+
+
+
+
+                                                                   Tensile
+                 762            1            2                                737            6            1           600
+                                                                                                                                                   736            1            7      600
+                                                    600
+
+                                                    500                                                               500                                                             500
+
+
+
+
+                                                                                                                                  True Class
+True Class
+
+
+
+
+                                                             True Class
+
+
+
+
+                                                                                                                                        Shear
+      Shear
+
+
+
+
+                                                                                                                                                                                      400
+
+
+
+
+                                                                   Shear
+                  2            723           1      400
+                                                                               1            747           4           400
+                                                                                                                                                    0            750           2
+                                                    300                                                               300                                                             300
+
+                                                    200                                                               200                                                             200
+
+
+
+
+                                                                                                                                        Mixed
+      Mixed
+
+
+
+
+                                                                   Mixed
+                  3             1           755     100
+                                                                               4             1           749          100
+                                                                                                                                                    7             3           744     100
+
+                                                                                                                                                                                      0
+                Tensile       Shear         Mixed                            Tensile       Shear         Mixed                                    Tensile        Shear        Mixed
+                          Predicted Class                                              Predicted Class                                                      Predicted Class
+                                 (a)                                                          (b)                                                                  (c)
+      Fig. 4: Confusion matrices of test set evaluation for the (a) raw-signal model, (b) 6-feature model, and (c) 8-feature model.
+
+
+The three-layered structure standard for all models with two                                                                TABLE I: Model test results
+hidden layers was designed to balance model complexity and                                                       Model         Parameter            Accuracy           Model size
+computational efficiency. The ReLU activation function in
+                                                                                                                 Raw-signal      66 243                  0.996         258.76 KB
+the hidden layers is mathematically represented as f(x) =                                                        6-feature        6 979                  0.992          27.26 KB
+max(0,x), which activates a neuron only if the input is positive,                                                8-feature        9 283                  0.991          36.26 KB
+thus introducing non-linearity without affecting the sparsity of
+the model. The output layer’s SoftMax function provides a
+probabilistic interpretation of multi-class predictions beneficial                                  and the computational time required for the ANN to make
+for categorical outcomes.                                                                           an inference. A detailed understanding of the computational
+   Finally, the optimum number of epochs for training was                                           demands for extracting features and running the model was
+achieved using an early stopping mechanism. Early stopping                                          thus obtained by measuring these parameters separately.
+is a form of regularization used to avoid overfitting by ter-                                          The performance of the deployed models was compared
+minating the training process if the model’s performance on                                         using several indicators: inference time, feature extraction time,
+a validation set does not improve for a specified number of                                         total execution time, memory usage, and energy consumption.
+epochs. This strategy ensures that the model’s learning is halted                                   These factors are crucial in AE signal classification for applica-
+when sufficiently generalized, thereby preserving its predictive                                    tions like structural health monitoring, where quick processing
+performance on unseen data. Before deployment, the models                                           and energy efficiency are essential for long battery life and
+were evaluated based on the parameter number, accuracy, and                                         immediate response. Energy consumption is estimated based
+model size.                                                                                         on datasheet values of the processor’s power consumption.
+E. Model Deployment                                                                                                      III. R ESULTS AND D ISCUSSION
+   With feature selection and model design in place, they need                                        The presentation and discussion of results is separated into
+to be deployed on the low-power microcontroller for efficient                                       pre-deployment model evaluation, as well as results of the
+operation. Custom implementations for the extraction of each                                        deployed models.
+selected feature was implemented in optimized C-code. Each
+function was meticulously evaluated against the initial Python                                      A. Model Evaluation
+code to verify equivalent results. For FFT implementation, the                                         This section provides a detailed analysis of the ANN mod-
+Arduino FFT library was used.                                                                       els’ performance prior to their deployment. The models were
+   Afterwards, the developed ANN models were optimized for                                          assessed based on their classification performance based on
+microcontroller deployment. The models were converted using                                         accuracy, as well as their complexity in terms of parameter
+the TensorFlow Lite for microcontroller framework (TFLM),                                           count and memory requirements. A summary of these results
+applying int8 quantization to model parameters. TensorFlow                                          is given in Table I. Moreover, confusion matrices for each
+Lite converts models into a format suitable for resource-                                           model are provided in Fig. 4
+constrained devices while maintaining adequate accuracy for                                            Using the raw AE signals as input, the first model comprises
+inference tasks. Only required resolvers are included in the                                        66 243 parameters and thus is the most complex model among
+code to minimize the memory overhead of the TFLM frame-                                             the three. This is to be expected, as each individual sample
+work. Each model and its selected features were then individu-                                      of the signal needs to be processed within the ANN model’s
+ally tested on the microcontroller to evaluate its real-time per-                                   neurons. It achieves the highest accuracy of 0.996, providing an
+formance. This testing procedure focused on two aspects: the                                        excellent level of agreement between the predicted and actual
+computational time required for feature extraction (if needed)                                      classifications of AE signals. This high level of performance
+
+
+                                                                                            447
+             Authorized licensed use limited to: CZECH TECHNICAL UNIVERSITY. Downloaded on May 16,2026 at 13:25:20 UTC from IEEE Xplore. Restrictions apply.
+                                         2024 IEEE 10th World Forum on Internet of Things (WF-IoT)
+
+
+                                           TABLE II: Key parameters of deployed ANN models
+          Model         Inference (µs)    Feature extraction (µs)    Total time (µs)                       Flash size (KB)        RAM size (KB)            Energy (mJ)
+          Raw-signal         6 656                   –                    6 656                                 222.99                      126.06              0.073
+          6-feature           767                 471 937                472 704                                176.93                       64.93              5.19
+          8-feature           930                 344 106                345 036                                172.11                       67.34              3.79
+
+
+
+underscores the model’s capability to capture the intricate
+waveform patterns within the full spectrum of data points,                                                106
+                                                                                                                  Prediction Time
+enabling a robust classification of AE signals. Figure 4a                                                         Feature Extraction Time
+                                                                                                          105     Total Time
+provides more details about the classification performance,
+
+
+
+
+                                                                                    Time (microseconds)
+illustrating a dominant number of true positives across all                                               104
+classes with very few misclassifications.
+   The 6-feature model has significantly fewer parameters,                                                103
+totaling 6 979. This reduction is due to the much smaller
+input size, reducing the number of parameters that need to                                                102
+be computed in each neuron. The accuracy is slightly lower
+                                                                                                          101
+than that of the raw-signal model, but with values of 0.992 the                                                  Raw signals          6 Features(FFT)   8 Features(without FFT)
+performance is still very high. Figure 4b verifies this, demon-
+strating an overall low number of misclassifications without                  Fig. 5: Comparison of inference time, feature extraction time,
+clear bias towards certain classes. Due to the much lower                     and total processing time for the three evaluated approaches.
+number of parameters, the model size has been significantly
+reduced to 27.26 KB, enabling deployment on much more
+constrained embedded platforms.                                               microcontroller, where resources are limited and efficiency is
+   The 8-feature model excludes any frequency-domain fea-                     paramount.
+tures. Despite this limitation to time-domain features, the                      Due to the large number of parameters and operations,
+model achieves a similar classification performance as the                    the model with raw signal input exhibits a relatively long
+previous model, with an accuracy of 0.991. It comprises 9 283                 inference time of 6 656 µs. On the other hand, it does not
+parameters and is thus significantly larger than the model using              require any feature extraction. Hence, the total processing time
+the smaller feature set, but a low complexity in comparison                   is equivalent to the model inference time. The model size,
+to the raw-signal model. This results in a model size of                      including all required libraries, is the largest with 222.99 KB
+36.26 KB, which is still very small. The confusion matrix                     Flash and 126.06 KB RAM. The energy consumption for a
+presented in Fig. 4c shows a very similar performance to the 6-               single inference is estimated at 0.073 mJ.
+feature model. This result demonstrates that frequency-domain                    The 6-feature model, has a much lower inference time of
+features are not essential for an accurate classification in the              only 767 µs, but the time to extract the necessary features is
+given application scenario, but can reduce model size.                        substantial with 471 937 µs. This results in a total processing
+   Moreover, the results highlight the trade-off between model                time of 472 704 µs. The model size was reduced to 176.93 KB
+complexity and performance. While the raw-input model                         Flash and 64.93 KB RAM, but energy consumption increases
+achieves the best accuracy, it did so with many parameters,                   to 5.19 mJ. As depicted in Fig. 5, the substantial feature
+translating to a large model size (258.76 KB). The reduced                    extraction time determines the total processing time.
+models, with significantly fewer parameters and smaller sizes,                   Similarly, the 8-feature model, excluding any frequency-
+still performed admirably, providing lightweight alternatives                 domain features, has a low inference time of 930 µs, but a
+based on careful feature selection. However, these models re-                 high feature extraction time of 344 106 µs. This solution thus
+quire feature extraction, which is analyzed in the next section.              amounts to a total processing time of 345 036 µs. The model
+                                                                              size is about the same as the 6-feature model with 172.11 KB
+                                                                              Flash and 67.34 KB RAM, while the energy consumption is
+B. Deployment Results
+                                                                              estimated at 3.79 mJ.
+   All three ANN models, as well as the required feature                         The comparison of the three approaches shows a clear
+extraction algorithms have been deployed on an Arduino Nano                   trade-off between model complexity, processing time, and
+33 BLE Sense, encompassing the nRF52840 microcontroller.                      energy consumption. Despite its larger size and inference
+The deployed models are compared based on the inference                       time, the raw-input model outperforms the other models in
+time, feature extraction time, total processing time, model                   total prediction time and with minimal energy per prediction,
+size, and energy consumption, all of which are listed in                      making it the most suitable model for applications where
+Table II. These metrics are fundamental to understanding the                  the additional memory requirement is not a major concern.
+models’ performance in a constrained environment such as a                    Conversely, while smaller in size, the 6-feature and 8-feature
+
+
+                                                                        448
+    Authorized licensed use limited to: CZECH TECHNICAL UNIVERSITY. Downloaded on May 16,2026 at 13:25:20 UTC from IEEE Xplore. Restrictions apply.
+                                        2024 IEEE 10th World Forum on Internet of Things (WF-IoT)
+
+
+
+models require significant feature extraction times, which                    and signal conditioning with the signal classification approach
+translates to high energy consumption. Due to the high feature                proposed in this work, enabling in-situ verification.
+extraction time, reduced model inference times become irrel-                                    ACKNOWLEDGEMENT
+evant as the total processing time is dominated by the feature
+                                                                                The authors acknowledge financial support by the Knowl-
+extraction. Comparing these two models in more detail shows
+                                                                              edge Foundation under grant number 20180170 (NIIT).
+that removing frequency-domain features significantly reduces
+the feature extraction time (i.e., a reduction of about 120 ms).                                             R EFERENCES
+Therefore, even though the 8-feature model is larger and has                   [1] J. Xu, Z. Fu, Q. Han, G. Lacidogna, and A. Carpinteri, “Micro-
+a higher inference time, its total processing time and energy                      cracking Monitoring and Fracture Evaluation for Crumb Rubber Con-
+                                                                                   crete based on Acoustic Emission Techniques,” Structural Health Mon-
+consumption is significantly lower than those of the 6-feature                     itoring, vol. 17, no. 4, pp. 946–958, 2018.
+model.                                                                         [2] A. Carrasco, F. Méndez, F. Leaman, and C. Molina Vicuña, “Short
+                                                                                   Review of the Use of Acoustic Emissions for Detection and Monitoring
+                        IV. C ONCLUSIONS                                           of Cracks,” Acoustics Australia, vol. 49, no. 2, pp. 273–280, Jun. 2021.
+                                                                               [3] M. Barbosh, A. Sadhu, and G. Sankar, “Time–frequency Decomposition-
+   This paper evaluated different TinyML approaches for the                        assisted Improved Localization of Proximity of Damage using Acoustic
+                                                                                   Sensors,” Smart Materials and Structures, vol. 30, no. 2, p. 025021, Jan.
+classification of AE signals with the aim to compare the use                       2021.
+of extracted features with that of raw AE signals. Based on                    [4] S. Shahidan, R. Pullin, N. M. Bunnori, and S. S. M. Zuki, “Active Crack
+the presented results, several novel conclusions can be made.                      Evaluation in Concrete Beams using Statistical Analysis of Acoustic
+                                                                                   Emission Data,” Insight - Non-Destructive Testing and Condition Mon-
+Firstly, despite its larger size, the raw-signal model demon-                      itoring, vol. 59, no. 1, pp. 24–31, 2017.
+strated remarkable efficiency in inference time and energy                     [5] A. Brunčič, A. Štrukelj, M. Kreslin, A. Anžlin, and A. Šajna, “In situ
+consumption. This efficiency underscores the model’s ability                       Consideration of Resistance of Bridge Girder According to EC2 with
+                                                                                   AEM,” e-Journal of Nondestructive Testing, vol. 28, no. 1, 2023.
+to make rapid predictions, essential for real-time AE-based                    [6] L. Topolář, K. Timcakova, P. Misák, and L. Pazdera, “Parameters of
+SHM systems. The absence of feature extraction simplifies the                      Acoustic Emission Signals Obtained During the Setting and Hardening
+deployment process and enhances the model’s total processing                       of Concrete Mixtures with Different Water-Cement Ratio,” in Trends
+                                                                                   in Statics and Dynamics of Constructions II, vol. 837, Jul. 2016, pp.
+speed, making it highly suited for scenarios where fast signal                     152–156.
+classification is necessary. While this performance comes at                   [7] S. R. A. Shahiron Shahidan and I. Ismail, “Relationship between AE
+the cost of a larger memory requirement (222.99 KB Flash,                          Signal Strength and Absolute Energy in Determining Damage Classi-
+                                                                                   fication of Concrete Structures,” Jurnal Teknologi, vol. 78, no. 5, Apr.
+126.06 KB RAM), it is still compatible with many modern                            2016.
+low-power microcontroller resources.                                           [8] M. LaMura, N. A. Lamberti, G. Caliano, and A. S. Savoia, “An
+   Conversely, while being more compact, the models oper-                          Ultrasonic Flextensional Array for Acoustic Emission Techniques on
+                                                                                   Concrete Structures,” in 2018 IEEE International Ultrasonics Symposium
+ating on extracted features incurred significant computational                     (IUS), 2018, pp. 1–4.
+overhead during the feature extraction process. This compu-                    [9] A. Larosche, P. Ziehl, J. Mangual, and M. K. ElBatanouny, “Damage
+tational overhead resulted in longer total processing times                        Evaluation of Prestressed Piles to Cast in Place Bent Cap Connections
+                                                                                   with Acoustic Emission,” Engineering Structures, vol. 84, pp. 184–194,
+and thus higher energy consumption of 71x and 52x of the                           2015.
+raw-signal model, respectively, which could be detrimental                    [10] A. Thirumalaiselvi and S. Sasmal, “Pattern Recognition Enabled Acous-
+in time-critical and energy-sensitive applications. However,                       tic Emission Signatures for Crack Characterization During Damage
+                                                                                   Progression in Large Concrete Structures,” Applied Acoustics, vol. 175,
+these models maintained high classification performances,                          p. 107797, 2021.
+suggesting that a carefully selected subset of features can                   [11] Y. Zhang, S. Bader, and B. Oelmann, “A Lightweight Convolutional Neu-
+sufficiently capture the information required for accurate AE                      ral Network Model for Concrete Damage Classification using Acoustic
+                                                                                   Emissions,” in 2022 IEEE Sensors Applications Symposium (SAS), 2022,
+signal classification. It can also be concluded that the 8-feature                 pp. 1–6.
+model outperforms the 6-feature model, despite requiring a                    [12] P. R. Prem and A. R. Murthy, “Acoustic Emission Monitoring of
+larger ANN model. This is due to the reduction in feature                          Reinforced Concrete Beams Subjected to Four-point-bending,” Applied
+                                                                                   Acoustics, vol. 117, pp. 28–38, 2017.
+extraction time, as FFT computation is not required.                          [13] Y. Zhang, V. Adin, S. Bader, and B. Oelmann, “Leveraging Acoustic
+   The classification performance of AE signals directly im-                       Emission and Machine Learning for Concrete Materials Damage Classi-
+pacts the reliability of the SHM systems, which can be                             fication on Embedded Devices,” IEEE Transactions on Instrumentation
+                                                                                   and Measurement, vol. 72, pp. 1–8, 2023.
+employed in various industrial applications. Accurate classi-                 [14] V. Adın, Y. Zhang, B. Oelmann, and S. Bader, “Tiny Machine Learning
+fication enables the early detection of potential faults in mate-                  for Damage Classification in Concrete Using Acoustic Emission Sig-
+rials, preventing catastrophic failures and reducing downtime.                     nals,” in 2023 IEEE International Instrumentation and Measurement
+                                                                                   Technology Conference (I2MTC), 2023, pp. 1–6.
+The models developed in this study can distinguish between                    [15] G. Siracusano, F. Garescı̀, G. Finocchio, R. Tomasello, F. Lamonaca,
+different modes of material stress with high accuracy, which is                    C. Scuro, M. Carpentieri, M. Chiappini, and A. La Corte, “Automatic
+a testament to their potential utility in real-world applications.                 Crack Classification by Exploiting Statistical Event Descriptors for Deep
+                                                                                   Learning,” Applied Sciences, vol. 11, no. 24, 2021.
+The contributions of this work demonstrate that such a SHM                    [16] M. Barandas, D. Folgado, L. Fernandes, S. Santos, M. Abreu, P. Bota,
+system is feasible to be directly implemented in resource-                         H. Liu, T. Schultz, and H. Gamboa, “TSFEL: Time Series Feature
+limited IoT devices.                                                               Extraction Library,” SoftwareX, vol. 11, p. 100456, 2020.
+                                                                              [17] M. Z. A. Pon and K. P. KK, “Hyperparameter Tuning of Deep Learning
+   The future trajectory of this research will focus on the                        Models in Keras,” Sparklinglight Transactions on Artificial Intelligence
+integration with a complete IoT node that combines AE sensing                      and Quantum Computing (STAIQC), vol. 1, no. 1, pp. 36–40, 2021.
+
+
+
+
+                                                                        449
+    Authorized licensed use limited to: CZECH TECHNICAL UNIVERSITY. Downloaded on May 16,2026 at 13:25:20 UTC from IEEE Xplore. Restrictions apply.
+

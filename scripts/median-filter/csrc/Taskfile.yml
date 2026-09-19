@@ -1,0 +1,31 @@
+version: "3"
+
+tasks:
+  default:
+    desc: Default tasks
+    cmds:
+      - task --list
+
+  build:
+    desc: Build C library and Unity tests via CMake (requires cmake)
+    dir: .
+    cmds:
+      - mkdir -p ../build
+      - cmake -S .. -B ../build
+      - cmake --build ../build
+
+  test:
+    desc: Run Unity-based C tests (builds first)
+    dir: .
+    cmds:
+      - task: build
+      - cmake --build ../build
+      - ctest --test-dir ../build
+
+  test:valgrind:
+    desc: Run Unity tests under valgrind (requires valgrind)
+    dir: .
+    cmds:
+      - task: build
+      - cmake --build ../build
+      - valgrind --leak-check=full --show-leak-kinds=all --error-exitcode=1 ../build/peak_tests

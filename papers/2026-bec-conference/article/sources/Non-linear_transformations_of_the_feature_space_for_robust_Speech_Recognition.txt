@@ -1,0 +1,363 @@
+                         NON-LINEAR TRANSFORMATIONS OF THE FEATURE SPACE
+                                  FOR ROBUST SPEECH RECOGNITION
+
+            Angel de la Torre, Jose C. Segura, Carmen Benitez, Antonio M. Peinado, Antonio J. Rubio
+
+
+               Dpto. Electr6niea y Teen. Comp., Universidad de Granada, 18071 GRANADA (Spain)
+                                      Tel: +34.958.24.32.71      Fax: +34.958.24.32.30    e-ma il : atv@ugr.es
+
+
+
+
+                                ABSTRACT                                      limitations due to the non-linear distortion. Methods oriented to
+                                                                              the compensation of the noise effects over the speech repre senta­
+    The n o ise usually produces a non-linear distortion of the feature       tion should consider the non-linear effe cts and should be able to
+    space considered for Automatic S peech Recognition. This dis­
+                                                                              estimate the non-linear transformation providing the best estima­
+    tortion causes a mismatch between the training and recognition
+                                                                              tion of the clean speec h given the noisy speech.
+    conditions which significan tly degrades the performance of speecb             In this work, we analyze the effect of the noise over the cep­
+    recognizers. In this contribution we analyze the effect of the addi­
+                                                                              stral based representations. We show how linear methods (like
+    tive no ise over cepstral based representations and we c ompare sev­
+                                                                              CMN and MVN) are useful for the compensati o n of the co nvolu      ­
+
+    eral approaches to compens ate this effect. We discuss the impor­
+                                                                              tional noise and they also compensate some effects of the additive
+    tance of the non-linearities introduced by the noise and we propose
+                                                                              noise. The non-linear effects of the additive noise and the limi­
+    a method (based on the histogram equalization technique) specifi­
+                                                                              tations of the linear compensation methods are also analyzed. In
+    cally oriented to the compensation of the non-linear transformation       order to estimate non-linear trans formations for proper noise com ­
+    caused by the additive noise. The proposed method has been eval ­
+                                                                              pensation , we propose the application of the histogram equaliza­
+    uated using the AURORA-2 database and task. The recogn ition              tion technique. We have adapted this technique (usually applied
+    results show significant improvements with respect to other com­
+                                                                              for image processing) for the compensation of the non-linear ef­
+    pensation methods reported in the bibliography and reveals th e im­
+                                                                              fects caused by the noise over the c epstral coefficients. We have
+    portance of the non-linear effects of the noi se and the utility of the
+                                                                              carried out recognition ex periments (using the AURORA-2 da­
+    proposed method.
+                                                                              tabas e and task [2]) to show the importance of the compensation of
+                                                                              the non-linear effects and to evaluate the proposed compensation
+                           1. INTRODUCTION                                    method.
+
+    The noise severely affects automatic speech r ecogni tion applica­
+                                                                                         2. NON-LINEAR EFFECTS OF mE NOISE
+    tions working in real conditions [1, 2]. The recognition systems,
+    usually trained with clean speech do not mode l properly the speech       Currently, most of the autom atic speech recognition systems make
+    acquired under noisy conditions. The noise significantly degrades
+                                                                              use of parameterizations based on Mel Frequency Cepstral Coef­
+    the performance of speech recognizers mainly due to the mismatch          ficients (MFCC) [to]. The MFCC coefficients are obtained from
+    between the training conditions and recognition conditions [3].           a bank of filters uniformly distributed in Mel frequency scale. For
+         The methods proposed to make the speech recognizers more             each frame. the MFCC coefficients are obtained as an orthonormal
+    robust against the noise are mainly focussed on the mini mization         transformation (usually a DCT) of th e output lo g-e n ergi es of the
+    of the mismatch caused by the noise [3, 4, 5]. Some of them try to        filterbank. If the speech and the additive noise are uDcorrelated
+    represent the speech signal using robust features in order to mini­       signals, for the frame t and filter h, the energy of the contaminated
+    mize the effect of the noise. Other methods try to compen sate the        speech Yo ( t) can be written as a function of the energies of the
+    effect of the noise over the representation and provide an estima­        clean speech Xb(t) and the noise No(t) according to,
+    tion of the clean speech representation. There are also methods
+    which adapt the recognizers to the noise conditions in order to e­                              Y,,(t) ::::: Xo(t) + No(t)
+                                                                                                          '                                    (1)
+    valuate the noisy speech representation with noisy speech models.             If the signal is also affected by a convolutional noise (de­
+         The noise introduces a distortion of the representation space        scribed by Ho( t) for the frequency band h), the contaminated speech
+    which usually present a non-linear behavior. For example , cep­           can be written as,
+    stral based representations suffer non-linear distortions when the
+    speech signal is affected by an additive noise [6, 7]. In this case,                                                                       (2)
+    the frames with more energy are slightly affected but those frames
+                                                                              and the relationship for the logarithmically scaled output of the
+    with energy in the same range or smaller than the energy of the           filterbank (xo ::::: 10g(Xb» is given by,
+    noise are severely affected. Even though linear methods Qike the
+    Cepstral.Mean Normalization (CMN) [8] or Mean and Variance                           lIo(t) == .hb(t) + log[exp(x,,(t» + exp(nb(t»]        (3)
+    Normalization (MVN) [9]) provide significant improvements for
+                                                                                   In this domain, the convolutional n oise introduces a global
+                                                                              shift of the parameters representing the speech, while the addi­
+    cepstral based representations, these methods present important
+                   '
+
+
+
+
+        This work- has been panially supported by the Spanish Govenunent      tive noi se introduces a non-li near transformation of the feature s­
+    unde'r the CICYT project TIC99-0S83.                                      pace. Since the MFCC coefficients are obtained by applying an
+
+
+
+
+  0-7803-7402-9/02/$17.00 C2002 IEEE                                  1"401
+
+
+
+
+Authorized licensed use limited to: CZECH TECHNICAL UNIVERSITY. Downloaded on June 01,2026 at 21:41:35 UTC from IEEE Xplore. Restrictions apply.
+                                   ""l­
+                          ... __ I0Il01 ""'"
+
+
+
+
+                   ·1
+
+
+
+
+                             . �-"'
+                   ·2 -3'---'�   .I --0'---...L       l --"---..J
+                                 Iogoenorgy far doom .....
+
+
+        Fig. 1. Effect a/the additive noise over a log-energy coefficient.           Fig. Z. Histograms o/the log-energy parameter for the clean val­
+                                                                                     ues, the noise and the noisy values.
+       orthononnal transfonnation to the log-filterbank outputs, the non­
+       linear effects of the additive noise are also present in the MFCC             of CMN with a nonnalization of the variance (Mean and Variance
+       domain.                                                                       Nonnalization (MVN» improves the compensation of the mis­
+           We illustrate the non-linear effects and their consequences by            match with respect to CMN, and an improvement of the recog­
+       means of a Monte Carlo simulation. We have randomly gener­                    nition performance could be expected when this nonnalization is
+       ated a set of c le an log-energy values Xb according to a Gaussian            applied for robust speech recognition. However, these methods
+       probability distribution with mean p., = 0 and standard deviation             present the limitation that cannot compensate the non-linear ef­
+       CT., = 1. According to equation (3) these value s    have been contam·        fects caused by the noise.
+       inated in the log -energy domain with an additive no ise randomly                 In order to compensate the non-linear effects, we propose the
+       generated with a Gaussian distribution with p., = -0.75 and stan­             application of the histogram equalization (HEQ) teclmique, com­
+       dard devi ation CT., = 0.2. No convolutional noise was con sidered            monly applied for image proce ssing [11], that we have adapted to
+       in this simulation (hb = 0). Figure 1 shows the points {Xb, Yb}               the representation of the speech signal. The aim of this method
+       obtained by the simulation. In this figure. it can be observed that           is to provide a transformation x (1/) which converts the probability
+       for va lues Xb significantly greater than the noise, the c lean val­          distribution of the noisy speech Ptt (y) into a reference probab ili­
+       ues are not affected and 1/b asymptotically tends to Xb. When the             ty distribution corresponding to the clean speech p,.(x). It can be
+       energy of the clean values is in the same range of the energy of              demonstrated that if 2:(1/) transfonns PII(Y) into   p.,{:!:}, then the
+       the noise, the l og-energy is severely affected. and when the ener­           cumulative histograms verify that,
+       gy is significantly smaller, YI> asymptotically tends to n", and then
+       1/b shows the statistics of the noise independently of the Xb value.                                  CI/(Y}   =   Cz(x(y»                       (4)
+       The additive noise causes a non-linear transformation of the fea­
+       ture space as can be clearly appreciated in this figurel. Therefore,          and therefore the transfonnation can be obtained from the cwnu­
+       an appropriate compensation method for the additive noise should
+                                                                                     lative histogram of the noisy speech and the reference cumulative
+       provide a non-linear transformation to compensate the transforma­             histogram for the clean speech as,
+       tion caused by the noise.
+           The noise also affects the probability distribution of the param­                                                                            (5)
+       eters representing the speech . Figure 2 represents the nonnalized
+                                                                                     where C; 1 represents the inverse fimction of C.,. In Figure 3, the
+       histograms of the clean values, the n oise, and the contam inated
+                                                                                     transfonnations provided by the linear methods (CMN and MVN)
+       values for the simulation. It can be observed that the transforma­
+                                                                                     and by the HEQ method for the described simulation are shown.
+       tion introduced by the noise modifies the histogram corresponding
+                                                                                     The histograms resulting from the application of the transfonna­
+       to the clean data. There is a compression of the low energy part of
+                                                                                     tions are also shown. In this figure. it can be observed that the
+       the clean histogram which causes a shift of the mean and a reduc­
+                                                                                     CMN and the MVN are linear approaches that cannot compensate
+       tion of the variance of the noisy histo gram. In addition, due to the
+                                                                                     properly the n o ise effect. The HEQ method provide s a tran sfor­
+       non-linear effect of the noise, the shape of the histogram has been
+                                                                                     mation which compensates the non-linear effects of the noise and
+       modified and it is not Gaussian.
+                                                                                     removes distortion from the probability distributions of the noisy
+                                                                                     data.
+         3. COMPENSATION OF THE NOISE USING LINEAR
+              AND NON-LINEAR TRANSFORMATIONS
+                                                                                                    4. EXPERIMENTAL RESULTS
+
+       Since one of the side effects of the additive noise is a shift of the
+                                                                                     The three considered noise compensation methods (CMN, MVN
+       mean of the probability distributions of the parameters represent­
+                                                                                     and HEQ) have been compared in recognition experiments under
+       ing the speech, the Cepstral Mean Normalization (CMN) partially
+                                                                                     noise conditions using the AURORA-2 database and task [2]. The
+       compensate s the mismatch caused by the noise. The combination
+                                                                                     task consists on the recognition of connected digits spoken in En­
+           lIn addition to the cransformatioo. due to !he random behavior of the     glish. The speech is artificially contaminated at several SNRs with
+       noise, !he distribution P(1Ib IXb) becomes wider as :q, is more affected by   noise recorded for 10 different conditions. The recognition results
+       the noise, which causes an irrevClliible 10ss of information.                 at each SNR have been averaged over all the considered kinds of
+
+
+
+
+Authorized licensed use limited to: CZECH TECHNICAL UNIVERSITY. Downloaded on June 01,2026 at 21:41:35 UTC from IEEE Xplore. Restrictions apply.
+                                       A��;:=:� == .
+                                        Mean Subtractfon •••••                                                                            90
+                   2               MsanNar NOrmalization ....... .                                                                                  i                i
+
+              �
+                                     Histog ..Eq:. Iran.torm, "M._'                                                                       80    ·   ! · .... · :
+              -J   1                                                                                                                  " 70
+                                                                                                                                                    e•••llnO Cloan +
+                                                                                                                                      j   60       CMN Clean --... . .
+                                                                                                                                                   MVNClean ....... .
+                                                                                                                                                    HEQCI n ................
+                                                                                                                                      �   50    Baseline Muftlc. -e­
+                                                                                                                                                    •
+
+
+                                                                                                                                                 ; CMN Mullie. •• -e-.-
+                   .   ,                                                                                                                  40
+                                                                                                                                                   MVN Muttle. ........ .
+                                                                                                                                                   HEQMulUe. .............
+
+                                                                                                                                                        . ···   ..
+                   -2�L-�-.�2 �--.�'----�O ----�--�----�
+                                                                                                                                          30
+                                                                                                                                          20
+                                                                                                                                                    �· .             1
+                                                           Iog-enargyfor clean dllohll                                                          d••n            20dB           '5dB   ,OdB   OdB   -5dB
+                   O.B                                                                                                                                                                SNR
+                                                                                        .::
+                               .----....,-----..----....,----_-rn-:-:hl.-:"tog-"'-mr-...=-,
+                                                                                    Mean S�radion ------.
+                   0.7                                                         MeanIVar Nann.lizatlon ••.•••• ,                 Fig. 4. Recognition results obtained for the AURORA-2 databa­
+                                                                                 Histog,Eq. transform . ._.._ .......
+                   0.6                                                                                                          se. Average over the different noises for clean training results and
+                                                                       ,/'...�'...
+              �                                                                                                                 mu/ticondition training results.
+              ! 0,5
+              ;;- 0.4
+                                                                :' :
+                                                                    j.. :::\
+                                                                          ......
+
+
+              ��                                       /: f
+                   O.
+                                                                                                                                training results, the CMN compensation method slightly improves
+                           3
+                                                     ...        :
+                                                                                                                                the baseline r e sults . The normalization of t he mean and variance
+                   0.2
+                                                                                                                                provides a better compensation of the noise effect c ompared to
+                   0.'
+                                                    .: ,I
+                                                           .I                                                                   the CMN method. In contrast to these linear compensation meth­
+                           O ���-
+                             3 2
+                                 .
+                                   ,
+                                     -�/�----�--���                                                                             ods, the histogram equalization method is able to compensate the
+                                                                                                                                non-linear mismatch c aus ed by the noise, which provides signif­
+                               ·             ·
+
+
+
+                                                                                                                                icant improvements with respect to the Baseline, the CMN and
+      Fig. 3. (A) Transformations to c omp ens a te the noise effect (Mean                                                      the MVN compensation methods. The clean training recognition
+      Norma liza tion, MeanlVar Normalization a nd Histogram Equali­                                                            accuracy (averaged over SNR levels between 20 dB and 0 dB) is
+      zation). (B) Histograms for the noisy data compensated with the                                                           60.06%,61.13%,69.66% and 80.96% for the Baseline (no com­
+      different methods.                                                                                                        pensation method), and the CMN, MVN and HEQ compensation
+                                                                                                                                methods, respectively.
+                                                                                                                                    In the case of multicondition training, the recognition results
+      noise. The speech recognizer is based on Hidden Markov Model­
+                                                                                                                                present the same tendency (average recognition accuracy of86.39%,
+      ing. Each digit is m ode led as a left-to-right Continuous D ensity                                                       86.50%, 88.33% and 89.66% for Baseline, CMN, MVN and HEQ,
+      HMM with 16 states and six Gaussians per state [12]. The speech                                                           respectively), even though the differences in the performance for
+      recognizer has been trained under clean conditions and also using                                                         the different compensation methods are significantly smaller (be­
+      sentences contaminated with different kinds and levels of noise.                                                          cause the multicondition training drastically reduces the mismatch
+      Recognition experiments have been carried out using the clean                                                             between the training and recognition conditions).
+      training and the multicondition training recognizers according to
+                                                                                                                                    The recognition results show the importance of the non-linear
+      the AURORA-2 task.
+                                                                                                                                effects caused by the noise. The HEQ method provides impor­
+          The speech representation is based on a MFCC parameteri ­                                                             tant improvements in the recognition performance with respect to
+      zation. The speech signal, sampled at 8 kHz is segmented into
+                                                                                                                                the baseline system and also with respect to the linear compensa­
+      frames and each frame is represented as a feature vector contain­
+                                                                                                                                tion methods because it is able to compensate the non-linear ef­
+      ing a log-energy coefficient, 12 cepstral coefficients and the I st and                                                   fects caused by the noise. These i m pro vements are comparable to
+      2nd associated regression coefficients, which amount to 39 c om ­                                                         those provided by the best compensation methods proposed for the
+      ponents. In order to apply the considered c o mpensation meth ods ,                                                       AURORA-2 task presented at the EUROSPEECH-2001 Confer­
+      in the three cases the transformations have been applied to each                                                          ence (see Table 1)          [13]. Additionally, the formulation of the HEQ
+      component of the cepstral vector. In each case, the estimation of
+                                                                                                                                method does not depend on the kind of noise or the parameteriza­
+      the transformation for each component is based on the e stim ation                                                        tion utilized for the representat ion of the speech signal. Therefore,
+      of the mean (for CMN), the estimation of the mean and the vari­
+                                                                                                                                the HEQ method could provide improvements in speech recogni­
+      ance (for MVN) and the estimation of the cumulative histogram
+                                                                                                                                tion under noise conditions for a wide range of noise processes
+      (for HEQ). These estimations are obtained using all the frames                                                            and for different parameterizations of the speech signal. The HEQ
+      in each sentence and the transformations are app lied sentence by
+                                                                                                                                method could also be successfully combined with other noise com­
+      sentence. In the case of the HEQ, the considered reference prob­
+                                                                                                                                pensation methods and additional improvements could be expected
+      ability density function is a Gaussian probability distribution with
+                                                                                                                                in this case.
+      zero mean and unit variance. In the three cases, the co mpensati on
+      methods are applied for both, training and recognition.
+          Figure 4 shows the recognition results (Word Accuracy ver­                                                                                                     5_ CONCLUSIONS
+      sus the SNR level) when each compensation method is applied.
+      The results are averaged for the three sets (set A, set B and set                                                         In this work, we have analyzed the non-linear effects caused by
+      C) considered in the AURORA-2 task. The figure includes clean                                                             the noise over the representation of the speech signal in the con­
+      training and multiconditi6n training results. In the case of clean                                                        text of robust speech recognition under noise conditions. Linear
+
+
+
+
+                                                                                                                        1-403
+
+
+
+
+Authorized licensed use limited to: CZECH TECHNICAL UNIVERSITY. Downloaded on June 01,2026 at 21:41:35 UTC from IEEE Xplore. Restrictions apply.
+           Table t. Recognition results obtainedfor the AURORA-2 database by applying the histogram equalization compensation method.
+
+
+      compensation methods like CMN or MVN partially compensate               [3] Y. Gong. Speech recognition in noisy environments: A survey.
+      the transformation caused by t h e noise, but they are not able to          Speech Commul'lication, 16(3):261-291, 1995.
+      provide non linear transfonnations. We have proposed the appli­
+                   -
+                                                                              [4] J.R. BeUegarda. Statistical techniques for robust ASR: review
+      c ation of the histogram equalization (HEQ) technique as a method           and perspectives. Proc. of EuroSpeech-97, pages KN 33-36,
+      to estimate the non-linear transfonnations which optimally com­             1997.
+      pensate the noise effects.
+           The linear and non-linear compensation methods have been
+                                                                              [5] J.C. JWlqua and J.P. Halon. Robustness in automatic speech
+                                                                                  recognition. Kluwer Academ ic Publishers, 1996.
+       compared and evaluated with the AURORA-2 speech recognition
+      database and task. The experimental re su l ts show the importance      [6] R.M. Stem, B. Raj, and P.J. Moreno.     Compensation for
+      of the non-linear effects when the speech s ignal is affected by            environmental degradation in automatic speech recognition.
+      noise, and the necessity of compensation methods which are able             ESCA-NATO Tutorial and Research Workshop on Robust
+      to compensate the non-Iinearities introduced by the noise. The              Speech Recognition for Unknown Communication Channels,
+      HEQ compensation method provides a recognition performance                  pages 33-42, April 1997.
+       (averaged for SNR levels between 20 dB and 0 dB) of 80.76% for         [7] A. de la Torre, D. Fohr and J.P. Haron. Compensation of
+       clean training and 89.66% for multicondition training. The pr0-            noi se effects for robust speech recognition in car environ­
+      posed method significantly improves the performance of speech               ments. Proc. ofICSLP 2000, Oct 2000.
+      recognition systems under noise conditions and is shown as a com­
+                                                                              [8] C.R. Jankowski, Jr. Hoang-Doan, and R.P. Lippmann. A com­
+                                                                                  p ari s o n of signal processing front ends for automatic word
+      petitive method compared with the ones proposed for the AURORA-
+
+                                                                                  recognition. IEEE '!ram. on Speech and Audio Processing,
+      2 task [13).
+           Since the formulation of HEQ do es not make any assump­
+      tion about the contamination process, it could compensate differ­
+                                                                                  3(4):286--293, July 1995.
+
+      ent noise processes. Additionally, the HEQ method does not de­          [9] P. Jain and H. Hermansky. Improved mean and variance nor­
+      pend on the parameterization utilized for the speech representation         malization for robust speech recognition. Proc. of lCASSP
+      and therefore, it could be combined with other noi se compensation          2001, Salt Lake City, 2001.
+       methods in order to obtain additional improvements.                    [ 10] S.B. Davis and P. Mermelstein.   Comparison of parametric
+                                                                                  representations for monosyllabic word recognition in continu­
+                              6. REFERENCES                                       ously spoken sentences. IEEE Trans. on Acoustic. Speech and
+                                                                                  Signal Processing,
+       [ I ] R. Cole et. al. The challenge of spoken language systems: re­    [11] J.C. Russ.   The image processing handbook.      CRC Press,
+           search directions for the nineties. IEEE Trans. on Speech and          1995.
+           Audio ProcesSing, 3(1):1-21, January 1995.
+                                                                              [12] S. Young, J. Odell, D. Oll85On, V. Valtchev and P. Woodland.
+       [2] H.G. Hirsch and D. Pearce. The AURORA experimental                     The HTK Book. Cambridge University, 1997.
+                                                                              [13] EUROSPEECH 2001, Sessions A41 and Bll. Noise Robust
+           framework for the performance evaluation of speech recog­
+           nition systems Wlder noise conditions /SCA ITRW ASR2000
+                                                  .
+                                                                                  Recognition: Front-end and Compensation Algorithms Proc.
+            "Automatic Speech Recognition: Challenges for the Nex:t Mil­
+                                                                                  ofEUROSPEECH 2001, pp 184-236 and 421-440, Sep 2001.
+           lennium ", Paris, France, September 2000.
+
+
+
+
+                                                                     1-404
+
+
+
+
+Authorized licensed use limited to: CZECH TECHNICAL UNIVERSITY. Downloaded on June 01,2026 at 21:41:35 UTC from IEEE Xplore. Restrictions apply.
+

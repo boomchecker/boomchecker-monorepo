@@ -1,0 +1,724 @@
+    Mortar and Artillery Variants Classification by Exploiting
+            Characteristics of the Acoustic Signature
+                      Myron E. Hohil, David Grasing, Sachi Desai, and Amir Morcos
+                       1
+                           US Army RDECOM, Picatinny Arsenal, NJ 07806
+          Email: mhohil@pica.army.mil; david.grasing@pica.army.mil; sdesai@pica.army.mil;
+                                     amorcos@pica.army.mil;
+
+
+                                                  Abstract
+
+         Feature extraction methods based on the discrete wavelet transform and multiresolution
+         analysis facilitate the development of a robust classification algorithm that reliably
+         discriminates mortar and artillery variants via acoustic signals produced during the
+         launch/impact events. Utilizing acoustic sensors to exploit the sound waveform
+         generated from the blast for the identification of mortar and artillery variants. Distinct
+         characteristics arise within the different mortar variants because varying HE mortar
+         payloads and related charges emphasize concussive and shrapnel effects upon impact
+         employing varying magnitude explosions. The different mortar variants are characterized
+         by variations in the resulting waveform of the event. The waveform holds various
+         harmonic properties distinct to a given mortar/artillery variant that through advanced
+         signal processing techniques can employed to classify a given set. The DWT and other
+         readily available signal processing techniques will be used to extract the predominant
+         components of these characteristics from the acoustic signatures at ranges exceeding
+         2km. Exploiting these techniques will help develop a feature set highly independent of
+         range, providing discrimination based on acoustic elements of the blast wave. Highly
+         reliable discrimination will be achieved with a feed-forward neural network classifier
+         trained on a feature space derived from the distribution of wavelet coefficients, frequency
+         spectrum, and higher frequency details found within different levels of the
+         multiresolution decomposition. The process that will be described herein extends current
+         technologies, which emphasis multi modal sensor fusion suites to provide such situational
+         awareness. A two fold problem of energy consumption and line of sight arise with the
+         multi modal sensor suites. The process described within will exploit the acoustic
+         properties of the event to provide variant classification as added situational awareness to
+         the solider.
+
+         Keywords: Neural Network, Artillery, Impact, Launch, Statistical Analysis, Acoustic
+         Sensors, and Artillery
+
+
+                                           1. INTRODUCTION
+
+     A network of acoustic sensors can be used to detect and localize artillery launch and/or impact events,
+and can provide a capability to classify the types of events that have occurred in a specified region provide
+both warning and identification of threats found in the area. The added information integrated into the
+common operating picture would assist field commanders to (more) accurately plan and execute measures
+that must be taken in order to ensure the proper actions for a mission. Such a warning system would also
+help reduce the time-consuming, manpower intensive and dangerous tasks associated with identifying the
+events, allowing a field commander to make rapid and accurate judgments that insure greater safety and
+minimize danger for the soldiers.
+
+
+
+             Unmanned/Unattended Sensors and Sensor Networks IV, edited by Edward M. Carapezza,
+               Proc. of SPIE Vol. 6736, 67360J, (2007) · 0277-786X/07/$18 · doi: 10.1117/12.738185
+
+
+                                        Proc. of SPIE Vol. 6736 67360J-1
+     The reliability associated with using acoustic sensor technologies to discriminate between artillery
+variants/types using features that remain robust over long-range wave propagation, firing time, and
+detonation point (air/ground) are developed and discussed herein. The results described are based on an
+analysis conducted using acoustic signature data collected during a data collection exercise in the Spring of
+2005. The artillery blast data was collected at YUMA Proving Ground (YPG) on 07-11 March 2005 in a
+field test experiment conducted by the Acoustic Center of Excellence (ACOE) from ARDEC (Picatinny
+Arsenal). The purpose of the experiment was to gather artillery and mortar data and subsequently
+investigate whether launch events could be distinguished from impact events using acoustic sensor
+technologies. The field test included the launch and detonation of several variants of artillery, comprising
+of various rounds and included mortars; High Explosive (HE) variants. The data set comprised of 52 IM
+event signatures and 125 LA event signatures collected using microphones emplaced at two sensors sites,
+S1 and S2, shown in Figure 1. S1 was located approximately 300m from the firing position, while S2 was
+emplaced 1000m from the firing position and 700m from the impact zone.
+
+
+          A C O E D A T A C O L L E C T I O N E X E R C IS E
+
+
+          A r t il le r y L a u n c h S it e
+
+          D e t o n a t i o n /I m p a c t S it e
+
+
+
+
+                                                                                                             700m
+          A c o u s tic S e n s o r S ite                                                      m
+                                                                                          00
+                                                                                     15
+
+
+                                                                                       1000m
+                                                                                                            S2
+                                                         300m
+
+
+                                                         S1
+
+
+
+            Figure 1 –Layout of Sensor Emplacement at Yuma Proving Grounds for Data Collection 1.
+
+
+     A second data collection exercise was conducted in January 2006 at Yuma Proving Grounds. The
+purpose of this data collection was to enhance the acoustic signature library. The acoustic recordings
+collected added a new class of mortars to the data base, primarily launches. The data collection also
+allowed us to extend the ranges of the acoustic microphone to provide greater standoff distance for
+classification. Four acoustic sensors were emplaced by the ACOE from ARDEC at sensor sites S1-S4 with
+ranges varying from 750m to 2000m from the firing position, shown in Figure 3.
+
+                                ACOE DATA COLLECTION EXERCISE
+                                                                             S3              S2        S1
+                                Artillery Launch Site
+                                                                     1000m
+
+
+
+
+                                Detonation/Impact Site
+
+                                Acoustic Sensor Site
+                                                                                        0m
+
+
+
+
+                                                                             S4
+                                                                                     125
+
+
+
+                                                                                                  m
+                                                                                                00
+                                                                                              15
+                                                                              750m
+
+
+
+
+                                                                                               2500m
+
+
+
+  Figure 2 –Layout of Sensor Emplacement at Yuma Proving Grounds for Data Collection 2.
+
+
+
+
+                                                    Proc. of SPIE Vol. 6736 67360J-2
+   A third data collection exercise was conducted between May 31st and June 1st 2006 at Yuma Proving
+Grounds. The purpose of this data collection was two fold, first to increase the number of acoustic
+signatures in our library to continue to build our database. The second portion of the experiment was to
+conduct additional analysis of the influence of range variance on sound propagation from the acoustic
+source and the affects on the acoustic characteristics to develop a more robust feature space. Over the two-
+day data collection the assorted lots of mortar rounds were fired at various distances, ranging from 1000m-
+7500m. The air temperature was significantly higher from previous data collections, (1000-1060
+Fahrenheit). Testing occurred under clear skies from the period of 0900-1500hrs. Figures 3 and 4 show
+the sensor deployment schemes for the two-day data collection are shown with approximate distances for
+the three acoustic sensors that were emplaced by the ACOE from ARDEC; S1, S2, and S3. The distances
+from the firing point and impact zones to the sensor sites are shown in figures 3 and 4.
+   A C O E D A T A C O L L E C T I O N E X E R C IS E
+                                                                   S1               S2                               S3
+
+   A r t ille r y L a u n c h S it e
+
+   D e t o n a t io n /Im p a c t S it e                     m
+                                                                                                        m
+                                                                                                   90
+
+
+
+                                                                                m
+   A c o u s t ic S e n s o r S it e
+                                                            1210
+
+
+
+
+                                                                                                                          1100m
+                                                                                              70
+
+
+                                                                            00
+                                                                           22
+
+
+
+
+                                                                     1000m                              6000m
+
+                                                                                    7000m
+
+
+
+
+            Figure 3 – Layout of Sensor Emplacement at Yuma Proving Grounds May 31st, 2006 for Data Collection 3.
+
+
+
+ ACOE DATA COLLECTION EXERCISE
+                                                                           S1                                   S2                S3
+
+ Artillery Launch Site
+
+ Detonation/Impact Site
+                                                                       m
+
+
+
+
+                                                                                              m                 m
+                                                                                            90                80
+                                                                   1860
+
+
+
+
+ Acoustic Sensor Site                                                                                                                  1100m
+                                                                                         70                 75
+
+
+
+
+                                                                            2600m                                4900m
+
+
+                                                                                             7500m
+           Figure 4 – Layout of Sensor Emplacement at Yuma Proving Grounds June 1st, 2006 for Data Collection 3.
+
+    Figure 5 shows three typical acoustic signatures for launches and impacts from various ranges to the
+sensors. The most notable attributes within each type of blast are readily identified. High frequency
+precursors that occur prior to the main blast of an IM type event are shown in Figure 5b. These precursors
+are attributed to various explosive and concussive properties within the blast, which degrade with long-
+range propagation. Note that the high frequency precursors are absent prior to the main blast as shown in
+
+
+
+
+                                                        Proc. of SPIE Vol. 6736 67360J-3
+Figure 5. In this work, we identify range invariant features found within the multiresolution decomposition
+of the corresponding signatures in an attempt to further promote disparate sensor technology for artillery
+event discrimination. The subsequent development of a feature space representation for classification is
+based upon data obtained during the three series of data collections at YPG We show that details extracted
+via different levels of decomposition produce repeatable properties that can be processed and combined to
+ensure reliable discrimination between these events with various caliber of artillery at varying ranges.
+
+                                                                  VyiIg C
+
+
+
+
+       -D.7
+
+       -D.4
+
+
+
+
+       aS
+
+         0
+
+       -D.5
+
+
+
+                                                            I-S               2                                 S
+
+
+
+
+       D.5
+
+
+ C.)     0
+
+       -D.5
+
+
+
+                                                                              2               2fl               S
+
+
+
+
+ Figure 5 – Acoustic Signatures from YPG (a) Mortar launch recorded at S1, (b) Mortar impact recorded from S2, (c)
+                                         Mortar launch recorded at S2.
+
+
+
+
+                                          2. DATA PROCESSING
+     Statistical analytical methods are used as a basis to identify distinct, disjoint feature sets that remain
+consistent for a given class of round, and do not degrade dramatically with long-range propagation. The
+complex, non-stationary response of the signatures to be analyzed, which are categorically poor candidates
+for feature extraction and segmentation via Fourier analysis or the short-time Fourier Transform. On the
+other hand, the non-stationary, transient and often oscillatory nature of these signals is well represented
+with a temporal representation identifying the acoustic baseband signature and developing a series of non-
+amplitude characteristics describing a given acoustic blast wave. Exploiting the transient nature of the
+source surface wave providing a scalable time representation, we process the raw data into manageable
+sizes.
+     After an impulsive event is detected, a three-second snippet is taken around the maximum. Various
+preprocessing steps are performed on the data. The first step is to remove any DC offset. The recorded
+acoustic signatures are down sampled. For training purposes it was convenient to convert the 32768
+samples/sec to 8192 samples/sec. Although there was a small loss in information (particularly in the rapid
+onset as the acoustic wave first passes over the microphone) it was deemed that the benefits of working
+with less data outweighed any corresponding loss of information. The data was also normalization by
+scaling the recording to make the largest peak equal to unity.
+
+
+
+
+                                         Proc. of SPIE Vol. 6736 67360J-4
+         The original data cuts were obtained by first estimating a noise floor and accepting a recording
+when the recording exceeded some dynamic threshold. The recording is taken 1 second from the maximum
+peak in the characteristic N-wave and 2 seconds forward from the same point providing the data snipet.
+Many standard approaches (e.g. the median absolute difference technique) are well know in the art and can
+be used for impulse detection. After a recording has been cut it is desirable to find a consistent reference
+point. Explosions generally have a characteristic N wave shape consisting of the following; a rapid onset
+followed by a rapid decrease of pressure until reaching a negative peak then slowly increasing back to zero.
+
+
+              2.1 DERIVING DISTINCTIVE ACOUSTIC CHARACTERISTIC’S
+      Utilizing statistical analytical properties a series of distinctive characteristic elements extracted from
+acoustic signatures developing a series of statistical methods that provide representation of the various
+phenomena occurring in the temporal domain. These derived features describe the various characteristics
+of surface wave generated by the explosive blast event at the launch of an artillery or mortar shell.
+      The acoustic signature generated by the expulsion of an artillery/mortar round out of a gun tube during
+launch divides into a series of temporal based events. The natural sequence of a round being launched is
+acoustically described by the representative signature recorded by the microphone. The signature divided
+into a series of events based on the characteristic N-wave generated by the charge used to launch the
+artillery/mortar round. The blast envelope is broken into a series of lobes describing the dramatic change in
+pressure as the explosion concludes with some minimal burn at the tail end as the signature fades out.
+      The signature is broken into the following series of intervals using the N-shaped envelope as
+represented as p[n] where n is the number of samples from the reference point defined in the previous
+section (first zero crossing after the initial peak pressure), and that zero crossing is noted. The lobes of the
+blast are defined by the time intervals [τ1 τ2] and [τ3 τ4]. The reference point was chosen to be the first zero
+crossing after the initial peak pressure, essentially the middle leg of the characteristic N-wave. The ratio of
+the energy in the interval [τ1, τ2] to the energy in the interval [τ3, τ4] generates three key features based on
+the equation defined by eq.1.
+
+                                                                        2
+                                                      ∑n=τ p[n]
+                                                          τ2
+
+                                              f13 ≡            1
+                                                                        2
+                                                      ∑n=τ p[n]
+(1)                                                       τ4
+                                                               3
+
+
+
+Pressure squared roll off. For a given interval [τ1, τ2] and constant α (0 < α < 1) this feature is defined as
+follows: The time index τ that makes the energy of p in the interval [τ1, τ1+τ] equal to α times the energy
+in the interval [τ1, τ2] is taken as the feature
+f14 = ∆⋅τ. ∆ is also defined to be 1/(sampling rate) and is in several expressions to make the actual
+sampling rate used less relevant defined by eq.2 and eq.3.
+
+(2)
+                                                 f14 = ∆ ⋅τ
+
+For τ satisfying:
+                                                      2                           2
+                                ∑ τ p[n] = α ∑ τ p[n]
+                                     τ 1 +τ                        τ2
+(3)
+                                     n= 1                          n= 1
+The slope of a least squares linear fit to pressure over the interval [τ1, τ2]:
+
+
+
+
+                                          Proc. of SPIE Vol. 6736 67360J-5
+(4)                                                    lS np − S n S p
+                                           f15 ≡                         2
+                                                        lS nn − S n
+Each of the elements is defined in equations 5-9 over the defined time interval with various points on the
+characteristic N-wave.
+
+                                          l = τ 2 − τ 1 + 1,
+(5)                                                τ2
+(6)                                       S n = ∑ ( ∆ n ),
+                                                  n =τ 1
+                                                       τ2
+(7)                                       S nn = ∑ ( ∆ n ) 2 ,
+                                                   n =τ 1
+                                                   τ2
+(8)                                       S p = ∑ p [ n ],
+                                                  n =τ 1
+                                                       τ2
+(9)                                       S np = ∑ ∆ ⋅ n ⋅ p [ n ]
+                                                   n =τ 1
+
+
+The centroid of pressure squared over the time interval [τ1, τ2]:
+
+                                                   τ2
+
+                                                  ∑τ ∆ ( n − τ ) ⋅ p [ n ]
+                                                  n=
+                                                                     1
+                                                                                 2
+
+
+(10)                            f 21 ≡ C ≡              1
+                                                            τ2
+
+                                                            ∑τ p [ n ]
+                                                            n=
+                                                                             2
+
+                                                                 1
+
+
+     The feature space proposed is comprised of primitives derived from the normalized energy
+distributions within the normalized original signature, centered about the maximum value of the blast wave
+that results in various power distributions characteristic to the event. Feature extraction methods yield
+differences that become visible with the varying energy distribution found within the events, including the
+energy distributions over the given period while remaining amplitude independent.
+
+
+
+
+                                     3.     FEATURE OPTIMIZATION
+          It was desired to determine the optimal set of features and corresponding parameters. It is desired
+to obtain a small number of features that yields the most amount of information. A brute force search
+quickly becomes computationally prohibitive as the number of features increases. The approach taken was
+to define a measure of fitness and search over all the features and parameters for a single feature. The
+feature and corresponding parameters that yields the greatest measure of fitness is then recorded.
+Subsequent features are then added to the existing set, and the merit of each combination is evaluated, and
+new feature/parameters are selected in turn. We do not forbid the possibility that the same feature with a
+different data cut is best (i.e. features can occur multiple times). This process is repeated until the desired
+number of features is reached (in our case 6 features were selected).
+          In order to evaluate the usefulness of each set of features a metric is needed. The metric chosen
+was the Mahalanobis distance. For the two class case with means, µ1 and µ2 and pooled covariance Σ given
+by:
+
+
+
+
+                                          Proc. of SPIE Vol. 6736 67360J-6
+(11)
+                                              ( N C1 − 1)Σ C1 + ( N C 2 − 1)Σ C 2
+                                    Σ≡
+                                                       N C1 + N C 2 − 2
+The Mahalanobis distance is defined as:
+
+(12)                            d (c1, c 2) ≡ ( µ1 − µ 2 )T ⋅ Σ −1 ⋅ ( µ1 − µ 2 )
+
+For each possible set of features and parameters, the Mahalanobis distance between each combination of
+classes is computed. The minimum of these Mahalanobis distances are taken as a measure of fitness for a
+given set of feature/parameters to then proceed to the next step of classification.
+
+
+
+                   Priiiu& timi •r'i ritici                    Priiiu& rolloa                   Uniir rigriiilon to priiur
+
+
+            0.8                                                                         0.8
+
+
+                                                                                          0
+
+                                                                                        -0.8
+
+
+
+              -0      U      U 04              08                                         -02       U       0.2      0.4      0.8
+                          TimE]                                     Time Es]                             Time Es]
+
+                     C ntroidofpr    ur 2                  Pressure2 time area ratios            Pressure2 time area ratios
+
+
+
+            0.8
+
+                                                                                                                     L
+
+            -0.8
+
+
+              —l
+                             U.:      0.4      0.8                                                                            0.8
+                          Time Es]                                  Time Es]                             Time Es]
+
+
+
+
+Figure 6 – A representation of the derived, defined feature space across an acoustic signature of high-explosive event..
+
+
+
+
+                                                Proc. of SPIE Vol. 6736 67360J-7
+                                                                                    Preuuure2rolloffs              Linearreqressionto pressure
+
+
+
+
+                 0.1    0.16     0.2      0.26     P.S                       0.24   0.26 0.28       0.3   0.32
+                               Time Eu]                                                 Time Eu]
+
+                       Ce ntru id of p reusu re2                         1pPmuuum2 time area ratios
+                                                                  16
+
+                                                              0 10
+                                                              r
+                                                                  6.
+                                                                  -6
+
+                                                                       0.2     0.22 0.24 0.28 0.28        0.3     0.1 0.16 0.2 0.26 0.3 0.36
+                                                                                        Time Eu]                                Time Eu]
+
+
+
+
+          Figure 7 – A zoomed representation of the derived, defined feature space providing greater detail.
+
+
+                                                   4. NEURAL NETWORK CLASSIFIER
+    Neural networks have become a powerful tool for solving difficult classification (mapping) problems
+with a proven ability to realize non-linear discriminant functions and complex decision regions that are
+often required to ensure separability between classes. The use of neural networks for classification is well
+documented and convergence requirements for training are well known. The standard multilayer
+feedforward neural network shown in Figure 8 was chosen due to its ability to learn mappings of any
+complexity, provided that the number of hidden layer neurons is sufficient to accommodate the number of
+separable regions that are required to solve a particular classification problem. In general, the network
+contains Ni inputs, N h hidden layer neurons and N O output layer neurons with no interconnections within
+a single layer. In the three-layer network shown, the connection weight between the i th input and j th
+hidden layer neuron will be denoted as wij and vij will be used to denote the connection weight between
+the j th neuron in the hidden layer and k th output layer neuron. A bias for the j th hidden layer neuron is
+denoted as b j and the bias for the k th output neuron is b̂k . x p denotes the set of P , N -tuple feature
+                                 [                        ]
+vectors x n ∈ ℜ N , x p = x1p , x2p , K , xNp used to discriminate between the different classes of artillery.
+
+                                                                                             b1                   b̂1
+                                                                       wij                                 v jk
+                                 x1                                                                                                   out 1
+
+                                x2                                                                                                    out 2
+
+                                x3                                                                                                    out 3
+
+
+                                                                                                                        bˆN 0
+                               xN                                                                                                    out N 0
+                                                     Ni                                    Nh                     NO
+              Figure 8– Standard Multilayer Feedforward Neural Network.
+
+
+
+
+                                                          Proc. of SPIE Vol. 6736 67360J-8
+    The input layer units or “neurons” propagate signals to the hidden layer but do not perform any
+computations. Neurons in the hidden layer and the output layer compute their response by taking a
+weighted sum signals from the previous layer plus a bias, and then passing the sum through an activation
+function. For example, the output of the j th neuron in the hidden layer upon the presentation of the p th
+
+                                        ( )
+                                                                 N
+input pattern x p is given by out Pj = f net Pj where net Pj =   ∑ w x + b , and f is an activation function,
+                                                                 i =1
+                                                                           P
+                                                                        ij i   j
+
+
+that was chosen to be the sigmoid function
+                                                          2
+                                            f ( x) =            −1      (13)
+                                                       1 + e -x
+      The neural network classifier used to discriminate between variant artillery and mortar round types.
+The neural network was trained using the generalized delta rule or back propagation algorithm. The
+algorithm sequentially adjusts the interconnection weights within the network, subsequent to the
+application of all patterns in a training set, a routine commonly referred to as an epoch. In general, when an
+input pattern x p from a training set is presented to the network, it produces and output that is different
+from the target value, say d P . The error for the specific pattern is defined as the squared
+                N
+
+               ∑(             )
+              1 0 P              2
+error E P =          d k − out kP . An unconstrained nonlinear optimization performed to minimize the total
+              2 k =1
+error function of the network
+                                                       P
+                                           E (w) =   ∑ E (w)
+                                                     k =1
+                                                            P           (14)
+
+through the incremental computation of the gradient of the error in equation (14), and successive
+adjustment of the interconnection weights so as to achieve the global minimum error corresponding
+to E (w) = 0 . In this implementation the Levenberg-Marquardt algorithm was used. To train the network
+the error function is defined as the sum of error functions defined above for all input/output pairs of the
+training set. Levenberg-Marquardt is hybrid technique that utilizes a parameter that changes during training
+to vary between steps defined by the Gauss-Newton algorithm and standard gradient descent.
+
+
+                                                 5. RESULTS
+
+                                        EXPERIMENT 1 RESULTS
+    Features were extracted from the data sets using standard statistical analysis tools for signal processing
+as described in sections two and three, and the 6-tuple feature vector ζ               = f 1 , f 1 , f 1 , f 4 , f 5 , f 6 , was
+                                                                                   p
+
+
+constructed according to equations (1), (3), (4), and (10), respectively. Optimization techniques were
+utilized to exploit the most robust and ideal set of features to provide maximum seperability, giving the
+most amount of information. The optimization method defined a measure of fitness for each of
+Experiments were then conducted to measure the separability of the feature space and benchmark the
+performance of the proposed neural network classifier. The architecture of the neural network consisted of
+five hidden layer neurons trained using 2/3 of randomly selected vectors from a total of 423 signatures
+made available from the multiplicity of YPG exercise between March of 2005, YPG 1 and June of 2006,
+YPG 3 . The neural network has six input nodes and five output nodes to separate the various rounds based
+on caliber. The training set comprised of 2/3 of the total data set composed of various mortars and artillery
+
+
+
+
+                                        Proc. of SPIE Vol. 6736 67360J-9
+caliber rounds at the diverse sensor sites. When tested against the remaining 1/3 total data signatures
+composed of artillery and mortars , the networked correctly classified 132 out of 141 rounds with the
+correct caliber based on the launch events. The overall performance of network was 93.62% for correct
+artillery and mortar variant classification; each individual round had the following classification rates, 86%
+for Type A, 96% for Type B, 95% for Type C, 100% for Type D, and 77% for Type E rounds. The events
+were classified as a certain round caliber when the output from the sigmoid activation function in equation
+(14) was greater than 0 and less then 0 for the series of outputs giving an expression in 1 and -1 values.
+
+
+                Classified        Classified       Classified      Classified         Classified Correctly
+                Type A            Type B           Type C          Type D             Type E Classified
+
+    TypeA       6                 0                1               0                  0              85.7%
+    TypeB       0                 45               1               0                  1              95.7%
+
+
+
+
+                                                                .
+    TypeC                         1                60              2                                 95.2%
+    TypeD       0                 0                0               11                 0              100%
+
+
+
+
+                                                           .
+    TypeB       0                 0                0               3                  10             77%
+
+                    Figure 9– Classification Results Table to Discriminate Various Round Calibers.
+
+
+
+                                                                         TypeB •  launch 81mm
+                                                                                  launch 120mm
+
+                          4
+
+
+
+                          2
+                                                            . >.         TypeC •
+
+                          U
+
+                                                                         H.
+
+
+
+
+                          4
+                          3
+
+
+
+                                                                        -c    U
+
+                                                           -2
+
+
+
+
+          Figure 10– A 3-tuple Representations of Seperability of Artillery/Mortar Based on Caliber Type.
+
+
+                                                6. CONCLUSIONS
+    In this paper, feature extraction methods based on the statically analysis methods for acoustic signals
+and temporal space analysis facilitate the development of a robust classification algorithm that affords
+reliable discrimination between various calibers of artillery and mortar round types based on launch event
+acoustic signatures. The acoustic signature generated by the various charges utilized to expel a round out
+of a firing tube affords a series of characteristic features amplitude independent, and range independent that
+
+
+
+
+                                          Proc. of SPIE Vol. 6736 67360J-10
+can discriminate various caliber rounds. Previous methods for artillery/mortar classification based on
+launch events were based on visual cues rather than remote acoustic methods, which vary on proximity to
+the event and line of sight. Amplitude dependant features, which vary dramatically due to signal
+attenuation and distortion resulting from various propagation effects, are minimized through the use of
+signal processing techniques that exploit class specific attributes that remain constant within the signature
+data and furthered through statistical analysis [4].
+    The non-stationary, transient and often oscillatory nature of artillery blast signals may be represented
+efficiently with a temporal base that effectively capture the time-frequency distribution of such signal
+components. Classification results using a neural network trained on the feature set show reliable
+discrimination of artillery and mortar events from various distances is 94% based singularly on launch
+events for events between 700 - 7500 meters.
+
+
+                                             REFERENCES
+
+1.   H.E. Bass, ”Aero Acoustic Blast Classification Study (ACBS)”, Interim Report for contract 95-
+     F139300-000, January, 1996
+2.   Birenzvige, A., Sickenberger, D., and Reyes, F., “Disparate Sensor Integration Program Description
+     and Preliminary Data Analysis”, Report ECBC-TR-251, Edgewood Chemical Biological Center,
+     September 2002.
+3.   Daubechies, I., 1992, Ten Lectures on Wavelets: SIAM, Capital City Press.
+4.   Vetterli, M., Kovacevic, J., “Wavelets and Subband Coding”, Prentice Hall, NJ 1995
+5.   Mallet, S., “A theory for Multiresolution Signal Decomposition: The Wavelet Representation.”, IEEE
+     Transactions on Pattern Analysis and Machine Intelligence, Vol. 11. No. 7. July 1989.
+6.   Hohil, M., Desai, S., Chang, J., “Discrimination between High Explosive and Chemical/Biological
+     Artillery Using Acoustic Sensors.” Military Sensing Symposia, Laurel, MD. August 2004.
+
+
+
+
+                                      Proc. of SPIE Vol. 6736 67360J-11
+

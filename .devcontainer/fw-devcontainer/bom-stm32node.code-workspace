@@ -1,0 +1,83 @@
+{
+  "folders": [
+    {
+      "path": "../../fw/bom-stm32node"
+    }
+  ],
+  "settings": {
+    "C_Cpp.intelliSenseEngine": "default",
+    "C_Cpp.intelliSenseEngineFallback": "enabled",
+    "C_Cpp.autocomplete": "default",
+    "C_Cpp.errorSquiggles": "enabled",
+    "C_Cpp.default.compilerPath": "/usr/bin/arm-none-eabi-gcc",
+    "C_Cpp.default.compileCommands": "${workspaceFolder}/build/Debug/compile_commands.json",
+    "C_Cpp.default.intelliSenseMode": "gcc-arm",
+    "clang-format.executable": "/usr/bin/clang-format",
+    "editor.formatOnPaste": true,
+    "editor.formatOnSave": true,
+    "cmake.configureOnOpen": false,
+    "cmake.buildDirectory": "${workspaceFolder}/build"
+  },
+  "tasks": {
+    "version": "2.0.0",
+    "tasks": [
+      {
+        "label": "FW STM: Build (Debug)",
+        "type": "shell",
+        "command": "task build",
+        "options": { "cwd": "${workspaceFolder}" },
+        "problemMatcher": ["$gcc"],
+        "group": { "kind": "build", "isDefault": true }
+      },
+      {
+        "label": "FW STM: Flash",
+        "type": "shell",
+        "command": "task flash",
+        "options": { "cwd": "${workspaceFolder}" },
+        "problemMatcher": []
+      },
+      {
+        "label": "FW STM: Clean",
+        "type": "shell",
+        "command": "task clean",
+        "options": { "cwd": "${workspaceFolder}" },
+        "problemMatcher": []
+      }
+    ]
+  },
+  "launch": {
+    "version": "0.2.0",
+    "configurations": [
+      {
+        "name": "FW STM: Launch (flash + break at main)",
+        "type": "cortex-debug",
+        "request": "launch",
+        "cwd": "${workspaceFolder}",
+        "preLaunchTask": "FW STM: Build (Debug)",
+        "executable": "${workspaceFolder}/build/Debug/bom-stm32node.elf",
+        "servertype": "openocd",
+        "serverpath": "openocd-stm32",
+        "gdbPath": "gdb-multiarch",
+        "searchDir": ["/opt/openocd-stm32/share/openocd/scripts"],
+        "configFiles": ["${workspaceFolder}/debug/openocd-stm32h5.cfg"],
+        "device": "STM32H563ZI",
+        "svdFile": "${workspaceFolder}/debug/STM32H563.svd",
+        "runToEntryPoint": "main"
+      },
+      {
+        "name": "FW STM: Attach (halt running)",
+        "type": "cortex-debug",
+        "request": "attach",
+        "cwd": "${workspaceFolder}",
+        "executable": "${workspaceFolder}/build/Debug/bom-stm32node.elf",
+        "servertype": "openocd",
+        "serverpath": "openocd-stm32",
+        "gdbPath": "gdb-multiarch",
+        "searchDir": ["/opt/openocd-stm32/share/openocd/scripts"],
+        "configFiles": ["${workspaceFolder}/debug/openocd-stm32h5.cfg"],
+        "device": "STM32H563ZI",
+        "svdFile": "${workspaceFolder}/debug/STM32H563.svd"
+      }
+    ]
+  }
+}

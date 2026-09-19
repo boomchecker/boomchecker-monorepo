@@ -1,0 +1,443 @@
+                                                                                                                                                                                   2024 10th International Conference on Control, Decision and Information Technologies
+                                                                                                                                                                                   CoDIT 2024 | Valletta, Malta / July 01-04, 2024                          Technically co-sponsored by IEEE & IFAC
+2024 10th International Conference on Control, Decision and Information Technologies (CoDIT) | 979-8-3503-7397-4/24/$31.00 ©2024 IEEE | DOI: 10.1109/CoDIT62066.2024.10708400
+
+
+
+
+                                                                                                                                                                                                   Rigorous Floating-Point to Fixed-Point Quantization
+                                                                                                                                                                                                  of Deep Neural Networks on STM32 Micro-controllers
+                                                                                                                                                                                                                        Dorra Ben Khalifa1           and Matthieu Martel2,3
+
+                                                                                                                                                                                      Abstract— Embedding artificial intelligence onto low-               many others. However, mapping the resulting DNNs
+                                                                                                                                                                                   power devices is a challenging task that has been partially            onto fast and compact embedded systems remains a
+                                                                                                                                                                                   overcome by recent advances in machine learning and                    challenging problem that seriously hinders the applica-
+                                                                                                                                                                                   hardware design. Currently, deep neural networks can be
+                                                                                                                                                                                   deployed on embedded targets to perform various tasks                  tion and development of neural network technology in
+                                                                                                                                                                                   such as speech recognition, object detection or human                  embedded platforms [2]. A further difficulty lies in the
+                                                                                                                                                                                   activity recognition. However, it is still possible to optimize        fact that these DNNs are usually trained on a desktop
+                                                                                                                                                                                   deep neural networks on embedded devices. These opti-                  computer with high computing power, before being
+                                                                                                                                                                                   mizations mainly concern energy consumption, memory                    ported to the target architecture, which has low comput-
+                                                                                                                                                                                   and real-time constraints, but also easier deployment at
+                                                                                                                                                                                   the edge. In addition, there is still a need for a better              ing power. It is then necessary to perform this arithmetic
+                                                                                                                                                                                   understanding of what can be achieved for different use                conversion without degrading the performance of the
+                                                                                                                                                                                   cases. This work focuses on the quantization and deploy-               network. Quantization is a technique that significantly
+                                                                                                                                                                                   ment of deep neural networks on low-power 32-bit micro-                reduces the memory footprint. It involves reducing
+                                                                                                                                                                                   controllers. In this article, the quantization method used is          the number of bits used to code each model weight,
+                                                                                                                                                                                   based on solving an integer optimization problem derived
+                                                                                                                                                                                   from the neural network model and concerning the accu-                 so that the total memory footprint is reduced by the
+                                                                                                                                                                                   racy of the computations and results at each point of the              same factor. Quantization also makes it possible to use
+                                                                                                                                                                                   network. We evaluate the performance of our quantization               fixed-point rather than floating-point coding [3]. Several
+                                                                                                                                                                                   method on a collection of neural networks measuring the                advantages are possible if operations are carried out
+                                                                                                                                                                                   analysis time and time-to-solution improvement between                 using integer rather than floating-point data types. An
+                                                                                                                                                                                   the floating- and fixed-point networks, considering a typical
+                                                                                                                                                                                   embedded platform employing a STM32 Nucleo-144 micro-                  important advantage is that integer operations require far
+                                                                                                                                                                                   controller.                                                            fewer computations on most processor cores, including
+                                                                                                                                                                                      Index Terms— Embedded systems; artificial intelligence;             micro-controllers especially in cases where there is no
+                                                                                                                                                                                   constraint generation; quantization; power consumption;                Floating-Point Unit (FPU) available, so floating-point
+                                                                                                                                                                                   micro-controllers                                                      instructions have to be emulated in software, resulting
+                                                                                                                                                                                                                                                          in a significant overhead.
+                                                                                                                                                                                                         I. I NTRODUCTION                                    In this article, we present a method to synthesize
+                                                                                                                                                                                      In recent years, Deep Neural Networks (DNN) have                    fixed-point code from the floating-point description of
+                                                                                                                                                                                   demonstrated their ability to solve challenging prob-                  a DNN. Our approach consists of generating a system
+                                                                                                                                                                                   lems in many fields including audio recognition, image                 of constraints describing the propagation of the fixed-
+                                                                                                                                                                                   classification, or human activity monitoring [1]. One of               point arithmetic errors throughout a DNN and of finding
+                                                                                                                                                                                   the well-known disadvantages of DNNs is that they are                  an optimal solution. The constraints involve only integer
+                                                                                                                                                                                   time, memory and energy intensive, as the number of                    quantities and can be efficiently solved by a Satisfiability
+                                                                                                                                                                                   operations and parameters increases with the complexity                Modulo Theories (SMT) optimizing solver (we use
+                                                                                                                                                                                   of the model architecture.                                             Z3 in practice [4].) A special constraint specifies the
+                                                                                                                                                                                      Due to their low power consumption and small size,                  error threshold tolerated on the outputs. As a result,
+                                                                                                                                                                                   embedded systems have also been widely used in auto-                   we obtain the minimal fixed-point formats with regard
+                                                                                                                                                                                   matic controls, wearable devices, home appliances and                  to our cost function, which guarantee that the error
+                                                                                                                                                                                                                                                          threshold is respected. Our technique is implemented in
+                                                                                                                                                                                     1 Dorra     Ben Khalifa is with       Fédération ENAC ISAE-        a tool, Popinns. which takes as input a Tensorflow
+                                                                                                                                                                                   SUPAERO       ONERA,     University      of      Toulouse, France
+                                                                                                                                                                                   dorra.ben-khalifa@enac.fr                                              2.0 model and generates the C code of this model in
+                                                                                                                                                                                     2     Matthieu     Martel     is    with     LAMPS       Labora-     fixed-point arithmetic. We evaluate Popinns on several
+                                                                                                                                                                                   tory,   University   of     Perpignan    Via    Domitia,    France     neural networks composed of different layers and with
+                                                                                                                                                                                   matthieu.martel@univ-perp.fr
+                                                                                                                                                                                     3 Matthieu Martel is also with the Numalis company, Bureaux du       thousands of parameters. Since our aim is to integrate
+                                                                                                                                                                                   Polygone, 265 Avenue. des États du Languedoc, Montpellier, France.    neural networks into low-power devices, in this article
+
+
+
+
+                                                                                                                                                                                   979-8-3503-7397-4/24/$31.00                                                                                                      - 1201 -
+                                                                                                                                                                                Authorized licensed use limited to: CZECH ©2024 IEEE
+                                                                                                                                                                                                                          TECHNICAL UNIVERSITY. Downloaded on June 01,2026 at 21:04:28 UTC from IEEE Xplore. Restrictions apply.
+   CoDIT 2024 | Valletta, Malta / July 01-04, 2024                    Technical Co-Sponsors: IEEE CSS, IEEE SMC, IEEE RAS & IFAC.
+
+
+
+
+   we evaluate our neural networks synthesized on low-                       Recently, the quantization method presented in the
+   power 32-bit micro-controllers. The results show that                  recent Aster [8] tool assigns mixed fixed-point precision
+   our fixed-point neural networks consume less time and                  to the neural networks that solve regression tasks, while
+   energy on an ARM micro-controller than their original                  guaranteeing a provided error bound. Aster optimizes
+   floating-point version. The results of the mean relative               the number of bits needed to implement a network and
+   errors measured during evaluations of the fixed-point                  generates more efficient fixed-point code for custom
+   versus floating-point versions of the model are also                   hardware such as FPGAs. However, the tool focuses
+   presented.                                                             only on neural network controllers that are typically
+      The rest of this article is organized as follows. Section           regression models. Another solution to synthesize fixed-
+   II discusses the related work. Section III presents an                 point code based on constraint generation is described
+   overview of our fixed-point synthesis tool for DNNs. In                in [9]. The proposed tool generates a system of con-
+   section IV, we review the results obtained by executing                straints with integer variables that can be solved by an
+   DNNs on a STM32 micro-controller board. Section V                      SMT solver. Consequently, the solution to this system
+   concludes this work and discusses future perspectives.                 give the minimal number of bits required for each neuron
+                                                                          and each synaptic weight. Unlike our tool which handle
+                        II. RELATED W ORK                                 several type of neural network layers, this approach is
+                                                                          limited to fully connected layers.
+      As there is a large body of work on efficient neu-                     The work presented in [10] studied the effect of
+   ral network inference, we focus here on a representa-                  limited precision data representation and computation
+   tive selection of the techniques closest to our method,                on neural network training. their results show that sub-
+   which convert neural networks from floating-point to                   stituting floating-point units with fixed-point arithmetic
+   fixed-point arithmetic while guaranteeing a certain error              circuits comes with significant gains in the energy effi-
+   threshold on the resulting DNN. We also omit work on                   ciency and computational throughput, while potentially
+   fixed-point code generation for numerical programs.                    risking performance of the neural network. Shiftry [11]
+      The work proposed in [5] consists on tuning the                     is a compiler from high-level floating-point ML models
+   precision of an already trained neural network, assumed                to fixed-point C programs with 8-bit and 16-bit integers,
+   to behave correctly at some precision, in such a way                   with lower memory requirements. It uses a data-driven
+   that, after tuning, the network behaves almost like the                float-to-fixed procedure and a RAM management mech-
+   original one while performing its computations in lower                anism.
+   precision. Based on the formal modeling of the propaga-
+   tion of rounding errors, a set of linear constraints among               III. N EURAL N ETWORK Q UANTIZATION M ETHOD
+   integers is generated which can be solved by linear                              BASED C ONSTRAINT G ENERATION
+   programming. However, the prototype implemented is
+   limited to floating-point arithmetic, and no fixed-point                  In this section, we give an overview of the technique
+   solution has been proposed to run a DNN.                               implemented in our tool, Popinns, and how it proceeds
+      The work in [6] presents a semi-automated framework                 to synthesize the fixed-point program corresponding to
+   to bound and interpret the impact of rounding errors                   a given neural network.
+   due to the precision choice for inference in generic                      Popinns takes as entry a Tensorflow model1
+   DNNs. The framework can receive any TensorFlow/K-                      and translates it into its internal representation. Cur-
+   eras model in the front-end and computes and then prop-                rently, the layers accepted are dense, conv2d,
+   agates rounding errors through the computations for the                max pooling2d, up sampling2d and flatten.
+   back-end by affine and interval arithmetic. However, this              The ReLU activation function is also handled by our
+   work is limited to floating-point precision, whereas our               tool. For example, the code below defines a model made
+   tool goes further by converting floating-point formats                 of a convolutional layer followed by a dense layer with
+   to fixed-point ones and targeting embedded architec-                   ReLU (the flatten layer translates the matrix resulting
+   tures such as STM32 micro-controllers. Ferro et al. [7]                from the convolution into a vector.) This model takes
+   proposed a floating-point auto-tuning tool on different                as inputs images of size height × width= 16 × 16
+   kinds of neural networks. Their tuning approach is based               and classify them in different classes (numclass= 6).
+   on a stochastic arithmetic in order to obtain the lowest               As indicated further in Table I, this model has 404
+   precision for each of its parameters. However, this work               parameters.
+   do not propose a conversion from floating-point to fixed-
+   point neural networks.                                                   1 https://www.tensorflow.org/
+
+
+
+
+                                                                                                                                    - 1202 -
+Authorized licensed use limited to: CZECH TECHNICAL UNIVERSITY. Downloaded on June 01,2026 at 21:04:28 UTC from IEEE Xplore. Restrictions apply.
+   CoDIT 2024 | Valletta, Malta / July 01-04, 2024                    Technical Co-Sponsors: IEEE CSS, IEEE SMC, IEEE RAS & IFAC.
+
+
+
+
+      height = 16 ; width = 16 ;                                          fixed-point operations.
+      num_classes = 6                                                        A fixed-point number is represented by a k-bit signed
+      input_shape = (height, width, 1)
+      model = keras.Sequential(                                           integer X, combined with a scale factor f ∈ Z. Then
+          [                                                               X represents the real value x defined by
+          keras.Input(shape=input_shape),
+          layers.Conv2D(1, kernel_size=(3, 3)),                                                    x = X · 2−f .                          (1)
+          layers.Flatten(),
+          layers.Dense(num_classes,                                          We denote Qi,f the format of a given fixed-point
+                       activation="relu")
+          ]                                                               number represented using a k-bit integer associated to
+      )                                                                   a scaling factor f , where k = i + f . In Popinns, the
+      Once the model is trained, the following command                    formats Qi,f of the fixed-point numbers and variables
+   is all that is needed to generate the code in fixed-point              are determined thanks to the range analysis which yields
+   arithmetic.                                                            the sizes i of the integer part and thanks to the solution
+                                                                          to the system of constraints which gives the sizes f of
+      threshold = 8
+      popinns(model,1,height,width,imgs,threshold)
+                                                                          the fractional parts.
+                                                                             [...]
+      In the sequence above imgs is an array containing                      // -- convolution
+   several images of size height×width. It corresponds                       x[1][0][0][0] = fx_addx(fx_addx(fx_addx(
+   typically to a subset of the training set and is used                         fx_addx(fx_addx(fx_addx(fx_addx(fx_addx(
+                                                                                 fx_addx(0,fx_mulx(147580,x
+   to perform the dynamic range analysis. This dynamic                           [0][0][0][0],18)),fx_mulx(124002,x
+   analysis consists of running the DNN with a set of input                      [0][0][0][1],18)),fx_mulx(-147646,x
+   data and taking, for each output, the join of the values                      [0][0][0][2],18)),fx_mulx(98488,x
+                                                                                 [0][0][1][0],18)),fx_mulx(-76541,x
+   obtained at each run. This gives the most significant bits                    [0][0][1][1],18)),fx_mulx(-33375,x
+   of the values arising at each point of the model (this                        [0][0][1][2],18)),fx_mulx(-10303,x
+   step is crucial to to generate the system of constraints                      [0][0][2][0],18)),fx_mulx(-104803,x
+                                                                                 [0][0][2][1],18)),fx_mulx(-63949,x
+   described in the next paragraph)                                              [0][0][2][2],18)) ;
+      Finally, threshold denotes the accuracy required                       // -- conversion Q13,18 -> Q18,13
+   for the fixed-point model which is set by the user. In                    x[1][0][0][0] = fx_xtox(x[1][0][0][0],18,13);
+                                                                             [...]
+   our example, an accuracy of 2−8 is required, which                        // -- FC Layer
+   means that the errors between the outputs of the original                 tmp = 0;
+   model and those of the fixed-point code synthesized by                    for (int j=0;j<49;j++) {
+                                                                               tmp = fx_addx(tmp,fx_mulx(W_3[0*49+j], x
+   Popinns must be less than 2−8 .                                                 [3][0][j][0],13));};
+      Our key approach is based on a formal semantics                          // fx_k_d_i=13 f_k_i=15 fy_k_d_i=8
+   describing the propagation of the errors through the                        x[4][0][0][0] = RELU(fx_xtox(tmp,15,8));
+                                                                             [...]
+   computations performed by the DNN [12]. From these
+   semantics, we deduce a system of constraints made of                      An excerpt from this code is given hereafter for
+   inequalities between linear expressions among integer                  our example. The first statements are for the convo-
+   variables and constants. They are not linear because they              lution. The values 147580, 124002, . . . correspond to
+   also contain implications to encode the min and max                    the coefficients of the convolutional kernel translated
+   operations. The unknowns are the fixed-point formats                   in the adequate fixed-point formats. The last statements
+   of the numbers arising in the computations and a cost                  correspond to the fully connected layer and ReLU. The
+   function is used to indicate to the underlying optimizing              comment in the for loop indicate that the inputs x,
+   solver (we use the Z3 SMT solver [4]) to find the                      computing precision and output y of the first neuron of
+   minimal sizes for the fractional parts of the fixed-point              the layer respectively are Q18,13 , Q16,15 and Q23,8 (for
+   numbers, while ensuring that the accuracy threshold is                 the sake of conciseness, we have discarded these com-
+   respected. This system of constraints is described in                  ments for the convolutional layer but they are present in
+   [12].                                                                  Popinns’s output).
+      Once the constraint system has been solved (in a few                   Evaluating the floating-point and fixed-point version
+   seconds in our experiments), Popinns uses the fixed-                   of our example model, for a particular yet representative
+   point formats found by the solver to synthesize a fixed-               input, yields the following results:
+   point C code relying on the Fixmath library2 for the
+                                                                              yfloat   =     −0.100635, −0.069120, −0.037741,
+                                                                                                                           
+     2 https://savannah.nongnu.org/projects/fixmath/
+                                                                                             −0.109075, −0.039620, 0.071354
+
+
+
+
+                                                                                                                                    - 1203 -
+Authorized licensed use limited to: CZECH TECHNICAL UNIVERSITY. Downloaded on June 01,2026 at 21:04:28 UTC from IEEE Xplore. Restrictions apply.
+   CoDIT 2024 | Valletta, Malta / July 01-04, 2024                    Technical Co-Sponsors: IEEE CSS, IEEE SMC, IEEE RAS & IFAC.
+
+
+
+
+   and
+         yfix   =    −0.101562, −0.070312, −0.031250,
+                                                   
+                     −0.117188, −0.023438, 0.062500
+   In particular, we can observe that the dominant class is
+   clearly preserved.
+                IV. E XPERIMENTAL E VALUATION
+      Since our goal is to execute the DNNs synthesized by
+   Popinns on embedded architectures, we present in this
+   section the results obtained in terms of execution time,               Fig. 1: Connecting the power shield to the target board
+   energy consumption and average relative error between                  using basic connectors.
+   the fixed-point version generated by our tool and the
+   original floating-point version.                                         NN      #P     # Cl
+                                                                                                    Size
+                                                                                                            CV     MP     FL     FC      RL
+                                                                                                   Input
+   A. Experimental Setup
+                                                                            1       122     6       196      2      1      1      1       2
+      The device evaluation for our benchmarks is done                      2       182     8       100      1      1      2      2       2
+   using a 32-bit Arm® Cortex®-M3 CPU (120 MHz max)                         3       404     6       256      1      -      1      1       -
+   with 1 MByte of flash program memory and 128Kbyte                        4       505     5       100      -      -      1      1       -
+                                                                            5       600     4       144      -      -      2      2       -
+   of RAM based STM32F2072G micro-controller3 . We                          6       620     10      256      1      -      1      1       1
+   used Miosix4 , an operating system kernel designed to                    7       798     4       256      1      -      1      1       1
+   run on 32bit micro-controllers. As the Cortex®-M3                        8      1020     10      144      1      -      1      1       2
+                                                                            9      1318     12      100      -      -      3      3       -
+   ARM core lacks the support for hardware floating-point,                  10     1586     8       256      1      -      1      1       1
+   to compile all the benchmarks we have used the soft-
+   ware floating-point provided by the compiler when the
+   -msoft-float command-line switch is passed. With                       TABLE I: Description of the neural networks used
+   the switch enabled, the compiler will not generate any                 in our experiments. NN is the reference of the net-
+   Floating-point Unit (FPU) instructions, and appropriate                work, #P indicates its number of parameters, #Cl the
+   function calls to emulate floating-point computation are               number of recognized classes, CV, MP, FL, FC and
+   generated by passing floating-point arguments in integer               RL respectively indicate the number of convolutional,
+   registers.                                                             maxpool, flatten, fully connected and ReLU layers of
+      The time measurements were taken by querying the                    the networks.
+   high-resolution timer provided by the Miosix API, im-
+   plemented by exploiting one of the micro-controller’s
+   internal timers. Concerning the Popinns setup, we                      advanced power consumption measurement capability. It
+   evaluate 10 neural networks with different error thresh-               performs consumption averaging (static measurement up
+   olds: 6, 8, 10 and 12 bits, given by the user. This allows             to 200 mA) as well as real-time analysis (dynamic mea-
+   us to determine the threshold that gives the smallest                  surement up to 50 mA with 100 kHz bandwidth). Figure
+   relative error between the floating-point and fixed-point              1 depicts how to power the X-NUCLEO-LPM01A via
+   versions of the neural network. For experiments mea-                   its micro-USB port and how to use wires to connect it
+   suring execution time and energy consumption, we have                  to the target STM32 Nucleo-144 board.
+   chosen a single error threshold, which is considered the               B. Experimental Results
+   best requirement for obtaining the lowest relative error.
+                                                                             In our experiments we used 10 different neural net-
+   For experiments measuring execution time and energy
+                                                                          works as shown in Table I. These networks are com-
+   consumption, we have chosen a single error threshold,
+                                                                          posed of a mix of the layers and they have about 100
+   which is considered the best requirement and gives the
+                                                                          parameters (case of the smallest network, NN1) and up
+   lowest relative error.
+                                                                          to 1600 parameters (case of the largest network, NN10).
+      For power consumption measurement, we employed
+                                                                          Table II focuses on the mean relative errors computed
+   the X-NUCLEO-LPM01A expansion board which is a
+                                                                          by comparing the outputs of the fixed-point codes with
+   1.8 V to 3.3 V programmable power supply source with
+                                                                          the results of the original floating-point codes. These
+     3 https://www.st.com                                                 errors were computed for several thresholds (6, 8,10
+     4 https://miosix.org/                                                and 12 bits) for 6 of our networks, NN1 to NN6. The
+
+
+
+
+                                                                                                                                      - 1204 -
+Authorized licensed use limited to: CZECH TECHNICAL UNIVERSITY. Downloaded on June 01,2026 at 21:04:28 UTC from IEEE Xplore. Restrictions apply.
+   CoDIT 2024 | Valletta, Malta / July 01-04, 2024                    Technical Co-Sponsors: IEEE CSS, IEEE SMC, IEEE RAS & IFAC.
+
+
+
+
+    NN     Thresh=6       Thresh=8      Thresh=10       Thresh=12                                              STM32 Execution Time (s)
+                                                                            2.5
+                                                                                   Floating-Point NN
+       1         0.05          0.018          0.022           0.003                   Fixed-Point NN
+       2         0.03          0.011          0.014          0.0086
+       3         0.08          0.021          0.057           0.021           2
+
+       4        0.038          0.044          0.031           0.020
+       5         0.05          0.021          0.051           0.035
+                                                                            1.5
+       6        0.068          0.011           0.03          0.0085
+
+
+   TABLE II: Mean relative errors measured on evaluations                     1
+
+   of the fixed-point versions of the models compared to
+   their floating-point versions, for models NN1 to NN6                     0.5
+   described in Table I.
+
+                                                                              0
+                                                                                        NN1            NN2         NN3         NN4           NN5        NN6
+
+
+
+                                                                                                             STM32 Energy measurement (μJ)
+   remaining networks, NN7 to NN10, could not be run                        0.35
+                                                                                                                                             Floating-point NN
+   on the STM32 board due to the small amount of flash                                                                                          Fixed-Point NN
+
+                                                                             0.3
+   memory available in this micro-dcontroller, which is not
+   sufficient for the sizes of the remaining neural networks.
+                                                                            0.25
+   For the majority of the benchmarks, our tool is able to
+   constrain the relative error below 0.1%. These results                    0.2
+
+   confirm that the relative error measurement depends on
+   the threshold requested by the user and the range of                     0.15
+
+   variables computed after a certain number of program
+                                                                             0.1
+   executions.
+      Figure 2 depicts the measurement of execution time                    0.05
+
+   and power consumption of the floating-point and fixed-
+                                                                              0
+   point synthesized neural networks tested on the STM32                                 NN1           NN2         NN3         NN4           NN5        NN6
+
+   Nucleo-144 board. We recall that energy measurements
+   are performed using the X-NUCLEO-LPM01A STM32                          Fig. 2: Measurement of execution time in seconds (top)
+   power shield.                                                          and power consumption in µJ (bottom) of the floating-
+                                                                          point and fixed-point synthesized neural networks tested
+      We observe in the top hand side of Figure 2, that
+                                                                          on the STM32 Nucleo-144 board.
+   the fixed-point neural networks generated are 2× to 4×
+   faster than the floating-point networks as for NN1 and
+   NN2 respectively. In addition, the fixed-point versions
+                                                                                    V. C ONCLUSION AND F UTURE W ORK
+   of NN3 to NN6 manage to run on the board in less
+   than 1 second, unlike their floating-point versions, which                In this article, we focused on the quantization and
+   consume a lot of memory on the board and were                          deployment of deep neural networks on a low-power
+   therefore unable to run. These results validate the main               STM32 Nucleo-144 micro-controller. Our quantization
+   objective of this work, which is to successfully run                   technique is based on formal semantics describing the
+   optimal versions of DNNs on low-resource architec-                     propagation of round-off errors through the network. As
+   tures, especially since in terms of performance, their                 a result, we can minimize the size of fixed-point formats
+   behaviors is identical to the original more resource-                  and guarantee that an error threshold on the results is
+   intensive version. The bottom hand side of Figure 2                    satisfied. We have also shown that the fixed-point codes
+   shows that the fixed-point neural networks generated                   generated are less time- and energy-intensive than their
+   by our method consume less energy than their original                  original floating-point models.
+   floating-point versions. For example, for the NN2, the                    In future work, we aim at adding more kinds of
+   fixed-point model consumes only 0.05 µJ compared                       layers to Popinns and optimize the execution time of
+   with its floating-point version, which consumes 0.2µJ.                 the code generated. Moreover, we aim at synthesizing
+   Our biggest neural network NN6 with 620 parameters                     VHDL code and implement directly the neural networks
+   consumes 0.05µJ in its fixed-point version.                            on FPGA or ASIC circuits. Another perspective is to
+
+
+
+
+                                                                                                                                                            - 1205 -
+Authorized licensed use limited to: CZECH TECHNICAL UNIVERSITY. Downloaded on June 01,2026 at 21:04:28 UTC from IEEE Xplore. Restrictions apply.
+   CoDIT 2024 | Valletta, Malta / July 01-04, 2024                           Technical Co-Sponsors: IEEE CSS, IEEE SMC, IEEE RAS & IFAC.
+
+
+
+
+   compare Popinns to other tools enabling to translate
+   floating-point DNNs into fixed-point while providing
+   formal bounds on the errors introduced by the transla-
+   tion. Finally, we aim at mixing quantization techniques,
+   with pruning techniques [13], [14], which remove the
+   less useful weights of DNNs in order to reduce even
+   more the resources needed for their execution.
+                             R EFERENCES
+    [1] Y. Zhou, S. Moosavi-Dezfooli, N. Cheung, and P. Frossard,
+        “Adaptive quantization for deep neural network,” in Proceedings
+        of the Thirty-Second AAAI Conference on Artificial Intelligence,
+        (AAAI-18), the 30th innovative Applications of Artificial Intelli-
+        gence (IAAI-18), and the 8th AAAI Symposium on Educational
+        Advances in Artificial Intelligence (EAAI-18), New Orleans,
+        Louisiana, USA, February 2-7, 2018, S. A. McIlraith and K. Q.
+        Weinberger, Eds. AAAI Press, 2018, pp. 4596–4604.
+    [2] P. Novac, G. B. Hacene, A. Pegatoquet, B. Miramond, and
+        V. Gripon, “Quantization and deployment of deep neural net-
+        works on microcontrollers,” Sensors, vol. 21, no. 9, p. 2984,
+        2021.
+    [3] IEEE Standard for Binary Floating-point Arithmetic, AN-
+        SI/IEEE, 2008.
+    [4] L. M. de Moura and N. Bjørner, “Z3: an efficient SMT solver,”
+        in Tools and Algorithms for the Construction and Analysis of
+        Systems, ser. LNCS, vol. 4963. Springer, 2008, pp. 337–340.
+    [5] A. Ioualalen and M. Martel, “Neural network precision tuning,”
+        in Quantitative Evaluation of Systems, 16th International Con-
+        ference, QEST, ser. Lecture Notes in Computer Science, vol.
+        11785. Springer, 2019, pp. 129–143.
+    [6] C. Q. Lauter and A. Volkova, “A framework for semi-automatic
+        precision and accuracy analysis for fast and rigorous deep
+        learning,” in 27th IEEE Symposium on Computer Arithmetic,
+        ARITH 2020. IEEE, 2020, pp. 103–110.
+    [7] Q. Ferro, S. Graillat, T. Hilaire, F. Jézéquel, and
+        B. Lewandowski, “Neural network precision tuning using
+        stochastic arithmetic,” in Software Verification and Formal
+        Methods for ML-Enabled Autonomous Systems - 5th
+        International Workshop, FoMLAS 2022, and 15th International
+        Workshop, NSV, ser. Lecture Notes in Computer Science, vol.
+        13466. Springer, 2022, pp. 164–186.
+    [8] D. Lohar, C. Jeangoudoux, A. Volkova, and E. Darulova, “Sound
+        mixed fixed-point quantization of neural networks,” ACM Trans.
+        Embed. Comput. Syst., vol. 22, no. 5s, 2023.
+    [9] H. Benmaghnia, M. Martel, and Y. Seladji, “Code generation for
+        neural networks based on fixed-point arithmetic,” ACM Trans.
+        Embed. Comput. Syst., sep 2022.
+   [10] S. Gupta, A. Agrawal, K. Gopalakrishnan, and P. Narayanan,
+        “Deep learning with limited numerical precision,” in Proceedings
+        of the 32nd International Conference on Machine Learning,
+        ICML 2015, ser. JMLR Workshop and Conference Proceedings,
+        vol. 37. JMLR.org, 2015, pp. 1737–1746.
+   [11] A. Kumar, V. Seshadri, and R. Sharma, “Shiftry: RNN inference
+        in 2kb of RAM,” Proc. ACM Program. Lang., vol. 4, no.
+        OOPSLA, pp. 182:1–182:30, 2020.
+   [12] D. Ben Khalifa and M. Martel, “Efficient implementation of
+        neural networks usual layers on fixed-point architectures,” in
+        Proceedings of the 25th ACM SIGPLAN/SIGBED International
+        Conference on Languages, Compilers, and Tools for Embedded
+        Systems, LCTES. ACM, 2024.
+   [13] H. Cheng, M. Zhang, and J. Q. Shi, “A survey on deep neural
+        network pruning-taxonomy, comparison, analysis, and recom-
+        mendations,” CoRR, vol. abs/2308.06767, 2023.
+   [14] A. Vysogorets and J. Kempe, “Connectivity matters: Neural
+        network pruning through the lens of effective sparsity,” J. Mach.
+        Learn. Res., vol. 24, pp. 99:1–99:23, 2023.
+
+
+
+
+                                                                                                                                    - 1206 -
+Authorized licensed use limited to: CZECH TECHNICAL UNIVERSITY. Downloaded on June 01,2026 at 21:04:28 UTC from IEEE Xplore. Restrictions apply.
+

@@ -1,0 +1,398 @@
+Detection and Classification of Acoustic Scenes and Events 2025                                                    30–31 October 2025, Barcelona, Spain
+
+
+
+
+ Low-Complexity Acoustic Scene Classification with Device Information
+                  in the DCASE 2025 Challenge
+       Florian Schmid1 , Paul Primus1 , Toni Heittola2 , Annamaria Mesaros2 , Irene Martı́n-Morató2 , Gerhard Widmer1,3
+
+                           1
+                           Institute of Computational Perception, Johannes Kepler University Linz, Austria
+                2
+                    Computing Sciences Tampere University, Finland, 3 LIT Artificial Intelligence Lab, Linz, Austria
+                                        {florian.schmid, paul.primus, gerhard.widmer}@jku.at
+                                    {toni.heittola, annamaria.mesaros, irene.martinmorato}@tuni.fi
+
+   Abstract—This paper presents the Low-Complexity Acoustic Scene Classi-
+fication with Device Information Task of the DCASE 2025 Challenge, along
+with its baseline system. Continuing the focus on low-complexity models,
+data efficiency, and device mismatch from previous editions (2022–2024),
+this year’s task introduces a key change: recording device information is
+now provided at inference time. This enables the development of device-
+specific models that leverage device characteristics—reflecting real-world
+deployment scenarios in which a model is designed with awareness of the
+underlying hardware. The training set matches the 25% subset used in
+the corresponding DCASE 2024 challenge, with no restrictions on external
+data use, highlighting transfer learning as a central topic. The baseline
+achieves 50.72% accuracy with a device-agnostic model, improving to
+51.89% when incorporating device-specific fine-tuning. The task attracted
+31 submissions from 12 teams, with 11 teams outperforming the baseline.
+The top-performing submission achieved an accuracy gain of more than
+8 percentage points over the baseline on the evaluation set.
+   Index Terms—DCASE Challenge, Acoustic Scene Classification, multiple
+devices, device information, data-efficiency, low-complexity, transfer
+learning
+
+
+                         1. INTRODUCTION
+
+Acoustic Scene Classification (ASC) aims to identify the type of
+environment in which an audio recording was made, based on a short
+excerpt [1]. Environments are defined as a set of real-world locations,
+such as Metro station, Urban park, or Public square. The ASC task
+has a long-standing presence in the DCASE Challenge, evolving
+through various refinements over the years. Recent editions have
+emphasized challenges relevant to real-world deployment, including
+low-complexity constraints [2]–[5], recording device mismatch [2],
+[5], [6], and data efficiency [5]. For example, the 2024 edition required
+systems to be lightweight enough to operate on embedded devices, to          Fig. 1: Overview of Low-Complexity Acoustic Scene Classification with Device
+achieve high performance with limited training data, and to generalize       Information. At inference time, models must operate under low-complexity
+across a variety of potentially unknown recording devices. The 2025          constraints and handle both known (seen during training) and unknown (unseen
+                                                                             during training) recording devices, with the device ID provided. The baseline
+edition1 introduces several modifications compared to the 2024 edition.      follows a two-stage training process: first, learning a general model, then
+The most significant change in the 2025 edition is the availability of       adapting it to device-specific characteristics to enhance performance on known
+the recording device ID at inference time. This enables participants to      devices.
+tailor their models to device-specific characteristics, for instance, by
+fine-tuning the model for the known hardware. This design reflects           models must comply with the low-complexity constraints, ensuring
+realistic deployment scenarios where the target device is known in           suitability for embedded devices (ED).
+advance and recordings from it may be available to improve prediction           The limited size of the training set reflects real-world scenarios with
+accuracy.                                                                    scarce labeled data, highlighting transfer learning as a key strategy. In
+   Figure 1 illustrates the task setup and baseline training procedure.      contrast to 2024, the 2025 task lifts restrictions on external resources,
+Training is performed in two stages: a general model is first trained        allowing participants to incorporate additional acoustic scene datasets
+on the full available dataset (25% subset from the 2024 edition),            to improve performance.
+followed by adaptation into device-specific models using recordings             The remainder of the paper is organized as follows: Section 2 briefly
+from known devices. At inference, device-specific models are used for        reviews prior approaches to device generalization, low-complexity
+known devices, while the general model handles unknown ones. All             constraints, and transfer learning in earlier challenge editions. Section 3
+                                                                             details the task setup, and Section 4 presents the baseline system.
+  1 Task Description Page: https://dcase.community/challenge2025/task-low-   Results are discussed in Section 5, and conclusions are drawn in
+complexity-acoustic-scene-classification-with-device-information             Section 6.
+
+
+
+
+                                                                        6
+Detection and Classification of Acoustic Scenes and Events 2025                                               30–31 October 2025, Barcelona, Spain
+
+
+
+                     2. PREVIOUS EDITIONS                                     Development Set: The development set contains 64 hours of audio
+                                                                           recorded with three real devices (A, B, C) and six simulated devices
+In past editions, several strategies were proposed to improve gen-
+                                                                           (S1–S6). It is further divided into:
+eralization across different—and potentially unknown—recording
+devices. The most common in 2023 and 2024 were augmentation-based             • Development-train: This corresponds to the 25% subset used
+
+methods, such as Freq-MixStyle [7], [8] and device impulse response              in last year’s data-efficient evaluation setup [5]. It includes
+augmentation [9]. Others aimed to suppress device information via                recordings from six devices: A, B, C, and S1–S3.
+domain adaptation [10], [11] or normalization [12], while a third line        • Development-test: In addition to the devices in development-train,
+
+of work adjusted the sampling distribution to balance devices [13].              this split includes the remaining simulated devices S4–S6, which
+   Over the years, various complexity constraints have been introduced,          are unseen during training and serve to evaluate generalization
+with the two most recent editions limiting model size to 128 kB and              to unknown devices.
+computational cost to 30 million multiply-accumulate operations (30           Only the development-train split (25% subset) and announced
+MMACs), targeting Cortex-M4-class devices. In response, techniques         external resources may be used for training. The development-test
+such as Knowledge Distillation [8], Pruning [14], [15], and Sparsi-        split must be used only for evaluation. City and device information
+fication [16] were explored, alongside the design of efficient CNN         are provided for all recordings in the development set.
+architectures [15], [17]–[20].                                                Evaluation Set: The evaluation set includes five unknown devices
+   To tackle data scarcity, the 2024 edition saw widespread use of         (D and S7–S10), as well as two cities that are not present in the
+transfer learning from the large-scale general-purpose audio dataset       development set, in addition to recordings from known cities and
+AudioSet [21]. Participants leveraged it in three main ways: (1) fine-     devices. It is used for final system evaluation and is published without
+tuning a large pre-trained model on ASC and distilling it into a low-      scene labels. Device IDs are provided at inference time, while city
+complexity student [15], [20], [22]; (2) pre-training a low-complexity     information is withheld. Known devices (A, B, C, S1–S3) are labeled
+model directly on AudioSet [23]; or (3) extracting task-relevant clips     explicitly, whereas unknown devices (D, S7–S10) are marked as
+from AudioSet for training [24].                                           unknown. The ratio of known to unknown devices is kept consistent
+                                                                           between the development-test and evaluation sets.
+                           3. TASK SETUP
+                                                                           3.2. Device-Specific Modeling: Problem Setting
+As discussed in the previous section, device mismatch, low-complexity
+                                                                           In this section, we briefly formalize the problem setting arising from
+constraints, and transfer learning have been extensively studied in the
+                                                                           the availability of device information. We assume the training data
+context of the ASC task. However, this year’s setup introduces key
+                                                                           is drawn from K distinct domains (i.e., devices) D1 , D2 , . . . , DK ,
+variations to the handling of device mismatch and transfer learning.
+                                                                           each associated with its own data distribution pDk (X). The amount
+Regarding device mismatch, the recording device ID is now provided
+                                                                           of training data per domain varies and is often limited. The domain
+at inference time. Some device IDs may already have appeared in
+                                                                           ID is provided with each training example.
+the training data, others may be novel. This will allow participants
+                                                                              At test time, the system is evaluated on samples originating from a
+to develop specialized models for devices known from the training
+                                                                           mix of known domains (seen during training) and unknown domains
+set. For transfer learning, external datasets are no longer limited
+                                                                           (unseen during training). For each test sample, the corresponding
+to general-purpose collections like AudioSet [21]. However, related
+                                                                           source domain (i.e., device ID) is provided. This additional information
+acoustic scene datasets are now permitted. Given these changes, the
+                                                                           allows for models that specialize in known domains by leveraging
+challenge aims to address the following set of research questions:
+                                                                           domain-specific characteristics, while still requiring a general model
+  • Can device type information be exploited to improve performance        to handle unknown domains.
+    compared to previous editions, where it was not available at              A straightforward strategy to address this setting is to first train
+    inference time?                                                        a general model across all domains and then adapt it to individual
+  • Which machine learning techniques are most effective for creating
+                                                                           domains using the corresponding in-domain training data. This two-
+    specialized models for different recording devices?                    step approach is also implemented in the baseline system, as described
+  • Can additional acoustic scene datasets—possibly featuring dif-
+                                                                           in Section 4. Key innovations may lie in the strategy for specializing
+    ferent scenes, locations, or devices—help improve performance          the general model to the known domains, which may contain only a
+    on the TAU dataset [2], [6]?                                           small number of labeled data points.
+3.1. Dataset                                                               3.3. Evaluation and Submission
+The task again builds on top of the TAU Urban Acoustic Scenes              Submissions are ranked based on class-wise macro-averaged accuracy
+2022 Mobile dataset [2], [6], which was also used in the 2022, 2023,       computed on the evaluation set. As a secondary, operating point-
+and 2024 editions of the challenge [4], [5]. The dataset provides          independent metric, multi-class cross-entropy is reported. Each team
+one-second audio snippets sampled at 44.1 kHz in single-channel,           may submit up to four sets of predictions from different systems.
+24-bit format and consists of recordings from ten distinct acoustic        This year, participants must also submit inference code to promote
+scenes.                                                                    open research and allow additional complexity evaluations by the
+   Audio was captured in multiple European cities using four devices       organizers.
+in parallel: a high-quality binaural recorder (primary device A) and
+three consumer devices (B, C, D). Additionally, ten simulated devices      3.4. System Complexity Requirements
+(S1–S10) were created by applying device-specific impulse responses        The system complexity constraints follow the 2024 edition [5] and
+to recordings from device A. For further details on the dataset creation   apply to each individual model, including both the general model
+and device distribution, we refer to [2]. This dataset description is      and any device-specific variants. Both model size and computational
+based on [5]. The dataset is divided into a development set and an         cost are restricted. Specifically, model parameters must fit within
+evaluation set, following a predefined split.                              128 kB of memory, with no fixed numerical precision requirement.
+
+
+
+
+                                                                      7
+Detection and Classification of Acoustic Scenes and Events 2025                                                      30–31 October 2025, Barcelona, Spain
+
+
+
+Table 1: Device-wise and overall accuracies of the baseline system on the development-test split.
+ Model                        A        B        C        S1       S2       S3        S4       S5       S6     Macro Avg. Accuracy
+ General Model              62.80    52.87    54.23    48.52    47.29    52.86      48.14   47.23     42.60        50.72 ± 0.47
+ Device-specific Models     63.98    55.85    59.09    48.68    48.74    52.72      48.14   47.23     42.60        51.89 ± 0.05
+
+
+Participants are free to trade off the number of parameters against              detail. Additional results and detailed system descriptions are available
+numerical precision; for instance, the limit corresponds to 128K                 on the official challenge website3 .
+parameters with 8-bit quantization or 32K parameters with 32-bit
+                                                                                 5.1. Architectures
+precision. Computational complexity is capped at 30 MMACs for
+processing a one-second audio segment. These constraints are designed            Due to the low-complexity constraints, efficient neural network design
+to reflect the capabilities of resource-constrained devices such as              remained a central focus. In line with last year’s trends [5], most teams
+the Cortex-M4 series (e.g., STM32L496@80 MHz or Arduino Nano                     adopted factorized convolutional architectures. Five of the twelve
+33@64 MHz).                                                                      teams—including the top-ranked submission—built their systems on
+                                                                                 the CP-Mobile architecture [25]. However, several top-performing
+                       4. BASELINE SYSTEM                                        teams proposed novel architectural variants.
+                                                                                    Team Tan SNTLNTU [26] introduced CNN-GRU, which combines
+Following the 2024 edition [5], the baseline system builds on a                  pointwise and 1D depthwise convolutions over the frequency and
+simplified variant of the top-performing submission from the 2023                time dimensions, integrates Squeeze-and-Excitation layers [27], and
+edition [25]. It employs a receptive-field-regularized, factorized CNN           applies a GRU along the frequency axis. Team Luo CQUPT [28]
+architecture, referred to as CP-Mobile. Audio recordings are first               presented DynaCP, a CP-Mobile modification that processes pooling
+resampled to 32 kHz, then converted into mel spectrograms using                  and strided convolutions in parallel and dynamically combines their
+a 4096-point FFT with a window size of 96 ms and a hop size                      outputs. Teams Chang HYU [29] and Ramezanee SUT [30] built
+of approximately 16 ms, followed by a mel scaling with 256 mel                   upon reparameterizable convolution blocks [31], which use multiple
+filterbanks.                                                                     branches during training that can be merged into a single, efficient
+    As illustrated in Figure 1, the system is trained in two stages. In          equivalent at inference time. Additionally, Chang HYU [29] employed
+the first stage, a general model is trained on data from all devices             Channel-Time-Frequency Attention (CTFA) [32], a lightweight at-
+for 150 epochs using the AdamW optimizer and a batch size of                     tention mechanism that allows the model to focus on informative
+256. To address device mismatch, Freq-MixStyle [7], [8] is applied               input regions, while Ramezanee SUT [30] proposed learnable pooling
+during training. In the second stage, for each device in the training            layers. As input to the models, all teams used log-mel energies, with
+set, a device-specific model is created by end-to-end fine-tuning the            the exception of two teams that used the spectrogram instead.
+general model on data from that specific device for 50 epochs. During
+                                                                                 5.2. System Complexity
+inference, device-specific models are applied to known devices, while
+the general model handles unknown ones.                                          As in previous editions [4], [5], Knowledge Distillation (KD) [33]
+    The baseline system requires 29.4 MMACs to process a one-                    remained the most widely used model compression technique, em-
+second audio clip. The model uses 61,148 parameters in 16-bit (fp16)             ployed by 10 out of 12 teams. Compared to previous editions, several
+precision, resulting in a total memory footprint of 122.3 kB for the             interesting variations to the KD process have been explored, such as
+parameters.                                                                      a feature-level distillation loss [34], device-aware feature alignment
+    Table 1 presents the device-wise and overall accuracies of the               loss to train a device-expert teacher [35], and self-distillation [36].
+baseline system on the development-test split. After Stage 1, the                   Compared to 2024 [5], where pruning was used only by the
+general model achieves an overall accuracy of 50.72%. Following                  top-ranked team [15], this year pruning gained traction, with 3
+Stage 2, where device-specific models are trained, the overall accuracy          of the top 6 teams adopting it. Notably, the second-ranked team,
+improves to 51.89%. Device-specific fine-tuning increases the accuracy           Tan SNTLNTU [26], applied pruning exclusively, without using KD.
+for all known devices except for S3, with performance gains varying              All top-5 teams used 16-bit precision, while none opted for 8-bit
+notably across devices. The accuracy on unknown devices remains                  quantization—likely due to the ease of reducing to 16-bit with minimal
+unchanged between the two rows of the table, as the general model                or no accuracy loss, whereas maintaining performance with 8-bit
+is used for inference on unknown devices. The source code and a                  quantization remains more challenging.
+detailed description of the baseline system are available online2 .              5.3. External Data Usage
+                                                                                 External data was primarily used in two ways. First, most teams em-
+                     5. CHALLENGE RESULTS                                        ployed teacher models for KD that were pre-trained on AudioSet [21].
+The task received 31 submissions from 12 teams, with 11 out of                   PaSST [37] remained a popular choice, though two teams—including
+12 teams outperforming the baseline system. For both the baseline                the top-ranked one—used BEATs [38], while the third-ranked team,
+and most submitted systems, performance on the development-test                  Luo CQUPT [28], used AudioSet-pretrained MobileNets [39] and
+split aligned well with that on the evaluation set. Table 2 presents             Dynamic MobileNets [40].
+the best-performing system from each team that outperformed the                    Second, several teams applied Device Impulse Response (DIR)
+baseline and summarizes their architectural choices, strategies for              augmentation [9] using impulse responses from MicIRP4 , increasing
+handling complexity, use of external data, and device adaptation                 the diversity of recording conditions in the training data.
+methods. The following subsections discuss each of these aspects in                3 Results:     https://dcase.community/challenge2025/task-low-complexity-
+                                                                                 acoustic-scene-classification-with-device-information-results
+  2 Source Code: https://github.com/CPJKU/dcase2025 task1 baseline                 4 https://micirp.blogspot.com/
+
+
+
+
+                                                                           8
+Detection and Classification of Acoustic Scenes and Events 2025                                                      30–31 October 2025, Barcelona, Spain
+
+
+
+Table 2: Best-performing system per team (only including systems that outperform the baseline) and the official DCASE2025 baseline. Score indicates the
+accuracy on the evaluation set, Size refers to the memory required to store model parameters, and MAC denotes the number of multiply-accumulate operations.
+External indicates whether external data was used, and Device Adaptation describes the method used to adapt the model to specific devices based on provided
+device IDs. KD, IR, and FT stand for Knowledge Distillation, Impulse Response augmentation, and Fine-Tuning, respectively.
+         Team                     Score     Size     MAC      Architecture      Complexity              External            Device Adaptation
+         Karasin JKU              61.5     122kB     29M       CP-Mobile           fp16,KD       IR,CochlScene,BEATs        Full device-spec. FT
+         Tan SNTLNTU              59.9     116kB     10M       CNN-GRU           fp16, prune               IR                     Full FT
+         Luo CQUPT                59.6     123kB     28M        DynaCP            fp16, KD            EfficientAT                 Full FT
+         Zhang AITHU-SJTU         59.3     126kB     29M      SSCP-Mobile      fp16,KD,prune            PaSST                         –
+         Chang HYU                59.0     125kB     29M       Rep-CTFA            fp16,KD             IR,PaSST                Head-only FT
+         Li NTU                   58.9     122kB     17M       CP-Mobile          KD,prune             IR,PaSST                       –
+         Ramezanee SUT            57.9     125kB     28M       DSFlexiNet             KD                   IR                     Full FT
+         Jeong SEOULTECH          57.9     122kB     26M       CP-Mobile           fp16,KD              PaSST                     Full FT
+         Chen GXU                 56.6     122kB     29M       CP-Mobile           fp16,KD              PaSST                         –
+         Krishna SRIB             56.1     122kB     27M       CP-Mobile             fp16                   –                     Full FT
+         Zhou XJTLU               55.5     126kB     29M       TF-SepNet           int8,KD        IR,AudioSet,BEATs               Full FT
+         DCASE25 baseline         53.2     122kB     29M       CP-Mobile            fp16                    –                     Full FT
+
+
+   Among all participating teams, only the top-ranked team,                    challenges of acoustic scene classification: low-complexity constraints,
+Karasin JKU [41], took advantage of the new rule allowing external             device mismatch, and limited training data. A key novelty this year
+ASC datasets by leveraging CochlScene [42]. CochlScene contains                is the availability of device information at inference time, enabling
+76,115 ten-second audio clips recorded across 13 distinct acoustic             device-specific adaptation and yielding consistent improvements in
+scenes. The dataset was collected via crowdsourcing, primarily from            the baseline system.
+contributors in Korea. Several scene classes overlap partially with               While the three research questions outlined in Section 3 remain only
+those in the TAU Urban Acoustic Scenes 2022 Mobile dataset [2],                partially explored, the top-ranked submission provided valuable initial
+[6] (e.g., Bus and Park), though others are unique to CochlScene               answers. They showed that fine-tuning routines tailored to specific
+(e.g., Restroom and Elevator) or TAU (e.g., Airport and Travelling             devices improve performance, and that leveraging external acoustic
+by Tram).                                                                      scene classification datasets such as CochlScene can substantially
+   Team Karasin JKU [41] explored pre-training both the teacher and            boost accuracy on the TAU dataset. These strategies delivered an
+student models on CochlScene. Notably, this strategy led to substantial        accuracy gain of more than 1.5 percentage points over all other
+performance improvements for convolutional architectures such as               submissions, highlighting promising directions for future work.
+CP-Mobile [25] and CP-ResNet [43], with gains of +3.36 and +6.05                  Beyond transfer learning and device-aware modeling, participants
+percentage points on the TAU development-test split, respectively. In          also advanced research on efficient architectures, Knowledge Distilla-
+contrast, transformer-based models like PaSST [37] and BEATs [38]              tion, and pruning. Several teams experimented with different teacher
+saw only marginal or no improvements.                                          models for Knowledge Distillation, while others introduced archi-
+                                                                               tectural components for low-complexity models such as lightweight
+5.4. Device Adaptation
+                                                                               attention mechanisms, reparameterizable convolutions, and learnable
+To exploit the given device information, most teams opted for the              pooling layers.
+baseline strategy of fine-tuning the general model on device-specific             Overall, the 2025 edition of Task 1 advanced established research on
+data to obtain specialized models. More advanced methods were                  low-complexity modeling while providing initial insights into device-
+explored by only a few participants.                                           aware adaptation and the use of external acoustic scene datasets,
+   Team Han CSU [44] addressed device variability by incorporating             laying the groundwork for further exploration in these directions.
+device embeddings into the model’s internal representations, effectively
+conditioning the network on the identity of the recording device.                                    7. ACKNOWLEDGMENT
+   Team Chang HYU [29] adopted a modular approach by training
+                                                                               The LIT AI Lab is supported by the Federal State of Upper Austria.
+lightweight, device-specific classification heads while keeping the
+                                                                               Gerhard Widmer’s work is supported by the European Research
+shared backbone frozen. This design preserves a common, general-
+                                                                               Council (ERC) under the European Union’s Horizon 2020 research
+purpose acoustic feature extractor across all devices, while allowing
+                                                                               and innovation programme, grant agreement No 101019375 (Whither
+for device-tailored classification at the output stage. Importantly, this
+                                                                               Music?). Annamaria Mesaros’s work is supported by Academy of
+method keeps the overall system compact, as the additional device-
+                                                                               Finland grant 332063 “Teaching machines to listen”.
+specific components introduce only minimal overhead.
+   The top-ranked team, Karasin JKU [41], further exploited device in-                                      REFERENCES
+formation by customizing training configurations—such as Knowledge
+Distillation hyperparameters—for each device-specific fine-tuning run.          [1] E. Benetos, D. Stowell, and M. D. Plumbley, “Approaches to complex
+In particular, they observed that the optimal loss weighting factor in              sound scene analysis,” in Cham: Springer International Publishing, 2018.
+                                                                                [2] T. Heittola, A. Mesaros, and T. Virtanen, “Acoustic scene classification
+Knowledge Distillation, which balances the supervised loss and the
+                                                                                    in DCASE 2020 challenge: Generalization across devices and low
+distillation loss, varies across devices and benefits from device-specific          complexity solutions,” in DCASE Workshop, 2020.
+tuning.                                                                         [3] I. Martı́n-Morató, T. Heittola, A. Mesaros, and T. Virtanen, “Low-
+                                                                                    complexity acoustic scene classification for multi-device audio: Analysis
+                          6. CONCLUSION                                             of DCASE 2021 challenge systems,” in DCASE Workshop, 2021.
+                                                                                [4] I. Martı́n-Morató, F. Paissan, A. Ancilotto, T. Heittola, A. Mesaros,
+This paper introduced the setup and baseline system for Task 1 of                   E. Farella, A. Brutti, and T. Virtanen, “Low-complexity acoustic scene
+the DCASE 2025 Challenge, which continues to address three core                     classification in DCASE 2022 challenge,” in DCASE Workshop, 2022.
+
+
+
+
+                                                                           9
+Detection and Classification of Acoustic Scenes and Events 2025                                                            30–31 October 2025, Barcelona, Spain
+
+
+
+ [5] F. Schmid, P. Primus, T. Heittola, A. Mesaros, I. Martı́n-Morató,             [28] Y. Luo, H. Liu, L. Shi, and L. Gan, “Dynacp: Dynamic parallel selective
+     K. Koutini, and G. Widmer, “Data-efficient low-complexity acoustic                  convolution in cp-mobile under multi-teacher distillation for acoustic
+     scene classification in the DCASE 2024 challenge,” in DCASE Workshop,               scene classification,” DCASE2025 Challenge, Tech. Rep., 2025.
+     2024.                                                                          [29] S.-G. Han, P. M. Byun, and J.-H. Chang, “Hyu submission for DCASE
+ [6] A. Mesaros, T. Heittola, and T. Virtanen, “A multi-device dataset for               2025 task 1: Low-complexity acoustic scene classification using repa-
+     urban acoustic scene classification,” in DCASE Workshop, 2018.                      rameterizable CNN with channel-time-frequency attention,” DCASE2025
+ [7] B. Kim, S. Yang, J. Kim, H. Park, J. Lee, and S. Chang, “Domain                     Challenge, Tech. Rep., 2025.
+     generalization with relaxed instance frequency-wise normalization for          [30] M. M. Ramezanee, H. Sharify, A. M. Mehrani Kia, and B. Raoufi,
+     multi-device acoustic scene classification,” in Interspeech, 2022.                  “Acoustic scene classification with knowledge distillation and device-
+ [8] F. Schmid, S. Masoudian, K. Koutini, and G. Widmer, “CP-JKU                         specific fine-tuning for DCASE 2025,” DCASE2025 Challenge, Tech.
+     submission to DCASE22: Distilling knowledge for low-complexity                      Rep., 2025.
+     convolutional neural networks from a patchout audio transformer,”              [31] B. Han, W. Huang, Z. Chen, A. Jiang, P. Fan, C. Lu, Z. Lv, J. Liu,
+     DCASE Challenge, Tech. Rep., 2022.                                                  W.-Q. Zhang, and Y. Qian, “Data-efficient low-complexity acoustic scene
+ [9] T. Morocutti, F. Schmid, K. Koutini, and G. Widmer, “Device-robust                  classification via distilling and progressive pruning,” in ICASSP, 2025.
+     acoustic scene classification via impulse response augmentation,” in           [32] X. Zeng and M. Wang, “Channel-time-frequency attention module for
+     EUSIPCO, 2023.                                                                      improved multi-channel speech enhancement,” IEEE Access, 2025.
+[10] H. Truchan, T. H. Ngo, and Z. Ahmadi, “Ascdomain: Domain invariant             [33] G. E. Hinton, O. Vinyals, and J. Dean, “Distilling the knowledge in a
+     device-adversarial isotropic knowledge distillation convolutional neural            neural network,” in NIPS Deep Learning Workshop, 2014.
+     architecture,” in ICASSP, 2025.                                                [34] H. Li, Z. Yang, M. Wang, E.-L. Tan, J. Yeow, S. Peksi, and W.-S. Gan,
+[11] K. Koutini, F. Henkel, H. Eghbal-zadeh, and G. Widmer, “CP-JKU                      “Joint feature and output distillation for low-complexity acoustic scene
+     submissions to DCASE’20: Low-complexity cross-device acoustic scene                 classification,” DCASE2025 Challenge, Tech. Rep., 2025.
+     classification with RF-regularized CNNs,” DCASE Challenge, Tech. Rep.,         [35] S. Jeong and S. Kim, “Adaptive knowledge distillation using a
+     2020.                                                                               device-aware teacher for low-complexity acoustic scene classification,”
+[12] B. Kim, S. Yang, J. Kim, and S. Chang, “QTI submission to DCASE                     DCASE2025 Challenge, Tech. Rep., 2025.
+     2021: Residual normalization for device-imbalanced acoustic scene              [36] X. Chen and W. Xie, “McCi submission to DCASE 2025: Training
+     classification with efficient design,” DCASE Challenge, Tech. Rep., 2021.           low-complexity acoustic scene classification system with knowledge
+[13] J.-H. Lee, J.-H. Choi, P. M. Byun, and J.-H. Chang, “Hyu submission                 distillation and curriculum,” DCASE2025 Challenge, Tech. Rep., 2025.
+     for the DCASE 2022: Efficient fine-tuning method using device-aware            [37] K. Koutini, J. Schlüter, H. Eghbal-zadeh, and G. Widmer, “Efficient
+     data-random-drop for device-imbalanced acoustic scene classification,”              training of audio transformers with patchout,” in Interspeech, 2022.
+     DCASE Challenge, Tech. Rep., 2022.                                             [38] S. Chen, Y. Wu, C. Wang, S. Liu, D. Tompkins, Z. Chen, W. Che, X. Yu,
+[14] K. Koutini, J. Schlüter, and G. Widmer, “CPJKU submission to DCASE21:              and F. Wei, “BEATs: Audio pre-training with acoustic tokenizers,” in
+     Cross-device audio scene classification with wide sparse frequency-                 ICML, 2023.
+     damped CNNs,” DCASE Challenge, Tech. Rep., 2021.                               [39] F. Schmid, K. Koutini, and G. Widmer, “Efficient large-scale audio
+[15] H. Bing, H. Wen, C. Zhengyang, J. Anbai, C. Xie, F. Pingyi, L. Cheng,               tagging via transformer-to-cnn knowledge distillation,” in ICASSP, 2023.
+     L. Zhiqiang, L. Jia, Z. Wei-Qiang, and Q. Yanmin, “Data-efficient acoustic     [40] ——, “Dynamic convolutional neural networks as efficient pre-trained
+     scene classification via ensemble teachers distillation and pruning,”               audio models,” IEEE ACM Trans. Audio Speech Lang. Process., 2024.
+     DCASE Challenge, Tech. Rep., 2024.                                             [41] D. Karasin, I.-C. Olariu, M. Schöpf, and A. Szymańska, “Domain-specific
+[16] C.-H. H. Yang, H. Hu, S. M. Siniscalchi, Q. Wang, W. Yuyang, X. Xia,                external data pre-training and device-aware distillation for data-efficient
+     Y. Zhao, Y. Wu, Y. Wang, J. Du, and C.-H. Lee, “A lottery ticket                    acoustic scene classification,” DCASE2025 Challenge, Tech. Rep., May
+     hypothesis framework for low-complexity device-robust neural acoustic               2025.
+     scene classification,” DCASE Challenge, Tech. Rep., 2021.                      [42] I.-Y. Jeong and J. Park, “Cochlscene: Acquisition of acoustic scene data
+[17] J. Tan and Y. Li, “Low-complexity acoustic scene classification using               using crowdsourcing,” in APSIPA ASC, 2022.
+     blueprint separable convolution and knowledge distillation,” DCASE             [43] K. Koutini, H. Eghbal-zadeh, and G. Widmer, “Receptive field reg-
+     Challenge, Tech. Rep., 2023.                                                        ularization techniques for audio classification and tagging with deep
+[18] Y. Cai, M. Lin, C. Zhu, S. Li, and X. Shao, “DCASE2023 task1                        convolutional neural networks,” IEEE ACM Trans. Audio Speech Lang.
+     submission: Device simulation and time-frequency separable convolution              Process., 2021.
+     for acoustic scene classification,” DCASE Challenge, Tech. Rep., 2023.         [44] S. Han, D. H. Lee, M. S. Jo, E. S. Ha, M. J. Chae, and G. W. Lee,
+[19] F. Schmid, T. Morocutti, S. Masoudian, K. Koutini, and G. Widmer,                   “Confidence-aware ensemble knowledge distillation for low-complexity
+     “CP-JKU submission to DCASE23: Efficient acoustic scene classification              acoustic scene classification,” DCASE2025 Challenge, Tech. Rep., 2025.
+     with cp-mobile,” DCASE Challenge, Tech. Rep., 2023.
+[20] Y.-F. Shao, P. Jiang, and W. Li, “Low-complexity acoustic scene
+     classification with limited training data,” DCASE Challenge, Tech. Rep.,
+     2024.
+[21] J. F. Gemmeke, D. P. W. Ellis, D. Freedman, A. Jansen, W. Lawrence,
+     R. C. Moore, M. Plakal, and M. Ritter, “Audio set: An ontology and
+     human-labeled dataset for audio events,” in ICASSP, 2017.
+[22] Y. Cai, M. Lin, S. Li, and X. Shao, “DCASE2024 task1 submission:
+     Data-efficient acoustic scene classification with self-supervised teachers,”
+     DCASE Challenge, Tech. Rep., 2024.
+[23] N. David, R. Aida, and S. Patrick, “Data-efficient acoustic scene
+     classification with pre-trained CP-Mobile,” DCASE Challenge, Tech.
+     Rep., 2024.
+[24] A. Werning and R. Haeb-Umbach, “Upb-Nt submission to DCASE24:
+     Dataset pruning for targeted knowledge distillation,” DCASE Challenge,
+     Tech. Rep., 2024.
+[25] F. Schmid, T. Morocutti, S. Masoudian, K. Koutini, and G. Widmer,
+     “Distilling the knowledge of transformers and CNNs with CP-mobile,”
+     in DCASE Workshop, 2023.
+[26] E.-L. Tan, J. W. Yeow, S. Peksi, H. Li, Z. Yang, and W.-S. Gan, “Sntl-
+     ntu dcase25 submission: Acoustic scene classification using CNN-GRU
+     model without knowledge distillation,” DCASE2025 Challenge, Tech.
+     Rep., May 2025.
+[27] J. Hu, L. Shen, and G. Sun, “Squeeze-and-excitation networks,” in CVPR,
+     2018.
+
+
+
+
+                                                                               10
+

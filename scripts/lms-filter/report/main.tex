@@ -1,0 +1,268 @@
+\documentclass[conference]{IEEEtran}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[czech]{babel}
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{graphicx}
+\usepackage{textcomp}
+\usepackage{xcolor}
+\usepackage{url}
+
+\newcommand{\code}[1]{\texttt{#1}}
+\newcolumntype{Y}{>{\raggedright\arraybackslash}X}
+\newcommand{\placeholder}[1]{%
+  \fbox{%
+    \begin{minipage}{0.92\linewidth}
+      \centering\small #1
+    \end{minipage}%
+  }%
+}
+
+\begin{document}
+
+\title{Potlačení vlastního hluku dronu algoritmem FxLMS pro detekci impulzních akustických událostí}
+
+\author{\IEEEauthorblockN{Martin Maxa}
+\IEEEauthorblockA{CTU, FEE\\
+Prague, Czechia\\
+maxamart@fel.cvut.cz}}
+
+\maketitle
+
+\begin{abstract}
+Palubní mikrofon zachycuje spolu s~okolními zvuky také hluk motorů a~vrtulí. Tato složka může u~krátkých impulzních událostí, například výstřelu, výrazně snížit poměr signálu k~rušení. Práce popisuje simulaci aktivního potlačení hluku algoritmem filtered-x least mean squares (FxLMS). Reference vznikají z~řídicích signálů motorů, takže systém nepotřebuje referenční mikrofony. Adaptivní filtr používá normalizovaný krok, jehož jmenovatel tvoří součet výkonů filtrovaných referencí ve všech kanálech. Jedna hodnota rychlosti učení proto vyhovuje konfiguracím SISO, sum-first i~MISO bez ručního přepočtu podle počtu kanálů. Algoritmus je implementován v~jazyce C s~aritmetikou Q15. Ve čtyřmotorovém scénáři dosáhla konfigurace MISO 4$\times$4 útlumu 21{,}3\,dB, zatímco sum-first se stejnými čtyřmi motorovými referencemi dosáhl 6{,}7\,dB. SISO v~samostatném jednomotorovém scénáři dosáhlo 24{,}5\,dB, tuto hodnotu však nelze přímo porovnávat s~vícemotorovými konfiguracemi.
+\end{abstract}
+
+\begin{IEEEkeywords}
+active noise control, FxLMS, adaptive filtering, drone acoustics, impulsní akustické události
+\end{IEEEkeywords}
+
+\section{Úvod}
+Dronový pohon vytváří výrazné tóny na frekvenci průchodu listů vrtule (blade pass frequency, BPF). Pro vrtuli s~$N_b$ listy a~otáčkovou frekvencí $f_r$ platí $f_{\mathrm{BPF}}=N_b f_r$. Spektrum obsahuje také harmonické násobky BPF, převážně pod 1\,kHz (obr.~\ref{fig:dads_spectrum}). Palubní mikrofon tyto tóny zaznamenává současně s~okolními zvuky, a~u~krátkých impulzů tak klesá poměr signálu k~rušení.
+
+Aktivní potlačení hluku (ANC) snižuje akustický tlak rušení v~místě chybového mikrofonu pomocí řízeného sekundárního zdroje \cite{elliott1993active,kuo1996anc}. Dopředné zapojení vyžaduje referenci korelovanou s~rušením. Zde ji poskytují řídicí signály jednotlivých motorů, ze kterých lze odvodit okamžitou BPF. Odrušovací signál prochází mezi aktuátorem a~mikrofonem sekundární akustickou cestou, a~běžný LMS proto nestačí. FxLMS před aktualizací vah filtruje referenci odhadem této cesty \cite{burgess1981duct,widrow1985adaptive}. Existují také varianty zaměřené na nižší výpočetní náročnost a~rychlejší konvergenci \cite{ramos2021modified}.
+
+Práce se omezuje na potlačení vlastního hluku dronu v~jednom mikrofonním kanálu a~na zachování užitečného impulzního signálu. Model neobsahuje geometrii zdrojů, směrové vyzařování ani změřené akustické cesty, proto z~něj nelze určit účinnost prostorového nebo směrového ANC. Závěrečná část navrhuje experiment pro ověření motorových referencí na reálném pohonu; výsledky tohoto experimentu zatím nejsou součástí práce.
+
+\section{Akustická charakteristika dronového hluku}
+
+Frekvenční strukturu hluku jsme ověřili na datasetu DADS (Drone Audio Detection Samples) \cite{basso2024dads}. Databáze spojuje záznamy ze šesti zdrojů \cite{alemadi2019drone,ramos2024dronenoise} s~dalšími měřeními z~palubních a~pozemních mikrofonů. Obsahuje 163\,591 dronových nahrávek o~délce 27{,}1\,h a~16\,729 nahrávek bez dronu o~délce 33{,}8\,h. Všechny soubory mají vzorkovací kmitočet 16\,kHz, 16bitové vzorky a~jeden kanál.
+
+Výkonovou spektrální hustotu (PSD) jsme pro každou nahrávku vypočítali Welchovou metodou s~oknem 2048 vzorků a~50\% překryvem. Spektra jsme poté zprůměrovali v~lineárním výkonovém měřítku. Obrázek~\ref{fig:dads_spectrum} uvádí průměr a~mezikvartilové pásmo obou tříd.
+
+Dronové nahrávky mají pod 1\,kHz průměrnou PSD o~10 až 15\,dB vyšší než nahrávky bez dronu. Úzká spektrální maxima odpovídají BPF a~jejím harmonickým. U~malých UAV se dvěma až čtyřmi listy a~otáčkami 3\,000 až 9\,000~min$^{-1}$ leží BPF přibližně mezi 100 a~600\,Hz.
+
+Nad 1\,kHz se průměry obou tříd přibližují. Nahrávky bez dronu jsou v~tomto pásmu rozptýlenější, protože pocházejí z~odlišných prostředí a~obsahují například výstřely, pouliční hluk nebo zvuky přírody. ANC rotačních strojů se však obvykle soustředí na nižší frekvence, kde leží BPF a~její hlavní harmonické \cite{kuo1996anc,ramos2024dronenoise}.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\columnwidth]{figures/dads_average_spectrum.png}
+  \caption{Střední PSD pro dronové ($n=163\,591$, červeně) a~ne-dronové ($n=14\,868$, modře) nahrávky z~datasetu DADS. Pásma odpovídají 25.–75.~percentilu přes nahrávky.}
+  \label{fig:dads_spectrum}
+\end{figure}
+
+\section{Princip FxLMS}
+Dopředný model ANC obsahuje referenci $x[n]$, primární cestu $P(z)$ mezi zdrojem rušení a~mikrofonem, adaptivní řídicí filtr $G(z)$ a~sekundární cestu $C(z)$ mezi aktuátorem a~mikrofonem. Signál v~mikrofonu před potlačením je
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\columnwidth]{generated/fxlms_schema.pdf}
+  \caption{Blokové schéma algoritmu FxLMS s modelem sekundární cesty $\hat{C}(z)$.}
+  \label{fig:fxlms_schema}
+\end{figure}
+
+\begin{equation}
+  d[n] = P(z)x[n] + s[n],
+\end{equation}
+kde $s[n]$ označuje užitečný signál. Řídicí filtr generuje
+\begin{equation}
+  y[n] = \sum_{i=0}^{L-1} g_i[n]x[n-i],
+\end{equation}
+Po průchodu sekundární cestou vznikne odrušovací složka $c_y[n] = C(z)y[n]$. Chybový signál je
+\begin{equation}
+  e[n] = d[n] - c_y[n].
+\end{equation}
+
+Změna vah $g_i[n]$ se v mikrofonu projeví až přes sekundární cestu. FxLMS proto v adaptační větvi nepoužívá přímo $x[n]$, ale filtrovanou referenci
+\begin{equation}
+  x'[n] = \hat{C}(z)x[n],
+\end{equation}
+kde $\hat{C}(z)$ je odhad sekundární cesty. Aktualizace vah používá \emph{normalizovaný} krok (varianta NLMS pro FxLMS)
+\begin{equation}
+  g_i[n+1] = g_i[n] + \frac{\mu}{P[n]}\, e[n]\,x'[n-i],
+  \label{eq:fxlms_update}
+\end{equation}
+kde $\mu$ je bezrozměrná rychlost učení a $P[n]$ je okamžitý výkon filtrované reference v okně délky filtru $L$,
+\begin{equation}
+  P[n] = \varepsilon + \sum_{i=0}^{L-1} {x'}^2[n-i].
+  \label{eq:fxlms_power}
+\end{equation}
+Kladná konstanta $\varepsilon$ brání dělení nulou a~omezuje velikost kroku při slabé referenci. Implementace používá aritmetiku Q15 a~saturuje výstup i~váhy.
+
+\subsection*{Normalizovaný krok a jeho význam}
+U~běžného LMS je velikost aktualizace $\mu\,e[n]\,x'[n-i]$ přímo závislá na výkonu reference. Hodnota $\mu$ zvolená pro jednu úroveň vstupu proto může při silnějším signálu způsobit nestabilitu a~při slabším signálu zpomalit konvergenci. Normalizace výkonem $P[n]$ tuto závislost omezuje. Parametr $\mu$ je bezrozměrný, obvykle se volí v~rozsahu $0<\mu\lesssim 1$ a~v~této práci má hodnotu přibližně 0{,}09 (3000 ve~formátu Q15). Ve vícekanálové variantě zahrnuje $P[n]$ všechny reference a~aktuátory, takže se $\mu$ nemusí přepočítávat podle počtu kanálů.
+
+\subsection*{Vektorové rozšíření}
+
+Vícekanálovou variantu zapisujeme vektorově (obr.~\ref{fig:fxlms_schema_multiple}). Symbol $R$ označuje počet motorových referencí a~$M$ počet chybových mikrofonů. Referenční vektor $\mathbf{x}(n)\in\mathbb{R}^{R}$ vstupuje do maticového adaptivního filtru $\mathbf{G}(z)\in\mathbb{R}^{A\times R}$, který vytváří $A$ signálů pro aktuátory. Sekundární cesta $\mathbf{C}(z)\in\mathbb{R}^{M\times A}$ převádí jejich výstupy na chybový vektor $\mathbf{e}(n)\in\mathbb{R}^{M}$. Pro aktualizaci vah se reference filtrují odhadem $\hat{\mathbf{C}}(z)$.
+
+V implementaci odpovídá $R$ parametru \code{--reference-count} a $M$ počtu chybových mikrofonů (v současném modelu $M=1$). Počet aktuátorů je nastaven parametrem \code{--actuator-count}; ve zjednodušeném schématu na obr.~\ref{fig:fxlms_schema_multiple} je ztotožněn s~$R$.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\columnwidth]{generated/fxlms_schema_multiple.pdf}
+  \caption{Blokové schéma vektorového FxLMS pro $R$ referenčních kanálů a $M$ chybových mikrofonů. Silné šipky označují vektory; křížky na vodičích ukazují dimenzi ($R$, $A$, nebo $M$). Adaptivní filtr $\mathbf{G}(z)\in\mathbb{R}^{A\times R}$ generuje $A$ aktuátorových signálů; $\mathbf{C}(z)\in\mathbb{R}^{M\times A}$ je fyzická sekundární cesta; $\hat{\mathbf{C}}(z)$ je její odhad použitý ve filtraci reference.}
+  \label{fig:fxlms_schema_multiple}
+\end{figure}
+
+\section{Implementace}
+Implementace je v~modulu \code{scripts/lms-filter}. Pythonový program sestaví syntetickou scénu, načte WAV soubory, zavolá sdílenou knihovnu v~jazyce C a~uloží metriky s~grafy. Jádro filtru používá pevnou řádovou čárku a~nealokuje paměť na haldě. Potřebný stavový buffer dodá volající podle zvolené konfigurace; pouze hostitelský obal demonstračního API používá dynamickou alokaci.
+
+\subsection{SISO režim}
+SISO varianta používá jednu referenci, jeden aktuátor a~jeden adaptivní FIR filtr $G(z)$. Uchovává jednu historii reference, sekundární cestu $C(z)$ a~její odhad $\hat{C}(z)$.
+
+\subsection{Sum-first a MISO režimy}
+Více motorových referencí lze zpracovat dvěma způsoby. Režim \emph{sum-first} je nejprve sečte v~Pythonu, takže C jádro dostane jediný referenční kanál ($R=1$). Se čtyřmi aktuátory pracují čtyři adaptivní filtry.
+
+V režimu \emph{MISO} (viz obr.~\ref{fig:fxlms_schema_multiple}) vstupuje do C jádra plná matice $R$ referencí. Pro $R$ referencí a $A$ aktuátorů se alokuje $A \times R$ adaptivních FIR filtrů. Konfigurace \code{--reference-count 4 --actuator-count 4} tedy vytvoří 16 sad vah ($R=4$, $A=4$, $M=1$). Výstup aktuátoru $a$ je součet příspěvků všech referencí:
+\begin{equation}
+  y_a[n] = \sum_{r=0}^{R-1}\sum_{i=0}^{L-1} g_{a,r,i}[n]x_r[n-i].
+\end{equation}
+Sekundární výstupy aktuátorů se sčítají do jedné odrušovací složky v chybovém mikrofonu ($M=1$). Všechny adaptivní cesty se učí ze stejného chybového signálu $e[n]$. Každá cesta ale používá vlastní filtrovanou referenci $x'_{a,r}[n]=\hat{C}_a(z)x_r[n]$ přes odhad sekundární cesty daného aktuátoru a~aktualizace váhy $g_{a,r,i}$ má tvar~\eqref{eq:fxlms_update} s~$x'$ nahrazeným za $x'_{a,r}$.
+
+Normalizační výkon $P[n]$ z~\eqref{eq:fxlms_power} se ve vícekanálovém případě sčítá přes \emph{všechny} dvojice reference--aktuátor,
+\begin{equation}
+  P[n] = \varepsilon + \sum_{a=0}^{A-1}\sum_{r=0}^{R-1}\sum_{i=0}^{L-1} {x'}_{a,r}^2[n-i].
+  \label{eq:fxlms_power_multi}
+\end{equation}
+Součet zohledňuje počet i~energii kanálů. Se vzrůstajícím $R$ a~$A$ se efektivní krok zmenší, zatímco hodnota $\mu$ zůstane stejná. Předchozí implementace dělila $\mu$ ve vícekanálovém režimu pevnou konstantou, což zpomalovalo adaptaci a~snižovalo dosažený útlum.
+
+Sekundární cesta $C(z)$ nevychází z~geometrie ani z~měření skutečného reproduktoru. Každému aktuátoru $a$ odpovídá pevný čtyřkoeficientový FIR filtr $C_a(z)$ v~aritmetice Q15. Na jeho vstupu je řídicí signál $y_a[n]$ a~na výstupu simulovaná odrušovací složka v~místě chybového mikrofonu:
+\begin{equation}
+  c_a[n] = \sum_{k=0}^{3} c_{a,k}y_a[n-k].
+\end{equation}
+Filtr aproximuje impulzní odezvu fyzické cesty. Kombinuje aktuální vzorek $y_a[n]$ se třemi předchozími vzorky, a~modeluje tak krátkou paměť, frekvenčně závislý útlum a~fázový posun mezi aktuátorem a~mikrofonem. FxLMS potřebuje tento přenos znát, protože odrušovací signál musí do místa měření dorazit s~odpovídající amplitudou a~opačnou fází. Čtyři koeficienty slouží pouze pro demonstraci; model reálné sestavy by vyžadoval identifikaci delší impulzní odezvy z~měření.
+
+Pole \code{k\_secondary\_path} obsahuje pro každý aktuátor mírně odlišnou sadu koeficientů. Ty se během adaptace nemění, na rozdíl od vah regulátoru $G(z)$ upravovaných podle chyby $e[n]$. FIR výpočet používá kruhovou historii seřazenou od nejnovějšího vzorku; po akumulaci následuje posun o~15 bitů a~saturace. U~více aktuátorů se výstupy sekundárních cest sečtou:
+\begin{equation}
+  e[n] = d[n] - \sum_{a=0}^{A-1} c_a[n].
+\end{equation}
+Blok $C_a(z)$ zastupuje aktuátor i~šíření zvuku k~mikrofonu. Simulace tyto části dále nerozlišuje. Odhad $\hat{C}_a(z)$ tvoří další čtyřkoeficientový FIR filtr. Jeho koeficienty v~poli \code{k\_secondary\_path\_estimate} jsou podobné, ale ne shodné s~modelem skutečné cesty. Odhad filtruje pouze reference při aktualizaci vah a~nepodílí se přímo na výpočtu $e[n]$.
+
+\subsection{Fixed-point aritmetika}
+Vzorky a~koeficienty veřejného rozhraní mají typ \code{int16\_t} a~formát Q15. FIR filtr akumuluje součiny v~širším celočíselném typu a~výsledek posune o~15 bitů. Aktualizace vah podle \eqref{eq:fxlms_update} používá 64bitovou aritmetiku. Čitatel $\mu\,e[n]\,x'[n-i]$, kde $\mu=\code{mu\_q15}/2^{15}$, se celočíselně vydělí výkonem $P[n]$. Přírůstek váhy se poté saturuje do rozsahu \code{int16\_t}. Výkon je uložen jako klouzavý součet čtverců přes okno délky $L$ a~všechny kanály. Při každém vzorku se odečte nejstarší čtverec a~přičte nový, takže aktualizace stojí $O(1)$ operací na kanál místo $O(L)$. Regularizace $\varepsilon$ závisí na délce filtru a~počtu kanálů. Pro všechny konfigurace se používá stejná hodnota \code{mu\_q15}.
+
+\section{Experimentální metodika}
+Experiment používá syntetická data. Python vytváří hluk z~několika motorových referencí, které se liší otáčkami, zesílením, zpožděním a~primární FIR cestou. Užitečný WAV signál se normalizuje, upraví na délku simulace a~přičte k~primárnímu mikrofonnímu signálu. Výstupem FxLMS je chybový signál, ve kterém má zůstat užitečný impulz a~klesnout složka korelovaná s~motory.
+
+Výsledky v~následující sekci vznikly ze scénáře s~impulzním audio souborem \code{audio/gunshot-vs-firecracker.wav}. Referenční běh pro MISO konfiguraci je:
+\begin{quote}
+\scriptsize\ttfamily
+task run --\\
+--mode miso --reference-count 4\\
+--actuator-count 4\\
+--wanted-wav audio/gunshot-vs-firecracker.wav\\
+--duration-s 10 --plot-window 5..6\\
+--spectrum-window 5..6 --wanted-gain 0.1
+\end{quote}
+
+Soubor \code{metrics.json} obsahuje střední kvadratické chyby primárního signálu, chybového signálu a~reziduálního hluku. Útlum dronu v~decibelech počítáme jako
+\begin{equation}
+  A_{\mathrm{drone}} = 10\log_{10}\frac{\mathrm{MSE}(d_{\mathrm{drone}})}{\mathrm{MSE}(e-s)},
+  \label{eq:drone_atten}
+\end{equation}
+přičemž obě střední kvadratické chyby se počítají ve~vyhodnocovacím okně 5--6\,s (parametr \code{--spectrum-window}), tedy po~odeznění počátečního přechodového děje. Metrika vyjadřuje pouze potlačení vlastního hluku, úspěšnost detekce výstřelu nehodnotí.
+
+\subsection{Výpočet spektra}
+Spektrální vyhodnocení na~obr.~\ref{fig:spectrum_result} probíhá na témže okně 5--6\,s. Výkonové spektrální hustoty počítáme Welchovou metodou (Hannovo okno 4096 vzorků, 50\,\% překryv), čímž průměrujeme přes několik segmentů. Křivky jsou pro čitelnost vyhlazeny 1/12oktávovým klouzavým průměrem a~vyneseny na~logaritmické frekvenční ose. Útlum v~závislosti na~frekvenci $A(f)=\mathrm{PSD}_{d_{\mathrm{drone}}}(f)-\mathrm{PSD}_{e-s}(f)$ vykreslujeme přes celé pásmo: zeleně frekvence, kde regulátor energii potlačuje, červeně frekvence, kde ji naopak přidává. Na~frekvencích s~malou energií dronového hluku regulátor vkládá slabý anti-hluk; ověřili jsme, že reziduum odpovídá výstupu sekundárních cest, jde tedy o~reálně vstříknutou energii, nikoli o~numerický artefakt. Tato složka však leží o~40\,dB i~více pod tonálními složkami dronu (viz absolutní úrovně v~horním panelu), takže do~celkové energie přispívá zanedbatelně; energeticky vážený průměr přes celé pásmo je díky Parsevalově rovnosti shodný s~$A_{\mathrm{drone}}$ podle~\eqref{eq:drone_atten} a~uvádíme jej v~tabulce~\ref{tab:metrics}.
+
+\section{Výsledky}
+Tabulka~\ref{tab:metrics} uvádí výsledky tří konfigurací. Útlum je energeticky vážený průměr v~okně 5--6\,s podle~\eqref{eq:drone_atten}. Ve všech případech jsme použili impulzní WAV s~\code{--wanted-gain 0.1}, $\mu=3000$ v~Q15, délku filtru $L=64$ a~vzorkovací kmitočet $f_s=16$\,kHz. Útlum počítáme z~reziduálního hluku $e-s$ po odečtení užitečného signálu. Sum-first i~MISO používají tutéž čtyřmotorovou scénu. V~sum-first se čtyři motorové reference před vstupem do C jádra sečtou, takže jádro zpracovává jediný referenční kanál ($R=1$). SISO používá odlišnou jednomotorovou scénu, a~slouží proto jako samostatný referenční experiment, nikoli jako přímo srovnatelná varianta čtyřmotorového případu.
+
+\begin{table}[htbp]
+\caption{Útlum dronu pro jednotlivé konfigurace (okno 5--6\,s)}
+\label{tab:metrics}
+\centering
+\begin{tabular}{lcccc}
+\toprule
+Režim & Motory & $R$ & Aktuátory & Útlum [dB] \\
+\midrule
+SISO & 1 & 1 & 1 & 24{,}5 \\
+sum-first & 4 & 1 & 4 & 6{,}7 \\
+MISO & 4 & 4 & 4 & 21{,}3 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+V~přímo srovnatelném čtyřmotorovém scénáři dosáhlo MISO útlumu 21{,}3\,dB, tedy o~14{,}6\,dB více než sum-first s~útlumem 6{,}7\,dB. Samostatný jednomotorový běh SISO dosáhl 24{,}5\,dB. Vyšší hodnota SISO ale neprokazuje převahu nad MISO, protože vstupní hluk vzniká v~jiné scéně s~jediným motorem. Výsledek čtyřmotorového porovnání ukazuje, že zachování samostatných referencí je v~použitém modelu podstatné: MISO může pro každý aktuátor kombinovat příspěvky jednotlivých motorů, zatímco jejich předčasné sečtení v~režimu sum-first tuto informaci ztrácí. MISO používá 16 adaptivních filtrů a~normalizace podle~\eqref{eq:fxlms_power_multi} upravuje efektivní krok podle celkového výkonu všech kanálů.
+
+Časový průběh MISO 4$\times$4 na obr.~\ref{fig:time_result} zachycuje okno 5--6\,s. Impulzní událost přibližně v~čase 5{,}4\,s zůstává v~chybovém signálu, zatímco periodická složka motorů klesne. Spektra na obr.~\ref{fig:spectrum_result} potvrzují, že filtr tlumí především tonální složky BPF do 1\,kHz (zeleně), kde má simulovaný dronový hluk nejvíce energie. Na~frekvencích s~malou energií dronového hluku naopak vkládá slabý anti-hluk (červeně) o~desítky decibelů pod úrovní hlavních tónů. Energeticky vážený průměr přes celé pásmo proto určují především tonální složky a~odpovídá hodnotě z~tabulky.
+
+\begin{figure}[tb]
+\centering
+\includegraphics[width=\columnwidth]{figures/fxlms_demo_miso.png}
+\caption{Časový průběh MISO 4$\times$4 v~okně 5--6\,s. Panely shora zobrazují čtyři motorové reference $x_i[n]$, mikrofonní signál $d[n]$ se součtem odrušovacích složek $\sum_a C_a(z)y_a[n]$, výstupy aktuátorů $y_a[n]$ a~výstup ANC $e[n]$ s~užitečným signálem $s[n]$. Každý panel používá vlastní měřítko svislé osy.}
+\label{fig:time_result}
+\end{figure}
+
+\begin{figure}[tb]
+\centering
+\includegraphics[width=\columnwidth]{figures/fxlms_spectrum_miso.png}
+\caption{Spektrální porovnání MISO 4$\times$4 v~okně 5--6\,s. Horní panel: PSD vstupu $d[n]$, výstupu ANC $e[n]$ a~užitečného signálu $s[n]$. Dolní panel: útlum dronového hluku přes celé pásmo.}
+\label{fig:spectrum_result}
+\end{figure}
+
+\section{Přechod k reálné motorové referenci}
+V~simulaci jsou motorové reference dostupné bez zpoždění a~sdílejí časovou základnu s~audiem. U~reálného pohonu závisí dostupnost, přesnost a~zpoždění na konkrétním ESC. Tabulka~\ref{tab:real_references} uvádí zdroje, které je třeba experimentálně porovnat.
+
+\begin{table}[htbp]
+\caption{Kandidátní reference pro ověření na reálném pohonu}
+\label{tab:real_references}
+\centering
+\scriptsize
+\setlength{\tabcolsep}{3pt}
+\begin{tabularx}{\columnwidth}{@{}>{\raggedright\arraybackslash}p{0.22\columnwidth}YY@{}}
+\toprule
+Zdroj & Hlavní vlastnosti a omezení & Zamýšlená role \\
+\midrule
+Hall / encoder & Přímý úhel, deterministické impulzy; vyžaduje snímač a společný čas s~audiem. & Preferovaná laboratorní reference pro BPF a řádové harmonické. \\
+Úhel rotoru / back-EMF & Úhel nebo okamžiky komutace dostupné v~bezsenzorovém ESC; neznámá filtrace a~nižší přesnost při malých otáčkách. & Praktický zdroj pro syntézu kvadraturních referencí. \\
+DShot eRPM & Snadná integrace; převod podle počtu pólů, kvantování a~proměnlivé zpoždění \cite{betaflightDshotRpm,ardupilotEscTelemetry}. & První prototyp a~diagnostika, ne samostatná širokopásmová reference. \\
+Proud motoru & Obsahuje komutaci i změny zatížení, ale také PWM a spínací rušení. & Pozdější srovnávací nebo doplňková reference. \\
+Referenční mikrofon & Zachytí tonální i~širokopásmový hluk; citlivost na proudění a~akustickou zpětnou vazbu. & Srovnávací a~hybridní širokopásmová větev. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Pro první prototyp navrhujeme časově označený úhel rotoru, případně otáčky doplněné integrací fáze. Z~odhadu úhlu $\theta[n]$ vytvoříme pro BPF a~vybrané harmonické kvadraturní dvojice
+\begin{equation}
+ x_{k,c}[n]=\cos(k\theta[n]),\qquad
+ x_{k,s}[n]=\sin(k\theta[n]).
+ \label{eq:harmonic_reference}
+\end{equation}
+Kvadraturní báze se používá v~úzkopásmovém ANC rotačních strojů. Nesoulad mezi frekvencí tachometrické reference a~skutečného tónu však snižuje dosažitelný útlum \cite{xiao2006narrowband}. Mechanický úhel je proto nutné převést na BPF podle počtu listů a~ponechat jen harmonické s~dostatečnou koherencí vůči mikrofonnímu signálu. Tato reference predikuje periodické tóny BPF, nikoli turbulentní širokopásmový hluk.
+
+Pouhé převzorkování telemetrie na vzorkovací kmitočet audia nevytvoří fázově přesnou referenci. Sériová telemetrie ESC v~ArduPilot standardně aktualizuje data rychlostí 10\,Hz a~lze ji nastavit na 100\,Hz; dokumentace ji zároveň označuje za pomalejší než obousměrný DShot \cite{ardupilotEscTelemetry}. Také u~DShot je nutné zaznamenat čas přijetí rámce, změřit zpoždění a~jitter a~ověřit převod eRPM na mechanické otáčky. Audio ADC a~telemetrie musí sdílet hodiny, případně musí systém průběžně odhadovat jejich časový posun a~drift. Fázová chyba bez synchronizace roste s~řádem harmonické v~\eqref{eq:harmonic_reference}.
+
+Ověření začne statickým testem jednoho rotoru. Během řízené změny otáček se současně zaznamená zvuk, časově označené otáčky nebo úhel, proud a~řídicí signál ESC. Pro každou referenci změříme koherenci s~BPF a~jejími harmonickými. Ve stejných pracovních bodech pak porovnáme útlum jednotlivých řádů, rychlost konvergence a~případné zesílení mimo cílové frekvence. Po SISO testu může následovat měření více rotorů a~upoutaného visu, které zahrne rozdílné otáčky, vzájemné akustické cesty a~změny zatížení. Publikované pokusy prokázaly směrové i~palubní ANC v~kontrolovaných podmínkách \cite{bi2025directional,steiner2026drone}, ale používají jinou geometrii, mikrofonní reference a~změřené přenosové cesty. Jejich hodnoty útlumu proto nelze přenést na zde navržený systém.
+
+Proud motoru může k~otáčkám doplnit informaci o~zatížení, vyžaduje však rychlé synchronní měření a~potlačení spínacích složek. Referenční mikrofon zachytí také širokopásmový aeroakustický hluk, ale je citlivý na proudění a~akustickou zpětnou vazbu. Po ověření úzkopásmové reference proto porovnáme všechny zdroje stejnou metrikou koherence. Hybridní varianta může použít úhel motoru pro harmonické BPF a~proud nebo mikrofon pro zbývající složky.
+
+\section{Diskuze a budoucí práce}
+Model nahrazuje akustické cesty pevnými FIR filtry a~ručně zvolenými zpožděními. Nepracuje se souřadnicemi motorů, mikrofonů a~reproduktorů, směrovými charakteristikami ani odrazy. Výsledky proto nepopisují prostorový vyzařovací diagram ani účinnost směrového potlačení.
+
+Směrové ANC bude vyžadovat polohu každého motoru, reproduktoru a~mikrofonu. Z~jejich vzdáleností lze odvodit zpoždění a~útlum primárních i~sekundárních cest a~doplnit model odrazů. Teprve takový model umožní optimalizovat útlum ve zvoleném směru a~současně omezit energii vyzařovanou jinam.
+
+Vliv filtru na detekci impulzů je třeba ověřit samostatně. Jednoduchý detektor založený na~krátkodobé energii nebo spektrální změně umožní porovnat počet správných a~chybných detekcí před filtrací a~po ní. Klasifikátor má smysl přidat až po tomto měření.
+
+\section{Závěr}
+Implementovaný FxLMS filtr dosáhl ve čtyřmotorovém scénáři útlumu 21{,}3\,dB v~režimu MISO 4$\times$4 a~6{,}7\,dB v~režimu sum-first. Zachování čtyř samostatných motorových referencí tedy v~použitém modelu přineslo proti jejich sečtení zlepšení o~14{,}6\,dB. SISO dosáhlo v~samostatném jednomotorovém scénáři 24{,}5\,dB, tato hodnota však není přímo srovnatelná s~vícemotorovými výsledky. Normalizovaný krok umožnil ve všech režimech použít stejnou rychlost učení. Výsledky platí pro syntetické akustické cesty a~nepředpovídají výkon na skutečném dronu. Ten bude záviset na synchronizaci úhlové reference, koherenci harmonických BPF a~identifikaci sekundárních cest. Prostorové potlačení navíc vyžaduje geometrický model celé sestavy.
+
+\bibliographystyle{ieeetr}
+\bibliography{references}
+
+\end{document}

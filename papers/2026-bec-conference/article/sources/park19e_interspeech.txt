@@ -1,0 +1,406 @@
+INTERSPEECH 2019
+September 15–19, 2019, Graz, Austria
+
+
+
+                           SpecAugment: A Simple Data Augmentation Method
+                                  for Automatic Speech Recognition
+                            Daniel S. Park1∗, William Chan2 , Yu Zhang1 , Chung-Cheng Chiu1 ,
+                                       Barret Zoph1 , Ekin D. Cubuk1 , Quoc V. Le1
+                                            1
+                                                Google Brain, Mountain View, CA, USA
+                                                 2
+                                                   Google Brain, Toronto, ON, Canada
+          {danielspark, williamchan, ngyuzh, chungchengc, barretzoph, cubuk, qvl}@google.com
+
+
+                              Abstract                                         is simple and computationally cheap to apply, as it directly acts
+                                                                               on the spectrogram as if it were an image, and does not require
+     We present SpecAugment, a simple data augmentation method                 any additional data. We are thus able to apply SpecAugment
+     for speech recognition. SpecAugment is applied directly to                online during training. SpecAugment consists of three kinds of
+     the feature inputs of a neural network (i.e., filter bank coef-           deformations of the spectrogram. The first is time warping, a
+     ficients). The augmentation policy consists of warping the                deformation of the time-series in the time direction. The other
+     features, masking blocks of frequency channels, and masking               two augmentations, inspired by “Cutout”, proposed in computer
+     blocks of time steps. We apply SpecAugment on Listen, Attend              vision [19], are time and frequency masking, where we mask a
+     and Spell networks for end-to-end speech recognition tasks. We            block of consecutive time steps or mel frequency channels.
+     achieve state-of-the-art performance on the LibriSpeech 960h                   This approach, while rudimentary, is remarkably effec-
+     and Swichboard 300h tasks, outperforming all prior work. On               tive and allows us to train end-to-end ASR networks, called
+     LibriSpeech, we achieve 6.8% WER on test-other without the                Listen Attend and Spell (LAS) [6], to surpass more compli-
+     use of a language model, and 5.8% WER with shallow fusion                 cated hybrid systems, and achieve state-of-the-art results even
+     with a language model. This compares to the previous state-               without the use of Language Models (LMs). On LibriSpeech
+     of-the-art hybrid system of 7.5% WER. For Switchboard, we                 [20], we achieve 2.8% Word Error Rate (WER) on the test-
+     achieve 7.2%/14.6% on the Switchboard/CallHome portion of                 clean set and 6.8% WER on the test-other set, without the
+     the Hub5’00 test set without the use of a language model, and             use of an LM. Upon shallow fusion [21] with an LM trained
+     6.8%/14.1% with shallow fusion, which compares to the previ-              on the LibriSpeech LM corpus, we are able to better our per-
+     ous state-of-the-art hybrid system at 8.3%/17.3% WER.                     formance (2.5% WER on test-clean and 5.8% WER on test-
+     Index Terms: end-to-end speech recognition, data augmenta-                other), improving the current state of the art on test-other by
+     tion                                                                      22% relatively. On Switchboard 300h (LDC97S62) [22], we
+                                                                               obtain 7.2% WER on the Switchboard portion of the Hub5’00
+                         1. Introduction                                       (LDC2002S09, LDC2003T02) test set, and 14.6% on the Call-
+                                                                               Home portion, without using an LM. Upon shallow fusion
+     Deep Learning has been applied successfully to Automatic                  with an LM trained on the combined transcript of the Switch-
+     Speech Recognition (ASR) [1], where the main focus of re-                 board and Fisher (LDC200{4,5}T19) [23] corpora, we obtain
+     search has been designing better network architectures, for ex-           6.8%/14.1% WER on the Switchboard/Callhome portion.
+     ample, DNNs [2], CNNs [3], RNNs [4] and end-to-end models
+     [5, 6, 7]. However, these models tend to overfit easily and re-
+     quire large amounts of training data [8].                                               2. Augmentation Policy
+          Data augmentation has been proposed as a method to gen-              We construct an augmentation policy that acts on the log mel
+     erate additional training data for ASR. For example, in [9, 10],          spectrogram directly to help the network learn useful features.
+     artificial data was augmented for low resource speech recogni-            Motivated by the goal that these features should be robust to
+     tion tasks. Vocal Tract Length Normalization has been adapted             deformations in the time direction, partial loss of frequency in-
+     for data augmentation in [11]. Noisy audio has been synthe-               formation and partial loss of small segments of speech, we have
+     sised via superimposing clean audio with a noisy audio signal             chosen the following deformations to make up a policy:
+     in [12]. Speed perturbation has been applied on raw audio for
+                                                                                  1. Time warping is applied via the function
+     LVSCR tasks in [13]. The use of an acoustic room simulator has
+                                                                                     sparse image warp of tensorflow.                     Given
+     been explored in [14]. Data augmentation for keyword spotting
+                                                                                     a log mel spectrogram with τ time steps, we view it
+     has been studied in [15, 16]. Feature drop-outs have been em-
+                                                                                     as an image where the time axis is horizontal and the
+     ployed for training multi-stream ASR systems [17]. More gen-
+                                                                                     frequency axis is vertical. A random point along the
+     erally, learned augmentation techniques have explored different
+                                                                                     horizontal line passing through the center of the image
+     sequences of augmentation transformations that have achieved
+                                                                                     within the time steps (W, τ − W ) is to be warped either
+     state-of-the-art performance in the image domain [18].
+                                                                                     to the left or right by a distance w chosen from a uniform
+          Inspired by the recent success of augmentation in the
+                                                                                     distribution from 0 to the time warp parameter W along
+     speech and vision domains, we propose SpecAugment, an aug-
+                                                                                     that line. We fix six anchor points on the boundary—the
+     mentation method that operates on the log mel spectrogram of
+                                                                                     four corners and the mid-points of the vertical edges.
+     the input audio, rather than the raw audio itself. This method
+                                                                                  2. Frequency masking is applied such that f consecutive
+         ∗Work done as a member of the Google AI Residency Program.                  mel frequency channels [f0 , f0 + f ) are masked, where
+
+
+
+
+Copyright © 2019 ISCA                                                   2613           http://dx.doi.org/10.21437/Interspeech.2019-2680
+                                                                                                       3. Model
+                                                                            We use Listen, Attend and Spell (LAS) networks [6] for our
+                                                                            ASR tasks. These models, being end-to-end, are simple to train
+                                                                            and have the added benefit of having well-documented bench-
+                                                                            marks [24, 25] that we are able to build upon to get our results.
+                                                                            In this section, we review LAS networks and introduce some
+                                                                            notation to parameterize them. We also introduce the learning
+                                                                            rate schedules we use to train the networks, as they turn out
+                                                                            to be an important factor in determining performance. We end
+                                                                            with reviewing shallow fusion [21], which we have used to in-
+                                                                            corporate language models for further gains in performance.
+Figure 1: Augmentations applied to the base input, given at the
+top. From top to bottom, the figures depict the log mel spectro-
+                                                                            3.1. LAS Network Architectures
+gram of the base input with no augmentation, time warp, fre-
+quency masking and time masking applied.                                    We use Listen, Attend and Spell (LAS) networks [6] for end-to-
+                                                                            end ASR studied in [25], for which we use the notation LAS-
+                                                                            d-w. The input log mel spectrogram is passed in to a 2-layer
+                                                                            Convolutional Neural Network (CNN) with a stride of 2. The
+                                                                            output of the CNN is passes through an encoder consisting of
+                                                                            d stacked bi-directional LSTMs with cell size w to yield a se-
+                                                                            ries of attention vectors. The attention vectors are fed into a
+                                                                            2-layer RNN decoder of cell dimension w, which yields the to-
+                                                                            kens for the transcript. The text is tokenized using a Word Piece
+                                                                            Model (WPM) [26] of vocabulary size 16k for LibriSpeech and
+                                                                            1k for Switchboard. The WPM for LibriSpeech 960h is con-
+Figure 2: Augmentation policies applied to the base input. From             structed using the training set transcripts. For the Switchboard
+top to bottom, the figures depict the log mel spectrogram of the            300h task, transcripts from the training set are combined with
+base input with policies None, LB and LD applied.                           those of the Fisher corpus to construct the WPM. The final tran-
+                                                                            scripts are obtained by a beam search with beam size 8. For
+                                                                            comparison with [25], we note that their “large model” in our
+       f is first chosen from a uniform distribution from 0 to
+                                                                            notation is LAS-4-1024.
+       the frequency mask parameter F , and f0 is chosen from
+       [0, ν − f ). ν is the number of mel frequency channels.
+                                                                            3.2. Learning Rate Schedules
+   3. Time masking is applied such that t consecutive time
+                                                                            The learning rate schedule turns out to be an important factor
+      steps [t0 , t0 + t) are masked, where t is first chosen from
+                                                                            in determining the performance of ASR networks, especially
+      a uniform distribution from 0 to the time mask parameter
+                                                                            so when augmentation is present. Here, we introduce training
+      T , and t0 is chosen from [0, τ − t).
+                                                                            schedules that serve two purposes. First, we use these schedules
+          • We introduce an upper bound on the time mask                    to verify that a longer schedule improves the final performance
+            such that a time mask cannot be wider than p times              of the network, even more so with augmentation (Table 2). Sec-
+            the number of time steps.                                       ond, based on this, we introduce very long schedules that are
+                                                                            used to maximize the performance of the networks.
+Figure 1 shows examples of the individual augmentations ap-                      We use a learning rate schedule in which we ramp-up, hold,
+plied to a single input. The log mel spectrograms are normal-               then exponentially decay the learning rate until it reaches 1/100
+ized to have zero mean value, and thus setting the masked value             of its maximum value. The learning rate is kept constant beyond
+to zero is equivalent to setting it to the mean value.                      this point. This schedule is parameterized by three time stamps
+     We can consider policies where multiple frequency and                  (sr , si , sf )—the step sr where the ramp-up (from zero learning
+time masks are applied. The multiple masks may overlap. In                  rate) is complete, the step si where exponential decay starts, and
+this work, we mainly consider a series of hand-crafted policies,            the step sf where the exponential decay stops.
+LibriSpeech basic (LB), LibriSpeech double (LD), Switchboard                     There are two more factors that introduce time scales in our
+mild (SM) and Switchboard strong (SS) whose parameters are                  experiment. First, we turn on a variational weight noise [27]
+summarized in Table 1. In Figure 2, we show an example of a                 of standard deviation 0.075 at step snoise and keep it constant
+log mel spectrogram augmented with policies LB and LD.                      throughout training. Weight noise is introduced in the step in-
+                                                                            terval (sr , si ), i.e., during the high plateau of the learning rate.
+                                                                                 Second, we introduce uniform label smoothing [28] with
+Table 1: Augmentation parameters for policies. mF and mT
+                                                                            uncertainty 0.1, i.e., the correct class label is assigned the confi-
+denote the number of frequency and time masks applied.
+                                                                            dence 0.9, while the confidence of the other labels are increased
+                                                                            accordingly. As is commented on again later on, label smooth-
+         Policy   W      F    mF       T      p    mT                       ing can destabilize training for smaller learning rates, and we
+          None     0     0      -       0     -      -                      sometimes choose to turn it on only at the beginning of training
+           LB     80    27      1     100    1.0     1                      and off when the learning rate starts to decay.
+           LD     80    27      2     100    1.0     2                           The two basic schedules we use, are given as the following:
+          SM      40    15      2      70    0.2     2
+           SS     40    27      2      70    0.2     2                           1. B(asic): (sr , snoise , si , sf ) = (0.5k, 10k, 20k, 80k)
+                                                                                 2. D(ouble): (sr , snoise , si , sf ) = (1k, 20k, 40k, 160k)
+
+
+
+
+                                                                     2614
+As discussed further in section 5, we can improve the perfor-                 Table 2: LibriSpeech test WER (%) evaluated for varying net-
+mance of the trained network by using a longer schedule. We                   works, schedules and policies. First row from [25].
+thus introduce the following schedule:
+                                                                                                                      No LM          With LM
+   3. L(ong): (sr , snoise , si , sf ) = (1k, 20k, 140k, 320k)                     Network         Sch       Pol
+                                                                                                                   clean   other   clean   other
+which we use to train the largest model to improve performance.
+                                                                               LAS-4-1024 [25]      B         -      4.7    13.4     3.6    10.3
+When using schedule L, label smoothing with uncertainty 0.1 is
+introduced for time steps < si = 140k for LibriSpeech 960h,                                         B        LB      3.7    10.0     3.4     8.3
+and is subsequently turned off. For Switchboard 300h, label                                         B        LD      3.6     9.2     2.8     7.5
+                                                                                 LAS-4-1024
+smoothing is turned on throughout training.                                                         D         -      4.4    13.3     3.5    10.4
+                                                                                                    D        LB      3.4     9.2     2.7     7.3
+3.3. Shallow Fusion with Language Models                                                            D        LD      3.4     8.3     2.8     6.8
+                                                                                                    D         -      4.5    13.1     3.6    10.3
+While we are able to get state-of-the-art results with augmen-                   LAS-6-1024         D        LB      3.4     8.6     2.6     6.7
+tation, we can get further improvements by using a language                                         D        LD      3.2     8.0     2.6     6.5
+model. We thus incorporate an RNN language model by shal-                                           D         -      4.3    12.9     3.5    10.5
+low fusion for both tasks. In shallow fusion, the “next token”                   LAS-6-1280         D        LB      3.4     8.7     2.8     7.1
+y∗ in the decoding process is determined by                                                         D        LD      3.2     7.7     2.7     6.5
+
+        y∗ = argmax (log P (y|x) + λ log PLM (y)) ,              (1)
+                  y                                                                        Table 3: LibriSpeech 960h WERs (%).
+
+i.e., by jointly scoring the token using the base ASR model and                Method                                 No LM          With LM
+the language model. We also use a coverage penalty c [29].
+                                                                                                                   clean   other   clean   other
+      For LibriSpeech, we use a two-layer RNN with embedding
+dimension 1024 used in [25] for the LM, which is trained on                    HMM
+the LibriSpeech LM corpus. We use identical fusion parameters                   Panayotov et al., (2015) [20]                      5.51    13.97
+                                                                                Povey et al., (2016) [30]                          4.28
+(λ = 0.35 and c = 0.05) used in [25] throughout.
+                                                                                Han et al., (2017) [31]                            3.51    8.58
+      For Switchboard, we use a two-layer RNN with embedding                    Yang et al. (2018) [32]                            2.97    7.50
+dimension 256, which is trained on the combined transcripts of
+                                                                               CTC/ASG
+the Fisher and Switchboard datasets. We find the fusion pa-
+                                                                                Collobert et al., (2016) [33]       7.2
+rameters via grid search by measuring performance on RT-03                      Liptchinsky et al., (2017) [34]     6.7    20.8     4.8     14.5
+(LDC2007S10). We discuss the fusion parameters used in indi-                    Zhou et al., (2018) [35]                           5.42    14.70
+vidual experiments in section 4.2.                                              Zeghidour et al., (2018) [36]                      3.44    11.24
+                                                                                Li et al., (2019) [37]              3.86   11.95   2.95     8.79
+                      4. Experiments                                           LAS
+                                                                                Zeyer et al., (2018) [24]           4.87   15.39   3.82    12.76
+In this section, we describe our experiments on LibriSpeech and                 Zeyer et al., (2018) [38]           4.70   15.20
+Switchboard with SpecAugment. We report state-of-the-art re-                    Irie et al., (2019) [25]             4.7    13.4    3.6    10.3
+sults that out-perform heavily engineered hybrid systems.                       Sabour et al., (2019) [39]           4.5    13.3
+                                                                               Our Work
+4.1. LibriSpeech 960h                                                           LAS                                 4.1    12.5     3.2     9.8
+                                                                                LAS + SpecAugment                   2.8     6.8     2.5     5.8
+For LibriSpeech, we use the same setup as [25], where we use
+80-channel filter banks with delta and delta-delta acceleration,
+                                                                              incorporate an LM using shallow fusion to further improve per-
+and a 16k word piece model [26].
+                                                                              formance. The results are presented in Table 3.
+     The three networks LAS-4-1024, LAS-6-1024 and LAS-6-
+1280 are trained on LibriSpeech 960h with a combination of
+                                                                              4.2. Switchboard 300h
+augmentation policies (None, LB, LD) and training schedules
+(B/D). Label smoothing was not applied in these experiments.                  For Switchboard 300h, we use the Kaldi [40] “s5c” recipe to
+The experiments were run with peak learning rate of 0.001 and                 process our data, but we adapt the recipe to use 80-dimensional
+batch size of 512, on 32 Google Cloud TPU chips for 7 days.                   filter banks with delta and delta-delta acceleration. We use a 1k
+Other than the augmentation policies and learning rate sched-                 WPM [26] to tokenize the output, constructed using the com-
+ules, all other hyperparameters were fixed, and no additional                 bined vocabulary of the Switchboard and Fisher transcripts.
+tuning was applied. We report test set numbers, validated by                       We train LAS-4-1024 with policies (None, SM, SS) and
+the dev-other set in Table 2. We see that augmentation con-                   schedule B. As before, we set the peak learning rate to 0.001
+sistently improves the performance of the trained network, and                and total batch size to 512, and train using 32 Google Cloud
+that the benefit of a larger network and a longer learning rate               TPU chips. Here the experiments are run with and without label
+schedule is more apparent with harsher augmentation.                          smoothing. Not having a canonical development set, we choose
+     We then take our largest network, LAS-6-1280, and use the                to evaluate the checkpoint at the end point of the training sched-
+longer schedule L (with training time ∼ 24 days) and policy                   ule, which we choose to be 100k steps for schedule B. We note
+LD to maximize performance. We turn label smoothing on for                    that the training curve relaxes after the decay schedule is com-
+time steps < 140k as noted before. The test set performance                   pleted (step sf ), and the performance of the network does not
+is reported by evaluating the checkpoint with best dev-other                  vary much. The performance of various augmentation policies
+performance. State of the art performance is achieved by the                  with and without label smoothing for Switchboard 300h on the
+LAS-6-1280 model, even without a language model. We can                       Switchboard and CallHome test sets is shown in Table 4.
+
+
+
+
+                                                                       2615
+Table 4: Switchboard 300h WER (%) evaluated for LAS-4-1024                  Table 6: Test set WER (%) evaluated without LM for network
+trained with schedule B with varying augmentation and Label                 LAS-4-1024 trained with schedule B.
+Smoothing (LS) policies. No LMs have been used.
+                                                                                 W     F     mF      T      p     mT     test-other   test
+                   Policy       LS   SWBD      CH                                80    27     1     100    1.0     1          10.0    3.7
+                                ×     12.1     22.6                              0     27     1     100    1.0     1          10.1    3.8
+                     -
+                                ◦     11.2     21.6                              80     0     -     100    1.0     1          11.0    4.0
+                                ×      9.5     18.8                              80    27     1      0      -      -          10.9    4.1
+                    SM
+                                ◦      8.5     16.1
+                                ×      9.7     18.2                         phases of the learning rate schedule for LibriSpeech.
+                    SS
+                                ◦      8.6     16.3
+                                                                            Augmentation converts an over-fitting problem into an
+                                                                            under-fitting problem. As can be observed from the training
+     We then train LAS-6-1280 on Switchboard 300h with                      curves of the networks in Figure 3, the networks during training
+schedule L (training time ∼ 24 days) to achieve state of the art            not only under-fit the loss and WER on the augmented training
+performance. We find that turning label smoothing on through-               set, but also on the training set itself when trained on augmented
+out training benefits the final performance. We report the perfor-          data. This is in stark contrast to the usual situation where net-
+mance at the end of the training schedule, or 340k steps. Table 5           works tend to over-fit to the training data. This is the major
+summarizes our results with other work. We also apply shallow               benefit of training with augmentation, as explained below.
+fusion with an LM trained on Fisher-Switchboard, whose fusion
+parameters are obtained by evaluating performance on the RT-
+03 corpus. Unlike LibriSpeech, the fusion parameters do not
+transfer between networks trained differently—the three entries
+in Table 5 were obtained by using fusion parameters (λ, c) =
+(0.3, 0.05), (0.2, 0.0125) and (0.1, 0.025).
+
+             Table 5: Switchboard 300h WERs (%).
+
+ Method                                No LM           With LM                  Figure 3: LAS-6-1280 on LibriSpeech with schedule D.
+                                     SWBD    CH       SWBD   CH             Common methods of addressing under-fitting yield im-
+ HMM                                                                        provements. We were able to make significant gains in per-
+  Veselý et al., (2013) [41]                         12.9   24.5           formance by standard approaches to alleviate under-fitting—
+  Povey et al., (2016) [30]                            9.6   19.3           making larger networks and training longer. The current re-
+  Hadian et al., (2018) [42]                          9.3    18.9
+                                                                            ported performance was obtained by the recursive process of
+  Zeyer et al., (2018) [24]                           8.3    17.3
+                                                                            applying a harsh augmentation policy, and then making wider,
+ CTC                                                                        deeper networks and training them with longer schedules.
+  Zweig et al., (2017) [43]          24.7    37.1     14.0   25.3
+  Audhkhasi et al., (2018) [44]      20.8    30.4
+  Audhkhasi et al., (2018) [45]      14.6    23.6                                                 6. Conclusions
+ LAS                                                                        SpecAugment greatly improves the performance of ASR net-
+  Lu et al., (2016) [46]             26.8    48.2     25.8   46.0           works. We are able to obtain state-of-the-art results on the Lib-
+  Toshniwal et al., (2017) [47]      23.1    40.8                           riSpeech 960h and Switchboard 300h tasks on end-to-end LAS
+  Zeyer et al., (2018) [24]          13.1    26.1     11.8   25.7
+  Weng et al., (2018) [48]           12.2    23.3
+                                                                            networks by augmenting the training set using simple hand-
+  Zeyer et al., (2018) [38]          11.9    23.7     11.0   23.1           crafted policies, surpassing the performance of hybrid systems
+                                                                            even without the aid of a language model. SpecAugment con-
+ Our Work
+                                                                            verts ASR from an over-fitting to an under-fitting problem, and
+  LAS                                11.2    21.6     10.9   19.4
+  LAS + SpecAugment (SM)              7.2    14.6      6.8   14.1           performance can be gained by training bigger networks longer.
+  LAS + SpecAugment (SS)              7.3    14.4      7.1   14.0           Acknowledgements: We would like to thank Yuan Cao,
+                                                                            Ciprian Chelba, Kazuki Irie, Ye Jia, Anjuli Kannan, Patrick
+                                                                            Nguyen, Vijay Peddinti, Rohit Prabhavalkar, Yonghui Wu and
+                         5. Discussion                                      Shuyuan Zhang for useful discussions.
+Time warping contributes, but is not a major factor in im-
+proving performance. In Table 6, we present three training                                        7. References
+results for which time warping, time masking and frequency                   [1] G. Hinton, L. Deng, D. Yu, G. Dahl, A.-r. Mohamed, N. Jaitly,
+masking have been turned off, respectively. We see that the ef-                  A. Senior, V. Vanhoucke, P. Nguyen, B. Kingsbury et al., “Deep
+fect time warping, while small, is still existent. Time warping,                 neural networks for acoustic modeling in speech recognition,”
+being the most expensive as well as the least influential of the                 IEEE Signal processing magazine, vol. 29, 2012.
+augmentations discussed in this work, should be the first aug-               [2] G. Dahl, D. Yu, L. Deng, and A. Acero, “Context-Dependent
+mentation to be dropped given any budgetary limitations.                         Pre-Trained Deep Neural Networks for Large-Vocabulary Speech
+                                                                                 Recognition,” IEEE Transactions on Audio, Speech, and Lan-
+Label smoothing can make training unstable. We observed                          guage Processing, vol. 20, Jan 2012.
+that training becomes unstable when the learning rate is being               [3] T. Sainath, A. rahman Mohamed, B. Kingsbury, and B. Ramab-
+decayed for LibriSpeech when label smoothing is applied with                     hadran, “Deep Convolutional Neural Networks for LVCSR,” in
+augmentation. We thus use label smoothing only in the initial                    ICASSP, 2013.
+
+
+
+
+                                                                     2616
+ [4] A. Graves, A. rahman Mohamed, and G. Hinton, “Speech Recog-                  [26] M. Schuster and K. Nakajima, “Japanese and korean voice
+     nition with Deep Recurrent Neural Networks,” in ICASSP, 2013.                     search,” in ICASSP, 2012.
+ [5] A. Graves and N. Jaitly, “Towards End-to-End Speech Recogni-                 [27] A. Graves, “Practical Variational Inference for Neural Networks,”
+     tion with Recurrent Neural Networks,” in ICML, 2014.                              in NIPS, 2011.
+ [6] W. Chan, N. Jaitly, Q. V. Le, and O. Vinyals, “Listen, Attend and            [28] C. Szegedy, V. Vanhoucke, S. Ioffe, J. Shlens, and Z. Wojna, “Re-
+     Spell: A Neural Network for Large Vocabulary Conversational                       thinking the inception architecture for computer vision,” in CVPR,
+     Speech Recognition,” in ICASSP, 2016.                                             2016.
+                                                                                  [29] J. Chorowski and N. Jaitly, “Towards better decoding and lan-
+ [7] D. Bahdanau, J. Chorowski, D. Serdyuk, P. Brakel, and Y. Bengio,
+                                                                                       guage model integration in sequence to sequence models,” in IN-
+     “End-to-End Attention-based Large Vocabulary Speech Recogni-
+                                                                                       TERSPEECH, 2017.
+     tion,” in ICASSP, 2016.
+                                                                                  [30] D. Povey, V. Peddinti, D. Galvez, P. Ghahrmani, V. Manohar,
+ [8] C.-C. Chiu, T. N. Sainath, Y. Wu, R. Prabhavalkar, P. Nguyen,                     X. Na, Y. Wang, and S. Khudanpur, “Purely sequence-trained
+     Z. Chen, A. Kannan, R. J. Weiss, K. Rao, E. Gonina, N. Jaitly,                    neural networks for ASR based on lattice-free MMI,” in INTER-
+     B. Li, J. Chorowski, and M. Bacchiani, “State-of-the-art Speech                   SPEECH, 2016.
+     Recognition With Sequence-to-Sequence Models,” in ICASSP,
+     2018.                                                                        [31] K. J. Han, A. Chandrashekaran, J. Kim, and I. Lane, “The CA-
+                                                                                       PIO 2017 Conversational Speech Recognition System,” in arXiv,
+ [9] N. Kanda, R. Takeda, and Y. Obuchi, “Elastic spectral distortion                  2017.
+     for low resource speech recognition with deep neural networks,”              [32] X. Yang, J. Li, and X. Zhou, “A novel pyramidal-FSMN archi-
+     in ASRU, 2013.                                                                    tecture with lattice-free MMI for speech recognition,” in arXiv,
+[10] A. Ragni, K. M. Knill, S. P. Rath, and M. J. F. Gales, “Data aug-                 2018.
+     mentation for low resource languages,” in INTERSPEECH, 2014.                 [33] R. Collobert, C. Puhrsch, and G. Synnaeve, “Wav2Letter: an End-
+[11] N. Jaitly and G. Hinton, “Vocal Tract Length Perturbation (VTLP)                  to-End ConvNet-based Speech Recognition System,” in arXiv,
+     improves speech recognition,” in ICML Workshop on Deep Learn-                     2016.
+     ing for Audio, Speech and Language Processing, 2013.                         [34] V. Liptchinsky, G. Synnaeve, and R. Collobert, “Letter-Based
+[12] A. Hannun, C. Case, J. Casper, B. Catanzaro, G. Diamos,                           Speech Recognition with Gated ConvNets,” in arXiv, 2017.
+     E. Elsen, R. Prenger, S. Satheesh, S. Sengupta, A. Coates, and               [35] Y. Zhou, C. Xiong, and R. Socher, “Improving End-to-End
+     A. Ng, “Deep Speech: Scaling up end-to-end speech recognition,”                   Speech Recognition with Policy Learning,” in ICASSP, 2018.
+     in arXiv, 2014.                                                              [36] N. Zeghidour, Q. Xu, V. Liptchinsky, N. Usunier, G. Synnaeve,
+[13] T. Ko, V. Peddinti, D. Povey, and S. Khudanpur, “Audio Augmen-                    and R. Collobert, “Fully Convolutional Speech Recognition,” in
+     tation for Speech Recognition,” in INTERSPEECH, 2015.                             arXiv, 2018.
+                                                                                  [37] J. Li, V. Lavrukhin, B. Ginsburg, R. Leary, O. Kuchaiev, J. M.
+[14] C. Kim, A. Misra, K. Chin, T. Hughes, A. Narayanan, T. Sainath,
+                                                                                       Cohen, H. Nguyen, and R. T. Gadde, “Jasper: An End-to-End
+     and M. Bacchiani, “Generation of large-scale simulated utterances
+                                                                                       Convolutional Neural Acoustic Model,” in arXiv, 2019.
+     in virtual rooms to train deep-neural networks for far-field speech
+     recognition in Google Home,” in INTERSPEECH, 2017.                           [38] A. Zeyer, A. Merboldt, R. Schlüter, and H. Ney, “A comprehen-
+                                                                                       sive analysis on attention models,” in NIPS: Workshop IRASL,
+[15] R. Prabhavalkar, R. Alvarez, C. Parada, P. Nakkiran, and T. N.                    2018.
+     Sainath, “Automatic gain control and multi-style training for ro-
+     bust small-footprint keyword spotting with deep neural networks,”            [39] S. Sabour, W. Chan, and M. Norouzi, “Optimal Completion Dis-
+     in ICASSP, 2015.                                                                  tillation for Sequence Learning,” in ICLR, 2019.
+                                                                                  [40] D. Povey, A. Ghoshal, G. Boulianne, L. Burget, O. Glembek,
+[16] A. Raju, S. Panchapagesan, X. Liu, A. Mandal, and N. Strom,
+                                                                                       N. Goel, M. Hannemann, P. Motlicek, Y. Qian, P. Schwarz,
+     “Data Augmentation for Robust Keyword Spotting under Play-
+                                                                                       J. Silovsky, G. Stemmer, and K. Vesely, “The Kaldi Speech
+     back Interference,” in arXiv, 2018.
+                                                                                       Recognition Toolkit,” in ASRU, 2011.
+[17] S. H. Mallidi and H. Hermansky, “Novel neural network based                  [41] K. Vesely, A. Ghoshal, L. Burger, and D. Povey, “Sequence-
+     fusion for Multistream ASR,” in ICASSP, 2016.                                     discriminative training of deep neural networks,” in INTER-
+[18] E. D. Cubuk, B. Zoph, D. Mané, V. Vasudevan, and Q. V. Le, “Au-                  SPEECH, 2013.
+     toaugment: Learning augmentation policies from data,” in CVPR,               [42] H. Hadian, H. Sameti, D. Povey, and S. Khudanpur, “End-to-end
+     2019.                                                                             speech recognition using lattice-free MMI,” in INTERSPEECH,
+[19] T. DeVries and G. Taylor, “Improved Regularization of Convolu-                    2018.
+     tional Neural Networks with Cutout,” in arXiv, 2017.                         [43] G. Zweig, C. Yu, J. Droppo, and A. Stolcke, “Advances in All-
+                                                                                       Neural Speech Recognition,” in ICASSP, 2017.
+[20] V. Panayotov, G. Chen, D. Povey, and S. Khudanpur, “Lib-
+     rispeech: An ASR corpus based on public domain audio books,”                 [44] K. Audhkhasi, B. Ramabhadran, G. Saon, M. Picheny, and D. Na-
+     in ICASSP, 2015.                                                                  hamoo, “Direct Acoustics-to-Word Models for English Conversa-
+                                                                                       tional Speech Recognition,” in INTERSPEECH, 2018.
+[21] Ç. Gülçehre, O. Firat, K. Xu, K. Cho, L. Barrault, H. Lin,
+     F. Bougares, H. Schwenk, and Y. Bengio, “On using monolingual                [45] K. Audhkhasi, B. Kingsbury, B. Ramabhadran, G. Saon, and
+     corpora in neural machine translation,” in arxiv, 2015.                           M. Picheny, “Building competitive direct acoustics-to-word mod-
+                                                                                       els for english conversational speech recognition,” in ICASSP,
+[22] J. Godfrey, E. Holliman, and J. McDaniel, “SWITCHBOARD:                           2018.
+     telephone speech corpus for research and development,” in                    [46] L. Lu, X. Zhang, and S. Renals, “On training the recurrent neural
+     ICASSP, 1992.                                                                     network encoder-decoder for large vocabulary end-to-end speech
+[23] C. Cieri, D. Miller, and K. Walker, “The fisher corpus: a resource                recognition,” in ICASSP, 2016.
+     for the next generations of speech-to-text,” in LREC, 2004.                  [47] S. Toshniwal, H. Tang, L. Lu, and K. Livescu, “Multitask Learn-
+[24] A. Zeyer, K. Irie, R. Schlüter, and H. Ney, “Improved training of                ing with Low-Level Auxiliary Tasks for Encoder-Decoder Based
+     end-to-end attention models for speech recognition,” in INTER-                    Speech Recognition,” in INTERSPEECH, 2017.
+     SPEECH, 2018.                                                                [48] C. Weng, J. Cui, G. Wang, J. Wang, C. Yu, D. Su, and D. Yu, “Im-
+[25] K. Irie, R. Prabhavalkar, A. Kannan, A. Bruguier, D. Rybach, and                  proving Attention Based Sequence-to-Sequence Models for End-
+     P. Nguyen, “Model Unit Exploration for Sequence-to-Sequence                       to-End English Conversational Speech Recognition,” in INTER-
+     Speech Recognition,” in arXiv, 2019.                                              SPEECH, 2018.
+
+
+
+
+                                                                           2617
+

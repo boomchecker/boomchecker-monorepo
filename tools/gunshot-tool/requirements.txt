@@ -1,0 +1,9 @@
+streamlit>=1.39.0
+pandas>=2.2.2
+numpy>=1.26.4
+librosa>=0.10.1
+soundfile>=0.12.1
+scipy>=1.11.0
+plotly>=5.0.0
+matplotlib>=3.8.0
+pyarrow>=14.0.0

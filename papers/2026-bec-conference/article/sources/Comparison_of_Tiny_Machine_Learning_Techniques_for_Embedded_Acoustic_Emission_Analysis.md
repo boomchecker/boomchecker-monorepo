@@ -1,0 +1,9 @@
+﻿# Comparison of Tiny Machine Learning Techniques for Embedded Acoustic Emission Analysis
+
+## Abstract (přepis)
+This paper compares machine learning approaches with different input data formats for the classification of acoustic emission (AE) signals. AE signals are a promising monitoring technique in many structural health monitoring applications. Machine learning has been demonstrated as an effective data analysis method, classifying different AE signals according to the damage mechanism they represent. These classifications can be performed based on the entire AE waveform or specific features that have been extracted from it. However, it is currently unknown which of these approaches is preferred. With the goal of model deployment on resource-constrained embedded Internet of Things (IoT) systems, this work evaluates and compares both approaches in terms of classification accuracy, memory requirement, processing time, and energy consumption. To accomplish this, features are extracted and carefully selected, neural network models are designed and optimized for each input data scenario, and the models are deployed on a low-power IoT node. The comparative analysis reveals that all models can achieve high classification accuracies of over 99%, but that embedded feature extraction is computationally expensive. Consequently, models utilizing the raw AE signal as input have the fastest processing speed and thus the lowest energy consumption, which comes at the cost of a larger memory requirement.
+
+## Co je zajímavé pro náš článek
+- Přesně řeší trade-off accuracy vs. paměť vs. energie na embedded zařízení, což je jádro naší části PC vs. embedded.
+- Důležitý závěr: feature extraction nemusí být zdarma a může energeticky dominovat.
+- Podporuje potřebu reportovat nejen přesnost, ale i runtime/deployment metriky.

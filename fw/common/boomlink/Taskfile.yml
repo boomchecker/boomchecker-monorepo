@@ -1,0 +1,47 @@
+version: "3"
+
+tasks:
+  setup:
+    desc: Create a venv with the generator/test Python dependencies
+    cmds:
+      - python3 -m venv .venv
+      - .venv/bin/pip install --quiet --upgrade pip
+      - .venv/bin/pip install --quiet -r requirements.txt
+
+  build:
+    desc: Configure and build the host-native protocol and link frame libraries + their test tools
+    aliases: [b]
+    cmds:
+      # .venv first on PATH so CMake's find_package(Python3) picks up the
+      # interpreter that actually has protobuf/grpcio-tools installed (task
+      # setup), not whatever bare `python3` resolves to system-wide.
+      - PATH=$PWD/.venv/bin:$PATH cmake --preset Debug
+      - PATH=$PWD/.venv/bin:$PATH cmake --build --preset Debug
+
+  test:
+    desc: Build, then run the full native/host test suite (C + Python) via CTest
+    aliases: [t]
+    deps:
+      - build
+    cmds:
+      - PATH=$PWD/.venv/bin:$PATH ctest --preset Debug
+
+  generate:
+    desc: Add any new golden vectors under tests/vectors/ (never overwrites existing ones - see generate_vectors.py)
+    deps:
+      - build
+    cmds:
+      - PYTHONPATH=$PWD/build/Debug/python_pb2 .venv/bin/python tests/generate_vectors.py
+
+  lint:
+    desc: Run ruff over the Python in this package
+    cmds:
+      # linkframe/ too, not just tests/: boomlink_linkframe.py is shipped code
+      # (PR 5's host CLI will import it), not a test helper.
+      - .venv/bin/ruff check tests linkframe
+
+  clean:
+    desc: Remove the build directory
+    aliases: [c]
+    cmds:
+      - rm -rf build

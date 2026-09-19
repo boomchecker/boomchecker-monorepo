@@ -1,6 +1,12 @@
 # VS code
 .vscode
 
+# Generated docs (MkDocs site output + mkdoxy temp + local docs venv)
+site/
+.venv-docs/
+docs/_build
+docs/_doxygen
+
 # Build Outputs
 .next/
 out/
@@ -8,11 +14,14 @@ build
 dist
 .bin
 
-# pnpm
+# Node / pnpm
+node_modules
 .pnpm-store
 
 # Python
 .venv
+venv
+__pycache__
 
 # Go
 *.exe
@@ -35,3 +44,16 @@ go.work.sum
 *.db-shm
 *.db-wal
 data/
+
+# Vendored SVD (large; fetched by the fw-devcontainer post-create script)
+fw/bom-stm32node/debug/STM32H563.svd
+
+# STM32CubeIDE / Eclipse project metadata
+.project
+.cproject
+.settings/
+.externalToolBuilders/
+
+# stm32node-cli writes captures to <cwd>/recordings; keep them local
+/recordings/
+scripts/median-filter/third_party/

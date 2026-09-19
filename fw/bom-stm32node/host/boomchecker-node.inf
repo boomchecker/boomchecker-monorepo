@@ -1,0 +1,57 @@
+; boomchecker-node.inf
+; -----------------------------------------------------------------------------
+; Windows host driver-info file that gives the boomchecker-node CDC ACM virtual
+; COM port a custom name in Device Manager ("boomchecker-node (COMx)") instead
+; of the generic "USB Serial Device (COMx)".
+;
+; It does NOT install a new kernel driver: it binds the inbox, Microsoft-signed
+; usbser.sys to our USB VID/PID and only sets the displayed name. Legal to use;
+; the VID/PID below (0483:5710) is ST's sample CDC identity - fine for
+; development, replace with your own before shipping a product.
+;
+; Install: Device Manager -> the port (USB Serial Device / boomchecker-node) ->
+;   Update driver -> Browse my computer -> Let me pick -> Have Disk ->
+;   select this .inf. Accept the unsigned-INF warning (the actual driver,
+;   usbser.sys, is signed). Then unplug/replug the board.
+; -----------------------------------------------------------------------------
+
+[Version]
+Signature   = "$Windows NT$"
+Class       = Ports
+ClassGuid   = {4D36E978-E325-11CE-BFC1-08002BE10318}
+Provider    = %ProviderName%
+DriverVer   = 07/23/2026,1.0.0.0
+
+[Manufacturer]
+%ProviderName% = DeviceList, NTamd64, NTarm64
+
+[DeviceList.NTamd64]
+%DeviceName% = DriverInstall, USB\VID_0483&PID_5710
+
+[DeviceList.NTarm64]
+%DeviceName% = DriverInstall, USB\VID_0483&PID_5710
+
+[DriverInstall.NT]
+Include   = mdmcpq.inf
+CopyFiles = FakeModemCopyFileSection
+AddReg    = DriverInstall.NT.AddReg
+
+[DriverInstall.NT.AddReg]
+HKR,,DevLoader,,*ntkern
+HKR,,NTMPDriver,,usbser.sys
+HKR,,EnumPropPages32,,"MsPorts.dll,SerialPortPropPageProvider"
+
+[DriverInstall.NT.Services]
+AddService = usbser, 0x00000002, DriverService
+
+[DriverService]
+DisplayName   = %ServiceName%
+ServiceType   = 1
+StartType     = 3
+ErrorControl  = 1
+ServiceBinary = %12%\usbser.sys
+
+[Strings]
+ProviderName = "Boom"
+DeviceName   = "boomchecker-node"
+ServiceName  = "boomchecker-node USB CDC"

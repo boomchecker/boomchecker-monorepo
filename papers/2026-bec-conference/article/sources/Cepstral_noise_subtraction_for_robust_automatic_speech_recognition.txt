@@ -1,0 +1,330 @@
+ CEPSTRAL NOISE SUBTRACTION FOR ROBUST AUTOMATIC SPEECH RECOGNITION
+
+                                                  Robert Rehr and Timo Gerkmann
+
+                 Speech Signal Processing Group, Department of Medical Physics and Acoustics
+                     Cluster of Excellence Hearing4all, University of Oldenburg, Germany
+                       robert.rehr@uni-oldenburg.de, timo.gerkmann@uni-oldenburg.de
+
+
+                            ABSTRACT                                             between speakers and can also partly reduce the detrimental influence
+                                                                                 of the background noise. For CMVN, however, there is no associa-
+The robustness of speech recognizers towards noise can be increased              tion with a reduction of a specific distortion [5]. However, it can be
+by normalizing the statistical moments of the Mel-frequency cepstral             associated with restoring the temporal diversity of the features which
+coefficients (MFCCs), e. g. by using cepstral mean normalization                 may be reduced due to additive noise which can also be interpreted
+(CMN) or cepstral mean and variance normalization (CMVN). The                    as a reduction of the feature variance [6]. The general idea of feature
+necessary statistics are estimated over a long time window and of-               normalization has also been taken further, e. g. in [7], where the distri-
+ten, a complete utterance is chosen. Consequently, changes in the                bution of the noisy input features is fitted to a target distribution. This
+background noise can only be tracked to a limited extent which poses             procedure normalizes all moments of the input data simultaneously
+a restriction to the performance gain that can be achieved by these              and is also known as histogram equalization.
+techniques. In contrast, algorithms recently developed for single-
+                                                                                      Even though CMVN offers a simple way to increase the noise
+channel speech enhancement allow to track the background noise
+                                                                                 robustness of speech recognizers, it is not able to track fast changes
+quickly. In this paper, we aim at combining speech enhancement
+                                                                                 in the time-variant noise components as the statistics for the normal-
+techniques and feature normalization methods. For this, we propose
+                                                                                 ization are typically estimated over a longer time-period. In many
+to transform an estimate of the noise power spectral density to the
+                                                                                 cases, a whole utterance is chosen. Due to these shortcomings, the
+MFCC domain, where we subtract it from the noisy MFCCs. This is
+                                                                                 performance gain achieved by CMVN is limited. Recent research on
+followed by a conventional CMVN. For background noises that are
+                                                                                 single-channel speech enhancement, however, has brought up tech-
+too instationary for CMVN but can be tracked by the noise estimator,
+                                                                                 nologies that allow to track the background noise quickly, e. g. [8].
+we show that this processing leads to an improvement in comparison
+                                                                                 Therefore, combining these techniques with CMVN may increase the
+to the sole application of CMVN. The observed performance gain
+                                                                                 robustness of the recognition towards noise. Unfortunately, enhanc-
+emerges especially in low signal-to-noise-ratios.
+                                                                                 ing the input signal using state-of-the-art noise reduction algorithms
+    Index Terms— automatic speech recognition, cepstral analysis,                in combination with CMVN, often does not result in an additional
+feature normalization, noise robustness, speech enhancement                      performance gain compared to the sole application of CMVN.
+                                                                                      Consequently, we investigated other options for including speech
+                       1. INTRODUCTION                                           enhancement technologies for improving the noise robustness of
+                                                                                 ASR in combination with CMVN. We propose a novel method which
+The term automatic speech recognition (ASR) describes the process                subtracts the Mel-frequency cepstral coefficients (MFCCs) [9] of the
+of transcribing speech utterances represented as acoustic wave forms             background noise from the MFCC vector of the noisy input signal.
+to written words. Nowadays, ASR is used in many applications, e. g.              Subsequently, the processed features are normalized using CMVN.
+for interacting with mobile devices or home-entertainment systems                Subtracting the noise component is equivalent to a whitening of the
+[1]. Over the last years, many methods and techniques have been                  background noise in the Mel spectral domain. We will show that the
+described in the literature to make ASR more robust against acoustic             proposed enhancement technique leads to higher recognition rates
+influences such as noise and reverberation [2]. One approach for                 compared to the sole application of CMVN if the background noise
+improving the performance of ASR systems is to enhance the fea-                  is too instationary to be compensated by the normalization but can
+ture values extracted from the noisy input signal before the data is             be tracked by a noise estimator. In these cases, the error rate can be
+statistically modeled, e. g. using hidden Markov models (HMMs)                   reduced – especially in low signal-to-noise-ratio (SNR) conditions.
+and Gaussian mixture models (GMMs). Such an enhancement can                      In our experiments we use a state-of-the-art noise estimator for which
+be achieved by normalizing the statistical moments of the feature                we employ the algorithm described in [8].
+values. Thus, cepstral mean normalization (CMN) [3] or cepstral                       The paper is structured as follows. First, we give a detailed
+mean and variance normalization (CMVN) [4] have been used in                     description of the proposed method in Section 2, which is followed
+many applications as these techniques have proven to give better                 by a brief analysis in Section 3. The setup for the experimental
+recognition results in various environments. As shown in [3, 5], the             evaluation of the proposed method is presented in Section 4 and the
+beneficial effect of CMN can be explained by its capabilities to reduce          results are shown in Section 5.
+differences between the test and the training data caused by channel
+distortions and colorizations. Furthermore, in [5], it is discussed that
+CMN is also able to reduce differences in the feature representation                                  2. PROPOSED METHOD
+
+    This work was funded by the PhD program “Signals and Cognition”, and         In this section, we propose to normalize cepstral features based on an
+the DFG Research Grant GE2538/2-1.                                               estimate of the noise power spectral density (PSD) obtained using a
+
+
+978-1-4673-6997-8/15/$31.00 ©2015 IEEE                                     375                                                            ICASSP 2015
+  Authorized licensed use limited to: CZECH TECHNICAL UNIVERSITY. Downloaded on June 01,2026 at 21:42:25 UTC from IEEE Xplore. Restrictions apply.
+state-of-the-art noise tracker. We assume that the speech signal s[n]                                             proposed   CMVN          noise (avg.)
+is corrupted by an interfering noise d[n] and that only the noisy input
+signal x[n] is available. The time domain signal x[n] is split into                                       2
+
+
+
+
+                                                                                       X̄ [1, `] →
+overlapping blocks which are transformed to the frequency domain
+using a discrete Fourier transform (DFT) after applying a Hamming                                         0
+window. From this, we compute the periodogram of the input signal
+|X[k, `]|2 where k denotes the frequency index and ` the block index.                                 −2
+This quantity is used to obtain an estimate of the background noise
+PSD σ̂d2 [k, `] by employing the speech presence probability (SPP)                                            0      2       4         6        8
+based estimator described in [8]. With the coefficients of the mth                                        4                      /s
+triangular filter Rm [k], the spectral quantities are transformed to                                                                                      0
+                                                                                                          3
+
+
+
+
+                                                                                                f / kHz
+MFCCs [9] using
+                                                                                                                                                          −20
+                                                                                                          2
+                     N −1
+                     X                                                                                                                                    −40
+      X 0 [m, `] =          Rm [k] |X[k, `]|2 ,                           (1)                             1
+                     k=0
+                                                                                                          0                                               −60
+                     M −1                                                                                          2       4         6        8
+                     X                π(2m + 1)q
+                                                       log X 0 [m, `] ,
+                                                                    
+        X [q, `] =          cos                                           (2)                                                    t/s
+                     m=0
+                                         2M
+
+where q = 0, . . . , Q − 1. Here, N and M denote the number of DFT                    Fig. 1: Upper panel: Time course of the second MFCC of an utter-
+coefficients and Mel filters, respectively, while Q is the number of                  ance corrupted by frequency-dependent modulated white noise at an
+MFCCs.                                                                                SNRs of -5 dB after applying CMVN and the proposed preprocessing
+                                                                                      strategy. Additionally shown: estimate of the noise power spectral
+    Finally, we obtain a processed version of the feature values by
+                                                                                      density transformed to the MFCC domain. Lower panel: Spectrogram
+subtracting the noise estimate in the cepstral domain via
+                                                                                      of the noisy speech signal (t: time, X [q, `]: qth MFCC at frame `).
+                     X̃ [q, `] = X [q, `] − D̂[q, `],                     (3)
+
+where D̂[q, `] is the background noise estimate σ̂d2 [k, `] transformed                    As the second MFCC characterizes the spectral tilt, meaning the
+to the MFCC domain using (1) and (2). As the subtraction in the                       balance between high and low frequencies, the value of this coefficient
+logarithmic domain equals a division the linear domain, this operation                will vary depending on the modulation imprinted on the background
+leads to a whitening of the background noise in the Mel filterbank                    noise. The upper panel of Figure 1 shows the corresponding time
+representation. Before the enhanced features are fed to the speech                    course which results after applying CMVN and the proposed method
+recognizer they are normalized by a CMVN which is given by [4]                        to the noisy speech feature. Additionally, the ensemble average of the
+                                                                                      background noise is displayed. It is obtained by averaging the squared
+                              L−1
+                           1 X                                                        magnitude spectra of multiple realizations of the same modulated
+              M[q] =           X̃ [q, `],                                 (4)         noise followed by the transformation to the MFCC domain. In other
+                           L
+                              `=0
+                                                                                      words, this curve represents an estimate of the noise power spectral
+                                      L−1
+                            1 X                 2                                   density transformed to the MFCC domain. For a better comparison,
+               V[q] =            X̃ [q, `] − M[q] ,                       (5)         this average is normalized using the means and variances which have
+                           L−1
+                                      `=0                                             been computed for the feature values of the noisy speech MFCCs.
+                           X̃ [q, `] − M[q]
+            X̄ [q, `] =         p           ,                             (6)              Figure 1 shows that the feature values obtained using CMVN still
+                                    V[q]
+                                                                                      follow the modulation of the noise. From this, it can be concluded
+where L is the number of blocks in a single utterance.                                that CMVN has no effect on the time-dependent variations. For the
+                                                                                      proposed method, however, it is possible to see that the modulation
+                                                                                      of the feature values is reduced which results in a time-course which
+              3. ANALYSIS AND COMPARISON                                              is considerably different compared to the feature values obtained by
+                                                                                      applying CMVN.
+Before the experimental results are presented, a short analysis of
+the proposed preprocessing and its behavior is given. Here, we will                        The proposed method reduces the impact of the noise modula-
+point out the differences and possible advantages and disadvantages                   tions in the MFCC domain, and effectively results in a whitening of
+in comparison to the sole application of CMVN.                                        the noise. However, this whitening will also affect the input speech,
+     For explaining the differences between the two preprocessing                     which may have a negative impact on the recognition accuracy of
+strategies, namely CMVN and the method proposed in Section 2,                         the ASR system. However, our experiments, where we used the SPP-
+we will make use of an example where a speech utterance has been                      based noise estimator to obtain D̂[q, `], show that this processing
+corrupted by a modulated white noise. The modulation of the back-                     does not lead to a severe degradation of the recognition accuracy. If
+ground noise is created by applying a time-variant filter function                    trained on multi condition data, it may be possible for the recognition
+which periodically changes its frequency response from a high-pass                    system to learn the disturbances which reduces the influence of them
+to a low-pass characteristic and vice versa. Thus, the modulation of                  on the recognition rate. However, no large deteriorations are observed
+the background noise is frequency dependent which can be observed                     if the recognizer is trained on clean speech data. This indicates that
+in the spectrogram of the corrupted speech utterance which is shown                   the ASR performance is presumably not impaired by the proposed
+in the lower panel of Figure 1. The SNR is set to −5 dB.                              preprocessing.
+
+
+                                                                                376
+  Authorized licensed use limited to: CZECH TECHNICAL UNIVERSITY. Downloaded on June 01,2026 at 21:42:25 UTC from IEEE Xplore. Restrictions apply.
+                   4. EXPERIMENTAL SETUP                                      The results are presented as average over the three test sets of the
+                                                                              audio database. Further, the feature processing strategies are also
+In this section, we describe the experimental setup for evaluating            evaluated on noise types which are not part of the Aurora2 database.
+the proposed feature enhancement method and how it is compared                These noise types change their spectral shape over time which can
+to other feature normalization techniques such as CMVN. Addition-             be tracked by the SPP based estimator but cannot be followed by a
+ally, we will compare these two methods to a state-of-the-art noise           conventional CMVN. These additional background noises include
+reduction scheme which is combined with CMVN. An important                    seashore noise1 and traffic noise2 . For the traffic noise, the first two
+difference to our proposed approach is that here the noise compen-            seconds have been removed in our experiments. In all evaluations, the
+sation is obtained in the short-time DFT domain. In contrast, in our          additional noise types are excluded from the multi condition training
+proposed method the noise compensation is achieved directly in the            set.
+MFCC domain. CMVN as described in (4) – (6) without further                        As comparison criterion, we employ the recognition accuracy
+preprocessing serves as baseline in our comparison.                           which is given by [12]
+     The sole application of CMVN is compared to CMVN combined
+with the proposed feature enhancement, as described in Section 2.                                        W − ED − ES − EI
+                                                                                                   A=                     ,                        (8)
+For estimating the background noise, we employ the SPP based noise                                             W
+estimator which has been presented in [8]. This algorithm updates its         where W is the total number of words and ED , ES and EI denote
+noise estimate using a SPP soft-decision mask. In our experiments,            the number of deletion errors, substitution errors and insertion errors,
+we decided to deactivate the lock-up protection which tries to avoid          respectively.
+stagnation of the algorithm if the SPP is close to 100 % for a longer
+time period. In situations where no or only little noise is present, this
+protection can cause the speech power to leak into the noise estimate                                     5. RESULTS
+which affects the recognition results.
+     Lastly, a state-of-the-art single-channel speech enhancement             In this section, the results of the experiments described in the previous
+scheme is included as preprocessing. Here, the features are extracted         section are presented.
+from an estimate of the clean speech signal ŝ[n]. After that, the
+feature values are normalized by a CMVN. The employed noise re-                                Wiener Filter        CMVN          proposed
+duction algorithm uses the Wiener filter to suppress the background
+                                                                                                               seashore noise
+noise. It is given by                                                                   100
+                                     σs2 [k, `]
+                                                            
+                                                                                         80
+                                                                                A/% →
+
+
+
+
+             G[k, `] = max                    2
+                                                     , G min   .      (7)
+                              σs2 [k, `] + σd [k, `]
+                                                                                         60
+An estimate of the background noise σ̂d2 [k, `] is obtained by the SPP                                                          multi condition
+based estimator proposed in [8]. The speech PSD σ̂s2 [k, `] is estimated                 40
+                                                                                                                                clean condition
+using temporal cepstrum smoothing which has been described in [10].                      20
+This method has been chosen as it has proven to perform better in                         −5         0          5         10          15          20
+ASR applications than other state-of-the-art techniques, e. g. the                                             SNR / dB →
+decision-directed approach [11]. Further, a spectral floor Gmin is
+introduced in order to reduce the musical-noise further. This type of         Fig. 2: Recognition accuracy measured for various feature prepro-
+artifact has been found to be detrimental for the ASR performance,            cessing strategies in seashore noise in dependence on the SNR (A:
+e. g. in [11]. The parameter Gmin is set to −10 dB.                           recognition accuracy, SNR: signal-to-noise ratio).
+     Within our experiments, MFCCs, as described in (2), serve as
+features. We extract the MFCCs using a 23 band Mel filter bank
+which is limited to the frequency range between 64 Hz and 4 kHz.                   Figure 2 contains the results for the seashore noise. The graphs
+After applying the discrete cosine transform, we use the lowest 13            show that the proposed method increases the speech recognizer’s
+coefficients as features where we include the 0th cepstral coefficient.       accuracy in comparison to CMVN. This becomes clearly visible in
+Further, the commonly used first and second order delta derivatives           low SNR conditions. At an SNR of −5 dB, the accuracy can be
+are extracted and appended to the feature vector which results in a           boosted by roughly 10 % in absolute value for multi and clean con-
+39-dimensional representation of the input signal. For all processing         dition training. While the state-of-the-art noise reduction improves
+strategies a block length of 32 ms and an overlap of 50 % is chosen.          the performance when no feature normalization is applied [11], these
+Before a block is transformed to the Fourier domain, it is weighted           results show that no improvements are achieved in comparison to
+by a Hamming window. The computation of the empirical means and               CMVN. Here, the obtained accuracy is even slightly lower compared
+variances required for the CMVN is utterance based.                           to CMVN especially if the system is trained on clean speech data.
+     For the evaluation, an HTK [12] based speech recognizer and the               Also for the traffic noise, for which the results are shown in
+Aurora2 database [13] is used. For recognizing the speech utterances,         Figure 3, higher recognition accuracies are visible. Again, the largest
+a conventional ASR system based on GMMs and HMMs is utilized.                 improvements are obtained in low SNR conditions. At −5 dB, the
+The parameters which have been used for the reference recognizer              accuracy is 10 % larger in absolute value compared to CMVN if
+of the Aurora2 experiment [13] are also employed in this evaluation.          multi condition training is used. For clean condition training, the
+Consequently, the HMMs consist of 16 states per word and only                 performance gain is about 5 % in absolute value.
+left-to-right transitions without skips are allowed. The GMMs consist           1 taken from http://www.freesound.org/people/kijjaz/
+of three mixtures and the covariance matrices are restricted to be            sounds/172601
+diagonal. The ASR system is trained on the clean and the multi-                 2 taken from http://www.freesound.org/people/timsc/
+condition training set which are given in the Aurora2 corpus [13].            sounds/242922
+
+
+
+                                                                        377
+  Authorized licensed use limited to: CZECH TECHNICAL UNIVERSITY. Downloaded on June 01,2026 at 21:42:25 UTC from IEEE Xplore. Restrictions apply.
+                 Wiener Filter          CMVN          proposed                                           7. REFERENCES
+                                    traffic noise                                 [1] X. He and L. Deng, “Speech-centric information processing:
+          100
+                                                                                      An optimization-oriented approach,” Proceedings of the IEEE,
+           80                                                                         vol. 101, no. 5, pp. 1116–1135, May 2013.
+  A/% →
+
+
+
+
+           60                                                                     [2] J. Li, L. Deng, Y. Gong, and R. Haeb-Umbach, “An overview of
+                                                                                      noise-robust automatic speech recognition,” IEEE/ACM Trans-
+           40                                       multi condition
+                                                                                      actions on Audio, Speech, and Language Processing, vol. 22,
+                                                    clean condition                   no. 4, pp. 745–777, Apr. 2014.
+           20
+            −5         0            5         10          15          20          [3] B. S. Atal, “Effectiveness of linear prediction characteristics
+                                  SNR / dB →                                          of the speech wave for automatic speaker identification and
+                                                                                      verification,” The Journal of the Acoustical Society of America,
+Fig. 3: Recognition accuracy measured for various feature prepro-                     vol. 55, no. 6, pp. 1304–1312, 1974.
+cessing strategies in traffic noise in dependence on the SNR (A:                  [4] O. Viikki and K. Laurila, “Cepstral domain segmental feature
+recognition accuracy, SNR: signal-to-noise ratio).                                    vector normalization for noise robust speech recognition,”
+                                                                                      Speech Communication, vol. 25, no. 1–3, pp. 133 – 147, 1998.
+                 Wiener Filter          CMVN          proposed                    [5] J. Droppo and A. Acero, “Environmental robustness,” in
+                                                                                      Springer Handbook of Speech Processing, J. Benesty, M. M.
+                           average over Aurora2 test sets
+          100                                                                         Sondhi, and Y. Huang, Eds. Springer Berlin Heidelberg, 2008,
+                                                                                      pp. 653 – 679.
+           80
+  A/% →
+
+
+
+
+                                                                                  [6] J. P. Openshaw and J. Masan, “On the limitations of cepstral
+           60                                                                         features in noise,” in International Conference on Acoustics,
+                                                                                      Speech, and Signal Processing (ICASSP), Adelaide, South Aus-
+           40                                       multi condition                   tralia, Australia, Apr. 1994, pp. 49–52.
+                                                    clean condition
+           20                                                                     [7] S. Molau, F. Hilger, and H. Ney, “Feature space normalization in
+            −5         0            5         10          15          20              adverse acoustic conditions,” in IEEE International Conference
+                                  SNR / dB →                                          on Acoustics, Speech, and Signal Processing (ICASSP), Hong
+                                                                                      Kong, China, Apr. 2003, pp. 656–659.
+Fig. 4: Recognition accuracy measured for various feature prepro-                 [8] T. Gerkmann and R. C. Hendriks, “Noise power estimation
+cessing strategies as mean over all test sets of the Aurora2 database                 based on the probability of speech presence,” in IEEE Workshop
+in dependence on the SNR (A: recognition accuracy, SNR: signal-to-                    on Applications of Signal Processing to Audio and Acoustics
+noise ratio).                                                                         (WASPAA), New Paltz, New York, USA, 2011, pp. 145–148.
+                                                                                  [9] S. Davis and P. Mermelstein, “Comparison of parametric repre-
+                                                                                      sentations for monosyllabic word recognition in continuously
+     In this last paragraph, the results are presented for the three test             spoken sentences,” IEEE Transactions on Acoustics, Speech
+sets included in the Aurora2 database. The recognition rates are                      and Signal Processing, vol. 28, no. 4, pp. 357–366, 1980.
+shown in Figure 4. Here, the mean over all noise types of the corpus
+                                                                                 [10] C. Breithaupt, T. Gerkmann, and R. Martin, “A novel a priori
+is shown. In contrast to the other noise types, no improvements are
+                                                                                      SNR estimation approach based on selective cepstro-temporal
+obtained using the proposed method. The accuracy is nearly on the
+                                                                                      smoothing,” in IEEE International Conference on Acoustics,
+same level as for CMVN. This result can probably be explained by
+                                                                                      Speech and Signal Processing (ICASSP), Las Vegas, Nevada,
+the strongly instationary noise characteristics, e. g. of babble noise,
+                                                                                      USA, Apr. 2008, pp. 4897–4900.
+which cannot be tracked precisely by the noise estimator.
+                                                                                 [11] C. Breithaupt and R. Martin, “DFT-based speech enhancement
+                                                                                      for robust automatic speech recognition,” in ITG Conference on
+                           6. CONCLUSIONS                                             Voice Communication (Sprachkommunikation), Aachen, Ger-
+                                                                                      many, Oct. 2008.
+In this paper, we introduced a novel method for feature enhance-
+ment which incorporates techniques used in speech enhancement for                [12] S. Young, G. Evermann, M. Gales, T. Hain, D. Kershaw, X. Liu,
+improving the performance of ASR. In contrast to methods which                        G. Moore, J. Odell, D. Ollason, D. Povey, V. Valtchev, and
+enhance the input signal using single-channel noise reduction before                  P. Woodland, The HTK Book. Cambridge University Engineer-
+the features are extracted, the proposed method is able to increase                   ing Department, Dec. 2006.
+the recognition rate in combination with CMVN. For this, the MFCC                [13] H.-G. Hirsch and D. Pearce, “The AURORA experimental
+representation of the background noise is subtracted from the noisy                   framework for the performance evaluation of speech recogni-
+MFCCs which effectively reduces the impact of noise modulations                       tion systems under noisy conditions,” in ASR-2000 - Automatic
+onto the MFCC features. If the changes of the background noise are                    Speech Recognition: Challenges for the new Millenium, Paris,
+too quick to be captured by CMVN while it is possible to follow these                 France, Sep. 2000, pp. 181 – 188.
+using a state-of-the-art noise estimator, considerable improvements in
+terms of recognition accuracy are obtained. These emerge especially
+in low SNR conditions as demonstrated in the experiments conducted
+for seashore and traffic noise.
+
+
+                                                                           378
+  Authorized licensed use limited to: CZECH TECHNICAL UNIVERSITY. Downloaded on June 01,2026 at 21:42:25 UTC from IEEE Xplore. Restrictions apply.
+

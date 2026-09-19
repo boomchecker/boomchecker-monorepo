@@ -1,0 +1,97 @@
+syntax = "proto3";
+
+package boomlink;
+
+// Detection application messages (boomlink.md section 8.1). DetectionEvent
+// carries metadata only, never audio (section 12.1) - a local recording
+// identifier may point at other storage, but the bytes themselves travel
+// over USB/SD/another high-bandwidth transport, never BoomLink.
+message DetectionMessage {
+  oneof message {
+    DetectionEvent event = 1;
+    DetectionStatus status = 2;
+    DetectionStatistics statistics = 3;
+  }
+}
+
+enum DetectionType {
+  DETECTION_TYPE_UNSPECIFIED = 0; // proto3's zero value; never a real event's type
+  DETECTION_TYPE_OTHER = 1;
+  DETECTION_TYPE_DRONE = 2;
+  DETECTION_TYPE_GUNSHOT = 3;
+  DETECTION_TYPE_EXPLOSION = 4;
+}
+
+// Section 12.2's recommended timestamp-quality model: lets a localization
+// algorithm distinguish GNSS/1PPS-disciplined timing from a local clock's
+// degraded estimate instead of trusting every timestamp equally.
+enum TimestampSource {
+  TIMESTAMP_SOURCE_UNSPECIFIED = 0;
+  TIMESTAMP_SOURCE_GNSS_DISCIPLINED = 1;
+  TIMESTAMP_SOURCE_LOCAL_RTC = 2;
+  TIMESTAMP_SOURCE_NETWORK_FALLBACK = 3;
+}
+
+// The common fields section 8.1 lists. Deliberately NOT modeled here: any
+// per-type detail (a gunshot's peak level, a drone's estimated rotor count,
+// ...). No detection algorithm exists in this firmware yet to say what it
+// would actually need - inventing a schema now would be guessing at a
+// consumer that does not exist. Field 15 is left unassigned (not
+// `reserved` - that keyword is for numbers once used and removed, not ones
+// not yet added, same convention envelope.proto's oneof already follows)
+// for whichever PR adds the first real detector to claim.
+message DetectionEvent {
+  uint32 event_id = 1;
+
+  // Microseconds since Unix epoch, captured at the moment of detection -
+  // section 12.3's "transmission time is not the detection timestamp".
+  uint64 detection_timestamp_us = 2;
+  TimestampSource timestamp_source = 3;
+  // 0 only for a perfectly disciplined source; degrade honestly rather than
+  // reporting false precision.
+  uint32 timestamp_uncertainty_us = 4;
+
+  DetectionType type = 5;
+  // 0-100. A bounded integer rather than a raw float, so confidence values
+  // from two different nodes are directly comparable without agreeing on a
+  // shared floating-point convention first (section 8.1's "prefer bounded
+  // integer units" reasoning, applied to confidence as well as position).
+  uint32 confidence_percent = 6;
+
+  bool position_valid = 7;
+  // 1e-7 degrees - section 8.1's recommended unit, chosen there specifically
+  // so this fits a plain int32 (range needed is +-1.8e9, comfortably inside
+  // int32's range) rather than a float.
+  int32 latitude_e7 = 8;
+  int32 longitude_e7 = 9;
+
+  bool bearing_valid = 10;
+  // Centidegrees, 0-35999, 0 = true north, increasing clockwise.
+  uint32 azimuth_centideg = 11;
+  // Centidegrees, -9000..9000, horizon = 0, up = positive.
+  int32 elevation_centideg = 12;
+
+  // Opaque to BoomLink - meaningful only to whatever ran the detection.
+  uint32 detector_id = 13;
+  uint32 detector_version = 14;
+}
+
+// Whether the detection subsystem is currently running - the counterpart to
+// section 8.3's StartDetection/StopDetection commands, so a peer can read
+// current state without having issued the most recent command itself.
+message DetectionStatus {
+  bool detection_enabled = 1;
+}
+
+// Cleared by section 8.3's ClearStatistics command. Per-type counters rather
+// than a repeated/map entry: DetectionType is a small fixed enum, so a fixed
+// struct field per type stays within Nanopb's static-allocation-only rule
+// (section 5.2) with no bound to choose, and can never grow past a value a
+// single 32-bit counter would already have wrapped at first anyway.
+message DetectionStatistics {
+  uint32 events_total = 1;
+  uint32 events_drone = 2;
+  uint32 events_gunshot = 3;
+  uint32 events_explosion = 4;
+  uint32 events_other = 5;
+}
