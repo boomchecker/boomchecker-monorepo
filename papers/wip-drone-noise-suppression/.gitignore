@@ -1,0 +1,12 @@
+# LaTeX auxiliary files
+*.aux
+*.log
+*.out
+*.bbl
+*.blg
+*.toc
+*.synctex.gz
+
+# Build output. The skeleton PDF carries no content worth reviewing in git;
+# track it (like papers/2026-bec-conference/) once there is a real draft.
+article/article_main.pdf

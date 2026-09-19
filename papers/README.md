@@ -7,13 +7,15 @@ look up what we published and where its sources live.
 |---|---|---|---|---|---|
 | 2026 | BEC 2026 (paper 53) | Artillery Launch Detection | Zelinjak, Maxa | published | [`2026-bec-conference/`](2026-bec-conference/) |
 | 2026 | IMEKO *(exact venue to be confirmed)* | Acoustic-Based Detection, Classification, and Localization of Impulsive Sounds | Svatoš, Maxa | presented 2026-09-16 | [`2026-imeko-impulsive-sounds/`](2026-imeko-impulsive-sounds/) |
+| *TBD* | *not chosen yet* | Drone Ego-Noise Suppression for Impulsive Event Detection | Maxa | scaffold; waiting on the measurement campaign | [`wip-drone-noise-suppression/`](wip-drone-noise-suppression/) |
 
 ## Where a new contribution goes
 
 The deciding question is **where its build inputs live**:
 
 - Text and figures with no computational dependency on a project → its own directory
-  here, named `<year>-<venue>-<slug>`.
+  here, named `<year>-<venue>-<slug>`. A contribution with no venue yet gets a `wip-<slug>`
+  directory and is renamed once the venue is picked.
 - Tables or figures generated from experiments over a project's dataset → the
   contribution stays with that project, and only a row is added to the table above.
 
@@ -26,7 +28,9 @@ chain.
 ## Build
 
 ```bash
-task papers:imeko26:build     # from the repository root
+task papers:imeko26:build       # from the repository root
+task papers:bec26:build
+task papers:dronenoise:build
 ```
 
 Run `task latex:setup` once beforehand (TeX Live and the required packages).

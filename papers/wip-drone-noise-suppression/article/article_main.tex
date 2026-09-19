@@ -13,7 +13,7 @@
 
 \begin{document}
 
-\title{Ego-Noise Suppression for Impulsive Acoustic Event Detection on Multirotor UAVs\\\thanks{Draft skeleton for ICASSP 2027 submission. Title, funding note, and author list to be finalized before submission.}}
+\title{Ego-Noise Suppression for Impulsive Acoustic Event Detection on Multirotor UAVs\\\thanks{Draft skeleton. Target venue, title, funding note, and author list to be finalized before submission.}}
 
 \author{\IEEEauthorblockN{Martin Maxa}
 \IEEEauthorblockA{\textit{Dept. of Measurement} \\
@@ -24,7 +24,7 @@ maxamart@fel.cvut.cz}}
 \maketitle
 
 \begin{abstract}
-Placeholder abstract. State the problem (on-board microphones on multirotor UAVs are dominated by ego-noise from motors/propellers, which masks short impulsive acoustic events of interest), the proposed approach (reference-free / motor-reference-driven active/adaptive noise suppression, e.g., FxLMS, applied ahead of an impulsive-event detector), and the headline quantitative result (attenuation in dB, effect on detection metrics) once experiments are finalized. Keep to ~150-200 words for ICASSP.
+Placeholder abstract. State the problem (on-board microphones on multirotor UAVs are dominated by ego-noise from motors/propellers, which masks short impulsive acoustic events of interest), the proposed approach (reference-free / motor-reference-driven active/adaptive noise suppression, e.g., FxLMS, applied ahead of an impulsive-event detector), and the headline quantitative result (attenuation in dB, effect on detection metrics) once the measurement campaign and experiments are finalized. Keep to ~150-200 words, or to whatever the chosen venue allows.
 \end{abstract}
 
 \begin{IEEEkeywords}
@@ -59,6 +59,10 @@ Limitations and scope boundaries (e.g., single-channel vs. multi-channel, simula
 \label{sec:conclusion}
 Summarize contribution and outline future work (e.g., real hardware validation, embedded real-time implementation).
 
+% The skeleton cites nothing yet; \nocite{*} keeps bibtex and the empty
+% thebibliography environment from erroring out. Delete it once the prose
+% carries real \cite commands.
+\nocite{*}
 \bibliographystyle{IEEEtran}
 \bibliography{references}
 

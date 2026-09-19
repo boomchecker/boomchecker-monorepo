@@ -10,5 +10,5 @@
 
 ## To Add
 - `to-verify`: UAV/drone ego-noise suppression papers specific to acoustic sensing payloads (as opposed to general ANC).
-- `to-verify`: Impulsive acoustic event detection literature (gunshot/explosion detection) — can reuse the source list already collected in `projects/2026-zelinjak-artillery-detection/BEC/article/sources/` if the downstream-detector narrative (option b in `writing_plan.md`) is chosen.
-- `to-verify`: ICASSP-specific recent work on drone-noise removal / bird-drone bioacoustics interference (adjacent, reviewer-relevant field).
+- `to-verify`: Impulsive acoustic event detection literature (gunshot/explosion detection) — can reuse the source list already collected in `papers/2026-bec-conference/article/sources/` if the downstream-detector narrative (option b in `writing_plan.md`) is chosen.
+- `to-verify`: Recent work on drone-noise removal / bird-drone bioacoustics interference (adjacent, reviewer-relevant field).
