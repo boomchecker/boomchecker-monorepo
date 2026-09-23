@@ -2,6 +2,9 @@ site_name: Boomchecker
 site_description: Boomchecker monorepo documentation and developer handbook
 site_url: https://docs.boomchecker.cz
 docs_dir: docs
+# LaTeX talk sources live next to the docs but are not part of the site.
+exclude_docs: |
+  talks/
 # site_dir is overridden in CI (mkdocs build -d docs/_site); locally defaults to ./site
 
 theme:
