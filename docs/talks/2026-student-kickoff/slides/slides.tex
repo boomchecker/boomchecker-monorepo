@@ -82,7 +82,7 @@
 % One slide per thesis: \thesis{colour}{letter}{title}{type / supervisor}{goal}{deliverables}{plugs in}
 \newcommand{\thesis}[7]{%
   \begin{frame}{\badge{#1}{#2}\ #3}
-    \textcolor{ink!65}{\small\faUserTie\ #4}\par\medskip
+    \textcolor{ink!65}{\small #4}\par\medskip
     \begin{columns}[T,onlytextwidth]
       \column{0.56\textwidth}
         \textbf{Goal}\par\smallskip
@@ -278,7 +278,7 @@
 \section{The five theses}
 
 \thesis{tA}{A}{Acoustic Drone Detection on the STM32 Platform}
-  {Bachelor \textperiodcentered\ supervisor Martin Maxa}
+  {\faUserGraduate\ \textbf{Jan Amos Vorel} \quad \faUserTie\ supervisor Martin Maxa}
   {Survey and compare features (spectral, MFCC / log-mel) and classifiers (classic ML, tiny NNs)
    for deciding \emph{drone / no drone} from short audio segments, with embedded deployment in mind.}
   {\begin{itemize}
@@ -292,7 +292,7 @@
    code in \code{fw/common/boomdetect} and \code{fw/bom-stm32node/App/detect}.}
 
 \thesis{tB}{B}{Firmware for Multi-Microphone PDM Acquisition on STM32H5}
-  {Bachelor \textperiodcentered\ supervisor Martin Maxa}
+  {\faUserGraduate\ \textbf{Ivan Dyryvolkov} \quad \faUserTie\ supervisor Martin Maxa}
   {Record 4--6 PDM MEMS microphones at once on the STM32H5 using SAI in PDM mode + DMA, and show
    that the channels are \textbf{time-synchronous}.}
   {\begin{itemize}
@@ -306,7 +306,7 @@
    the single-mic SAI + GPDMA path in \code{fw/bom-stm32node} (\code{mic.c}, \code{pdm\_pcm.c}).}
 
 \thesis{tC}{C}{Drone Localization Methods in UAV Detection Systems}
-  {Bachelor \textperiodcentered\ supervisor Martin Maxa}
+  {\faUserGraduate\ \textbf{Vojtěch Beneš} \quad \faUserTie\ supervisor Martin Maxa}
   {A systematic survey of how drones are localized (radar, RF, optical, thermal, \textbf{acoustic})
    with focus on direction of arrival, range estimation and distributed sensors.}
   {\begin{itemize}
@@ -320,7 +320,7 @@
    Related code: \code{scripts/tdoa\_estimation}.}
 
 \thesis{tD}{D}{Web App for Data Collection \& Map Visualization}
-  {Bachelor or master \textperiodcentered\ supervisor Jakub Svatoš}
+  {\faUserGraduate\ \textbf{Martin Voplakal} \quad \faUserTie\ supervisor Jakub Svatoš}
   {A web application for the network of detection units: the server receives, validates and stores
    telemetry, and a client map shows it in real time.}
   {\begin{itemize}
@@ -332,7 +332,7 @@
   {The \textbf{backend + web map} on the central side. A first version lives in \code{apps/api-backend} and \code{apps/device-web}, but the technology choice is yours.}
 
 \thesis{tE}{E}{IMU Integration and Orientation Algorithms}
-  {Bachelor \textperiodcentered\ supervisor Kamil Herman}
+  {\faUserGraduate\ \textbf{Lumír Blažek} \quad \faUserTie\ supervisor Kamil Herman}
   {Know the node's \textbf{pitch, roll and yaw} so that acoustic measurements can be converted to
    global coordinates. This means accelerometer + gyro fusion with GPS drift correction.}
   {\begin{itemize}
@@ -772,9 +772,9 @@ git push -u origin yourname/short-description
     \node[card] at ([yshift=-6mm]c0.north) {survey map APIs};
     \node[card] at ([yshift=-14mm]c0.north) {SD-card logging};
     \node[card] at ([yshift=-22mm]c0.north) {try log-mel CNN};
-    \node[card=tE] at ([yshift=-6mm]c1.north) {IMU calibration\\\color{ink!60}@student-E};
-    \node[card=tC] at ([yshift=-17mm]c1.north) {TDOA simulation\\\color{ink!60}@student-C};
-    \node[card=tB,line width=1pt] at ([yshift=-6mm]c2.north) {SAI 4-ch PDM + DMA\\\color{ink!60}@student-B};
+    \node[card=tE] at ([yshift=-6mm]c1.north) {IMU calibration\\\color{ink!60}@Lumír};
+    \node[card=tC] at ([yshift=-17mm]c1.north) {TDOA simulation\\\color{ink!60}@Vojtěch};
+    \node[card=tB,line width=1pt] at ([yshift=-6mm]c2.north) {SAI 4-ch PDM + DMA\\\color{ink!60}@Ivan};
     \node[card=tA] at ([yshift=-6mm]c3.north) {MFCC on PC, baseline\\\color{ink!60}PR \#123};
     \node[card=okgreen] at ([yshift=-6mm]c4.north) {devcontainer works\\\color{ink!60}closed};
   \end{tikzpicture}
@@ -785,42 +785,49 @@ git push -u origin yourname/short-description
       \small
       \begin{itemize}
         \setlength{\itemsep}{2pt}
-        \item one task = one \textbf{issue}: title, \textbf{acceptance criteria}, assignee
-        \item move your cards yourself, and keep \emph{In progress} short
+        \item one piece of work = one \textbf{issue}, assigned to you
+        \item \textbf{you manage your own issues}: create, split, move and close them as you work
         \item PR description with \code{Closes \#N} closes the issue on merge
       \end{itemize}
     \column{0.40\textwidth}
       \centering\small
       \faDesktop\ \ \textbf{Live demo}\\[-1pt]
-      {\scriptsize\color{ink!65}create issue, then branch, PR, merge, card moves to Done}
+      {\scriptsize\color{ink!65}create issue, then branch, PR, merge, card moves to Done\par}
   \end{columns}
 \end{frame}
 
 % --------------------------------------------------
-\begin{frame}{A good issue}
-  \begin{columns}[c,onlytextwidth]
-    \column{0.50\textwidth}
-      \begin{block}{Example}
+\begin{frame}{Issues and milestones}
+  \begin{columns}[T,onlytextwidth]
+    \column{0.47\textwidth}
+      \begin{block}{Example issue}
         \small
-        \textbf{Record 4 PDM mics via SAI + DMA}\par\smallskip
+        \textbf{Channels from the 4 PDM mics are not aligned}\par\smallskip
         \scriptsize
-        \textit{Why}: needed for DoA experiments.\par\smallskip
-        \textit{Acceptance criteria}
-        \begin{itemize}
-          \item[{\faSquare[regular]}] 4 channels streamed to PC via \code{stm32node-cli}
-          \item[{\faSquare[regular]}] no dropped DMA buffers over 10 min
-          \item[{\faSquare[regular]}] inter-channel delay measured and documented
-        \end{itemize}
+        \textit{Problem}: after de-interleaving, a clap shows up with a different delay in
+        each channel.\par\smallskip
+        \textit{Possible approach} (optional): check the SAI slot order and the DMA half/full
+        buffer handling, then measure with a common test signal.
       \end{block}
-    \column{0.45\textwidth}
+      \vspace{4pt}
+      {\small An issue only needs to \textbf{describe the problem}. How to solve it is a hint at most.\par}
+    \column{0.49\textwidth}
+      \centering
+      \begin{tikzpicture}[font=\scriptsize]
+        \node[box=accent,font=\small] (m) at (4.2,0) {\faFlagCheckered\\[1pt]\textbf{milestone}\\[-1pt]\scriptsize agreed together};
+        \node[circle,fill=ctunavy,inner sep=2pt] (st) at (0,0) {};
+        \node[below=1pt of st,font=\scriptsize] {now};
+        \draw[flow,draw=ctublue] (st) to[out=40,in=180] node[pos=0.5,above,sloped]{your issues} (m.west);
+        \draw[flow,draw=ctublue!60,dashed] (st) to[out=-10,in=200] (m.west);
+        \draw[flow,draw=ctublue!35,dashed] (st) to[out=-50,in=220] node[pos=0.55,below,sloped]{another path} (m.west);
+      \end{tikzpicture}\par\medskip
+      \raggedright\small
       \begin{itemize}
-        \setlength{\itemsep}{5pt}
-        \item \textbf{Small}: a few days of work, not a semester.
-        \item \textbf{Checkable}: you know when it's done.
-        \item \textbf{Written down}: results and dead ends go into the issue or the docs.
+        \setlength{\itemsep}{3pt}
+        \item \textbf{Milestones}: the goals we agree on together.
+        \item \textbf{The path is yours}: which issues, in which order.
+        \item \textbf{Consult it along the way} so you don't spend weeks in a dead end.
       \end{itemize}
-      \medskip
-      \screenshot{figs/projects-board.png}{0.28\textheight}{our GitHub Projects board}
   \end{columns}
 \end{frame}
 
@@ -835,7 +842,7 @@ git push -u origin yourname/short-description
         \item \textbf{GitHub access}: send your GitHub username to Martin (\code{maxamart@fel.cvut.cz}).
         \item Go through \textbf{Get Started} and have the devcontainer running before the first consultation.
         \item Make your \textbf{first PR}: e.g.\ fix something unclear in the docs.
-        \item Create your first \textbf{issues} on the board.
+        \item Agree on your \textbf{milestones} with your supervisor, then create your issues.
         \item Book a \textbf{consultation} with your supervisor.
       \end{enumerate}
     \column{0.40\textwidth}

@@ -21,6 +21,5 @@ The deck shows a dashed TODO box until these files exist in `slides/figs/`:
 | `docs-screen.png`       | docs.boomchecker.cz, Get Started page with the left nav     |
 | `branch-protection.png` | Settings → Branches (or Rules) → the rule protecting `main` |
 | `pr-checks.png`         | A merged PR showing green CI checks and an approval         |
-| `projects-board.png`    | GitHub Projects board with the Kanban columns               |
 
 Use roughly 16:10 crops; they are scaled to the slide width.
