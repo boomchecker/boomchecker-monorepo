@@ -20,11 +20,17 @@
 
 /* First entry is the default. */
 static const classifier_t *const s_models[] = {
+    /* mlp_v6 stays the default. The run-`full` models beat it on 61 hours of
+       public audio (mlp_l2: 95 % of held-out drone windows against 42 %) and
+       lost to it on the first recordings from the node's own microphone, where
+       every retrained model scored the drone as noise and mlp_l2 did so most
+       confidently of all. Its threshold moved from 15.0 to 3.0 on those
+       recordings; see models/model_mlp_v6.c. The others stay in the image so
+       the same audio can be scored by each. */
     &classifier_mlp_v6,
     &classifier_svm_v3,
-    /* The comparison set from training run r2; see models/models.h. */
-    &classifier_svm_l1,
-    &classifier_svm_l2,
+    &classifier_mlp_l2,
+    &classifier_gbt_l2,
     &classifier_gbt_reg_l2,
     &classifier_cnn_small,
 };

@@ -80,9 +80,17 @@ bool boomdetect_init(boomdetect_t *d, const boomdetect_config_t *cfg)
 
     const classifier_t *model = (cfg->classifier != NULL) ? cfg->classifier
                                                           : classifier_default();
-    const boomdetect_extractor_t *ex = (cfg->extractor != NULL)
-                                           ? cfg->extractor
-                                           : boomdetect_extractor_default();
+    /* No extractor named means "the one this model reads", not "the first one
+       in the table". Those were the same answer only while every model was
+       layout 1; the moment a layout-2 model becomes the default, taking the
+       table's first entry rejects it, and the caller gets a false from init
+       with nothing to say why. The consumer-side version of this cost a board
+       session in September - detect_service.c left the field zero and every
+       layout-2 and layout-3 model answered "init failed" - and fixing it there
+       left every other caller free to make the same mistake. */
+    const boomdetect_extractor_t *ex =
+        (cfg->extractor != NULL) ? cfg->extractor
+                                 : boomdetect_extractor_for_layout(model->layout_id);
 
     if (ex == NULL || ex->extract == NULL || ex->n_features == 0u ||
         ex->n_features > BOOMDETECT_FEATURE_MAX)

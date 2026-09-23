@@ -34,6 +34,8 @@ static void scenario_lookup(void)
 
     CHECK(classifier_by_name("mlp_v6") == def,
           "by_name(\"mlp_v6\") did not return the same entry as default()");
+    CHECK(classifier_by_name("mlp_l2") != NULL,
+          "mlp_l2 is missing - the run-full candidate must stay scorable on the board");
     CHECK(classifier_by_name("svm_v3") != NULL, "svm_v3 is missing from the registry");
     CHECK(classifier_by_name("nope") == NULL, "an unknown name resolved to something");
     CHECK(classifier_by_name(NULL) == NULL, "a NULL name did not resolve to NULL");
@@ -99,11 +101,38 @@ static void scenario_init_rejects_bad_models(void)
           "a model reading %u features from offset 1 fits in %u and should not",
           bad.n_features, (unsigned)BOOMDETECT_FEATURE_COUNT);
 
+    /* A layout nothing implements. Not "the first layout plus one" - that was a
+       foreign id only while layout 1 was the only one, and it quietly became
+       layout 2 the day stats_spectral shipped, which left this check asserting
+       that a perfectly valid model is rejected. Assert the premise instead. */
+    const uint16_t no_such_layout = 0x7FFFu;
+    REQUIRE(boomdetect_extractor_for_layout(no_such_layout) == NULL,
+            "layout %u has an extractor now; pick another id for this check",
+            (unsigned)no_such_layout);
+
     classifier_t wrong_layout = bad;
     wrong_layout.n_features = 4u;
-    wrong_layout.layout_id = BOOMDETECT_LAYOUT_MEAN_STD_DMEAN_CMAX + 1u;
+    wrong_layout.layout_id = no_such_layout;
     cfg.classifier = &wrong_layout;
     CHECK(!boomdetect_init(&d, &cfg), "a model declaring a foreign layout was accepted");
+
+    /* And with an extractor the caller named: the layouts have to agree even
+       when both sides exist on their own. This is the pairing init guards once
+       it no longer derives the extractor from the table's first entry. */
+    classifier_t layout2 = bad;
+    layout2.n_features = 4u;
+    layout2.layout_id = BOOMDETECT_LAYOUT_STATS_SPECTRAL;
+    cfg.classifier = &layout2;
+    cfg.extractor = boomdetect_extractor_for_layout(BOOMDETECT_LAYOUT_MEAN_STD_DMEAN_CMAX);
+    REQUIRE(cfg.extractor != NULL, "the stats extractor is missing");
+    CHECK(!boomdetect_init(&d, &cfg),
+          "a layout-2 model was accepted against the layout-1 extractor");
+
+    cfg.extractor = boomdetect_extractor_for_layout(BOOMDETECT_LAYOUT_STATS_SPECTRAL);
+    REQUIRE(cfg.extractor != NULL, "the stats_spectral extractor is missing");
+    CHECK(boomdetect_init(&d, &cfg),
+          "a layout-2 model was rejected against its own extractor");
+    cfg.extractor = NULL;
 
     classifier_t no_decide = bad;
     no_decide.n_features = 4u;
