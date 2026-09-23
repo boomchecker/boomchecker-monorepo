@@ -4,10 +4,17 @@ Provenance, because a manifest that cannot say where a clip came from cannot
 say what "unseen" means:
 
 hf_drone_audio    HF `geronimobasso/drone-audio-detection-samples`, 39 parquet
-                  shards of 0.5..1 s clips at 16 kHz. Shard 38 is all drones,
-                  shard 03 was the noise source of the v1..v6 models. No
-                  recording key survives in the file names, so every clip is
-                  its own group.
+                  shards at 16 kHz: 163591 drone clips averaging 0.60 s and
+                  16729 negatives averaging 7.28 s, 61 hours together. Shards
+                  00-03 hold the negatives, 04-38 the drones. The clips were
+                  cut from longer recordings by whoever compiled the set and
+                  numbered with one running index per class, so neighbouring
+                  indices are neighbouring seconds of one recording - measured
+                  on shard 03, five consecutive negatives sit 5.4x closer in
+                  log-spectrum than clips from distant indices (1.45x for the
+                  drones, where every rotor already looks alike). No recording
+                  key survives the naming, so the group is a block of
+                  consecutive indices instead; see HF_GROUP_CLIPS.
 drone_audio_dataset  Al-Emadi et al. 2019 (github saraalemadi/DroneAudioDataset):
                   Parrot Bebop and Mambo recorded indoors, 1 s chunks named
                   "<recording>-<type>_<n>_.wav". Its "unknown" class is cut
@@ -32,6 +39,7 @@ playback_source   The two 16 kHz loops that were played back. Same provenance
 from __future__ import annotations
 
 import io
+import re
 from collections.abc import Iterable, Iterator
 from pathlib import Path
 
@@ -51,8 +59,33 @@ from boomdetect_train.paths import LEGACY_DATA_DIR, raw_dir
 
 HF_REPO = "geronimobasso/drone-audio-detection-samples"
 HF_URL = f"https://huggingface.co/datasets/{HF_REPO}/resolve/main/data/"
+
+# How many consecutive clips make one leakage group. A group is what a split is
+# decided on, so it has to be at least as long as the recording a clip was cut
+# from - otherwise the second before and the second after a cut land on
+# opposite sides and the held-out third measures memory rather than detection.
+# Both numbers are about two and a half to four minutes of audio at the class
+# average, which leaves 639 drone and 523 negative groups: coarse enough to
+# hold a recording, fine enough that a third of the groups is a third of the
+# hours to within a couple of per cent.
+HF_GROUP_CLIPS = {"drone": 256, "no-drone": 32}
+HF_NAME_RE = re.compile("^(no-drone|drone)-([0-9]+)$")
 DRONE_AUDIO_DATASET_URL = "https://github.com/saraalemadi/DroneAudioDataset.git"
 ESC50_URL = "https://github.com/karolpiczak/ESC-50.git"
+
+
+def hf_group(stem: str, fallback: str) -> str:
+    """The leakage key of one HF clip: its block of consecutive indices.
+
+    Deliberately not shard-qualified - the shards are slices of the same
+    numbering, so a recording that straddles a shard boundary still has to end
+    up on one side of the split.
+    """
+    m = HF_NAME_RE.match(stem)
+    if m is None:
+        return fallback
+    kind, idx = m.group(1), int(m.group(2))
+    return f"hf_drone_audio/{kind}/{idx // HF_GROUP_CLIPS[kind]:05d}"
 
 
 def _probe(path: Path) -> tuple[int, float]:
@@ -81,7 +114,7 @@ def hf_shard_rows(shard: Path, source: str = "hf_drone_audio") -> Iterator[dict]
             name = audio.get("path") or f"row{row_index}"
             label = int(rec["label"])
             cid = f"{source}/{shard.stem}/{Path(name).stem}"
-            group = cid  # no recording key survives; every clip is its own group
+            group = hf_group(Path(name).stem, cid)
             yield _row(
                 id=cid,
                 source=source,

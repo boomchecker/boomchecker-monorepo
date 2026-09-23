@@ -116,4 +116,4 @@ def shipped_models() -> dict[str, MlpHeader | LinearHeader]:
 
 
 # The operating points the registry declares (classifier_t::default_thr_milli).
-SHIPPED_THRESHOLDS = {"mlp_v6": 15.0, "svm_v3": 0.5}
+SHIPPED_THRESHOLDS = {"mlp_v6": 3.0, "svm_v3": 0.5}  # mlp_v6: 15.0 until 2026-09-23

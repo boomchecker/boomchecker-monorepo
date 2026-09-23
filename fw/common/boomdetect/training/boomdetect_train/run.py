@@ -76,13 +76,23 @@ def train_all(
     run_dir = runs_dir() / (run_name or time.strftime("%Y%m%d-%H%M%S"))
     (run_dir / "models").mkdir(parents=True, exist_ok=True)
 
-    info: dict = {
-        "families": families,
-        "layouts": layouts,
-        "max_neg_windows_per_clip": max_neg_windows_per_clip,
-        "dataset": summarize(manifest).to_dict(orient="records"),
-        "models": {},
-    }
+    # A run is often filled in two passes - the cheap stats layouts over every
+    # window, then the CNNs over a capped set - so a second call adds to the
+    # run rather than forgetting what the first one trained. The models on
+    # disk always survived; run.json used to be the thing that lost them.
+    info: dict = {"families": [], "layouts": [], "max_neg_windows_per_clip": {}, "models": {}}
+    run_json = run_dir / "run.json"
+    if run_json.exists():
+        info |= json.loads(run_json.read_text())
+        info.setdefault("models", {})
+    info["dataset"] = summarize(manifest).to_dict(orient="records")
+    info["families"] = sorted({*info.get("families", []), *families})
+    info["layouts"] = sorted({*info.get("layouts", []), *layouts})
+    caps = info.get("max_neg_windows_per_clip")
+    caps = dict(caps) if isinstance(caps, dict) else {}
+    for lay in layouts:
+        caps[str(lay)] = max_neg_windows_per_clip
+    info["max_neg_windows_per_clip"] = caps
     for layout in layouts:
         ws: WindowSet = build_window_set(
             manifest, cache, layout, "train", max_neg_windows_per_clip=max_neg_windows_per_clip
@@ -130,7 +140,7 @@ def train_all(
             _save_meta(run_dir, name, meta)
             info["models"][name] = meta
             log(f"  {name}: trained in {meta['seconds']} s")
-    (run_dir / "run.json").write_text(json.dumps(info, indent=2, default=str))
+    run_json.write_text(json.dumps(info, indent=2, default=str))
     return run_dir
 
 

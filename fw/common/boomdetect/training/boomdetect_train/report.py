@@ -114,6 +114,7 @@ def evaluate_model(
                 "auc": window_auc(clips),
                 "thr": thr,
                 "win_tpr": wr.tpr,
+                "win_neg_ok": wr.neg_rejected,
                 "fa_per_h": wr.fa_per_hour,
                 "clip_det": (f"{cr.detected}/{cr.eligible_pos}" if cr.eligible_pos else "-"),
                 "clip_fa": f"{cr.false_alarms}/{cr.eligible_neg}" if cr.eligible_neg else "-",
@@ -130,6 +131,7 @@ COLUMNS = [
     "auc",
     "thr",
     "win_tpr",
+    "neg_ok_%",
     "fa_per_h",
     "clip_det",
     "clip_fa",
@@ -152,6 +154,7 @@ def render_table(df: pd.DataFrame) -> str:
                     _fmt(r.auc),
                     _fmt(r.thr, 2),
                     _fmt(r.win_tpr, 2),
+                    _fmt(100.0 * r.win_neg_ok, 2),
                     _fmt(r.fa_per_h, 1),
                     r.clip_det,
                     r.clip_fa,
@@ -175,9 +178,15 @@ def render_report(
     parts += [
         f"Threshold per model: lowest value with at most {fa_per_hour:g} false-alarm windows per "
         "hour on the `val` negatives, then applied unchanged to every other suite. "
-        "`win_tpr` = positive windows called drone; `fa_per_h` = negative windows called drone "
-        f"per hour of negative audio; `clip_det` / `clip_fa` = clips alarmed under the {rule_txt} "
-        "rule, over the clips long enough for it (detected/positives, alarmed/negatives).",
+        "`win_tpr` = positive windows called drone; `neg_ok_%` = negative windows correctly left "
+        "alone; `fa_per_h` = negative windows called drone per hour of negative audio; "
+        f"`clip_det` / `clip_fa` = clips alarmed under the {rule_txt} rule, over the clips long "
+        "enough for it (detected/positives, alarmed/negatives).",
+        "",
+        "The `test` suite is the held-out third of the training sources, grouped so that a "
+        "recording never straddles the split. No weight, threshold or model choice is fitted "
+        "on it. `val` is where the threshold comes from, so its numbers are optimistic by "
+        "construction and are kept only to show by how much.",
         "",
     ]
     tables = []
@@ -195,6 +204,10 @@ def render_report(
             v = getattr(r, field)
             return v if isinstance(v, str) else _fmt(v, nd)
 
+        def pct(suite: str, field: str, nd: int = 2, rows=by_suite) -> str:
+            r = rows.get(suite)
+            return "-" if r is None else _fmt(100.0 * getattr(r, field), nd)
+
         stress_pct = "-"
         if "stress" in scored:
             neg = [c for c in scored["stress"] if c.label == 0]
@@ -204,6 +217,9 @@ def render_report(
         summary_rows.append(
             {
                 "model": m.name,
+                "tpr_test_%": pct("test", "win_tpr"),
+                "neg_ok_test_%": pct("test", "win_neg_ok"),
+                "auc_test": cell("test", "auc"),
                 "auc_val": cell("val", "auc"),
                 "auc_halmstad": cell("halmstad", "auc"),
                 "auc_salford": cell("salford", "auc"),
@@ -212,6 +228,7 @@ def render_report(
                 "clip_det_halmstad": cell("halmstad", "clip_det"),
                 "stress_fired_pct": stress_pct,
                 "_sort": by_suite["halmstad"].auc if "halmstad" in by_suite else float("nan"),
+                "_sort2": by_suite["test"].auc if "test" in by_suite else float("nan"),
             }
         )
     if summary_rows:

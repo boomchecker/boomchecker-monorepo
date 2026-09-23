@@ -99,6 +99,10 @@ class Suite:
 SUITES = {
     # name: (roles, splits, sources) - None means any
     "val": ((ROLE_TRAIN,), ("val",), None),
+    # The held-out third. Nothing fits on it: not a weight, not a threshold,
+    # not the choice of which family to ship. It is scored last and reported
+    # once, which is the only thing that makes its numbers mean anything.
+    "test": ((ROLE_TRAIN,), ("test",), None),
     "halmstad": ((ROLE_UNSEEN,), None, ("halmstad",)),
     "salford": ((ROLE_UNSEEN,), None, ("salford",)),
     "real_mic": ((ROLE_REAL,), None, ("own_recordings",)),
@@ -116,6 +120,9 @@ def select_suite(manifest: pd.DataFrame, name: str) -> pd.DataFrame:
     return manifest[m]
 
 
+SCORE_BATCH = 1 << 16
+
+
 def score_clips(
     rows: pd.DataFrame,
     cache: FrameCache,
@@ -124,12 +131,42 @@ def score_clips(
     *,
     gate: Gate = Gate.PER_FRAME,
     squelch: float | None = DEFAULT_SQUELCH,
+    batch: int = SCORE_BATCH,
 ) -> list[ClipScores]:
-    out: list[ClipScores] = []
+    """Score every window of every clip, then hand each clip its own slice back.
+
+    The windows of all clips are scored together rather than clip by clip. The
+    half-second clips of the HuggingFace set yield one window each, so the
+    per-call overhead of a scikit-learn `decision_function` or a torch forward
+    pass used to be the entire cost of an evaluation: a suite is 60000 clips and
+    a comparison is fifteen models over six suites. Batching does not change a
+    single number, only how long it takes to get them.
+    """
+    meta, feats_by_clip, ends_by_clip = [], [], []
     for rec in rows.itertuples(index=False):
         cf = cache.get(rec.source, rec.id)
         feats, ends = clip_windows(cf, layout, gate, squelch)
-        dec = scorer(feats).astype(np.float32).reshape(-1) if feats.shape[0] else np.empty(0)
+        meta.append(rec)
+        feats_by_clip.append(feats)
+        ends_by_clip.append(ends)
+
+    counts = np.asarray([f.shape[0] for f in feats_by_clip], dtype=np.int64)
+    nonempty = [f for f in feats_by_clip if f.shape[0]]
+    if nonempty:
+        allf = np.concatenate(nonempty).astype(np.float32)
+        parts = [
+            np.asarray(scorer(allf[i : i + batch]), dtype=np.float32).reshape(-1)
+            for i in range(0, allf.shape[0], batch)
+        ]
+        alld = np.concatenate(parts) if parts else np.empty(0, np.float32)
+    else:
+        alld = np.empty(0, np.float32)
+
+    out: list[ClipScores] = []
+    at = 0
+    for rec, n, ends in zip(meta, counts, ends_by_clip, strict=True):
+        dec = alld[at : at + n]
+        at += int(n)
         out.append(
             ClipScores(
                 id=rec.id,
@@ -261,8 +298,16 @@ class WindowRates:
     pos_windows: int
     neg_windows: int
     tpr: float  # positive windows called drone / positive windows
+    fpr: float  # negative windows called drone / negative windows
     fa_per_hour: float  # negative windows called drone per hour of negative audio
     neg_hours: float
+
+    @property
+    def neg_rejected(self) -> float:
+        """Negative windows correctly left alone. The plain-language counterpart
+        of fa_per_hour, which is the number that actually sizes a field
+        deployment but says nothing about how often the detector is right."""
+        return 1.0 - self.fpr
 
 
 def window_rates(clips: list[ClipScores], threshold: float) -> WindowRates:
@@ -275,6 +320,7 @@ def window_rates(clips: list[ClipScores], threshold: float) -> WindowRates:
         pos_windows=int(pos.shape[0]),
         neg_windows=int(neg.shape[0]),
         tpr=float((pos >= threshold).mean()) if pos.shape[0] else float("nan"),
+        fpr=fired / neg.shape[0] if neg.shape[0] else float("nan"),
         fa_per_hour=fired / neg_hours if neg_hours > 0 else float("nan"),
         neg_hours=neg_hours,
     )
