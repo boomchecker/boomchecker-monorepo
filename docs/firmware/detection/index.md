@@ -57,6 +57,9 @@ stack. `step()` does at most one frame, by contract rather than by comment.
 
 ## Console commands
 
+For a hands-on guide to switching models and tuning the threshold, squelch and
+alarm in the field, see [field-manual.md](field-manual.md) (Czech).
+
 | command | what it does |
 |---|---|
 | `detect <sec> [squelch_milli] [thr_milli] [dbg]` | run for `<sec>` seconds, stream `LVL`/`DET` lines and `ALM` on alarm transitions, end with `DETEND` |

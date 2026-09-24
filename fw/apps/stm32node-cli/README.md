@@ -32,6 +32,27 @@ task stm32-cli:proto    # regenerate PROTOCOL.md from the spec
 Or directly: `stm32node-cli tui`, `stm32node-cli record 5 --port /dev/ttyACM0`,
 `stm32node-cli ports`.
 
+### Batch recording
+
+`record <sec> <count>` (TUI console and CLI alike) records `<count>` files of
+`<sec>` seconds each into one folder, `recordings/batch-YYYYmmdd-HHMMSS/`.
+Without `<count>` it is the single-file `record` as before:
+
+```
+stm32node-cli record 10 20 --port COM7
+```
+
+Each `chunk-NNN.wav` is written the moment its seconds have arrived while the
+board keeps streaming, so `q` in the TUI or Ctrl-C on the CLI keeps everything
+recorded so far. `index.csv` in the folder lists every file with its stream
+number, real length and the stream's overrun/err health.
+
+The board is asked for the longest `stream` that holds a whole number of chunks
+(60 s = six 10-second files) and the host cuts it as it arrives. Boundaries
+inside one stream are gapless; between streams there is a command round-trip
+and the PDM settling transient (~0.12 s clipped), so the first chunk of every
+stream starts with it. A chunk longer than 60 s is rejected.
+
 ## Protocol
 
 The serial protocol is defined once in `src/stm32node_cli/protocol/spec.py` and

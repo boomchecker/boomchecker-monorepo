@@ -41,7 +41,10 @@ def tui(
 @app.command()
 def record(
     seconds: int = typer.Argument(
-        ..., min=1, max=STREAM_MAX_SECONDS, help="Seconds of audio to record."
+        ..., min=1, max=STREAM_MAX_SECONDS, help="Seconds of audio per file."
+    ),
+    count: int = typer.Argument(
+        1, min=1, help="How many files of SECONDS each; more than 1 records into one folder."
     ),
     port: str = typer.Option(DEFAULT_PORT, "--port", "-p", help="Serial port."),
     out: Path = typer.Option(_DEFAULT_OUT, "--out", "-o", help="Output folder for recordings."),
@@ -52,17 +55,46 @@ def record(
         help="Stream a synthetic 1 kHz tone (streamtest) instead of the microphone.",
     ),
 ) -> None:
-    """Record N seconds of PCM to a WAV file (headless)."""
+    """Record SECONDS of PCM to a WAV file; `record 10 20` records twenty 10-second files.
+
+    With COUNT > 1 the files land in one folder, each written the moment it
+    fills, so Ctrl-C keeps everything recorded so far; index.csv lists them.
+    """
     from .protocol.client import DeviceClient
-    from .sessions.record import RecordSession
     from .transport.serial_transport import SerialTransport
 
     source = "test" if test_tone else "mic"
-    with SerialTransport(port, timeout=DEFAULT_TIMEOUT_S) as transport:
-        client = DeviceClient(transport)
-        session = RecordSession(client, out)
-        result = session.record(seconds, source=source)
-    typer.echo(f"Saved {result.path} ({result.duration_s:.1f}s, {result.sample_count} samples).")
+    if count == 1:
+        from .sessions.record import RecordSession
+
+        with SerialTransport(port, timeout=DEFAULT_TIMEOUT_S) as transport:
+            session = RecordSession(DeviceClient(transport), out)
+            result = session.record(seconds, source=source)
+        typer.echo(
+            f"Saved {result.path} ({result.duration_s:.1f}s, {result.sample_count} samples)."
+        )
+        return
+
+    from .protocol.codec import StreamAborted
+    from .sessions.batch import BatchRecordSession, plan_streams
+
+    plan = plan_streams(seconds, count)
+    typer.echo(f"{count} x {seconds}s in {len(plan)} stream(s); Ctrl-C stops and keeps files")
+
+    def on_chunk(index: int, total: int, path: Path) -> None:
+        typer.echo(f"saved {path.name} ({index}/{total})")
+
+    try:
+        with SerialTransport(port, timeout=DEFAULT_TIMEOUT_S) as transport:
+            batch = BatchRecordSession(DeviceClient(transport), out)
+            outcome = batch.record(seconds, count, source=source, on_chunk=on_chunk)
+    except (StreamAborted, KeyboardInterrupt):
+        typer.echo("stopped - finished files are on disk, see index.csv")
+        raise typer.Exit(code=1) from None
+    typer.echo(
+        f"Saved {len(outcome.chunks)}/{count} files in {outcome.directory} "
+        f"({outcome.streams} stream(s)); index: {outcome.index_path.name}"
+    )
 
 
 @app.command()
