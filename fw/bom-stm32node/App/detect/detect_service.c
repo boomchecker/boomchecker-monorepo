@@ -19,8 +19,6 @@
 #include <stdio.h>
 #include <string.h>
 
-#define DET_MAX_SECONDS 60u
-
 /* Report the input level once a second (31 frames) so the operator can aim the
    source or the volume even when the squelch keeps windows from completing. */
 #define DET_LVL_EVERY 31u
@@ -189,17 +187,13 @@ void detect_service_run(uint32_t seconds, uint32_t squelch_milli, int32_t thr_mi
   {
     return;
   }
-  /* Clamped to 1..60, as the header says and as cli.c already enforces. It used
-     to return silently on 0, which contradicted both the header's contract and
-     the "the trailer always arrives" rule the other error paths follow - a host
-     driving this directly would have waited for a DETEND that never came. */
-  if (seconds == 0u)
+  /* 0 means "until a key is pressed"; anything else is clamped to the header's
+     limit, which cli.c already enforces. Every path still ends in DETEND: a
+     host driving this directly must never wait for a trailer that cannot come. */
+  const bool until_key = (seconds == 0u);
+  if (seconds > DETECT_MAX_SECONDS)
   {
-    seconds = 1u;
-  }
-  if (seconds > DET_MAX_SECONDS)
-  {
-    seconds = DET_MAX_SECONDS;
+    seconds = DETECT_MAX_SECONDS;
   }
 
   if (!s_cyccnt_ready)
@@ -270,11 +264,24 @@ void detect_service_run(uint32_t seconds, uint32_t squelch_milli, int32_t thr_mi
   bool mic_got = false;
   bool mic_ok  = true;
 
-  const uint32_t halves =
-      (seconds * PCM_FS_HZ + PCM_SAMPLES_PER_HALF - 1u) / PCM_SAMPLES_PER_HALF;
+  /* 64-bit: a day of blocks is 4.05e9, past what uint32_t holds with the
+     rounding term. An open-ended run simply never reaches its bound. */
+  const uint64_t halves =
+      until_key ? UINT64_MAX
+                : ((uint64_t)seconds * PCM_FS_HZ + PCM_SAMPLES_PER_HALF - 1u) /
+                      PCM_SAMPLES_PER_HALF;
 
-  for (uint32_t h = 0u; h < halves; h++)
+  for (uint64_t h = 0u; h < halves; h++)
   {
+    /* Polled once per mic block (~21 ms), before waiting for it, so the run
+       stops within a block of the keystroke. Bytes are discarded, not queued:
+       the line that stopped the run must not execute as a command afterwards.
+       Only the open-ended run listens - a timed run is what a script drives,
+       and a script's next command must not cut its own measurement short. */
+    if (until_key && usb_cli_key_pressed())
+    {
+      break;
+    }
     size_t nsamp = 0u;
     if (!det_wait_block(&nsamp))
     {

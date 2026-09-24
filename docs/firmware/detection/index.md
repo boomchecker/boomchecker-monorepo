@@ -62,7 +62,7 @@ alarm in the field, see [field-manual.md](field-manual.md) (Czech).
 
 | command | what it does |
 |---|---|
-| `detect <sec> [squelch_milli] [thr_milli] [dbg]` | run for `<sec>` seconds, stream `LVL`/`DET` lines and `ALM` on alarm transitions, end with `DETEND` |
+| `detect <sec> [squelch_milli] [thr_milli] [dbg]` | run for `<sec>` seconds (1..86400; `0` runs until any byte arrives on the console), stream `LVL`/`DET` lines and `ALM` on alarm transitions, end with `DETEND` |
 | `model [name]` | list the classifiers in this image, or select one |
 | `micslot [a\|b]` | which microphone of the PDM pair is decoded |
 | `micdiag` | probe the PDM data pins |

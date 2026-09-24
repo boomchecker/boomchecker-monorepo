@@ -166,9 +166,14 @@ static void cmd_detect(EmbeddedCli *cli, char *args, void *context)
   const char   *tok = embeddedCliGetToken(args, 1);
   char         *end = NULL;
   unsigned long sec = strtoul(tok, &end, 10);
-  if (end == tok || sec == 0u || sec > 60u)
+  /* 0 is open-ended: the run stops on the first byte from the console. The
+     same key-press stop is deliberately NOT offered to timed runs, so a script
+     that queues its next command cannot cut a measurement short. */
+  if (end == tok || sec > DETECT_MAX_SECONDS)
   {
-    embeddedCliPrint(cli, "usage: detect <sec> (1..60)");
+    snprintf(line, sizeof(line), "usage: detect <sec> (1..%lu, 0 = until any key)",
+             (unsigned long)DETECT_MAX_SECONDS);
+    embeddedCliPrint(cli, line);
     return;
   }
 

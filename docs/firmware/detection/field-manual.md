@@ -28,7 +28,8 @@ model            # zkontroluj, že je aktivní mlp_v6 (hvězdička) s thr=3000
 |---|---|
 | `model` | vypíše modely v image, `*` označuje aktivní, u každého výchozí práh |
 | `model <jméno>` | přepne model, např. `model mlp_l2` |
-| `detect <s> [squelch] [thr] [dbg]` | běží `<s>` sekund (1..60), vypisuje okna a alarmy |
+| `detect <s> [squelch] [thr] [dbg]` | běží `<s>` sekund (až 86400), vypisuje okna a alarmy |
+| `detect 0 ...` | běží bez limitu, dokud v konzoli nestiskneš libovolnou klávesu; pak přijde `DETEND` |
 | `micslot a` | přepne na živý mikrofon |
 
 Argumenty `detect` jsou poziční. Když chceš zadat práh, musíš zadat i squelch
@@ -38,7 +39,13 @@ před ním. Obě čísla jsou v tisícinách: `3000` znamená 3.0, `10` znamená
 detect 30                # výchozí squelch 10, práh modelu
 detect 30 10 1000        # squelch 10, práh 1.0
 detect 30 10 3000 1      # totéž s prahem 3.0 a ladicím výpisem po snímcích
+detect 600               # deset minut, výchozí squelch a práh
+detect 0 10 3000         # bez limitu, zastaví libovolná klávesa v konzoli
 ```
+
+Během `detect` deska neobsluhuje rádio, takže dlouhý běh znamená dlouhý výpadek
+LoRa. Pomocník `bdcli.py` čeká na `DETEND` a klávesu poslat neumí, `detect 0`
+proto pouštěj z ručního terminálu (PuTTY, Tera Term), ne přes skript.
 
 ## 3. Co deska vypisuje
 

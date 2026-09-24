@@ -31,7 +31,7 @@ STREAM_MAX_SECONDS = 60
 # (thr_milli is a raw logit for the v6 MLP; 3.0 was calibrated on 2026-09-23 against
 # the node's own recordings of a real drone, replacing the 15.0 set on room noise
 # alone), so tests/test_firmware_defaults.py checks both against the firmware.
-DETECT_MAX_SECONDS = 60
+DETECT_MAX_SECONDS = 86400  # DETECT_MAX_SECONDS in detect_service.h; 0 = until any key
 DETECT_DEFAULT_SQUELCH_MILLI = 10
 DETECT_SQUELCH_MILLI_MAX = 1000
 DETECT_MLP_V6_DEFAULT_THR_MILLI = 3000  # default_thr_milli of model_mlp_v6.c
@@ -125,7 +125,9 @@ COMMANDS: tuple[CommandSpec, ...] = (
         name="detect",
         usage="detect <sec> [squelch_milli] [thr_milli] [dbg]",
         description=(
-            "Run on-device drone detection for <sec> seconds (1..60): microphone PCM is "
+            "Run on-device drone detection for <sec> seconds (1..86400; 0 runs until the "
+            "console receives any byte, which is discarded rather than executed): "
+            "microphone PCM is "
             "decimated to 16 kHz, MFCC features are extracted (1024-sample frames, hop 512), "
             "every run of 14 frames above the RMS squelch is aggregated to a 52-value feature "
             "vector and classified by the model compiled into the firmware. That is currently "

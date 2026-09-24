@@ -49,6 +49,14 @@ def test_detect_thr_default_matches_mlp_v6_model() -> None:
     assert spec.DETECT_MLP_V6_DEFAULT_THR_MILLI == int(m.group(1))
 
 
+def test_detect_max_seconds_matches_firmware() -> None:
+    text = _read(DETECT_SERVICE_H)
+    assert spec.DETECT_MAX_SECONDS == _define(text, "DETECT_MAX_SECONDS", DETECT_SERVICE_H)
+    detect = next(c for c in spec.COMMANDS if c.name == "detect")
+    assert f"1..{spec.DETECT_MAX_SECONDS}" in detect.description
+    assert "0 runs until" in detect.description
+
+
 def test_detect_alarm_rule_matches_firmware() -> None:
     text = _read(DETECT_SERVICE_H)
     assert spec.DETECT_ALARM_N == _define(text, "DETECT_ALARM_N", DETECT_SERVICE_H)
