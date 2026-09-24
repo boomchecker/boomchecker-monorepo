@@ -28,12 +28,13 @@ STREAM_MAX_SECONDS = 60
 # the model tables in fw/common/boomdetect/models/) -------------------------------
 # Defaults the board applies when `detect` is given fewer arguments. The squelch
 # is the detector's; the threshold belongs to the model `model` last selected
-# (thr_milli is a raw logit for the v6 MLP; 15.0 was set on hardware against room
-# noise), so tests/test_firmware_defaults.py checks both against the firmware.
+# (thr_milli is a raw logit for the v6 MLP; 3.0 was calibrated on 2026-09-23 against
+# the node's own recordings of a real drone, replacing the 15.0 set on room noise
+# alone), so tests/test_firmware_defaults.py checks both against the firmware.
 DETECT_MAX_SECONDS = 60
 DETECT_DEFAULT_SQUELCH_MILLI = 10
 DETECT_SQUELCH_MILLI_MAX = 1000
-DETECT_MLP_V6_DEFAULT_THR_MILLI = 15000  # default_thr_milli of model_mlp_v6.c
+DETECT_MLP_V6_DEFAULT_THR_MILLI = 3000  # default_thr_milli of model_mlp_v6.c
 DETECT_THR_MILLI_LIMIT = 20000  # accepted thr_milli range is -LIMIT..+LIMIT
 # The K-of-N alarm above the classifier (App/detect/detect_service.h): ON when at
 # least K_ON of the last N classified windows were called drone, OFF when fewer
@@ -131,11 +132,11 @@ COMMANDS: tuple[CommandSpec, ...] = (
             "a small MLP (v6), whose decision value is a raw logit, not a probability. "
             "Optional overrides in units of 1/1000: squelch_milli (default 10 = RMS 0.010, "
             "0 disables the gate, 0..1000) and thr_milli (defaults to the selected "
-            "model's own operating point, 15000 = logit 15.0 for mlp_v6, may be "
+            "model's own operating point, 3000 = logit 3.0 for mlp_v6, may be "
             "negative, -20000..20000 - a value outside that range is rejected, not clamped; "
-            "the default was measured against ambient room noise on hardware, with no "
-            "drone present, so it trades away an unquantified amount of sensitivity to "
-            "avoid false alarms). "
+            "the default was calibrated on the node's own recordings of one real drone in "
+            "one room, where it fired on 32-47 % of windows with the drone airborne and on "
+            "none of the speech/clap/appliance confusers - a calibration, not a validation). "
             "A non-zero dbg adds one debug line per frame."
         ),
         response=(
