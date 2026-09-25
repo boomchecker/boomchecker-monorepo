@@ -166,6 +166,14 @@ RUN npm install -g @openai/codex @anthropic-ai/claude-code
 RUN mkdir -p /home/boom/.codex /home/boom/.claude && \
     chown -R boom:boom /home/boom/.codex /home/boom/.claude
 
+# Keep Claude Code fully inside the persisted claude-data volume (/home/boom/.claude).
+# By default Claude stores its OAuth token + history under ~/.claude (persisted) but
+# the account/onboarding config in ~/.claude.json at the home root, which is NOT on
+# the volume — so every rebuild wipes it and forces a re-login even though the token
+# survived. Pointing CLAUDE_CONFIG_DIR at the volume moves .claude.json inside it too
+# (Claude writes $CLAUDE_CONFIG_DIR/.claude.json), so login now persists across rebuilds.
+ENV CLAUDE_CONFIG_DIR=/home/boom/.claude
+
 # Set up PNPM storage to behave like on a local computer
 ENV PNPM_HOME="/pnpm-store"
 RUN mkdir -p $PNPM_HOME && \
