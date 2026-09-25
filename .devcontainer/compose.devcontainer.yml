@@ -33,7 +33,10 @@ services:
     security_opt:
       - seccomp:unconfined
     user: "1000"
-    command: sleep infinity
+    # Runs as root (containerUser: root overrides the user: above for PID 1) on
+    # every start and reclaims ownership of root-owned /workspace files before
+    # the boom shell attaches, then execs `sleep infinity`. See startup.sh.
+    command: ["/bin/bash", "/workspace/.devcontainer/fw-devcontainer/startup.sh"]
 
   sw-devcontainer:
     build:
