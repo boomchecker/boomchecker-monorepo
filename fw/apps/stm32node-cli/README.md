@@ -4,9 +4,10 @@ Host-side tools for the **boomchecker-node** STM32 board (STM32H563), talking
 over its USB CDC ACM virtual COM port. A Textual TUI plus a small Typer CLI.
 
 Today it can **record N seconds of PCM audio and save it as a WAV** — useful for
-bringing up the microphone path without an SD card. The architecture is layered
-so more device features (e.g. reading a detector's output) slot in as new
-sessions + screens.
+bringing up the microphone path without an SD card — and **run the board's
+on-device drone detector** (`detect`), streaming its `LVL`/`DET`/`ALM` report
+lines live and printing a `DETEND` summary. The architecture is layered so more
+device features slot in as new sessions + screens.
 
 ## Layout
 
@@ -30,7 +31,7 @@ task stm32-cli:proto    # regenerate PROTOCOL.md from the spec
 ```
 
 Or directly: `stm32node-cli tui`, `stm32node-cli record 5 --port /dev/ttyACM0`,
-`stm32node-cli ports`.
+`stm32node-cli detect 5 --port /dev/ttyACM0`, `stm32node-cli ports`.
 
 ### Batch recording
 

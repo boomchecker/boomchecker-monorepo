@@ -7,7 +7,12 @@ from pathlib import Path
 import typer
 
 from .config import DEFAULT_PORT, DEFAULT_TIMEOUT_S, default_output_dir
-from .protocol.spec import STREAM_MAX_SECONDS
+from .protocol.spec import (
+    DETECT_MAX_SECONDS,
+    DETECT_SQUELCH_MILLI_MAX,
+    DETECT_THR_MILLI_LIMIT,
+    STREAM_MAX_SECONDS,
+)
 
 app = typer.Typer(
     add_completion=False,
@@ -95,6 +100,58 @@ def record(
         f"Saved {len(outcome.chunks)}/{count} files in {outcome.directory} "
         f"({outcome.streams} stream(s)); index: {outcome.index_path.name}"
     )
+
+
+@app.command()
+def detect(
+    seconds: int = typer.Argument(
+        ..., min=0, max=DETECT_MAX_SECONDS, help="Seconds to run; 0 = until Ctrl-C."
+    ),
+    squelch: int | None = typer.Option(
+        None, "--squelch", min=0, max=DETECT_SQUELCH_MILLI_MAX, help="RMS gate, 1/1000."
+    ),
+    thr: int | None = typer.Option(
+        None,
+        "--thr",
+        min=-DETECT_THR_MILLI_LIMIT,
+        max=DETECT_THR_MILLI_LIMIT,
+        help="Decision threshold, 1/1000 (default: the selected model's own).",
+    ),
+    dbg: bool = typer.Option(False, "--dbg", help="Print a per-frame debug line."),
+    port: str = typer.Option(DEFAULT_PORT, "--port", "-p", help="Serial port."),
+) -> None:
+    """Run on-device drone detection, streaming the board's report lines.
+
+    Prints each LVL/DET/ALM line as it arrives and a final DETEND summary. With
+    SECONDS 0 the board runs until interrupted; Ctrl-C stops it and prints the
+    summary the board reports on the way out.
+    """
+    from .protocol.client import DeviceClient
+    from .protocol.codec import StreamAborted
+    from .transport.serial_transport import SerialTransport
+
+    try:
+        with SerialTransport(port, timeout=DEFAULT_TIMEOUT_S) as transport:
+            trailer = DeviceClient(transport).run_detect(
+                seconds,
+                squelch_milli=squelch,
+                thr_milli=thr,
+                dbg=dbg,
+                on_line=typer.echo,
+            )
+    except (KeyboardInterrupt, StreamAborted):
+        typer.echo("stopped")
+        raise typer.Exit(code=1) from None
+
+    if trailer is None:
+        typer.echo("no DETEND trailer - run may be incomplete")
+        raise typer.Exit(code=1)
+    typer.echo(
+        f"{trailer.windows} window(s), {trailer.drones} drone, {trailer.alarms} alarm(s) "
+        f"(overrun={int(trailer.overrun)} err={int(trailer.err)})"
+    )
+    if trailer.err:
+        raise typer.Exit(code=1)
 
 
 @app.command()

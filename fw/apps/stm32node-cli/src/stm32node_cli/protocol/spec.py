@@ -51,6 +51,12 @@ LINE_TERMINATOR = b"\n"
 # End-of-stream trailer sent after the payload, e.g. b"PCMEND overrun=0 err=0".
 # Confirms the stream finished and reports capture health.
 TRAILER_PREFIX = b"PCMEND"
+# Trailer that always closes a `detect` run, e.g.
+# b"DETEND windows=42 drones=8 alarms=3 overrun=0 err=0". Reaching it (and only it)
+# means the detector has stopped; a `DETERR <reason>` line may precede it on a start
+# failure, but the DETEND trailer still arrives with err=1.
+DETECT_TRAILER_PREFIX = b"DETEND"
+DETECT_ERROR_PREFIX = b"DETERR"
 
 
 @dataclass(frozen=True)

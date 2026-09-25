@@ -11,7 +11,12 @@ from __future__ import annotations
 from ..config import DEFAULT_TIMEOUT_S
 from ..protocol.client import DeviceClient
 from ..protocol.codec import StreamAborted
-from ..protocol.spec import STREAM_MAX_SECONDS
+from ..protocol.spec import (
+    DETECT_MAX_SECONDS,
+    DETECT_SQUELCH_MILLI_MAX,
+    DETECT_THR_MILLI_LIMIT,
+    STREAM_MAX_SECONDS,
+)
 from ..transport.serial_transport import SerialTransport
 from .base import Command, CommandContext, register_command
 from .batch import BatchRecordSession, plan_streams
@@ -189,6 +194,100 @@ def _cmd_version(ctx: CommandContext, args: list[str]) -> None:
     ctx.emit(version or "(no response)")
 
 
+DETECT_USAGE = "detect <sec> [squelch_milli] [thr_milli] [dbg]"
+
+
+def _parse_detect_args(
+    ctx: CommandContext, args: list[str]
+) -> tuple[int, int | None, int | None, bool] | None:
+    """Parse and range-check ``detect`` arguments; None on a usage error.
+
+    The firmware is the authoritative validator (and applies the selected model's
+    own threshold default), so optional arguments are only forwarded when given;
+    we check ranges up front only to keep an obvious typo from being mistaken for a
+    missing acknowledgement.
+    """
+    if not 1 <= len(args) <= 4:
+        ctx.emit(f"usage: {DETECT_USAGE}")
+        return None
+    try:
+        values = [int(a) for a in args]
+    except ValueError:
+        ctx.emit(f"usage: {DETECT_USAGE} (whole numbers)")
+        return None
+
+    seconds = values[0]
+    if not 0 <= seconds <= DETECT_MAX_SECONDS:
+        ctx.emit(f"sec must be 0..{DETECT_MAX_SECONDS} (0 = until any key)")
+        return None
+    squelch = values[1] if len(values) > 1 else None
+    if squelch is not None and not 0 <= squelch <= DETECT_SQUELCH_MILLI_MAX:
+        ctx.emit(f"squelch_milli must be 0..{DETECT_SQUELCH_MILLI_MAX}")
+        return None
+    thr = values[2] if len(values) > 2 else None
+    if thr is not None and not -DETECT_THR_MILLI_LIMIT <= thr <= DETECT_THR_MILLI_LIMIT:
+        ctx.emit(f"thr_milli must be -{DETECT_THR_MILLI_LIMIT}..{DETECT_THR_MILLI_LIMIT}")
+        return None
+    if len(values) > 3 and values[3] not in (0, 1):
+        ctx.emit("dbg must be 0 or 1")
+        return None
+    dbg = len(values) > 3 and values[3] == 1
+    return seconds, squelch, thr, dbg
+
+
+def _cmd_detect(ctx: CommandContext, args: list[str]) -> None:
+    """Run on-device drone detection and stream the report lines to the console."""
+    parsed = _parse_detect_args(ctx, args)
+    if parsed is None:
+        return
+    seconds, squelch, thr, dbg = parsed
+    ran = "until any key" if seconds == 0 else f"{seconds}s"
+    ctx.emit(f"-> detecting ({ran}) on {ctx.port} - press q then Enter to stop")
+
+    def on_line(line: str) -> None:
+        alarm_on = line.startswith("ALM") and " ON " in line
+        if "DRONE" in line or alarm_on:
+            ctx.emit(f"[red]{line}[/red]")
+        else:
+            ctx.emit(line)
+
+    def on_retry(attempt: int, total: int) -> None:
+        ctx.emit(
+            f"[yellow]no answer (attempt {attempt}/{total}); resending - "
+            "press q then Enter to abort[/yellow]"
+        )
+
+    try:
+        with SerialTransport(ctx.port, timeout=DEFAULT_TIMEOUT_S) as transport:
+            trailer = DeviceClient(transport).run_detect(
+                seconds,
+                squelch_milli=squelch,
+                thr_milli=thr,
+                dbg=dbg,
+                on_line=on_line,
+                should_abort=ctx.should_abort,
+                on_retry=on_retry,
+            )
+    except StreamAborted:
+        ctx.emit("[yellow]aborted[/yellow]")
+        return
+
+    if trailer is None:
+        ctx.emit("[yellow](no DETEND trailer - run may be incomplete)[/yellow]")
+        return
+    if trailer.err:
+        health = " [red](WARNING: detector error - mic failed or disconnected)[/red]"
+    elif trailer.overrun:
+        health = " [yellow](WARNING: overrun - dropped audio)[/yellow]"
+    else:
+        health = " [green](clean)[/green]"
+    colour = "red" if trailer.drones else "green"
+    ctx.emit(
+        f"[{colour}]v[/{colour}] {trailer.windows} window(s), {trailer.drones} drone, "
+        f"{trailer.alarms} alarm(s){health}"
+    )
+
+
 register_command(
     Command(
         name="record",
@@ -214,5 +313,16 @@ register_command(
         usage="version",
         help="Query the firmware version string.",
         run=_cmd_version,
+    )
+)
+register_command(
+    Command(
+        name="detect",
+        usage=DETECT_USAGE,
+        help=(
+            "Run on-device drone detection for <sec> seconds (0 = until any key); "
+            "streams LVL/DET/ALM lines live and prints a DETEND summary."
+        ),
+        run=_cmd_detect,
     )
 )
