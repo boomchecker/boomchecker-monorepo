@@ -75,18 +75,29 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     clang-format
 
 # STM32 platform support: ARM cross-toolchain + flashing/debugging tools.
-# arm-none-eabi-gcc is the bare-metal compiler; st-flash handles simple flashing
-# over ST-Link. CMake + Ninja are installed above, independent of ESP-IDF.
+# The ARM cross-compiler comes from Arm's OFFICIAL GNU toolchain tarball, NOT
+# Ubuntu's gcc-arm-none-eabi apt package. That package ships the compiler but no
+# C++ standard library (no <cstring>/libstdc++ for arm-none-eabi, and Ubuntu has
+# no separate package that provides it), which breaks the C++ firmware
+# (App/radio + RadioLib fail with `fatal error: cstring: No such file`). The
+# tarball bundles gcc/g++/binutils/newlib + libstdc++ with headers. Pinned to
+# 13.2.rel1 to match the compiler version the firmware has been built against.
+# st-flash handles simple flashing over ST-Link; CMake + Ninja are installed above.
 # NOTE: the Ubuntu `openocd` package is intentionally NOT installed here — plain
 # `openocd` must keep resolving to Espressif's fork (from ESP-IDF, needed for
 # ESP32), and a third OpenOCD install would only add PATH conflicts. STM32
 # debugging uses the ST fork built below as `openocd-stm32`.
+ARG ARM_TOOLCHAIN_VERSION=13.2.rel1
+RUN wget -qO /tmp/arm-toolchain.tar.xz \
+        "https://developer.arm.com/-/media/Files/downloads/gnu/${ARM_TOOLCHAIN_VERSION}/binrel/arm-gnu-toolchain-${ARM_TOOLCHAIN_VERSION}-x86_64-arm-none-eabi.tar.xz" && \
+    mkdir -p /opt/arm-gnu-toolchain && \
+    tar -xf /tmp/arm-toolchain.tar.xz -C /opt/arm-gnu-toolchain --strip-components=1 && \
+    rm /tmp/arm-toolchain.tar.xz
+ENV PATH="/opt/arm-gnu-toolchain/bin:${PATH}"
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc-arm-none-eabi \
-    binutils-arm-none-eabi \
-    libnewlib-arm-none-eabi \
     gdb-multiarch \
-    stlink-tools
+    stlink-tools && \
+    rm -rf /var/lib/apt/lists/*
 
 # STMicroelectronics OpenOCD fork (the one bundled with STM32CubeIDE), built from
 # source into /opt/openocd-stm32 and exposed as `openocd-stm32`. Unlike the
