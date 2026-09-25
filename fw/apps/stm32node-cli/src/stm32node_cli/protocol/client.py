@@ -149,16 +149,25 @@ class DeviceClient:
 
         embedded-cli echoes every received character (wrapped in cursor
         save/restore escapes) and prints a ``> `` prompt, so the first line(s)
-        after a command are the echo, not the answer. Return the first line that,
-        once ANSI escapes and a leading prompt are stripped, is neither empty nor
-        the echoed command itself.
+        after a command are the echo, not the answer. With live autocompletion
+        enabled the board also echoes, after each typed character, the
+        autocomplete suffix of the command (e.g. typing ``version`` emits
+        ``version`` then ``ersion``, ``rsion``, ``sion`` ...). Once the escapes
+        and ``\\r`` are stripped these collapse onto one line that *starts with*
+        the sent command but is not equal to it (``versionersionrsion...``).
+
+        Return the first line that, once ANSI escapes and a leading prompt are
+        stripped, is non-empty and does not start with the echoed command - so
+        both a clean echo and an autocompletion-mangled one are skipped, while a
+        genuine reply (which never begins with the command word) is returned.
         """
+        target = sent.replace(" ", "")
         for _ in range(max_lines):
             line = _ANSI_RE.sub("", self._read_line())
             if line.startswith("> "):
                 line = line[2:]
             line = line.strip()
-            if line and line != sent:
+            if line and not line.replace(" ", "").startswith(target):
                 return line
         return ""
 
