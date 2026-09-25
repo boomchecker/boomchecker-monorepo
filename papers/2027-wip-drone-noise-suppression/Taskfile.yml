@@ -1,0 +1,50 @@
+version: "3"
+
+# No taskfile-level vars on purpose. papers/Taskfile.yml includes this file next
+# to 2026-bec-conference and 2026-imeko-impulsive-sounds, which declare vars of
+# the same names (TEX, TEX_DIR, JOB). With Task 3.53.1 those bleed between the
+# sibling includes and the winner varies from run to run, so `task
+# papers:dronenoise:build` intermittently tried to compile the IMEKO slides.tex.
+# The paths below are written out to keep this build deterministic.
+
+tasks:
+  setup:
+    desc: Install LaTeX packages the article needs (IEEEtran from texlive-publishers, algorithmic from texlive-science)
+    cmds:
+      - sudo apt-get update
+      - sudo apt-get install -y texlive-publishers texlive-science
+    status:
+      - kpsewhich IEEEtran.cls
+      - kpsewhich algorithmic.sty
+
+  figures:
+    desc: Compile the standalone TikZ block diagram in article/figs to PDF
+    cmds:
+      - pdflatex -interaction=nonstopmode -halt-on-error -output-directory=article/figs article/figs/fxlms_schema.tex
+    status:
+      - test -f article/figs/fxlms_schema.pdf
+
+  build:
+    desc: Compile article/article_main.tex to article/article_main.pdf
+    deps: [setup]
+    dir: article
+    cmds:
+      # Called, not a dep: a dep inherits this task's dir: and would look for
+      # article/article/figs.
+      - task: figures
+      - pdflatex -interaction=nonstopmode -halt-on-error article_main.tex
+      - bibtex article_main
+      - pdflatex -interaction=nonstopmode -halt-on-error article_main.tex
+      - pdflatex -interaction=nonstopmode -halt-on-error article_main.tex
+
+  clean:
+    desc: Remove LaTeX auxiliary files
+    cmds:
+      - rm -f article/article_main.aux article/article_main.log article/article_main.out article/article_main.bbl article/article_main.blg article/article_main.toc article/article_main.synctex.gz
+      - rm -f article/figs/fxlms_schema.aux article/figs/fxlms_schema.log article/figs/fxlms_schema.pdf
+
+  rebuild:
+    desc: Clean and compile again
+    cmds:
+      - task: clean
+      - task: build

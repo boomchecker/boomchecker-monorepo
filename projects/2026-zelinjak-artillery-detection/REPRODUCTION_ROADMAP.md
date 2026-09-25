@@ -29,7 +29,7 @@ Kritická cesta M0–M5: cca 10–15 h čisté práce. M1 a M2 lze dělat parale
 
 *"A Lightweight and Robust Two-Stage Acoustic Pipeline for Embedded Artillery Launch Detection"* — **přijat** na BEC2026 (Tallinn, 6.–8. 10. 2026). Skóre recenzí: R1 accept (2), R2 weak accept (1), R3 accept (2), R4 weak accept (1, doporučuje major revision). Camera-ready verze musí zapracovat výtky recenzentů, termín 2026-08-31.
 
-Zdroje článku: `BEC/article/article_main.tex`, PDF `BEC/BEC2026_paper_53.pdf`. Recenze verbatim: `BEC/.agents/memories/2026-07-21_bec2026_reviews_camera_ready.md`. Camera-ready plán psaní: `BEC/.agents/memories/2026-07-21_camera_ready_plan.md`.
+Zdroje článku: `../../papers/2026-bec-conference/article/article_main.tex`, PDF `../../papers/2026-bec-conference/BEC2026_paper_53.pdf`. Recenze verbatim: `../../papers/2026-bec-conference/.agents/memories/2026-07-21_bec2026_reviews_camera_ready.md`. Camera-ready plán psaní: `../../papers/2026-bec-conference/.agents/memories/2026-07-21_camera_ready_plan.md`.
 
 ### 1.2 Co článek měří (experimenty k replikaci)
 
@@ -392,7 +392,7 @@ Tyto výstupy slouží jako **cross-check determinismu** nového harnessu — ne
    - `reproduce:pc` — end-to-end řetěz: `ml/reproduce.py` (M3, as-shipped pár) -> `ml/convert_model.py` + `ml/compare_tflite_weights.py` + `ml/compare_weights.py` ×2 + `ml/evaluate_robustness.py` + `ml/reproduce.py` s parametrizací (M1, proveniénce vah a rozhodující kvantizační experiment na 1 i 5 seedech) -> `ml/reproduce_legacy.py` (M4) -> `ml/make_deliverables.py`. **Rozšířeno oproti původnímu plánu** — zahrnuje i M1 kroky, ne jen M3/M4, aby byl harness skutečně kompletní.
    - `reproduce:clean` — smaže `generated/features_seed*`, `generated/results/`, `generated/models/`; v `generated/reports/` smaže vše **kromě** `weights_provenance.md` a `provenance_table3.md` (ručně psané reporty s analýzou, které žádný skript nerekonstruuje — jen podkladová CSV k nim se regenerují). **Nikdy** nesahá na `generated/results_ref_20260721/`.
 2. `ml/make_deliverables.py` generuje (vše z CSV, žádná ruční čísla):
-   - `generated/reports/table2_float32.tex` a `table3_int8.tex` — IEEE booktabs formát shodný se stylem `BEC/article/article_main.tex` (`\resizebox`, `\toprule/\midrule/\bottomrule`), sloupec Scope (Full corpus / Held-out test) × SNR, hodnoty mean ± std přes 5 seedů.
+   - `generated/reports/table2_float32.tex` a `table3_int8.tex` — IEEE booktabs formát shodný se stylem `../../papers/2026-bec-conference/article/article_main.tex` (`\resizebox`, `\toprule/\midrule/\bottomrule`), sloupec Scope (Full corpus / Held-out test) × SNR, hodnoty mean ± std přes 5 seedů.
    - `generated/reports/reviewer_response.md` — 5 sekcí: výtka -> důkaz (čísla natažená z CSV) -> navrhovaná formulace do článku. Pokrývá R2#6/R3/R4-major1/R4-Q1 (M1+M4), R3/R4-major2/R4-Q2 (M1 rozhodující experiment), R3/R4-major3/R4-Q3 (M2+M3 held-out), R4-Q4 (SNR vzorec), R1 III.C (velikost modelu; Flash/RAM/ops označeno jako závislé na M6).
    - `generated/reports/deliverables_data.json` — konsolidovaný podklad pro HTML artifact (publikovaná čísla, reprodukovaný souhrn, kvantizační efekt, proveniénce vah, legacy bug).
 3. **HTML artifact vytvořen** (nástroj Artifact, po skillu `artifact-design`): jednostránkový "evidence review" — přehledový pruh 5 verdiktů (confirmed/refuted/measured/partial) s odkazy na detailní sekce, pak po sekcích: proveniénce vah (korelační stupnice bipolárního rozsahu −1..+1, marker na ose místo plněného pruhu, aby blízká-nule hodnota nevypadala jako "poloviční"), kvantizační efekt (divergentní bar chart 10 kombinací, červená/zelená), held-out vs. full-corpus (skupinové pruhy), legacy bug (tabulka predikce vs. měření vs. publikováno), a fakta/mezery pro M6. Publikováno: <https://claude.ai/code/artifact/b0cf34ae-c933-40fd-9292-b51e0c44360b>.
@@ -494,7 +494,7 @@ Tyto výstupy slouží jako **cross-check determinismu** nového harnessu — ne
 | Legacy hypotéza (M4) proveniénci nepotvrdí | Diskrepance zůstane nevysvětlená | Poctivý reframe jako "open observation" — dle plánu z 21. 7. pro camera-ready přijatelné; zbylí podezřelí: váhy (M1), HW (M6) |
 | Determinismus napříč prostředími (jiný CPU/BLAS -> drobné float32 rozdíly) | Cross-check vs referenci nevyjde bitově | Porovnávat na úrovni metrik (4 desetinná místa); mean ± std místo jediného čísla; odchylky do logu |
 | 13 launch eventů v test splitu | Held-out čísla se širokými intervaly | Multi-seed mean ± std + explicitní caveat v článku; žádná statistická kosmetika |
-| Kapacita do 31. 8. | Nestihne se M6 / přepis textu | Kritická cesta M0–M5 je jen cca 10–15 h; M6 je volitelné; přepis textu má vlastní plán (`BEC/.agents/memories/2026-07-21_camera_ready_plan.md`, dny 4–6) |
+| Kapacita do 31. 8. | Nestihne se M6 / přepis textu | Kritická cesta M0–M5 je jen cca 10–15 h; M6 je volitelné; přepis textu má vlastní plán (`../../papers/2026-bec-conference/.agents/memories/2026-07-21_camera_ready_plan.md`, dny 4–6) |
 
 ---
 
