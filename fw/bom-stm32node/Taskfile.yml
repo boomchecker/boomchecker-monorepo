@@ -1,12 +1,25 @@
 # Building this firmware needs the host Python packages that Nanopb code
 # generation uses (protobuf, grpcio-tools) - see the PATH note on `build`
-# below. Create them once with `task setup` in ../common/boomlink.
+# below. The `build` task creates ../common/boomlink/.venv automatically via
+# the `boomlink:setup` dep (idempotent - no-op once it exists), so no manual
+# `task setup` step is required.
 version: "3"
+
+includes:
+  # Task v3 runs included tasks in THIS Taskfile's dir by default; `dir:` forces
+  # boomlink's tasks (e.g. setup, which creates .venv) to run in its own dir.
+  boomlink:
+    taskfile: ../common/boomlink/Taskfile.yml
+    dir: ../common/boomlink
 
 tasks:
   build:
     desc: Build STM32 firmware (Debug)
     aliases: [b]
+    deps:
+      # Create ../common/boomlink/.venv (protobuf/grpcio-tools) if missing, so
+      # the PATH prefix below points at a real interpreter. Idempotent.
+      - boomlink:setup
     cmds:
       # ../common/boomlink/.venv first on PATH so CMake's find_package(Python3)
       # picks up an interpreter that actually has protobuf/grpcio-tools

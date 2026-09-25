@@ -3,6 +3,12 @@ version: "3"
 tasks:
   setup:
     desc: Create a venv with the generator/test Python dependencies
+    # Idempotent: skip when the venv already imports the generator packages, so
+    # depending on this from a build is a no-op once set up (never reinstalls).
+    # Checks presence, not requirements.txt drift - `rm -rf .venv` to rebuild
+    # after bumping requirements.txt.
+    status:
+      - .venv/bin/python -c "import google.protobuf, grpc_tools.protoc"
     cmds:
       - python3 -m venv .venv
       - .venv/bin/pip install --quiet --upgrade pip
@@ -11,6 +17,8 @@ tasks:
   build:
     desc: Configure and build the host-native protocol and link frame libraries + their test tools
     aliases: [b]
+    deps:
+      - setup
     cmds:
       # .venv first on PATH so CMake's find_package(Python3) picks up the
       # interpreter that actually has protobuf/grpcio-tools installed (task
