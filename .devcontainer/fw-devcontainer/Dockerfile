@@ -12,7 +12,14 @@ ENV TZ=Etc/UTC
 # compose.devcontainer.yml's `user:` field to match.
 RUN usermod -l boom -d /home/boom -m ubuntu && \
     groupmod -n boom ubuntu && \
-    usermod -a -G dialout boom && \
+    # Add boom to the `root` group (gid 0). WSL2/usbipd creates the ST-Link
+    # /dev/bus/usb node as root:root 0664 (owner rw, group rw, other r) with no
+    # udev inside the container to widen it, and Docker can't remap a
+    # bind-mounted device's ownership. gid-0 membership turns the node's
+    # group-rw bits into write access so libusb_open() succeeds. It lives here
+    # in /etc/group (not compose `group_add`) so `docker exec` shells — how Dev
+    # Containers runs the interactive terminal as boom — inherit it too.
+    usermod -a -G dialout,root boom && \
     mkdir -p /home/boom/.ssh && \
     chown -R boom:boom /home/boom
 
