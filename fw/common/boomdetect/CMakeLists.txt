@@ -279,6 +279,8 @@ add_library(boomdetect_core OBJECT
 # src/classifier_registry.c is what puts it in the image (see
 # training/README.md, "Adding a model to the board").
 set(BOOMDETECT_MODEL_SOURCES
+  models/model_mlp_f1.c
+  models/model_gbt_f1.c
   models/model_mlp_v6.c
   models/model_svm_v3.c
   models/model_mlp_l2.c

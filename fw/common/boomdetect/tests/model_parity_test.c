@@ -96,8 +96,8 @@ int main(void)
 {
     scenario_every_entry_has_a_model_and_vice_versa();
     scenario_decisions_match();
-    /* Exact count from running the compiled binary: six models x 16 vectors x 2
+    /* Exact count from running the compiled binary: eight models x 16 vectors x 2
        checks plus the registry cross-checks. Re-read it off the binary whenever
        a model is added or removed. */
-    BD_TEST_REPORT("model_parity_test", 223);
+    BD_TEST_REPORT("model_parity_test", 297);
 }

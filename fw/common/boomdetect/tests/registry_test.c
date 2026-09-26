@@ -29,11 +29,13 @@ static void scenario_lookup(void)
 
     const classifier_t *def = classifier_default();
     REQUIRE(def != NULL, "classifier_default() returned NULL");
-    CHECK(strcmp(def->name, "mlp_v6") == 0,
+    CHECK(strcmp(def->name, "mlp_f1") == 0,
           "the deployed model should be the default, got '%s'", def->name);
 
-    CHECK(classifier_by_name("mlp_v6") == def,
-          "by_name(\"mlp_v6\") did not return the same entry as default()");
+    CHECK(classifier_by_name("mlp_f1") == def,
+          "by_name(\"mlp_f1\") did not return the same entry as default()");
+    CHECK(classifier_by_name("mlp_v6") != NULL,
+          "mlp_v6 is missing - the previous default must stay in the image for rollback");
     CHECK(classifier_by_name("mlp_l2") != NULL,
           "mlp_l2 is missing - the run-full candidate must stay scorable on the board");
     CHECK(classifier_by_name("svm_v3") != NULL, "svm_v3 is missing from the registry");
@@ -369,5 +371,5 @@ int main(void)
     scenario_two_families_differ();
     scenario_init_rejects_bad_models();
     scenario_real_models_actually_run();
-    BD_TEST_REPORT("registry_test", 80);  /* exact count from running the compiled binary */
+    BD_TEST_REPORT("registry_test", 97);  /* exact count from running the compiled binary */
 }
