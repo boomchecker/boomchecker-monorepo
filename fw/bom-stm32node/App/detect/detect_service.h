@@ -45,8 +45,12 @@
 
 #include "classifier.h"
 
-/** Default RMS gate, in 1/1000 of full scale. */
-#define DETECT_DEFAULT_SQUELCH_MILLI 10
+/** Default RMS gate, in 1/1000 of full scale. 10 until 2026-09-26: outdoors
+    the background sat at RMS 0.004 and a drone at 20 m and beyond at 0.004-0.009,
+    so at 0.010 most of it never made a window. At 3 a quiet room (0.0026 on this
+    microphone) still yields none - a window needs 14 frames in a row above the
+    gate - and the field-trained models' thresholds were chosen at this gate. */
+#define DETECT_DEFAULT_SQUELCH_MILLI 3
 
 /* Longest timed run `detect` accepts, one day. The 60 s of the first builds was
    the console's habit (stream has the same limit, for its buffer), not the

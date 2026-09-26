@@ -27,13 +27,17 @@ STREAM_MAX_SECONDS = 60
 # --- On-device detector (matches firmware App/detect/detect_service.h, cli.c and
 # the model tables in fw/common/boomdetect/models/) -------------------------------
 # Defaults the board applies when `detect` is given fewer arguments. The squelch
-# is the detector's; the threshold belongs to the model `model` last selected
-# (thr_milli is a raw logit for the v6 MLP; 3.0 was calibrated on 2026-09-23 against
-# the node's own recordings of a real drone, replacing the 15.0 set on room noise
-# alone), so tests/test_firmware_defaults.py checks both against the firmware.
+# is the detector's (0.003 since 2026-09-26: at 0.010 most of a drone at 20 m and
+# beyond never made a window in the field recordings); the threshold belongs to
+# the model `model` last selected, and the image boots with the first registry
+# entry, mlp_f1 (a raw logit, chosen at 5 false-alarm windows per hour on the
+# public val negatives). tests/test_firmware_defaults.py checks all of these
+# against the firmware.
 DETECT_MAX_SECONDS = 86400  # DETECT_MAX_SECONDS in detect_service.h; 0 = until any key
-DETECT_DEFAULT_SQUELCH_MILLI = 10
+DETECT_DEFAULT_SQUELCH_MILLI = 3
 DETECT_SQUELCH_MILLI_MAX = 1000
+DETECT_DEFAULT_MODEL = "mlp_f1"  # first entry of classifier_registry.c
+DETECT_DEFAULT_MODEL_THR_MILLI = 8466  # default_thr_milli of model_mlp_f1.c
 DETECT_MLP_V6_DEFAULT_THR_MILLI = 3000  # default_thr_milli of model_mlp_v6.c
 DETECT_THR_MILLI_LIMIT = 20000  # accepted thr_milli range is -LIMIT..+LIMIT
 # The K-of-N alarm above the classifier (App/detect/detect_service.h): ON when at
@@ -135,16 +139,19 @@ COMMANDS: tuple[CommandSpec, ...] = (
             "console receives any byte, which is discarded rather than executed): "
             "microphone PCM is "
             "decimated to 16 kHz, MFCC features are extracted (1024-sample frames, hop 512), "
-            "every run of 14 frames above the RMS squelch is aggregated to a 52-value feature "
-            "vector and classified by the model compiled into the firmware. That is currently "
-            "a small MLP (v6), whose decision value is a raw logit, not a probability. "
-            "Optional overrides in units of 1/1000: squelch_milli (default 10 = RMS 0.010, "
-            "0 disables the gate, 0..1000) and thr_milli (defaults to the selected "
-            "model's own operating point, 3000 = logit 3.0 for mlp_v6, may be "
-            "negative, -20000..20000 - a value outside that range is rejected, not clamped; "
-            "the default was calibrated on the node's own recordings of one real drone in "
-            "one room, where it fired on 32-47 % of windows with the drone airborne and on "
-            "none of the speech/clap/appliance confusers - a calibration, not a validation). "
+            "every run of 14 frames above the RMS squelch is aggregated to a feature vector "
+            "(the layout the selected model reads) and classified by the model `model` last "
+            "selected. The image boots with mlp_f1, a small MLP trained with the node's own "
+            "field recordings, whose decision value is a raw logit, not a probability. "
+            "Optional overrides in units of 1/1000: squelch_milli (default "
+            f"{DETECT_DEFAULT_SQUELCH_MILLI} = RMS 0.003, 0 disables the gate, 0..1000) and "
+            "thr_milli (defaults to the selected model's own operating point, "
+            f"{DETECT_DEFAULT_MODEL_THR_MILLI} = logit 8.466 for mlp_f1 and "
+            f"{DETECT_MLP_V6_DEFAULT_THR_MILLI} for mlp_v6, may be negative, -20000..20000 - "
+            "a value outside that range is rejected, not clamped; mlp_f1's default is the "
+            "threshold with 5 false-alarm windows per hour on the public validation "
+            "negatives, at which it alarmed on 14 of 17 field recordings of two real drones "
+            "and on none of 11 negative ones, each judged by a model that had not heard it). "
             "A non-zero dbg adds one debug line per frame."
         ),
         response=(

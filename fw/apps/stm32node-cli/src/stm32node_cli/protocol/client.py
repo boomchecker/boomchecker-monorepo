@@ -21,9 +21,9 @@ from .codec import (
     parse_trailer,
 )
 from .spec import (
+    DETECT_DEFAULT_MODEL_THR_MILLI,
     DETECT_DEFAULT_SQUELCH_MILLI,
     DETECT_MAX_SECONDS,
-    DETECT_MLP_V6_DEFAULT_THR_MILLI,
     DETECT_TRAILER_PREFIX,
     HEADER_SIZE,
     MAGIC,
@@ -181,7 +181,8 @@ class DeviceClient:
         ``detect`` takes positional arguments, so to pass a later one every earlier
         one must be present; a gap is filled with the firmware default. This only
         matters when ``dbg`` is set without an explicit ``thr_milli``, in which case
-        the ``mlp_v6`` default is sent rather than the deployed model's own.
+        the default model's threshold is sent - right after boot, wrong once
+        ``model`` has selected another one.
 
         Startup handshake mirrors :meth:`start_stream`: the command is resent only
         while the board stays *silent* (it was lost). Once any byte arrives the run
@@ -201,9 +202,7 @@ class DeviceClient:
                 DETECT_DEFAULT_SQUELCH_MILLI if squelch_milli is None else int(squelch_milli)
             )
         if thr_milli is not None or dbg:
-            args.append(
-                DETECT_MLP_V6_DEFAULT_THR_MILLI if thr_milli is None else int(thr_milli)
-            )
+            args.append(DETECT_DEFAULT_MODEL_THR_MILLI if thr_milli is None else int(thr_milli))
         if dbg:
             args.append(1)
         encoded = encode_command("detect", *args)

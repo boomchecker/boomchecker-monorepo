@@ -45,7 +45,7 @@ def test_run_detect_fills_positional_gap_before_dbg():
     # filled with the firmware default rather than shifting dbg into thr's slot.
     t = FakeTransport(to_read=b"DETEND windows=0 drones=0 alarms=0 overrun=0 err=0\r\n")
     DeviceClient(t).run_detect(5, dbg=True)
-    assert t.written == b"detect 5 10 3000 1\n"
+    assert t.written == b"detect 5 3 8466 1\n"
 
 
 def test_run_detect_reports_error_trailer():
