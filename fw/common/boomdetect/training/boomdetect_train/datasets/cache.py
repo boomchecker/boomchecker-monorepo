@@ -25,6 +25,7 @@ import pandas as pd
 import pyarrow.parquet as pq
 from tqdm import tqdm
 
+from boomdetect_train.datasets.field import is_field_path, load_field_audio
 from boomdetect_train.dsp.audio import read_audio, to_16k
 from boomdetect_train.dsp.mfcc import N_MELS, N_MFCC, FrameData, Frontend
 from boomdetect_train.features import N_SCALARS, frame_scalars_batch
@@ -73,12 +74,14 @@ class CachedFrames:
 
 
 def _load_clip(path: str) -> tuple[np.ndarray, int]:
-    """Audio of a manifest `path`: a file, or `<parquet>#<row>`."""
+    """Audio of a manifest `path`: a file, `<parquet>#<row>`, or a field clip spec."""
     if "#" in path and path.rsplit("#", 1)[1].isdigit():
         shard, row = path.rsplit("#", 1)
         table = pq.read_table(shard, columns=["audio"])
         audio = table.column("audio")[int(row)].as_py()
         return read_audio(audio["bytes"])
+    if is_field_path(path):
+        return load_field_audio(path)
     return read_audio(path)
 
 
@@ -171,7 +174,7 @@ def build_source_cache(
             add(cid, x, sr)
     it = tqdm(file_items, desc=source, disable=not show_progress)
     for cid, path in it:
-        x, sr = read_audio(path)
+        x, sr = _load_clip(path)
         add(cid, x, sr)
 
     frames = np.concatenate(blocks, axis=0) if blocks else np.empty((0, FRAME_WIDTH), np.float32)

@@ -116,6 +116,21 @@ def test_parity_vectors_and_header():
     assert '"svm_t", 2u, 69u, 16u' in text
 
 
+def test_export_names_rename_and_refuse_what_the_c_cannot_take():
+    from boomdetect_train.run import _export_names
+
+    run_models = {"mlp_l2": object(), "gbt_reg_l1": object()}
+    assert _export_names(["mlp_l2=mlp_f1_l2", "gbt_reg_l1"], run_models) == [
+        ("mlp_l2", "mlp_f1_l2"),
+        ("gbt_reg_l1", "gbt_reg_l1"),
+    ]
+    assert _export_names(None, run_models) == [("gbt_reg_l1", "gbt_reg_l1"), ("mlp_l2", "mlp_l2")]
+    with pytest.raises(KeyError):
+        _export_names(["mlp_l9"], run_models)
+    with pytest.raises(ValueError):
+        _export_names(["mlp_l2=mlp-f1"], run_models)
+
+
 def test_c_float_round_trips_float32():
     for v in (0.0, 1.0, -3.70808077, 1e-7, 123456.789, np.float32(0.1)):
         s = export._c_float(v)

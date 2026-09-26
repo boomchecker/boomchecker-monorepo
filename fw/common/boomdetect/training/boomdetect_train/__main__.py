@@ -5,6 +5,8 @@
     bdtrain features [SOURCE..]   run the front end, fill the frame cache
     bdtrain baseline              score the two shipped models on every suite
     bdtrain train                 train every family x layout, save under runs/
+                                  (--field adds the node's field recordings,
+                                  --share weights sources, --folds judges the field)
     bdtrain compare RUN           evaluate a run's models next to the baseline
     bdtrain export RUN            write model headers + parity vectors into the C tree
     bdtrain score REC.wav         replay a recording through every model, window by window
@@ -76,6 +78,17 @@ def cmd_baseline(args: argparse.Namespace) -> int:
     return 0
 
 
+def parse_shares(items: list[str] | None) -> dict[str, float]:
+    """['field=0.25', 'drone_audio_dataset=0.15'] -> {'field': 0.25, ...}."""
+    out: dict[str, float] = {}
+    for item in items or []:
+        source, sep, value = item.partition("=")
+        if not sep or not source:
+            raise SystemExit(f"--share wants SOURCE=FRACTION, got {item!r}")
+        out[source] = float(value)
+    return out
+
+
 def cmd_train(args: argparse.Namespace) -> int:
     from boomdetect_train.run import train_all
 
@@ -87,6 +100,11 @@ def cmd_train(args: argparse.Namespace) -> int:
         run_name=args.name,
         max_neg_windows_per_clip=args.max_neg_windows,
         cnn_epochs=args.cnn_epochs,
+        field=args.field,
+        field_exclude=args.field_exclude,
+        shares=parse_shares(args.share),
+        folds=args.folds,
+        augment=args.augment,
     )
     print(f"run written to {run_dir}")
     return 0
@@ -106,7 +124,15 @@ def cmd_export(args: argparse.Namespace) -> int:
     from boomdetect_train.run import export_run
 
     run_dir = paths.runs_dir() / args.run
-    written = export_run(run_dir, load_manifest(), FrameCache(), models=args.models)
+    written = export_run(
+        run_dir,
+        load_manifest(),
+        FrameCache(),
+        models=args.models,
+        keep=args.keep,
+        fa_per_hour=args.fa_per_hour,
+        squelch=args.squelch,
+    )
     for p in written:
         print(f"wrote {p}")
     return 0
@@ -178,6 +204,37 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--layouts", nargs="*", type=int, default=None, help="1 2 3")
     p.add_argument("--max-neg-windows", type=int, default=None, help="cap per negative clip")
     p.add_argument("--cnn-epochs", type=int, default=40, help="epochs for the CNN families")
+    p.add_argument(
+        "--field", action="store_true", help="also train on the field recordings (raw/field)"
+    )
+    p.add_argument(
+        "--field-exclude",
+        nargs="*",
+        default=None,
+        metavar="CATEGORY",
+        help="leave these field categories out, e.g. runner250 (a drone) or ticho (a negative)",
+    )
+    p.add_argument(
+        "--share",
+        nargs="*",
+        default=None,
+        metavar="SOURCE=FRACTION",
+        help="weight: fraction of its class a source carries, e.g. field=0.25 "
+        "drone_audio_dataset=0.15 (default: every window weighs the same)",
+    )
+    p.add_argument(
+        "--folds",
+        type=int,
+        default=0,
+        help="also train K fold models, so `compare` judges each field recording out of fold",
+    )
+    p.add_argument(
+        "--augment",
+        type=int,
+        default=0,
+        metavar="N",
+        help="N distance variants of every field clip (augment.py), source 'field_aug'",
+    )
     p.set_defaults(fn=cmd_train)
 
     p = sub.add_parser("compare", help="evaluate a run against the baseline")
@@ -194,7 +251,32 @@ def main(argv: list[str] | None = None) -> int:
 
     p = sub.add_parser("export", help="write C headers and parity vectors for a run")
     p.add_argument("run")
-    p.add_argument("--models", nargs="*", default=None, help="model names to export; default all")
+    p.add_argument(
+        "--models",
+        nargs="*",
+        default=None,
+        metavar="NAME[=CNAME]",
+        help="models to export, optionally under another C name; default all",
+    )
+    p.add_argument(
+        "--keep",
+        nargs="*",
+        default=None,
+        metavar="RUN:MODEL",
+        help="registry models from earlier runs that need parity vectors, e.g. full:mlp_l2",
+    )
+    p.add_argument(
+        "--fa-per-hour",
+        type=float,
+        default=5.0,
+        help="false-alarm windows per hour on the val negatives that picks the threshold",
+    )
+    p.add_argument(
+        "--squelch",
+        type=float,
+        default=0.010,
+        help="per-frame RMS gate the threshold is chosen under (the board's detect squelch)",
+    )
     p.set_defaults(fn=cmd_export)
 
     args = ap.parse_args(argv)

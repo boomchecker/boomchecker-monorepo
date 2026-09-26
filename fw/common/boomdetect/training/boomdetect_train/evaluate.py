@@ -28,7 +28,13 @@ import pandas as pd
 from sklearn.metrics import roc_auc_score
 
 from boomdetect_train.datasets.cache import CachedFrames, FrameCache
-from boomdetect_train.datasets.manifest import ROLE_REAL, ROLE_STRESS, ROLE_TRAIN, ROLE_UNSEEN
+from boomdetect_train.datasets.manifest import (
+    ROLE_FIELD,
+    ROLE_REAL,
+    ROLE_STRESS,
+    ROLE_TRAIN,
+    ROLE_UNSEEN,
+)
 from boomdetect_train.decision import KofN, clip_alarmed
 from boomdetect_train.dsp.windows import DEFAULT_SQUELCH, Gate, window_seconds, windows
 from boomdetect_train.features import (
@@ -106,6 +112,10 @@ SUITES = {
     "halmstad": ((ROLE_UNSEEN,), None, ("halmstad",)),
     "salford": ((ROLE_UNSEEN,), None, ("salford",)),
     "real_mic": ((ROLE_REAL,), None, ("own_recordings",)),
+    # Real drones through the node's microphone. A model trained on field
+    # recordings is scored here out of fold (report.py), never on a recording
+    # it was fitted to.
+    "field": ((ROLE_FIELD,), None, ("field",)),
     "stress": ((ROLE_STRESS,), None, None),
 }
 
@@ -180,6 +190,34 @@ def score_clips(
                 ends=ends,
             )
         )
+    return out
+
+
+def score_clips_by_fold(
+    rows: pd.DataFrame,
+    cache: FrameCache,
+    layout: int,
+    scorers: dict[int, Scorer],
+    fold_of_group: dict[str, int],
+    *,
+    squelch: float | None = DEFAULT_SQUELCH,
+) -> list[ClipScores]:
+    """score_clips() with every clip scored by the model of its group's fold.
+
+    The fold models are the run's models retrained without one fold of
+    recordings each, so a clip scored here was never seen by the model that
+    scores it - which is what makes a field number mean anything when the run
+    trained on field recordings. Clips come back in the order of `rows`.
+    """
+    folds = rows["group"].map(fold_of_group)
+    if folds.isna().any():
+        missing = rows.loc[folds.isna(), "group"].unique()[:3].tolist()
+        raise ValueError(f"no fold for {missing}; retrain the run so its folds cover them")
+    out: list[ClipScores] = []
+    for k, sub in rows.groupby(folds.astype(int)):
+        out.extend(score_clips(sub, cache, layout, scorers[int(k)], squelch=squelch))
+    order = {cid: i for i, cid in enumerate(rows["id"])}
+    out.sort(key=lambda c: order[c.id])
     return out
 
 

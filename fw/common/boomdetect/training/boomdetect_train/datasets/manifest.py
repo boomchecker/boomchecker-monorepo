@@ -8,7 +8,7 @@ Columns
     category  finer class: drone type, ESC-50 category, "background", ...
     group     leakage key: clips from the same recording share a group and
               never straddle a split
-    split     train / val / test / unseen / eval_real / stress
+    split     train / val / test / unseen / eval_real / field / stress
     role      what the clip is for (see ROLES) - a label alone does not say
               whether a clip may be trained on
     sr        native sample rate
@@ -32,14 +32,18 @@ from boomdetect_train.paths import data_root
 COLUMNS = ["id", "source", "path", "label", "category", "group", "split", "role", "sr", "duration"]
 
 # Roles say what a clip may be used for. Public training data trains; the two
-# unseen public sets and the node's own recordings only ever evaluate; the
-# synthetic stress clips exist to probe one failure mode and would teach a model
-# nothing real.
+# unseen public sets and the node's own speaker-playback recordings only ever
+# evaluate; the synthetic stress clips exist to probe one failure mode and would
+# teach a model nothing real. Field recordings - real drones and real sounds
+# through the node's microphone - are too few for a fixed three-way split, so
+# they train only when a run asks for them and are judged fold by fold, each
+# recording scored by the model that did not see it (datasets/field.py).
 ROLE_TRAIN = "train"  # trainable data (its split decides train, val or test)
 ROLE_UNSEEN = "unseen"  # public data the models never see in training
 ROLE_REAL = "real_mic"  # recorded with the node's own microphone chain
+ROLE_FIELD = "field"  # the node's field recordings: trainable, judged out of fold
 ROLE_STRESS = "stress"  # synthetic probes
-ROLES = (ROLE_TRAIN, ROLE_UNSEEN, ROLE_REAL, ROLE_STRESS)
+ROLES = (ROLE_TRAIN, ROLE_UNSEEN, ROLE_REAL, ROLE_FIELD, ROLE_STRESS)
 
 # The three-way partition of the trainable clips.
 #

@@ -14,6 +14,13 @@ quiet negative is still a negative.
 Feature 0 of layouts 1 and 2 (the mean of MFCC coefficient 0) is the only
 level-dependent value and is never fed to a new model: the models are meant to
 be gain-invariant, which is also why the layout-3 patch has its mean removed.
+
+Sources can be weighted by share (share_weights): the HuggingFace set is 97 %
+of the positive windows, so without a share every other source - the
+DroneAudioDataset rotors, and above all the node's own field recordings - is a
+rounding error in the loss however much it matters. A share fixes the fraction
+of its class's weight a source carries; the classes are balanced by weight at
+the same time, so a weighted set needs no oversampling.
 """
 
 from __future__ import annotations
@@ -45,16 +52,44 @@ def feature_offset(layout: int) -> int:
 
 @dataclass
 class WindowSet:
-    """Feature rows with their labels and the clip each came from."""
+    """Feature rows with their labels, the clip and source each came from, and a weight."""
 
     x: np.ndarray  # (n, n_features_full) - the FULL layout; models slice it
     y: np.ndarray  # (n,) int
     clip: np.ndarray  # (n,) str clip ids, for grouping
     layout: int
+    source: np.ndarray | None = None  # (n,) str, the manifest source of each window
+    w: np.ndarray | None = None  # (n,) float sample weights; None = unweighted
 
     @property
     def n(self) -> int:
         return int(self.y.shape[0])
+
+    def take(self, idx: np.ndarray) -> WindowSet:
+        """The windows at `idx` (indices or a boolean mask), weights dropped."""
+        return WindowSet(
+            self.x[idx],
+            self.y[idx],
+            self.clip[idx],
+            self.layout,
+            None if self.source is None else self.source[idx],
+        )
+
+
+def concat_window_sets(*sets: WindowSet) -> WindowSet:
+    """Windows of several sets of one layout, in order; weights are not carried over."""
+    layouts = {s.layout for s in sets}
+    if len(layouts) != 1:
+        raise ValueError(f"cannot mix layouts {sorted(layouts)}")
+    return WindowSet(
+        np.concatenate([s.x for s in sets]),
+        np.concatenate([s.y for s in sets]),
+        np.concatenate([s.clip for s in sets]),
+        layouts.pop(),
+        np.concatenate(
+            [s.source if s.source is not None else np.full(s.n, "", dtype=str) for s in sets]
+        ),
+    )
 
 
 def build_window_set(
@@ -63,42 +98,108 @@ def build_window_set(
     layout: int,
     split: str,
     *,
+    roles: tuple[str, ...] = (ROLE_TRAIN,),
     hop: int = TRAIN_HOP,
     pos_min_rms: float = POS_WIN_MIN_RMS,
     max_neg_windows_per_clip: int | None = None,
     seed: int = SEED,
 ) -> WindowSet:
-    """Sliding training windows for every train-role clip of `split`."""
-    rows = manifest[(manifest["role"] == ROLE_TRAIN) & (manifest["split"] == split)]
+    """Sliding training windows for every clip of `split` whose role is one of `roles`."""
+    rows = manifest[(manifest["role"].isin(roles)) & (manifest["split"] == split)]
+    items = (
+        (rec.id, rec.source, int(rec.label), cache.get(rec.source, rec.id))
+        for rec in rows.itertuples(index=False)
+    )
+    return frames_window_set(
+        items,
+        layout,
+        hop=hop,
+        pos_min_rms=pos_min_rms,
+        max_neg_windows_per_clip=max_neg_windows_per_clip,
+        seed=seed,
+    )
+
+
+def frames_window_set(
+    items,
+    layout: int,
+    *,
+    hop: int = TRAIN_HOP,
+    pos_min_rms: float = POS_WIN_MIN_RMS,
+    max_neg_windows_per_clip: int | None = None,
+    seed: int = SEED,
+) -> WindowSet:
+    """Sliding training windows of (clip id, source, label, CachedFrames) items.
+
+    What build_window_set does for the cache, for frames that never were in it
+    (augmented variants, computed per run).
+    """
     rng = np.random.default_rng(seed)
-    xs, ys, ids = [], [], []
-    for rec in rows.itertuples(index=False):
-        cf = cache.get(rec.source, rec.id)
-        squelch = pos_min_rms if rec.label == 1 else None
+    xs, ys, ids, srcs = [], [], [], []
+    for clip_id, source, label, cf in items:
+        squelch = pos_min_rms if label == 1 else None
         feats, _ = clip_windows(cf, layout, Gate.WINDOW_MEDIAN, squelch, hop=hop)
         if feats.shape[0] == 0:
             continue
-        if (
-            rec.label == 0
-            and max_neg_windows_per_clip
-            and feats.shape[0] > max_neg_windows_per_clip
-        ):
+        if label == 0 and max_neg_windows_per_clip and feats.shape[0] > max_neg_windows_per_clip:
             pick = rng.choice(feats.shape[0], size=max_neg_windows_per_clip, replace=False)
             feats = feats[np.sort(pick)]
         xs.append(feats)
-        ys.append(np.full(feats.shape[0], int(rec.label), dtype=np.int64))
-        ids.extend([rec.id] * feats.shape[0])
+        ys.append(np.full(feats.shape[0], int(label), dtype=np.int64))
+        ids.extend([clip_id] * feats.shape[0])
+        srcs.extend([source] * feats.shape[0])
     n_feat = LAYOUTS[layout].n_features
     if not xs:
         return WindowSet(
-            np.empty((0, n_feat), np.float32), np.empty(0, np.int64), np.empty(0, str), layout
+            np.empty((0, n_feat), np.float32),
+            np.empty(0, np.int64),
+            np.empty(0, str),
+            layout,
+            np.empty(0, str),
         )
     return WindowSet(
         np.concatenate(xs).astype(np.float32),
         np.concatenate(ys),
         np.asarray(ids, dtype=str),
         layout,
+        np.asarray(srcs, dtype=str),
     )
+
+
+def share_weights(ws: WindowSet, shares: dict[str, float]) -> np.ndarray:
+    """Per-window weights: each named source carries its share of its class's weight.
+
+    Within one class (drone, not drone) a source listed in `shares` gets that
+    fraction of the class's total weight, spread evenly over its windows; the
+    sources not listed split what is left in proportion to their window counts.
+    Both classes end with the same total, so the result is also class-balanced,
+    and it is scaled to a mean of 1 so that a learning rate means what it did.
+    A share names a fraction of a class, so a source present in only one class
+    (the drone-only DroneAudioDataset) only takes from that one.
+    """
+    if ws.source is None:
+        raise ValueError("share weights need the source of every window")
+    bad = {s: v for s, v in shares.items() if not 0.0 <= v < 1.0}
+    if bad:
+        raise ValueError(f"a share is a fraction in [0, 1): {bad}")
+    w = np.zeros(ws.n, dtype=np.float64)
+    classes = [c for c in (0, 1) if (ws.y == c).any()]
+    for c in classes:
+        in_c = ws.y == c
+        named = {s: v for s, v in shares.items() if (in_c & (ws.source == s)).any()}
+        rest = in_c & ~np.isin(ws.source, list(named))
+        total = sum(named.values())
+        if total >= 1.0 and rest.any():
+            raise ValueError(f"class {c}: shares {named} leave nothing for the other sources")
+        if not rest.any() and total > 0:
+            named = {s: v / total for s, v in named.items()}  # nothing else to leave room for
+            total = 1.0
+        for s, v in named.items():
+            m = in_c & (ws.source == s)
+            w[m] = v / m.sum()
+        if rest.any():
+            w[rest] = (1.0 - total) / rest.sum()
+    return (w * (ws.n / w.sum())).astype(np.float64)
 
 
 def balance_by_oversampling(ws: WindowSet, seed: int = SEED) -> tuple[np.ndarray, np.ndarray]:
@@ -179,7 +280,13 @@ def train_mlp(
     ws: WindowSet, hidden: tuple[int, ...] = (32,), seed: int = SEED, alpha: float = 1e-4
 ) -> ScaledModel:
     off = feature_offset(ws.layout)
-    x, y = balance_by_oversampling(ws, seed)
+    # A weighted set is already class-balanced by weight (share_weights);
+    # oversampling on top of it would count the balance twice.
+    if ws.w is None:
+        x, y = balance_by_oversampling(ws, seed)
+        sw = None
+    else:
+        x, y, sw = ws.x, ws.y, ws.w
     x = x[:, off:]
     scaler, mean, inv = _fit_scaler(x)
     clf = MLPClassifier(
@@ -194,7 +301,7 @@ def train_mlp(
         validation_fraction=0.1,
         random_state=seed,
     )
-    clf.fit((x - mean) * inv, y)
+    clf.fit((x - mean) * inv, y, sample_weight=sw)
     return ScaledModel("mlp", ws.layout, off, mean, inv, clf, {"hidden": list(hidden)})
 
 
@@ -202,8 +309,9 @@ def train_svm(ws: WindowSet, c: float = 1.0, seed: int = SEED) -> ScaledModel:
     off = feature_offset(ws.layout)
     x = ws.x[:, off:]
     scaler, mean, inv = _fit_scaler(x)
-    clf = LinearSVC(C=c, class_weight="balanced", max_iter=20000, random_state=seed)
-    clf.fit((x - mean) * inv, ws.y)
+    balance = "balanced" if ws.w is None else None  # share_weights balanced it already
+    clf = LinearSVC(C=c, class_weight=balance, max_iter=20000, random_state=seed)
+    clf.fit((x - mean) * inv, ws.y, sample_weight=ws.w)
     return ScaledModel("svm", ws.layout, off, mean, inv, clf, {"C": c})
 
 
@@ -218,8 +326,11 @@ def train_gbt(
     """Gradient-boosted trees. No scaler: trees are invariant to monotone rescaling."""
     off = feature_offset(ws.layout)
     x = ws.x[:, off:].astype(np.float64)
-    n_pos, n_neg = int((ws.y == 1).sum()), int((ws.y == 0).sum())
-    w = np.where(ws.y == 1, n_neg / max(n_pos, 1), 1.0)
+    if ws.w is None:
+        n_pos, n_neg = int((ws.y == 1).sum()), int((ws.y == 0).sum())
+        w = np.where(ws.y == 1, n_neg / max(n_pos, 1), 1.0)
+    else:
+        w = ws.w
     clf = HistGradientBoostingClassifier(
         max_iter=max_iter,
         max_leaf_nodes=max_leaf_nodes,

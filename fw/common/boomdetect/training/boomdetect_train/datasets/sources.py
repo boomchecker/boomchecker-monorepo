@@ -34,6 +34,12 @@ own_recordings    The node's own microphone: playback of drone loops through a
                   rotor) and room backgrounds. Evaluation only.
 playback_source   The two 16 kHz loops that were played back. Same provenance
                   as the training drones, so an anchor, not evidence.
+field             The node's own microphone in the field (raw/field/<session>):
+                  real drones - DJI Phantom 4 and a Walkera Runner 250, whose
+                  ESC whistles at 7.8 kHz - and the sounds that fool the
+                  detector, sorted into Positive/ and Negative/ by the people
+                  who recorded them. Trains only when a run asks for it and is
+                  judged out of fold; see datasets/field.py.
 """
 
 from __future__ import annotations
@@ -47,8 +53,10 @@ import pandas as pd
 import pyarrow.parquet as pq
 import soundfile as sf
 
+from boomdetect_train.datasets.field import field_rows
 from boomdetect_train.datasets.manifest import (
     COLUMNS,
+    ROLE_FIELD,
     ROLE_REAL,
     ROLE_STRESS,
     ROLE_TRAIN,
@@ -267,6 +275,12 @@ def playback_source_rows(root: Path | None = None) -> Iterator[dict]:
         )
 
 
+def field_recording_rows(root: Path | None = None) -> Iterator[dict]:
+    """Every labelled field session under raw/field (datasets/field.py)."""
+    root = root if root is not None else raw_dir() / "field"
+    yield from field_rows(root, ROLE_FIELD)
+
+
 def stress_rows(root: Path | None = None) -> Iterator[dict]:
     """The synthetic probes from stress.py, if they have been generated."""
     from boomdetect_train.stress import category_of
@@ -316,5 +330,6 @@ def build_rows(hf_paths: Iterable[Path] | None = None) -> pd.DataFrame:
     rows.extend(salford_rows())
     rows.extend(own_recording_rows())
     rows.extend(playback_source_rows())
+    rows.extend(field_recording_rows())
     rows.extend(stress_rows())
     return pd.DataFrame(rows, columns=COLUMNS)
