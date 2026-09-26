@@ -16,6 +16,17 @@
  * firmware) is wider than the change it justified. A field default chosen to
  * stop crying wolf, not an operating point swept on labelled data.
  *
+ * 2026-09-23: lowered to 3000 against the first labelled recordings from the
+ * node's own microphone (boomdetect-data/raw/field/2026-09-23, seven 30 s
+ * takes: room, motors on the ground, hover at 2 m, throttle sweep, free flight,
+ * hover across the room, and speech/claps/keyboard/appliances). At 15.0 the
+ * model fired on 0-5 % of windows with the drone in the air; at 3.0 on 32-47 %
+ * of them, on 0 % of the confusers and on none of the room (all below squelch).
+ * The confusers peaked at 1.48 - the 12.05 above came from another session,
+ * probably another microphone, and the two numbers together are the point of
+ * the paragraph above: this threshold belongs to a rig, not to the model. One
+ * drone, one room, two and a half minutes - a calibration, not a validation.
+ *
  * The decision is a raw logit, not a probability. A threshold that looks
  * sensible for a probability (0.5, say) is nowhere near this model's operating
  * range, which is why the threshold belongs to the model rather than to the
@@ -64,7 +75,7 @@ const classifier_t classifier_mlp_v6 = {
     .layout_id         = BOOMDETECT_LAYOUT_MEAN_STD_DMEAN_CMAX,
     .n_features        = MLP_NUM_INPUTS,
     .feature_offset    = MLP_V6_OFFSET,
-    .default_thr_milli = 15000,
+    .default_thr_milli = 3000,
     .decide            = mlp_v6_decide,
     .ctx               = NULL,
 };

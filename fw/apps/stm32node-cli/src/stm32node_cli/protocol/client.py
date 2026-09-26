@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import re
 import time
 from collections.abc import Callable, Iterator
@@ -9,15 +10,25 @@ from dataclasses import dataclass
 
 from ..transport.base import Transport
 from .codec import (
+    DetectTrailer,
     ProtocolError,
     StreamAborted,
     StreamHeader,
     StreamTrailer,
     encode_command,
+    parse_detect_trailer,
     parse_header,
     parse_trailer,
 )
-from .spec import HEADER_SIZE, MAGIC, STREAM_MAX_SECONDS
+from .spec import (
+    DETECT_DEFAULT_MODEL_THR_MILLI,
+    DETECT_DEFAULT_SQUELCH_MILLI,
+    DETECT_MAX_SECONDS,
+    DETECT_TRAILER_PREFIX,
+    HEADER_SIZE,
+    MAGIC,
+    STREAM_MAX_SECONDS,
+)
 
 # Strips terminal control sequences the board's console echoes (embedded-cli wraps
 # each echoed key in cursor save/restore codes, e.g. b"\x1b[s\x1b[u").
@@ -28,6 +39,8 @@ _ANSI_RE = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]")
 RetryFn = Callable[[int, int], None]
 # Returns True if the user asked to abort; polled during blocking waits.
 AbortFn = Callable[[], bool]
+# Called with each text line a streaming text command emits (without its terminator).
+LineFn = Callable[[str], None]
 
 # Defaults for the start-of-stream handshake.
 DEFAULT_STREAM_RETRIES = 3
@@ -144,21 +157,121 @@ class DeviceClient:
         """
         return parse_trailer(self._read_line())
 
+    def run_detect(
+        self,
+        seconds: int,
+        *,
+        squelch_milli: int | None = None,
+        thr_milli: int | None = None,
+        dbg: bool = False,
+        on_line: LineFn | None = None,
+        should_abort: AbortFn | None = None,
+        on_retry: RetryFn | None = None,
+        retries: int = DEFAULT_STREAM_RETRIES,
+        ack_timeout: float = DEFAULT_ACK_TIMEOUT_S,
+    ) -> DetectTrailer | None:
+        """Run the board's ``detect`` command and stream its report lines.
+
+        Sends ``detect <sec> [squelch_milli] [thr_milli] [dbg]`` and reads the
+        ``LVL``/``DET``/``ALM`` (and, with ``dbg``, ``F=``) lines the board emits,
+        handing each to ``on_line`` as it arrives. Returns the parsed ``DETEND``
+        trailer that always closes the run (even after a ``DETERR`` start failure),
+        or None if the board sent no trailer before the transport gave up.
+
+        ``detect`` takes positional arguments, so to pass a later one every earlier
+        one must be present; a gap is filled with the firmware default. This only
+        matters when ``dbg`` is set without an explicit ``thr_milli``, in which case
+        the default model's threshold is sent - right after boot, wrong once
+        ``model`` has selected another one.
+
+        Startup handshake mirrors :meth:`start_stream`: the command is resent only
+        while the board stays *silent* (it was lost). Once any byte arrives the run
+        has started, so a resend would queue a duplicate detect - we stop retrying
+        and read on. ``should_abort`` is polled throughout; when it returns True we
+        send one byte (which stops a ``sec=0`` run on the board) and raise
+        :class:`StreamAborted`.
+        """
+        if seconds < 0 or seconds > DETECT_MAX_SECONDS:
+            raise ValueError(f"seconds must be 0..{DETECT_MAX_SECONDS}")
+        if retries < 1:
+            raise ValueError("retries must be >= 1")
+
+        args: list[int] = [int(seconds)]
+        if squelch_milli is not None or thr_milli is not None or dbg:
+            args.append(
+                DETECT_DEFAULT_SQUELCH_MILLI if squelch_milli is None else int(squelch_milli)
+            )
+        if thr_milli is not None or dbg:
+            args.append(DETECT_DEFAULT_MODEL_THR_MILLI if thr_milli is None else int(thr_milli))
+        if dbg:
+            args.append(1)
+        encoded = encode_command("detect", *args)
+
+        prefix = DETECT_TRAILER_PREFIX.decode("ascii")
+        partial = bytearray()
+        attempt = 1
+        seen_any = False
+        self._t.write(encoded)
+        deadline = time.monotonic() + ack_timeout
+        while True:
+            if should_abort is not None and should_abort():
+                with contextlib.suppress(Exception):
+                    self._t.write(b"\n")  # stop a `sec=0` run on the board
+                raise StreamAborted("aborted by user")
+            b = self._t.read(1)
+            if not b:
+                # Silent read. Resend only while nothing has arrived at all (the
+                # command was lost); once the run is under way, LVL lines pace it
+                # ~once a second, so keep waiting for the DETEND trailer.
+                if not seen_any and time.monotonic() >= deadline:
+                    if attempt >= retries:
+                        raise ProtocolError(
+                            f"no response from the board after {retries} attempt(s) - "
+                            "is it connected and running?"
+                        )
+                    attempt += 1
+                    if on_retry is not None:
+                        on_retry(attempt - 1, retries)
+                    self._t.write(encoded)
+                    deadline = time.monotonic() + ack_timeout
+                continue
+            seen_any = True
+            if b == b"\r":
+                continue
+            if b != b"\n":
+                partial += b
+                continue
+            line = partial.decode("ascii", errors="replace")
+            partial.clear()
+            if line.startswith(prefix):
+                return parse_detect_trailer(line)
+            if line and on_line is not None:
+                on_line(line)
+
     def _read_response(self, sent: str, *, max_lines: int = 8) -> str:
         """Read a text command's reply, skipping the board's echo and prompt.
 
         embedded-cli echoes every received character (wrapped in cursor
         save/restore escapes) and prints a ``> `` prompt, so the first line(s)
-        after a command are the echo, not the answer. Return the first line that,
-        once ANSI escapes and a leading prompt are stripped, is neither empty nor
-        the echoed command itself.
+        after a command are the echo, not the answer. With live autocompletion
+        enabled the board also echoes, after each typed character, the
+        autocomplete suffix of the command (e.g. typing ``version`` emits
+        ``version`` then ``ersion``, ``rsion``, ``sion`` ...). Once the escapes
+        and ``\\r`` are stripped these collapse onto one line that *starts with*
+        the sent command but is not equal to it (``versionersionrsion...``).
+
+        Return the first line that, once ANSI escapes and a leading prompt are
+        stripped, is non-empty and does not start with the echoed command - so
+        both a clean echo and an autocompletion-mangled one are skipped, while a
+        genuine reply (which never begins with the command word) is returned.
         """
+        target = sent.replace(" ", "")
         for _ in range(max_lines):
             line = _ANSI_RE.sub("", self._read_line())
             if line.startswith("> "):
                 line = line[2:]
             line = line.strip()
-            if line and line != sent:
+            if line and not line.replace(" ", "").startswith(target):
                 return line
         return ""
 

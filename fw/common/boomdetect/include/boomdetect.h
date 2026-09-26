@@ -44,13 +44,14 @@ extern "C" {
 #endif
 
 /**
- * Largest number of MFCC frames that can be aggregated into one window, and the
+ * Largest number of frames that can be aggregated into one window, and the
  * firmware's value. A ceiling rather than the setting itself: it sizes
  * boomdetect_t::mfccs, while boomdetect_config_t::accum_frames picks the value
  * actually used, so a host run can reproduce the training pipeline's windowing
- * without a rebuild.
+ * without a rebuild. Defined in dsp_config.h because the log-mel layout's
+ * width is derived from it; this is the name the rest of the API uses.
  */
-#define BOOMDETECT_ACCUM_FRAMES 14u
+#define BOOMDETECT_ACCUM_FRAMES BOOMDETECT_ACCUM_FRAMES_MAX
 
 /**
  * Default frame hop, in 16 kHz samples. Frames are BOOMDETECT_WINDOW_SIZE long and
@@ -182,11 +183,16 @@ typedef struct
     bool     gap_pending; /**< a drop happened; the next frame reports it */
 
     float    frame[BOOMDETECT_WINDOW_SIZE]; /**< contiguous copy; the MFCC destroys it */
-    float    mfccs[BOOMDETECT_ACCUM_FRAMES * BOOMDETECT_MFCC_COEFFS];
+    /** One descriptor row per accepted frame of the current window:
+        [mfcc x 13 | log-mel x 20 | spectral scalars x 8] (src/extractors.h).
+        The name predates the log-mel and scalar blocks; the MFCC still comes
+        first in every row, so boomdetect_last_mfcc() is unchanged. */
+    float    mfccs[BOOMDETECT_ACCUM_FRAMES * BOOMDETECT_FRAME_WIDTH];
     /** Per-frame RMS of the frames held in the current window, for
         BOOMDETECT_GATE_WINDOW_MEDIAN. Unused by the per-frame gate. */
     float    rms_hist[BOOMDETECT_ACCUM_FRAMES];
-    float    features[BOOMDETECT_FEATURE_COUNT];
+    /** The configured extractor's output; only its n_features are meaningful. */
+    float    features[BOOMDETECT_FEATURE_MAX];
     uint32_t last_mfcc_slot;
 
     uint32_t accum;
@@ -269,6 +275,16 @@ void boomdetect_counts(const boomdetect_t *d, uint32_t *windows, uint32_t *drone
  * than only its verdict.
  */
 const float *boomdetect_last_mfcc(const boomdetect_t *d);
+
+/**
+ * @brief The whole descriptor row of the frame the last successful step() consumed.
+ *
+ * BOOMDETECT_FRAME_WIDTH values: the MFCC coefficients, then the log-mel
+ * vector, then the spectral scalars (src/extractors.h gives the offsets). NULL
+ * under the same conditions as boomdetect_last_mfcc(). Exists for the parity
+ * fixtures of the layouts that read more than the coefficients.
+ */
+const float *boomdetect_last_frame(const boomdetect_t *d);
 
 /**
  * @brief The aggregated feature vector of the last completed window.

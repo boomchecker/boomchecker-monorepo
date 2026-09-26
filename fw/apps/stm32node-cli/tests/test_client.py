@@ -113,6 +113,32 @@ def test_version_skips_echo_and_prompt():
     assert t.written == b"version\n"
 
 
+def _live_autocomplete_echo(command: str) -> bytes:
+    """Reproduce embedded-cli's live-autocompletion echo for a typed command.
+
+    On each keystroke the board echoes the typed char and then, wrapped in
+    cursor save/restore escapes, the remaining autocomplete suffix of the
+    command (printLiveAutocompletion). With the escapes and CRs stripped these
+    collapse to one line, e.g. "version" -> "versionersionrsion...".
+    """
+    raw = bytearray()
+    for i, ch in enumerate(command):
+        raw += ch.encode()
+        raw += b"\x1b[s" + command[i + 1 :].encode() + b"\x1b[u"
+    raw += b"\r\n"
+    return bytes(raw)
+
+
+def test_version_skips_live_autocompletion_echo():
+    # Real hardware bug: with live autocompletion the echoed line is not equal to
+    # the command ("versionersion rsion ..."), so an exact-match filter wrongly
+    # returned it. version() must still find the real answer on the next line.
+    echo = _live_autocomplete_echo("version")
+    t = FakeTransport(to_read=echo + b"bom-stm32node CLI v0.1\r\n")
+    assert DeviceClient(t).version() == "bom-stm32node CLI v0.1"
+    assert t.written == b"version\n"
+
+
 def test_start_stream_retries_then_fails_on_silence():
     # Total silence = command never landed -> resend each attempt, then give up.
     t = FakeTransport(to_read=b"")

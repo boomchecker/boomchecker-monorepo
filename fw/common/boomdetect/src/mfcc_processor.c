@@ -12,7 +12,7 @@
    buffers in boomdetect_t) and mfcc_tables.h's (which the generator wrote). They
    agree today and nothing made them. A regenerated table with a different
    coefficient count would have mfcc_process() write MFCC_DCT_ROWS floats into a
-   slot strided by BOOMDETECT_MFCC_COEFFS - an overrun that stays inside boomdetect_t,
+   slot strided by BOOMDETECT_FRAME_WIDTH - an overrun that stays inside boomdetect_t,
    so ASan never sees it and only the decisions go quietly wrong. */
 _Static_assert(MFCC_DCT_ROWS == BOOMDETECT_MFCC_COEFFS,
                "mfcc_tables.h was generated for a different coefficient count");
@@ -32,7 +32,11 @@ static arm_mfcc_instance_f32 mfcc_inst;
 
 /* 2*BOOMDETECT_FFT_SIZE, and it has to be: the magnitude step inside the MFCC asks for
    fftLen magnitudes and so reads twice that many floats, while upstream's doc
-   comment claims "FFT length + 2" is enough. See boomdetect_mfcc_f32.c. */
+   comment claims "FFT length + 2" is enough. See boomdetect_mfcc_f32.c.
+
+   After a call the first BOOMDETECT_MEL_FILTERS entries hold the log-mel vector
+   the DCT was applied to (boomdetect_mfcc_f32 computes it in place there); see
+   mfcc_last_logmel(). */
 static float32_t scratch_buffer[BOOMDETECT_FFT_SIZE * 2];
 
 arm_status mfcc_init(void)
@@ -54,4 +58,9 @@ void mfcc_process(float32_t *p_audio_buffer, float32_t *p_mfcc_out)
        line later, which is the kind of thing that reads as a formality until
        someone passes a buffer they still needed. */
     boomdetect_mfcc_f32(&mfcc_inst, p_audio_buffer, p_mfcc_out, scratch_buffer);
+}
+
+const float32_t *mfcc_last_logmel(void)
+{
+    return scratch_buffer;
 }

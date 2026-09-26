@@ -1,0 +1,287 @@
+"""`bdtrain`: the command line over the package.
+
+    bdtrain fetch                 download the HuggingFace shards into raw/
+    bdtrain manifest              enumerate every dataset present -> manifest.parquet
+    bdtrain features [SOURCE..]   run the front end, fill the frame cache
+    bdtrain baseline              score the two shipped models on every suite
+    bdtrain train                 train every family x layout, save under runs/
+                                  (--field adds the node's field recordings,
+                                  --share weights sources, --folds judges the field)
+    bdtrain compare RUN           evaluate a run's models next to the baseline
+    bdtrain export RUN            write model headers + parity vectors into the C tree
+    bdtrain score REC.wav         replay a recording through every model, window by window
+
+Every command reads and writes under the data root (paths.data_root()), never
+inside the repository, except `export`, whose whole point is the C tree.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+
+import pandas as pd
+
+from boomdetect_train import paths
+from boomdetect_train.datasets.cache import FrameCache, build_source_cache
+from boomdetect_train.datasets.manifest import load_manifest, save_manifest, summarize
+from boomdetect_train.datasets.sources import build_rows
+from boomdetect_train.dsp.mfcc import Frontend
+
+
+def cmd_fetch(args: argparse.Namespace) -> int:
+    from boomdetect_train.datasets.fetch import fetch_all
+
+    fetch_all(shards=args.shards or None)
+    return 0
+
+
+def cmd_manifest(args: argparse.Namespace) -> int:
+    df = build_rows()
+    if df.empty:
+        print(
+            "no datasets found; see datasets/sources.py for where they are expected",
+            file=sys.stderr,
+        )
+        return 1
+    p = save_manifest(df)
+    print(f"wrote {len(df)} clips to {p}")
+    with pd.option_context("display.width", 160, "display.max_rows", 200):
+        print(summarize(df).to_string(index=False))
+    return 0
+
+
+def cmd_features(args: argparse.Namespace) -> int:
+    df = load_manifest()
+    cache = FrameCache()
+    frontend = Frontend()
+    sources = args.sources or sorted(df["source"].unique())
+    for src in sources:
+        if cache.has(src) and not args.force:
+            print(f"{src}: cached, skipping (use --force to rebuild)")
+            continue
+        out = build_source_cache(df, src, frontend)
+        print(f"{src}: wrote {out}")
+    return 0
+
+
+def cmd_baseline(args: argparse.Namespace) -> int:
+    from boomdetect_train.report import baseline_report
+
+    text = baseline_report(load_manifest(), FrameCache(), rule=args.rule)
+    print(text)
+    out = paths.runs_dir() / "baseline.md"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(text, encoding="utf-8")
+    print(f"\nwritten to {out}")
+    return 0
+
+
+def parse_shares(items: list[str] | None) -> dict[str, float]:
+    """['field=0.25', 'drone_audio_dataset=0.15'] -> {'field': 0.25, ...}."""
+    out: dict[str, float] = {}
+    for item in items or []:
+        source, sep, value = item.partition("=")
+        if not sep or not source:
+            raise SystemExit(f"--share wants SOURCE=FRACTION, got {item!r}")
+        out[source] = float(value)
+    return out
+
+
+def cmd_train(args: argparse.Namespace) -> int:
+    from boomdetect_train.run import train_all
+
+    run_dir = train_all(
+        load_manifest(),
+        FrameCache(),
+        families=args.families,
+        layouts=args.layouts,
+        run_name=args.name,
+        max_neg_windows_per_clip=args.max_neg_windows,
+        cnn_epochs=args.cnn_epochs,
+        field=args.field,
+        field_exclude=args.field_exclude,
+        shares=parse_shares(args.share),
+        folds=args.folds,
+        augment=args.augment,
+    )
+    print(f"run written to {run_dir}")
+    return 0
+
+
+def cmd_compare(args: argparse.Namespace) -> int:
+    from boomdetect_train.report import compare_report
+
+    run_dir = paths.runs_dir() / args.run
+    text = compare_report(load_manifest(), FrameCache(), run_dir, rule=args.rule)
+    print(text)
+    (run_dir / "report.md").write_text(text, encoding="utf-8")
+    return 0
+
+
+def cmd_export(args: argparse.Namespace) -> int:
+    from boomdetect_train.run import export_run
+
+    run_dir = paths.runs_dir() / args.run
+    written = export_run(
+        run_dir,
+        load_manifest(),
+        FrameCache(),
+        models=args.models,
+        keep=args.keep,
+        fa_per_hour=args.fa_per_hour,
+        squelch=args.squelch,
+    )
+    for p in written:
+        print(f"wrote {p}")
+    return 0
+
+
+def cmd_score(args: argparse.Namespace) -> int:
+    from pathlib import Path
+
+    from boomdetect_train.score import render, score_recording
+
+    for wav in args.wavs:
+        wav = Path(wav)
+        df, scored = score_recording(wav, run=args.run, models=args.models, squelch=args.squelch)
+        print(render(df, scored, wav))
+        out = wav.with_suffix(".windows.csv")
+        df.to_csv(out, index=False, float_format="%.4f")
+        print(f"per-window table: {out}\n")
+    return 0
+
+
+def cmd_fixtures(args: argparse.Namespace) -> int:
+    from boomdetect_train.fixtures import write_extractor_fixture
+
+    print(f"wrote {write_extractor_fixture()}")
+    return 0
+
+
+def cmd_paths(args: argparse.Namespace) -> int:
+    info = {
+        "data_root": str(paths.data_root()),
+        "raw": str(paths.raw_dir()),
+        "cache": str(paths.cache_dir()),
+        "runs": str(paths.runs_dir()),
+        "mfcc_tables_h": str(paths.MFCC_TABLES_H),
+        "models_dir": str(paths.MODELS_DIR),
+    }
+    print(json.dumps(info, indent=2))
+    return 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(prog="bdtrain", description=__doc__.split("\n\n")[0])
+    sub = ap.add_subparsers(dest="cmd", required=True)
+
+    sub.add_parser("paths", help="print the directories in use").set_defaults(fn=cmd_paths)
+    sub.add_parser(
+        "fixtures", help="regenerate tests/vectors/extractor_expected.h from the Python spec"
+    ).set_defaults(fn=cmd_fixtures)
+    sub.add_parser("manifest", help="enumerate datasets into manifest.parquet").set_defaults(
+        fn=cmd_manifest
+    )
+
+    p = sub.add_parser("fetch", help="download the HuggingFace shards (resumable)")
+    p.add_argument("shards", nargs="*", type=int, help="shard numbers; default all 39")
+    p.set_defaults(fn=cmd_fetch)
+
+    p = sub.add_parser("features", help="fill the frame cache")
+    p.add_argument("sources", nargs="*", help="sources to (re)build; default all")
+    p.add_argument("--force", action="store_true")
+    p.set_defaults(fn=cmd_features)
+
+    p = sub.add_parser("baseline", help="score the shipped models")
+    p.add_argument("--rule", default="2of4", help="K-of-N alarm rule, e.g. 2of4, or 'none'")
+    p.set_defaults(fn=cmd_baseline)
+
+    p = sub.add_parser("train", help="train the model families")
+    p.add_argument("--name", default=None, help="run name (default: timestamp)")
+    p.add_argument("--families", nargs="*", default=None, help="mlp svm gbt cnn ...")
+    p.add_argument("--layouts", nargs="*", type=int, default=None, help="1 2 3")
+    p.add_argument("--max-neg-windows", type=int, default=None, help="cap per negative clip")
+    p.add_argument("--cnn-epochs", type=int, default=40, help="epochs for the CNN families")
+    p.add_argument(
+        "--field", action="store_true", help="also train on the field recordings (raw/field)"
+    )
+    p.add_argument(
+        "--field-exclude",
+        nargs="*",
+        default=None,
+        metavar="CATEGORY",
+        help="leave these field categories out, e.g. runner250 (a drone) or ticho (a negative)",
+    )
+    p.add_argument(
+        "--share",
+        nargs="*",
+        default=None,
+        metavar="SOURCE=FRACTION",
+        help="weight: fraction of its class a source carries, e.g. field=0.25 "
+        "drone_audio_dataset=0.15 (default: every window weighs the same)",
+    )
+    p.add_argument(
+        "--folds",
+        type=int,
+        default=0,
+        help="also train K fold models, so `compare` judges each field recording out of fold",
+    )
+    p.add_argument(
+        "--augment",
+        type=int,
+        default=0,
+        metavar="N",
+        help="N distance variants of every field clip (augment.py), source 'field_aug'",
+    )
+    p.set_defaults(fn=cmd_train)
+
+    p = sub.add_parser("compare", help="evaluate a run against the baseline")
+    p.add_argument("run")
+    p.add_argument("--rule", default="2of4")
+    p.set_defaults(fn=cmd_compare)
+
+    p = sub.add_parser("score", help="replay a WAV through the models, window by window")
+    p.add_argument("wavs", nargs="+", help="recordings (48 kHz from the board, or anything)")
+    p.add_argument("--run", default="full", help="run whose models to include; '' for shipped only")
+    p.add_argument("--models", nargs="*", default=None, help="restrict to these model names")
+    p.add_argument("--squelch", type=float, default=0.010, help="per-frame RMS gate (board: 0.010)")
+    p.set_defaults(fn=cmd_score)
+
+    p = sub.add_parser("export", help="write C headers and parity vectors for a run")
+    p.add_argument("run")
+    p.add_argument(
+        "--models",
+        nargs="*",
+        default=None,
+        metavar="NAME[=CNAME]",
+        help="models to export, optionally under another C name; default all",
+    )
+    p.add_argument(
+        "--keep",
+        nargs="*",
+        default=None,
+        metavar="RUN:MODEL",
+        help="registry models from earlier runs that need parity vectors, e.g. full:mlp_l2",
+    )
+    p.add_argument(
+        "--fa-per-hour",
+        type=float,
+        default=5.0,
+        help="false-alarm windows per hour on the val negatives that picks the threshold",
+    )
+    p.add_argument(
+        "--squelch",
+        type=float,
+        default=0.010,
+        help="per-frame RMS gate the threshold is chosen under (the board's detect squelch)",
+    )
+    p.set_defaults(fn=cmd_export)
+
+    args = ap.parse_args(argv)
+    return int(args.fn(args))
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

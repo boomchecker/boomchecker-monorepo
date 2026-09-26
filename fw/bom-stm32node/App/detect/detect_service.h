@@ -21,8 +21,12 @@
  *                                                   constant: the gate resets
  *                                                   accumulation, so a window
  *                                                   can straddle silence
+ *   ALM t=<s>.<ms> <ON|OFF> hits=<k>/<n>            the K-of-N alarm changed
+ *                                                   state on the window that
+ *                                                   closed at t; k = drone
+ *                                                   windows among the last n
  *   F=<n> a=<n> r=<n> h=<us> m=<us>                 per frame, only with dbg=1
- *   DETEND windows=<n> drones=<n> overrun=<0|1> err=<0|1>
+ *   DETEND windows=<n> drones=<n> alarms=<n> overrun=<0|1> err=<0|1>
  *   DETERR <reason>                                 followed by DETEND, always
  *
  * detect_service_selftest() prints a separate DST* family; see
@@ -41,8 +45,31 @@
 
 #include "classifier.h"
 
-/** Default RMS gate, in 1/1000 of full scale. */
-#define DETECT_DEFAULT_SQUELCH_MILLI 10
+/** Default RMS gate, in 1/1000 of full scale. 10 until 2026-09-26: outdoors
+    the background sat at RMS 0.004 and a drone at 20 m and beyond at 0.004-0.009,
+    so at 0.010 most of it never made a window. At 3 a quiet room (0.0026 on this
+    microphone) still yields none - a window needs 14 frames in a row above the
+    gate - and the field-trained models' thresholds were chosen at this gate. */
+#define DETECT_DEFAULT_SQUELCH_MILLI 3
+
+/* Longest timed run `detect` accepts, one day. The 60 s of the first builds was
+   the console's habit (stream has the same limit, for its buffer), not the
+   detector's: the timestamps are 64-bit inside boomdetect_frame_to_ms(), the
+   counters are 32-bit and the loop keeps no per-second state. What a long run
+   does cost is the radio - it is not serviced while `detect` runs (see
+   docs/firmware/bom-stm32node/boomlink.md section 6.2). `detect 0` has no limit
+   at all and ends on the first byte from the console. */
+#define DETECT_MAX_SECONDS 86400
+
+/* The alarm rule above the classifier (fw/common/boomdetect/include/
+   boomdetect_alarm.h): ON when at least K_ON of the last N classified windows
+   were called drone, OFF when fewer than K_OFF were. One window is 448 ms and
+   one logit; an alarm is a property of seconds. 2-of-4 with release below 1 is
+   what the training package evaluates clip-level verdicts with, so the board
+   and the report mean the same thing by "alarm". */
+#define DETECT_ALARM_N     4
+#define DETECT_ALARM_K_ON  2
+#define DETECT_ALARM_K_OFF 1
 
 /* The decision threshold is NOT here. It belongs to the model - a linear SVM's
    decisions live around +-3 while an MLP's are unbounded logits - so it is
@@ -50,8 +77,9 @@
    model's value is recorded beside it in boomdetect/models/model_mlp_v6.c. */
 
 /**
- * @brief Run detection for `seconds` (clamped to 1..60) and stream results.
- * @param seconds       capture length
+ * @brief Run detection for `seconds` and stream results.
+ * @param seconds       capture length, clamped to 1..DETECT_MAX_SECONDS; 0 runs
+ *                      until the console receives any byte (usb_cli_key_pressed)
  * @param squelch_milli RMS squelch threshold in 1/1000 (0 disables the gate)
  * @param thr_milli     decision threshold in 1/1000 (may be negative)
  * @param debug         non-zero: print an F=<frame> breadcrumb per frame
