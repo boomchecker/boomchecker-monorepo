@@ -15,3 +15,7 @@
 retraining/retrain*/models/
 retraining/retrain*/results/**/per_sample_seed*.csv
 retraining/retrain*/results/unseen_snr_per_sample_seed*.csv
+# Beamer auxiliary files (slides/)
+*.nav
+*.snm
+*.vrb
