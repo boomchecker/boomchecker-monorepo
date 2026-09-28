@@ -106,6 +106,34 @@
 }
 \tikzset{lbl/.style={font=\scriptsize,anchor=west,xshift=3pt,color=#1}}
 
+
+% "Two ways to train for noise": block diagram with a summing junction and a noise source.
+\tikzset{
+  twoways/.style={
+    blk/.style={draw=ctublue,thick,rounded corners,fill=ctublue!8,
+                minimum height=7.5mm,text width=17mm,font=\small,align=center},
+    ar/.style={-{Latex[length=1.8mm]},draw=gray,semithick},
+    why/.style={font=\scriptsize,text width=40mm,align=left,anchor=west,color=ink!80}},
+  sum/.style={draw=#1,thick,circle,fill=paper,minimum size=5.5mm,inner sep=0pt,
+              path picture={\draw[#1,thick]
+                ($(path picture bounding box.center)+(-1.6mm,0)$) -- ++(3.2mm,0)
+                ($(path picture bounding box.center)+(0,-1.6mm)$) -- ++(0,3.2mm);}},
+  src/.style={draw=#1,thick,rounded corners,fill=paper,minimum width=16mm,minimum height=5.5mm},
+  card/.style={draw=#1,thick,rounded corners,inner xsep=4mm,inner ysep=2.2mm},
+  head/.style={fill=#1,text=paper,font=\small\bfseries,rounded corners,
+               inner xsep=2.5mm,inner ysep=1.2mm,anchor=west},
+}
+% noise source glyph: \noisesrc{name}{coordinate}{colour} -- a random-looking trace in a box
+\newcommand{\noisesrc}[3]{%
+  \node[src=#3] (#1) at (#2) {};
+  \begin{scope}[shift={(#1.center)},x=1mm,y=1mm]
+    \draw[#3,line width=0.5pt,line join=round]
+      (-6,0) -- (-5.4,1.6) -- (-4.8,-1.1) -- (-4.2,0.7) -- (-3.6,-1.8) -- (-3,1.2)
+      -- (-2.4,-0.4) -- (-1.8,1.9) -- (-1.2,-1.4) -- (-0.6,0.5) -- (0,-0.9)
+      -- (0.6,1.5) -- (1.2,-1.7) -- (1.8,0.3) -- (2.4,1.1) -- (3,-1.3) -- (3.6,0.8)
+      -- (4.2,-0.5) -- (4.8,1.7) -- (5.4,-1.0) -- (6,0.2);
+  \end{scope}}
+
 % --------------------------------------------------
 
 \title[Post-Trigger Artillery Launch Classifier]{A Lightweight Noise-Robust Post-Trigger\\Classifier for Embedded Acoustic\\Artillery Launch Detection}
@@ -464,39 +492,47 @@
 \end{frame}
 
 \begin{frame}{Two ways to train for noise}
-  \vfill
   \centering
-  \begin{tikzpicture}[
-      blk/.style={draw=ctublue,thick,rounded corners,fill=ctublue!8,
-                  minimum height=9mm,text width=18mm,font=\small,align=center},
-      noise/.style={draw=ink!45,thick,circle,fill=paper,inner sep=1pt,font=\small\bfseries},
-      ar/.style={-{Latex[length=1.8mm]},draw=gray,semithick},
-      lab/.style={font=\small\bfseries,anchor=east}
-    ]
-    % row A: feature domain
+  \begin{tikzpicture}[twoways]
+
+    % ---------------- A: noise on the MFCC features ----------------
     \node[blk] (a1) at (0,0) {waveform};
-    \node[blk,right=8mm of a1] (a2) {MFCC};
-    \node[noise,right=5mm of a2] (an) {$+$};
-    \node[blk,right=5mm of an] (a3) {CNN};
-    \draw[ar] (a1) -- (a2); \draw[ar] (a2) -- (an); \draw[ar] (an) -- (a3);
-    \node[font=\scriptsize\color{ink!65},above=3.5mm of an] {Gaussian jitter};
-    \node[lab,color=gray1] at ($(a1.west)+(-4mm,0)$) {A\enspace MFCC domain};
-    % row B: waveform domain
-    \node[blk] (b1) at (0,-2.2) {waveform};
-    \node[noise,right=5mm of b1,draw=accent,text=accent] (bn) {$+$};
-    \node[blk,right=5mm of bn] (b2) {MFCC};
-    \node[blk,right=5mm of b2] (b3) {CNN};
-    \draw[ar] (b1) -- (bn); \draw[ar] (bn) -- (b2); \draw[ar] (b2) -- (b3);
-    \node[font=\scriptsize\color{accent},above=3.5mm of bn] {noise at 30--5\,dB};
-    \node[lab,color=accent] at ($(b1.west)+(-4mm,0)$) {B\enspace waveform domain};
+    \node[blk] (a2) at (2.2,0) {MFCC};
+    \node[sum=gray1] (as) at (4.4,0) {};
+    \node[blk] (a3) at (6.6,0) {CNN};
+    \noisesrc{an}{$(as)+(0,9.5mm)$}{gray1}
+    \node[font=\scriptsize\color{ink!65},anchor=west] at ($(an.east)+(1.5mm,0)$)
+      {Gaussian jitter on the matrix};
+    \draw[ar] (a1) -- (a2); \draw[ar] (a2) -- (as); \draw[ar] (as) -- (a3);
+    \draw[ar] (an) -- (as);
+    \node[why] (aw) at ($(a3.east)+(5mm,0)$)
+      {\textbf{cheap} -- MFCCs computed once,\\ noise added to the features};
+    \begin{scope}[on background layer]
+      \node[card=gray2,fit=(a1)(a3)(an)(aw)] (ca) {};
+    \end{scope}
+    \node[head=gray1] at ($(ca.north west)+(3mm,0)$) {A\enspace noise on the MFCC features};
+
+    % ---------------- B: noise on the waveform ----------------
+    \node[blk] (b1) at (0,-2.75) {waveform};
+    \node[sum=accent] (bs) at (2.2,-2.75) {};
+    \node[blk] (b2) at (4.4,-2.75) {MFCC};
+    \node[blk] (b3) at (6.6,-2.75) {CNN};
+    \noisesrc{bn}{$(bs)+(0,9.5mm)$}{accent}
+    \node[font=\scriptsize\color{accent},anchor=west] at ($(bn.east)+(1.5mm,0)$)
+      {additive noise, 30--5\,dB SNR};
+    \draw[ar] (b1) -- (bs); \draw[ar] (bs) -- (b2); \draw[ar] (b2) -- (b3);
+    \draw[ar] (bn) -- (bs);
+    \node[why] (bw) at ($(b3.east)+(5mm,0)$)
+      {\textbf{costlier} -- MFCCs recomputed for\\ every noisy copy, as in the sensor};
+    \begin{scope}[on background layer]
+      \node[card=accent,fit=(b1)(b3)(bn)(bw)] (cb) {};
+    \end{scope}
+    \node[head=accent] at ($(cb.north west)+(3mm,0)$) {B\enspace noise on the waveform};
   \end{tikzpicture}
-  \vfill
-  \begin{itemize}\small
-    \item A is cheap: the MFCCs are computed once, noise is added to the matrix.
-    \item But additive noise \emph{before} MFCC extraction distorts the cepstrum
-          \textbf{nonlinearly} and signal-dependently -- A may not imitate it.
-    \item Augmentation on the training split only.
-  \end{itemize}
+  \par\vspace{2mm}
+  {\small Noise added \emph{before} MFCC extraction distorts the cepstrum
+   \textbf{nonlinearly} -- does A imitate it?}\\[0.5mm]
+  {\scriptsize\color{ink!60} Augmentation on the training split only.}
       \note{
 \textbf{[6:40--7:40]}\par\medskip
     To make the network robust, we add noise during training. // And there are two
