@@ -77,36 +77,54 @@ Today I'll show you a small neural network that recognizes the sound of an artil
 It runs on a cheap microcontroller, and it keeps working in noise.\par
 }
 \newpage
-\slidehead{2}{Motivation and research questions}{0:40–1:50}{Part A -- full text}
-\thumb{3}
+\slidehead{2}{Motivation – decide on the edge, in noise}{0:40–1:50}{Part A -- full text}
+\thumb{2}
 {\Large\raggedright\sloppy\setlength{\parskip}{6pt}
 Let me start with the motivation.\par
 Recent conflicts have shown that we need cheap systems that can warn about artillery fire.\par
 Acoustic sensing is a good candidate.\par
-It is passive, it needs little power, and it doesn't send out any signal, so it is hard to find.\par
-But a real sensor has two problems at the same time.\par
-It has to work in noise.\par
-And it has to run on small, low-power hardware.\par
-\click
-So we ask two questions.\par
-First – to make the classifier robust to noise, is it enough to add noise to the features, or do we have to add it to the audio signal itself?\par
-And second – does this robustness survive when we quantize the model and run it on a microcontroller?\par
+It is passive, it needs little power, and it doesn't send out any signal.\par
+But if the sensor is cheap, we want many of them.\par
+And then we cannot stream raw audio from every node to a server.\par
+It costs power and bandwidth, and a node that transmits all the time is easy to find.\par
+So the decision has to be made on the edge – on the node itself.\par
+The node sends only an alert.\par
+The second problem is the signal.\par
+Artillery usually fires from far away – in our recordings, five to ten kilometres.\par
+So the launch arrives weak, and the signal-to-noise ratio is low.\par
+The classifier has to work in noise.\par
 }
 \newpage
-\slidehead{3}{Two-stage detection pipeline}{1:50–2:50}{Part A -- full text}
+\slidehead{3}{Research questions}{1:50–2:30}{Part A -- full text}
+\thumb{3}
+{\Large\raggedright\sloppy\setlength{\parskip}{6pt}
+These two problems give us two questions.\par
+First, low SNR.\par
+To make the classifier robust, we add noise during training.\par
+Can we add it cheaply, to the MFCC features?\par
+Or do we have to add it to the audio signal itself?\par
+Second, the edge.\par
+Does this robustness survive when we quantize the model to int8 and run it on a microcontroller?\par
+}
+\newpage
+\slidehead{4}{Two-stage detection pipeline}{2:30–3:50}{Part A -- full text}
 \thumb{4}
 {\Large\raggedright\sloppy\setlength{\parskip}{6pt}
 Our system has two stages.\par
-The first stage is a streaming trigger.\par
-It listens all the time and looks for impulsive events.\par
-It is our earlier work – it detected all the gunshots we tested, and it works down to a signal-to-noise ratio of five decibels.\par
-The second stage is what this talk is about.\par
-For each candidate, we cut a sixty millisecond window around the peak, compute MFCC features, and a small CNN decides: artillery launch, or not.\par
-So to be clear – we evaluate only the second stage.\par
-We assume the trigger has already found the event.\par
+The first stage is our earlier work.\par
+It runs all the time on the audio stream.\par
+It turns the signal into energy, and a median filter over the neighbouring windows estimates the background noise.\par
+The background is subtracted, and a peak becomes a candidate only if it is clearly above the background and rises like an impulse.\par
+This trigger detected all the gunshots we tested, and it works down to five decibels.\par
+But it fires on every impulsive sound – a door, a shout, a rifle shot.\par
+That's why we need the second stage.\par
+Only the candidates go there.\par
+We cut a sixty millisecond window around the peak, compute MFCC features, and a small CNN decides: artillery launch, or not.\par
+So the binary classifier is, in effect, the artillery launch detector.\par
+In this talk we evaluate only the second stage.\par
 }
 \newpage
-\slidehead{4}{Field recordings}{2:50–3:50}{Part A -- full text}
+\slidehead{5}{Field recordings}{3:50–4:50}{Part A -- full text}
 \thumb{5}
 {\Large\raggedright\sloppy\setlength{\parskip}{6pt}
 The data come from real artillery measurements.\par
@@ -119,7 +137,7 @@ Below it, you can see the sixty millisecond window that the classifier actually 
 Thirty percent of it is before the peak, and seventy percent after it.\par
 }
 \newpage
-\slidehead{5}{Labelled corpus and event-level split}{3:50–4:40}{Part A -- full text}
+\slidehead{6}{Labelled corpus and event-level split}{4:50–5:40}{Part A -- full text}
 \thumb{6}
 {\Large\raggedright\sloppy\setlength{\parskip}{6pt}
 This is the whole labelled corpus – eight hundred and forty-one events.\par
@@ -132,7 +150,7 @@ In training we use all four channels, and a class-weighted loss for the imbalanc
 The test set has ten launches and one hundred and fifty-eight other events.\par
 }
 \newpage
-\slidehead{6}{MFCC front end and compact CNN}{4:40–5:40}{Part A -- full text}
+\slidehead{7}{MFCC front end and compact CNN}{5:40–6:40}{Part A -- full text}
 \thumb{7}
 {\Large\raggedright\sloppy\setlength{\parskip}{6pt}
 Now the method.\par
@@ -145,7 +163,7 @@ In total it has about seventy-two thousand parameters.\par
 That is small enough for a microcontroller.\par
 }
 \newpage
-\slidehead{7}{Two ways to train for noise}{5:40–6:40}{Part A -- full text}
+\slidehead{8}{Two ways to train for noise}{6:40–7:40}{Part A -- full text}
 \thumb{8}
 {\Large\raggedright\sloppy\setlength{\parskip}{6pt}
 To make the network robust, we add noise during training.\par
@@ -159,7 +177,7 @@ Noise in the audio does not stay simple after the MFCC – it changes the featur
 So A may not look like real noise at all.\par
 }
 \newpage
-\slidehead{8}{Evaluation protocol}{6:40–7:30}{Part A -- full text}
+\slidehead{9}{Evaluation protocol}{7:40–8:30}{Part A -- full text}
 \thumb{9}
 {\Large\raggedright\sloppy\setlength{\parskip}{6pt}
 How do we test it?\par
@@ -171,7 +189,7 @@ Every number is an average over twenty-five runs – five training seeds and fiv
 And we report mainly the MCC, because the classes are imbalanced.\par
 }
 \newpage
-\slidehead{9}{Result 1 – where to add the noise}{7:30–8:40}{Part A -- full text}
+\slidehead{10}{Result 1 – where to add the noise}{8:30–9:40}{Part A -- full text}
 \thumb{10}
 {\Large\raggedright\sloppy\setlength{\parskip}{6pt}
 This is the first result.\par
@@ -186,7 +204,7 @@ When we combine both, it is worse than B alone.\par
 So feature noise is not just insufficient – here it actually hurts.\par
 }
 \newpage
-\slidehead{10}{Result 2 – held-out robustness of the deployed model}{8:40–9:50}{Part A -- full text}
+\slidehead{11}{Result 2 – held-out robustness of the deployed model}{9:40–10:50}{Part A -- full text}
 \thumb{11}
 {\Large\raggedright\sloppy\setlength{\parskip}{6pt}
 Now the deployed model in more detail.\par
@@ -201,7 +219,7 @@ And no small-arms gunshot was ever classified as artillery.\par
 Quantization to int8 made no real difference.\par
 }
 \newpage
-\slidehead{11}{Result 3 – on the ESP32-S3}{9:50–10:50}{Part A -- full text}
+\slidehead{12}{Result 3 – on the ESP32-S3}{10:50–11:50}{Part A -- full text}
 \thumb{12}
 {\Large\raggedright\sloppy\setlength{\parskip}{6pt}
 Finally, the microcontroller.\par
@@ -213,7 +231,7 @@ Please note, that's only the network – the MFCCs were computed on the host.\pa
 The model has about eighty kilobytes, and the whole firmware needs less than one hundred and fifty kilobytes of RAM.\par
 }
 \newpage
-\slidehead{12}{Limitations}{10:50–11:20}{Part A -- full text}
+\slidehead{13}{Limitations}{11:50–12:20}{Part A -- full text}
 \thumb{13}
 {\Large\raggedright\sloppy\setlength{\parskip}{6pt}
 Of course, there are limitations.\par
@@ -223,7 +241,7 @@ And the noise is synthetic.\par
 So these are the next steps for us.\par
 }
 \newpage
-\slidehead{13}{Conclusion}{11:20–12:00}{Part A -- full text}
+\slidehead{14}{Conclusion}{12:20–13:00}{Part A -- full text}
 \thumb{14}
 {\Large\raggedright\sloppy\setlength{\parskip}{6pt}
 To sum up.\par
@@ -245,36 +263,54 @@ T I'll s y a s n n t r t s o a a l.\par
 I r o a c m, a i k w i n.\par
 }
 \newpage
-\slidehead{2}{Motivation and research questions}{0:40–1:50}{Part B -- first letters}
-\thumb{3}
+\slidehead{2}{Motivation – decide on the edge, in noise}{0:40–1:50}{Part B -- first letters}
+\thumb{2}
 {\large\ttfamily\raggedright\linespread{1.5}\selectfont\setlength{\parskip}{7pt}
 L m s w t m.\par
 R c h s t w n c s t c w a a f.\par
 A s i a g c.\par
-I i p, i n l p, a i doesn't s o a s, s i i h t f.\par
-B a r s h t p a t s t.\par
-I h t w i n.\par
-A i h t r o s, l-p h.\par
-\click
-S w a t q.\par
-F – t m t c r t n, i i e t a n t t f, o d w h t a i t t a s i?\par
-A s – d t r s w w q t m a r i o a m?\par
+I i p, i n l p, a i doesn't s o a s.\par
+B i t s i c, w w m o t.\par
+A t w c s r a f e n t a s.\par
+I c p a b, a a n t t a t t i e t f.\par
+S t d h t b m o t e – o t n i.\par
+T n s o a a.\par
+T s p i t s.\par
+A u f f f a – i o r, f t t k.\par
+S t l a w, a t s-t-n r i l.\par
+T c h t w i n.\par
 }
 \newpage
-\slidehead{3}{Two-stage detection pipeline}{1:50–2:50}{Part B -- first letters}
+\slidehead{3}{Research questions}{1:50–2:30}{Part B -- first letters}
+\thumb{3}
+{\large\ttfamily\raggedright\linespread{1.5}\selectfont\setlength{\parskip}{7pt}
+T t p g u t q.\par
+F, l SNR.\par
+T m t c r, w a n d t.\par
+C w a i c, t t MFCC f?\par
+O d w h t a i t t a s i?\par
+S, t e.\par
+D t r s w w q t m t int8 a r i o a m?\par
+}
+\newpage
+\slidehead{4}{Two-stage detection pipeline}{2:30–3:50}{Part B -- first letters}
 \thumb{4}
 {\large\ttfamily\raggedright\linespread{1.5}\selectfont\setlength{\parskip}{7pt}
 O s h t s.\par
-T f s i a s t.\par
-I l a t t a l f i e.\par
-I i o e w – i d a t g w t, a i w d t a s-t-n r o f d.\par
-T s s i w t t i a.\par
-F e c, w c a s m w a t p, c MFCC f, a a s CNN d: a l, o n.\par
-S t b c – w e o t s s.\par
-W a t t h a f t e.\par
+T f s i o e w.\par
+I r a t t o t a s.\par
+I t t s i e, a a m f o t n w e t b n.\par
+T b i s, a a p b a c o i i i c a t b a r l a i.\par
+T t d a t g w t, a i w d t f d.\par
+B i f o e i s – a d, a s, a r s.\par
+That's w w n t s s.\par
+O t c g t.\par
+W c a s m w a t p, c MFCC f, a a s CNN d: a l, o n.\par
+S t b c i, i e, t a l d.\par
+I t t w e o t s s.\par
 }
 \newpage
-\slidehead{4}{Field recordings}{2:50–3:50}{Part B -- first letters}
+\slidehead{5}{Field recordings}{3:50–4:50}{Part B -- first letters}
 \thumb{5}
 {\large\ttfamily\raggedright\linespread{1.5}\selectfont\setlength{\parskip}{7pt}
 T d c f r a m.\par
@@ -287,7 +323,7 @@ B i, y c s t s m w t t c a s.\par
 T p o i i b t p, a s p a i.\par
 }
 \newpage
-\slidehead{5}{Labelled corpus and event-level split}{3:50–4:40}{Part B -- first letters}
+\slidehead{6}{Labelled corpus and event-level split}{4:50–5:40}{Part B -- first letters}
 \thumb{6}
 {\large\ttfamily\raggedright\linespread{1.5}\selectfont\setlength{\parskip}{7pt}
 T i t w l c – e h a f-o e.\par
@@ -300,7 +336,7 @@ I t w u a f c, a a c-w l f t i.\par
 T t s h t l a o h a f-e o e.\par
 }
 \newpage
-\slidehead{6}{MFCC front end and compact CNN}{4:40–5:40}{Part B -- first letters}
+\slidehead{7}{MFCC front end and compact CNN}{5:40–6:40}{Part B -- first letters}
 \thumb{7}
 {\large\ttfamily\raggedright\linespread{1.5}\selectfont\setlength{\parskip}{7pt}
 N t m.\par
@@ -313,7 +349,7 @@ I t i h a s-t t p.\par
 T i s e f a m.\par
 }
 \newpage
-\slidehead{7}{Two ways to train for noise}{5:40–6:40}{Part B -- first letters}
+\slidehead{8}{Two ways to train for noise}{6:40–7:40}{Part B -- first letters}
 \thumb{8}
 {\large\ttfamily\raggedright\linespread{1.5}\selectfont\setlength{\parskip}{7pt}
 T m t n r, w a n d t.\par
@@ -327,7 +363,7 @@ N i t a d n s s a t MFCC – i c t f i a n w.\par
 S A m n l l r n a a.\par
 }
 \newpage
-\slidehead{8}{Evaluation protocol}{6:40–7:30}{Part B -- first letters}
+\slidehead{9}{Evaluation protocol}{7:40–8:30}{Part B -- first letters}
 \thumb{9}
 {\large\ttfamily\raggedright\linespread{1.5}\selectfont\setlength{\parskip}{7pt}
 H d w t i?\par
@@ -339,7 +375,7 @@ E n i a a o t-f r – f t s a f n s.\par
 A w r m t MCC, b t c a i.\par
 }
 \newpage
-\slidehead{9}{Result 1 – where to add the noise}{7:30–8:40}{Part B -- first letters}
+\slidehead{10}{Result 1 – where to add the noise}{8:30–9:40}{Part B -- first letters}
 \thumb{10}
 {\large\ttfamily\raggedright\linespread{1.5}\selectfont\setlength{\parskip}{7pt}
 T i t f r.\par
@@ -354,7 +390,7 @@ W w c b, i i w t B a.\par
 S f n i n j i – h i a h.\par
 }
 \newpage
-\slidehead{10}{Result 2 – held-out robustness of the deployed model}{8:40–9:50}{Part B -- first letters}
+\slidehead{11}{Result 2 – held-out robustness of the deployed model}{9:40–10:50}{Part B -- first letters}
 \thumb{11}
 {\large\ttfamily\raggedright\linespread{1.5}\selectfont\setlength{\parskip}{7pt}
 N t d m i m d.\par
@@ -369,7 +405,7 @@ A n s-a g w e c a a.\par
 Q t int8 m n r d.\par
 }
 \newpage
-\slidehead{11}{Result 3 – on the ESP32-S3}{9:50–10:50}{Part B -- first letters}
+\slidehead{12}{Result 3 – on the ESP32-S3}{10:50–11:50}{Part B -- first letters}
 \thumb{12}
 {\large\ttfamily\raggedright\linespread{1.5}\selectfont\setlength{\parskip}{7pt}
 F, t m.\par
@@ -381,7 +417,7 @@ P n, that's o t n – t M w c o t h.\par
 T m h a e k, a t w f n l t o h a f k o RAM.\par
 }
 \newpage
-\slidehead{12}{Limitations}{10:50–11:20}{Part B -- first letters}
+\slidehead{13}{Limitations}{11:50–12:20}{Part B -- first letters}
 \thumb{13}
 {\large\ttfamily\raggedright\linespread{1.5}\selectfont\setlength{\parskip}{7pt}
 O c, t a l.\par
@@ -391,7 +427,7 @@ A t n i s.\par
 S t a t n s f u.\par
 }
 \newpage
-\slidehead{13}{Conclusion}{11:20–12:00}{Part B -- first letters}
+\slidehead{14}{Conclusion}{12:20–13:00}{Part B -- first letters}
 \thumb{14}
 {\large\ttfamily\raggedright\linespread{1.5}\selectfont\setlength{\parskip}{7pt}
 T s u.\par
@@ -411,23 +447,31 @@ I'm h t t y q.\par
 {\Large\raggedright\bfseries It runs on a cheap microcontroller, and it keeps working in noise.\par}
 \vspace{8mm}
 \newpage
-\slidehead{2}{Motivation and research questions}{0:40–1:50}{Part C -- anchors only}
-\thumb{3}
+\slidehead{2}{Motivation – decide on the edge, in noise}{0:40–1:50}{Part C -- anchors only}
+\thumb{2}
 \vspace{4mm}{\Large\raggedright\bfseries Let me start with the motivation.\par}
 \vspace{6mm}{\color{ink!40}\Huge\ldots}\par
 \vfill
-{\Large\raggedright\bfseries And second – does this robustness survive when we quantize the model and run it on a microcontroller?\par}
+{\Large\raggedright\bfseries The classifier has to work in noise.\par}
 \vspace{8mm}
 \newpage
-\slidehead{3}{Two-stage detection pipeline}{1:50–2:50}{Part C -- anchors only}
+\slidehead{3}{Research questions}{1:50–2:30}{Part C -- anchors only}
+\thumb{3}
+\vspace{4mm}{\Large\raggedright\bfseries These two problems give us two questions.\par}
+\vspace{6mm}{\color{ink!40}\Huge\ldots}\par
+\vfill
+{\Large\raggedright\bfseries Does this robustness survive when we quantize the model to int8 and run it on a microcontroller?\par}
+\vspace{8mm}
+\newpage
+\slidehead{4}{Two-stage detection pipeline}{2:30–3:50}{Part C -- anchors only}
 \thumb{4}
 \vspace{4mm}{\Large\raggedright\bfseries Our system has two stages.\par}
 \vspace{6mm}{\color{ink!40}\Huge\ldots}\par
 \vfill
-{\Large\raggedright\bfseries We assume the trigger has already found the event.\par}
+{\Large\raggedright\bfseries In this talk we evaluate only the second stage.\par}
 \vspace{8mm}
 \newpage
-\slidehead{4}{Field recordings}{2:50–3:50}{Part C -- anchors only}
+\slidehead{5}{Field recordings}{3:50–4:50}{Part C -- anchors only}
 \thumb{5}
 \vspace{4mm}{\Large\raggedright\bfseries The data come from real artillery measurements.\par}
 \vspace{6mm}{\color{ink!40}\Huge\ldots}\par
@@ -435,7 +479,7 @@ I'm h t t y q.\par
 {\Large\raggedright\bfseries Thirty percent of it is before the peak, and seventy percent after it.\par}
 \vspace{8mm}
 \newpage
-\slidehead{5}{Labelled corpus and event-level split}{3:50–4:40}{Part C -- anchors only}
+\slidehead{6}{Labelled corpus and event-level split}{4:50–5:40}{Part C -- anchors only}
 \thumb{6}
 \vspace{4mm}{\Large\raggedright\bfseries This is the whole labelled corpus – eight hundred and forty-one events.\par}
 \vspace{6mm}{\color{ink!40}\Huge\ldots}\par
@@ -443,7 +487,7 @@ I'm h t t y q.\par
 {\Large\raggedright\bfseries The test set has ten launches and one hundred and fifty-eight other events.\par}
 \vspace{8mm}
 \newpage
-\slidehead{6}{MFCC front end and compact CNN}{4:40–5:40}{Part C -- anchors only}
+\slidehead{7}{MFCC front end and compact CNN}{5:40–6:40}{Part C -- anchors only}
 \thumb{7}
 \vspace{4mm}{\Large\raggedright\bfseries Now the method.\par}
 \vspace{6mm}{\color{ink!40}\Huge\ldots}\par
@@ -451,7 +495,7 @@ I'm h t t y q.\par
 {\Large\raggedright\bfseries That is small enough for a microcontroller.\par}
 \vspace{8mm}
 \newpage
-\slidehead{7}{Two ways to train for noise}{5:40–6:40}{Part C -- anchors only}
+\slidehead{8}{Two ways to train for noise}{6:40–7:40}{Part C -- anchors only}
 \thumb{8}
 \vspace{4mm}{\Large\raggedright\bfseries To make the network robust, we add noise during training.\par}
 \vspace{6mm}{\color{ink!40}\Huge\ldots}\par
@@ -459,7 +503,7 @@ I'm h t t y q.\par
 {\Large\raggedright\bfseries So A may not look like real noise at all.\par}
 \vspace{8mm}
 \newpage
-\slidehead{8}{Evaluation protocol}{6:40–7:30}{Part C -- anchors only}
+\slidehead{9}{Evaluation protocol}{7:40–8:30}{Part C -- anchors only}
 \thumb{9}
 \vspace{4mm}{\Large\raggedright\bfseries How do we test it?\par}
 \vspace{6mm}{\color{ink!40}\Huge\ldots}\par
@@ -467,7 +511,7 @@ I'm h t t y q.\par
 {\Large\raggedright\bfseries And we report mainly the MCC, because the classes are imbalanced.\par}
 \vspace{8mm}
 \newpage
-\slidehead{9}{Result 1 – where to add the noise}{7:30–8:40}{Part C -- anchors only}
+\slidehead{10}{Result 1 – where to add the noise}{8:30–9:40}{Part C -- anchors only}
 \thumb{10}
 \vspace{4mm}{\Large\raggedright\bfseries This is the first result.\par}
 \vspace{6mm}{\color{ink!40}\Huge\ldots}\par
@@ -475,7 +519,7 @@ I'm h t t y q.\par
 {\Large\raggedright\bfseries So feature noise is not just insufficient – here it actually hurts.\par}
 \vspace{8mm}
 \newpage
-\slidehead{10}{Result 2 – held-out robustness of the deployed model}{8:40–9:50}{Part C -- anchors only}
+\slidehead{11}{Result 2 – held-out robustness of the deployed model}{9:40–10:50}{Part C -- anchors only}
 \thumb{11}
 \vspace{4mm}{\Large\raggedright\bfseries Now the deployed model in more detail.\par}
 \vspace{6mm}{\color{ink!40}\Huge\ldots}\par
@@ -483,7 +527,7 @@ I'm h t t y q.\par
 {\Large\raggedright\bfseries Quantization to int8 made no real difference.\par}
 \vspace{8mm}
 \newpage
-\slidehead{11}{Result 3 – on the ESP32-S3}{9:50–10:50}{Part C -- anchors only}
+\slidehead{12}{Result 3 – on the ESP32-S3}{10:50–11:50}{Part C -- anchors only}
 \thumb{12}
 \vspace{4mm}{\Large\raggedright\bfseries Finally, the microcontroller.\par}
 \vspace{6mm}{\color{ink!40}\Huge\ldots}\par
@@ -491,7 +535,7 @@ I'm h t t y q.\par
 {\Large\raggedright\bfseries The model has about eighty kilobytes, and the whole firmware needs less than one hundred and fifty kilobytes of RAM.\par}
 \vspace{8mm}
 \newpage
-\slidehead{12}{Limitations}{10:50–11:20}{Part C -- anchors only}
+\slidehead{13}{Limitations}{11:50–12:20}{Part C -- anchors only}
 \thumb{13}
 \vspace{4mm}{\Large\raggedright\bfseries Of course, there are limitations.\par}
 \vspace{6mm}{\color{ink!40}\Huge\ldots}\par
@@ -499,7 +543,7 @@ I'm h t t y q.\par
 {\Large\raggedright\bfseries So these are the next steps for us.\par}
 \vspace{8mm}
 \newpage
-\slidehead{13}{Conclusion}{11:20–12:00}{Part C -- anchors only}
+\slidehead{14}{Conclusion}{12:20–13:00}{Part C -- anchors only}
 \thumb{14}
 \vspace{4mm}{\Large\raggedright\bfseries To sum up.\par}
 \vspace{6mm}{\color{ink!40}\Huge\ldots}\par
@@ -539,7 +583,7 @@ I'm h t t y q.\par
     ESP32-S3 – latency per MFCC segment? & \textbf{32.0 ms (31.99–32.09 ms), classifier only}\\
     Model size, tensor arena? & \textbf{81,400 B; 80 KiB}\\
     Firmware flash code / flash data / RAM? & \textbf{201.5 kB / 144.0 kB / 143.8 kB}\\
-    Talk length – target? & \textbf{script written to 12:00 (slot length to confirm)}\\
+    Talk length – target? & \textbf{script written to 13:00 (slot length to confirm)}\\
   \bottomrule
 \end{tabular}
 

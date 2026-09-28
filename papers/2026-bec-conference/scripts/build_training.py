@@ -55,7 +55,7 @@ NUMBERS = [
     ("ESP32-S3 – latency per MFCC segment?", "32.0 ms (31.99–32.09 ms), classifier only", "numbers esp32"),
     ("Model size, tensor arena?", "81,400 B; 80 KiB", "numbers esp32"),
     ("Firmware flash code / flash data / RAM?", "201.5 kB / 144.0 kB / 143.8 kB", "numbers esp32"),
-    ("Talk length – target?", "script written to 12:00 (slot length to confirm)", "numbers talk"),
+    ("Talk length – target?", "script written to 13:00 (slot length to confirm)", "numbers talk"),
 ]
 
 # --------------------------------------------------------------------------- parsing

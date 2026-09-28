@@ -154,43 +154,86 @@
 % ===========================================================================
 \section{Motivation}
 
-\begin{frame}{Motivation and research questions}
+\begin{frame}{Motivation -- decide on the edge, in noise}
   \begin{itemize}
-    \item Passive acoustic sensing supports early warning: it is \textbf{cheap},
-          needs \textbf{little power} and \textbf{emits no signal} of its own.
-    \item A deployable sensor has to meet two constraints at once:
+    \item Passive acoustic sensing supports artillery early warning: it is
+          \textbf{cheap}, needs \textbf{little power} and \textbf{emits no signal} --
+          active systems are expensive, power-hungry and easier to locate.
   \end{itemize}
-  \vspace{-1mm}
-  \begin{center}
-  \begin{tikzpicture}
-    \fnode{0}{\faWaveSquare}{robust to noise}{background noise, event variability}
-    \fnode{5.5cm}{\faMicrochip}{runs on an MCU}{low power, little memory, int8}
-  \end{tikzpicture}
-  \end{center}
-  \vfill
-  \pause
-  \begin{block}{This study}
-    \begin{enumerate}
-      \item Noise robustness through training augmentation: is perturbing the
-            \emph{MFCC features} enough, or do we have to add noise to the
-            \emph{waveform}?
-      \item Does that robustness survive int8 quantization and deployment on an
-            ESP32-S3?
-    \end{enumerate}
-  \end{block}
-      \note<2>{
+  \vspace{1mm}
+  \begin{columns}[T,onlytextwidth]
+    \begin{column}{0.48\textwidth}
+      \begin{block}{\faMicrochip\enspace The decision has to be on the edge}
+        \small
+        \begin{itemize}\small
+          \item Cheap nodes $\Rightarrow$ many nodes, spread over a large area.
+          \item Streaming raw audio from every node costs power and radio
+                bandwidth -- and a transmitting node is easier to find.
+          \item $\Rightarrow$ each node decides by itself and sends an
+                \textbf{alert}, not the audio.
+        \end{itemize}
+      \end{block}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{block}{\faWaveSquare\enspace The signal arrives weak}
+        \small
+        \begin{itemize}\small
+          \item Artillery fires from far away -- in our recordings the guns were
+                $\approx$\textbf{5--10\,km} from the station.
+          \item The launch reaches the sensor attenuated, on top of wind, traffic and
+                other background.
+          \item $\Rightarrow$ the classifier has to work at \textbf{low SNR}.
+        \end{itemize}
+      \end{block}
+    \end{column}
+  \end{columns}
+      \note{
 \textbf{[0:40--1:50]}\par\medskip
     Let me start with the motivation. //\par\medskip
     Recent conflicts have shown that we need cheap systems that can warn about artillery
     fire. // Acoustic sensing is a good candidate. // It is passive, it needs little
-    power, and it doesn't send out any signal, so it is hard to find. //\par\medskip
-    But a real sensor has two problems at the same time. // It has to work in noise. //
-    And it has to run on small, low-power hardware. //\par\medskip
-    \textbf{[CLICK]}\par\medskip
-    So we ask two questions. // First -- to make the classifier robust to noise, is it
-    enough to add noise to the features, or do we have to add it to the audio signal
-    itself? // And second -- does this robustness survive when we quantize the model and
-    run it on a microcontroller? //
+    power, and it doesn't send out any signal. //\par\medskip
+    But if the sensor is cheap, we want many of them. // And then we cannot stream raw
+    audio from every node to a server. // It costs power and bandwidth, and a node that
+    transmits all the time is easy to find. // So the decision has to be made on the
+    edge -- on the node itself. // The node sends only an alert. //\par\medskip
+    The second problem is the signal. // Artillery usually fires from far away -- in our
+    recordings, five to ten kilometres. // So the launch arrives weak, and the signal-to-noise
+    ratio is low. // The classifier has to work in noise. //
+  }
+\end{frame}
+
+\begin{frame}{Research questions}
+  \vfill
+  \begin{columns}[T,onlytextwidth]
+    \begin{column}{0.48\textwidth}
+      \centering{\color{ctublue}\LARGE\faWaveSquare}\\[1mm]
+      {\small\bfseries low SNR}\par\vspace{2mm}
+      \begin{block}{Q1\enspace Where to add the training noise?}
+        \small
+        Can cheap \textbf{MFCC-domain} augmentation replace \textbf{waveform-domain}
+        noise augmentation for a compact post-trigger classifier?
+      \end{block}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \centering{\color{ctublue}\LARGE\faMicrochip}\\[1mm]
+      {\small\bfseries on the edge}\par\vspace{2mm}
+      \begin{block}{Q2\enspace Does it survive the chip?}
+        \small
+        Does the resulting robustness survive \textbf{int8 quantization} and deployment
+        on an \textbf{MCU} (ESP32-S3)?
+      \end{block}
+    \end{column}
+  \end{columns}
+  \vfill
+      \note{
+\textbf{[1:50--2:30]}\par\medskip
+    These two problems give us two questions. //\par\medskip
+    First, low SNR. // To make the classifier robust, we add noise during training. // Can
+    we add it cheaply, to the MFCC features? // Or do we have to add it to the audio
+    signal itself? //\par\medskip
+    Second, the edge. // Does this robustness survive when we quantize the model to int8
+    and run it on a microcontroller? //
   }
 \end{frame}
 
@@ -198,20 +241,19 @@
 \section{Pipeline}
 
 \begin{frame}{Two-stage detection pipeline}
-  \vfill
   \centering
   \begin{tikzpicture}[
       blk/.style={draw=ctublue,thick,rounded corners,fill=ctublue!8,
-                  minimum height=12mm,text width=21mm,font=\small,align=center},
+                  minimum height=11mm,text width=20mm,font=\small,align=center},
       prior/.style={draw=ink!35,thick,rounded corners,fill=ink!5,
-                  minimum height=11mm,text width=21mm,font=\small,align=center,text=ink!75},
+                  minimum height=11mm,text width=24mm,font=\small,align=center,text=ink!75},
       outb/.style={draw=accent,thick,rounded corners,fill=accent!8,
                   minimum height=11mm,text width=17mm,font=\small\bfseries,align=center,text=accent},
       ar/.style={-{Latex[length=1.8mm]},draw=gray,semithick}
     ]
     \node[font=\Large,color=ctublue] (mic) {\faMicrophone};
-    \node[prior,right=5mm of mic] (trg) {Streaming\\trigger};
-    \node[blk,right=8mm of trg] (win) {60\,ms window\\{\scriptsize 30\,\% / 70\,\% around peak}};
+    \node[prior,right=5mm of mic] (trg) {Median-filter\\trigger};
+    \node[blk,right=8mm of trg] (win) {60\,ms window\\{\scriptsize around the peak}};
     \node[blk,right=4mm of win] (mfcc) {MFCC\\{\scriptsize $58\times12$}};
     \node[blk,right=4mm of mfcc] (cnn) {Compact CNN\\{\scriptsize 72\,k params, int8}};
     \node[outb,right=5mm of cnn] (out) {launch /\\non-launch};
@@ -221,30 +263,53 @@
     \draw[ar] (mfcc) -- (cnn);
     \draw[ar] (cnn) -- (out);
     \begin{scope}[on background layer]
-      \node[fit=(trg),draw=ink!25,dashed,rounded corners,inner sep=2.5mm,
+      \node[fit=(trg),draw=ink!25,dashed,rounded corners,inner sep=2mm,
             label={[font=\scriptsize\color{ink!60}]below:stage 1 -- prior work}] {};
-      \node[fit=(win)(cnn),draw=accent,dashed,rounded corners,inner sep=2.5mm,
+      \node[fit=(win)(cnn),draw=accent,dashed,rounded corners,inner sep=2mm,
             label={[font=\scriptsize\bfseries\color{accent}]below:stage 2 -- this work}] {};
     \end{scope}
   \end{tikzpicture}
-  \vfill
-  \begin{itemize}\small
-    \item \textbf{Stage 1} -- median-filter impulse trigger; detected all tested small-arms
-          shots, reliable down to \textbf{5\,dB} SNR (Svatoš \emph{et al.}, 2019).
-    \item \textbf{Stage 2} -- classifies every triggered candidate: is it an artillery launch?
-    \item We evaluate \textbf{stage 2 only}, assuming the trigger has found the peak.
-  \end{itemize}
+  \par\vspace{2mm}
+  \begin{columns}[T,onlytextwidth]
+    \begin{column}{0.49\textwidth}
+      {\small\bfseries\color{ink!75}Stage 1 -- impulse detection}
+      \begin{itemize}\scriptsize
+        \item Runs continuously on the stream: signal $\rightarrow$ energy ($x^2$), a
+              \textbf{median filter} over neighbouring short windows estimates the local
+              background.
+        \item Background subtracted; a peak is a candidate only if it passes adaptive
+              amplitude, RMS-ratio and energy tests and \textbf{rises like an impulse}.
+        \item Detected all tested small-arms shots, reliable down to \textbf{5\,dB} SNR
+              (Svatoš \& Holub, RTSI 2019).
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.49\textwidth}
+      {\small\bfseries\color{accent}Stage 2 -- classification}
+      \begin{itemize}\scriptsize
+        \item Runs only on the candidates -- peaks that look like an acoustic impulsive
+              event.
+        \item The trigger also fires on doors, shouts, small arms \ldots\ -- a
+              \textbf{binary} classifier rejects them.
+        \item Launch / non-launch $\Rightarrow$ stage 2 is in effect the
+              \textbf{artillery launch detector}. We evaluate this stage only.
+      \end{itemize}
+    \end{column}
+  \end{columns}
       \note{
-\textbf{[1:50--2:50]}\par\medskip
+\textbf{[2:30--3:50]}\par\medskip
     Our system has two stages. //\par\medskip
-    The first stage is a streaming trigger. // It listens all the time and looks for
-    impulsive events. // It is our earlier work -- it detected all the gunshots we tested,
-    and it works down to a signal-to-noise ratio of five decibels. //\par\medskip
-    The second stage is what this talk is about. // For each candidate, we cut a sixty
-    millisecond window around the peak, compute MFCC features, and a small CNN decides:
-    artillery launch, or not. //\par\medskip
-    So to be clear -- we evaluate only the second stage. // We assume the trigger has
-    already found the event. //
+    The first stage is our earlier work. // It runs all the time on the audio stream. //
+    It turns the signal into energy, and a median filter over the neighbouring windows
+    estimates the background noise. // The background is subtracted, and a peak becomes a
+    candidate only if it is clearly above the background and rises like an impulse.
+    //\par\medskip
+    This trigger detected all the gunshots we tested, and it works down to five decibels.
+    // But it fires on every impulsive sound -- a door, a shout, a rifle shot. //\par\medskip
+    That's why we need the second stage. // Only the candidates go there. // We cut a
+    sixty millisecond window around the peak, compute MFCC features, and a small CNN
+    decides: artillery launch, or not. // So the binary classifier is, in effect, the
+    artillery launch detector. //\par\medskip
+    In this talk we evaluate only the second stage. //
   }
 \end{frame}
 
@@ -271,7 +336,7 @@
     \end{column}
   \end{columns}
       \note{
-\textbf{[2:50--3:50]}\par\medskip
+\textbf{[3:50--4:50]}\par\medskip
     The data come from real artillery measurements. //\par\medskip
     This is our recording station. // Four synchronized microphones on one mount, an
     audio interface and a laptop. //\par\medskip
@@ -314,7 +379,7 @@
     \end{column}
   \end{columns}
       \note{
-\textbf{[3:50--4:40]}\par\medskip
+\textbf{[4:50--5:40]}\par\medskip
     This is the whole labelled corpus -- eight hundred and forty-one events. //\par\medskip
     Fifty of them are artillery launches. // The rest are things that can also fire the
     trigger -- doors, shouts, bells, and small-arms gunshots. // The gunshots are the
@@ -378,7 +443,7 @@
     \end{column}
   \end{columns}
       \note{
-\textbf{[4:40--5:40]}\par\medskip
+\textbf{[5:40--6:40]}\par\medskip
     Now the method. //\par\medskip
     From each window we compute MFCCs. // We use very short frames -- two and a half
     milliseconds, with a one millisecond step -- because the event is short and changes
@@ -426,7 +491,7 @@
     \item Augmentation on the training split only.
   \end{itemize}
       \note{
-\textbf{[5:40--6:40]}\par\medskip
+\textbf{[6:40--7:40]}\par\medskip
     To make the network robust, we add noise during training. // And there are two
     places where we can add it. //\par\medskip
     Option A: we compute the MFCCs once, and then add small random noise directly to the
@@ -454,7 +519,7 @@
     \item Main metric: Matthews correlation coefficient (MCC).
   \end{itemize}
       \note{
-\textbf{[6:40--7:30]}\par\medskip
+\textbf{[7:40--8:30]}\par\medskip
     How do we test it? //\par\medskip
     We take the held-out test set and add noise to the audio -- again before the MFCC,
     because that's what happens in the real sensor. // The noise level is set per event,
@@ -488,7 +553,7 @@
   {\scriptsize\color{ink!70} Same network, three augmentation strategies; mean over 25 runs.
    At 5\,dB: A $0.30\pm0.21$, A\,+\,B $0.86\pm0.07$, B \hl{$0.98\pm0.04$}.}
       \note{
-\textbf{[7:30--8:40]}\par\medskip
+\textbf{[8:30--9:40]}\par\medskip
     This is the first result. // Same network, trained three times -- only the
     augmentation is different. //\par\medskip
     The light grey line is option A, noise on the features. // It is fine on clean data,
@@ -527,7 +592,7 @@
    noise the model misses launches, it does not raise false alarms.
    float32 vs.\ int8: within $\pm0.02$ MCC, no consistent direction.}
       \note{
-\textbf{[8:40--9:50]}\par\medskip
+\textbf{[9:40--10:50]}\par\medskip
     Now the deployed model in more detail. //\par\medskip
     In the trained range, from clean down to five decibels, the MCC stays between zero
     point nine eight and zero point nine nine. //\par\medskip
@@ -575,7 +640,7 @@
     \end{column}
   \end{columns}
       \note{
-\textbf{[9:50--10:50]}\par\medskip
+\textbf{[10:50--11:50]}\par\medskip
     Finally, the microcontroller. //\par\medskip
     We sent all test inputs to the ESP32-S3, at all noise levels -- that's one thousand
     one hundred and seventy-six inferences. // One thousand one hundred and seventy-one
@@ -605,7 +670,7 @@
           decision are future work.
   \end{itemize}
       \note{
-\textbf{[10:50--11:20]}\par\medskip
+\textbf{[11:50--12:20]}\par\medskip
     Of course, there are limitations. //\par\medskip
     We evaluate only the classifier, not the full stream. // We have only fifty launches,
     and one type of gun. // And the noise is synthetic. //\par\medskip
@@ -631,7 +696,7 @@
   {\large Thank you -- questions?}\\[2mm]
   {\small\color{gray} maxamart@fel.cvut.cz}
       \note{
-\textbf{[11:20--12:00]}\par\medskip
+\textbf{[12:20--13:00]}\par\medskip
     To sum up. //\par\medskip
     A small CNN with seventy-two thousand parameters works well as the second stage of an
     artillery launch detector. //\par\medskip
