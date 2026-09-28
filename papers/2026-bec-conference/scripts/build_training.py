@@ -8,16 +8,14 @@ script reads those blocks and writes, into ``slides/training/``:
   B. the same text reduced to first letters (retrieval practice with a skeleton),
   C. only the opening and closing sentence of each slide (recall from anchors);
   plus a first page with the method and a last page with every number in the talk.
-* ``anki.csv`` -- flashcards for Anki (tab separated, HTML allowed): one card per
-  slide, one "bridge" card per slide (its last sentence), and the number cards.
 
 Slide thumbnails are taken straight from ``slides/slides.pdf`` by page number
 (``\\includegraphics[page=...]``); the frame -> page mapping comes from ``slides.nav``,
 so build the deck first::
 
-    task build && python3 scripts/build_training.py && (cd slides/training && pdflatex booklet.tex)
+    task slides:build && python3 scripts/build_training.py && (cd slides/training && pdflatex booklet.tex)
 
-or simply ``task training``.
+or simply ``task slides:training``.
 """
 from __future__ import annotations
 
@@ -31,7 +29,7 @@ SLIDES_TEX = ROOT / "slides" / "slides.tex"
 SLIDES_NAV = ROOT / "slides" / "slides.nav"
 OUT_DIR = ROOT / "slides" / "training"
 
-# Every number in the talk, in one place (front, back, tag). Mirrors the cue-card footer.
+# Every number in the talk, in one place (question, answer, tag) -- the booklet's last page.
 NUMBERS = [
     ("Corpus – how many labelled events, how many launches?", "841 events, 50 artillery launches", "numbers dataset"),
     ("Non-launch events – impulsive noise / small-arms shots?", "706 / 85", "numbers dataset"),
@@ -257,8 +255,6 @@ slide by slide, always \textbf{aloud}, standing if you can.
         from there (this trains recovery from a blank), plus the questions in \texttt{QA.md}.
         Last evening: one relaxed run. \textbf{Freeze the script two days before the talk};
         every edit resets what you have learnt.
-  \item \textbf{Anki.} \texttt{anki.csv} holds one card per slide, one card per bridge
-        sentence and one per number -- for the minutes between sessions.
 \end{enumerate}
 
 \medskip
@@ -356,37 +352,6 @@ def write_booklet(slides: list[Slide]) -> Path:
     return out
 
 
-# --------------------------------------------------------------------------- anki
-
-
-def html(s: str) -> str:
-    return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-
-
-def write_anki(slides: list[Slide]) -> tuple[Path, int]:
-    rows = ["#separator:tab", "#html:true", "#tags column:3"]
-    for s in slides:
-        sents = s.sentences
-        front = f"<b>Slide {s.number} – {html(s.title)}</b> [{s.window}]<br><i>Say the whole slide.</i>"
-        body = []
-        for line in s.lines:
-            if line == "[CLICK]":
-                body.append('<span style="color:#C8102E"><b>[CLICK]</b></span>')
-            else:
-                t = html(line).replace("[CUT]", '<i style="color:#777">[CUT]').replace("[/CUT]", "[/CUT]</i>")
-                body.append(t)
-        body[0] = "<b>" + body[0] + "</b>" if not body[0].startswith("<span") else body[0]
-        rows.append("\t".join([front, "<br>".join(body), f"talk slide{s.number}"]))
-        closer = sents[-1].replace("[CUT]", "").replace("[/CUT]", "").strip()
-        rows.append("\t".join([f"<b>Slide {s.number} – {html(s.title)}</b><br>Last sentence (the bridge to the next slide)?",
-                               html(closer), f"talk bridge slide{s.number}"]))
-    for q, a, tags in NUMBERS:
-        rows.append("\t".join([html(q), html(a), "talk " + tags]))
-    out = OUT_DIR / "anki.csv"
-    out.write_text("\n".join(rows) + "\n", encoding="utf-8")
-    return out, len(rows) - 3
-
-
 # --------------------------------------------------------------------------- main
 
 if __name__ == "__main__":
@@ -398,9 +363,8 @@ if __name__ == "__main__":
         if not s.window:
             print(f"warning: slide {s.number} ({s.title}) has no time window", file=sys.stderr)
     booklet = write_booklet(slides)
-    anki, ncards = write_anki(slides)
     nsent = sum(len(s.sentences) for s in slides)
     print(f"{len(slides)} slides, {nsent} sentences -> {booklet.relative_to(ROOT)} "
-          f"({1 + 3 * len(slides) + 1} pages), {anki.relative_to(ROOT)} ({ncards} cards)")
+          f"({1 + 3 * len(slides) + 1} pages)")
     for s in slides:
         print(f"  {s.number:2d}  p.{s.page:2d}  [{s.window}]  {s.title}  ({len(s.sentences)} sentences)")

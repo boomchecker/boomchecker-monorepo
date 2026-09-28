@@ -199,7 +199,7 @@ tasks:
       - pdflatex -interaction=nonstopmode -halt-on-error slides-notes.tex
 
   slides:training:
-    desc: Generate the training booklet and Anki cards from the notes in slides.tex (needs a built deck)
+    desc: Generate the training booklet from the notes in slides.tex (needs a built deck)
     cmds:
       - python3 scripts/build_training.py
       - cd slides/training && pdflatex -interaction=nonstopmode -halt-on-error booklet.tex
