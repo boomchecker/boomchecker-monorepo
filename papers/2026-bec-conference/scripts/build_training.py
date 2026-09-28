@@ -248,7 +248,7 @@ slide by slide, always \textbf{aloud}, standing if you can.
   \item \textbf{Part C -- anchors only.} Say the whole slide from the opening and closing
         sentence alone. This is the level you need on stage.
   \item \textbf{Time it.} Each page carries its time window. The pauses are part of the
-        timing. Target for the whole talk: \textbf{12:00}.
+        timing. Target for the whole talk: \textbf{13:00}.
   \item \textbf{Space it out.} Day 1: slides 1--6 to Part C. Day 2: slides 7--13, then re-test
         1--6. Day 3: two full runs with the PDF full-screen and a clicker, one of them recorded
         on your phone -- listen back. Day 4: open the booklet on a random page and start
