@@ -264,7 +264,7 @@
     \draw[ar] (cnn) -- (out);
     \begin{scope}[on background layer]
       \node[fit=(trg),draw=ink!25,dashed,rounded corners,inner sep=2mm,
-            label={[font=\scriptsize\color{ink!60}]below:stage 1 -- prior work}] {};
+            label={[font=\scriptsize\color{ink!60}]below:stage 1 -- prior work [1]}] {};
       \node[fit=(win)(cnn),draw=accent,dashed,rounded corners,inner sep=2mm,
             label={[font=\scriptsize\bfseries\color{accent}]below:stage 2 -- this work}] {};
     \end{scope}
@@ -279,8 +279,7 @@
               background.
         \item Background subtracted; a peak is a candidate only if it passes adaptive
               amplitude, RMS-ratio and energy tests and \textbf{rises like an impulse}.
-        \item Detected all tested small-arms shots, reliable down to \textbf{5\,dB} SNR
-              (Svatoš \& Holub, RTSI 2019).
+        \item Detected all tested small-arms shots, reliable down to \textbf{5\,dB} SNR~[1].
       \end{itemize}
     \end{column}
     \begin{column}{0.49\textwidth}
@@ -295,6 +294,14 @@
       \end{itemize}
     \end{column}
   \end{columns}
+  % reference list, bottom-left above the footer
+  \begin{tikzpicture}[remember picture,overlay]
+    \node[anchor=south west,inner sep=0pt,xshift=4.5mm,yshift=7.5mm,text width=0.62\paperwidth,
+          align=left,font=\tiny\color{ink!60}] at (current page.south west)
+      {[1]~J.~Svatoš and J.~Holub, ``Smart Acoustic Sensor,'' in \emph{Proc.\ 2019 IEEE 5th
+       Int.\ Forum on Research and Technology for Society and Industry (RTSI)}, 2019,
+       pp.~161--165, doi:\,10.1109/RTSI.2019.8895591.};
+  \end{tikzpicture}
       \note{
 \textbf{[2:30--3:50]}\par\medskip
     Our system has two stages. //\par\medskip
