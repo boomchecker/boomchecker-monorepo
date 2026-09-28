@@ -71,7 +71,7 @@ README for the reasoning behind the method; only the differences are listed here
 
 | File | What it is |
 |---|---|
-| `slides.tex` | the deck **and** the spoken script (in `\note{}` blocks) – title + 13 frames + 4 appendix |
+| `slides.tex` | the deck **and** the spoken script (in `\note{}` blocks) – title + 13 frames + 5 appendix |
 | `slides-notes.tex` → `slides-notes.pdf` | two-line driver, script + slide thumbnail per page (for checking) |
 | `training/booklet.tex` → `booklet.pdf` | **print and learn from this**: one slide per page in three fading levels (full text / first letters / anchors) + every number |
 | `QA.md` | expected questions (seeded from the paper reviews) |
@@ -87,6 +87,10 @@ The script lives **only** in the `\note{}` blocks – the booklet is generated b
 `[CLICK]` overlay advance (none at the moment), each note opens with its time
 window. Written for a non-native speaker (short sentences, B2).
 
+The MFCC-jitter comparison from the paper is kept only as a control: one grey line on
+the training slide and an appendix chart -- the talk's story is waveform-domain
+training plus MCU deployment.
+
 Changes against the IMEKO template: no conference logo yet (put `figs/bec-logo.png`
 top-right on the title slide once we have it), the accent red marks the
 waveform-trained model and the headline numbers, and the results are pgfplots charts
@@ -95,7 +99,7 @@ re-plotted from `article/tables/` (keep them in sync if the tables are regenerat
 **Open points (first draft):**
 
 - Slot length is **not verified** – taltech.ee was not reachable when the draft was
-  written. The script is timed to 13:00 (~1 650 words, likely too long); trim once
+  written. The script is timed to 11:40; trim once
   the programme gives the slot.
 - Exact day/session of the talk – `\date` on the title slide says only "October 2026".
 - No `[CUT IF LATE]` sentences marked yet, no cue card yet.

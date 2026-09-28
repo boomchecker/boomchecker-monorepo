@@ -44,9 +44,7 @@ NUMBERS = [
     ("Trigger stage – validated down to which SNR?", "5 dB", "numbers pipeline"),
     ("SNR levels tested?", "30, 20, 10, 5 dB + stress 0 and −5 dB", "numbers protocol"),
     ("Runs per table cell?", "25 = 5 training seeds × 5 noise seeds", "numbers protocol"),
-    ("MFCC jitter – int8 MCC at 5 dB?", "0.30 ± 0.21", "numbers results"),
-    ("Jitter + waveform noise – int8 MCC at 5 dB?", "0.86 ± 0.07", "numbers results"),
-    ("Waveform noise only – int8 MCC at 5 dB?", "0.98 ± 0.04", "numbers results"),
+    ("Control (appendix): noise on the MFCC matrix – int8 MCC at 5 dB?", "0.30 ± 0.21 (Q&A only)", "numbers qa"),
     ("Deployed model – MCC at 30 dB / 5 dB?", "0.99 / 0.98 (0.988 / 0.976)", "numbers results"),
     ("Deployed model – MCC at 0 dB / −5 dB?", "0.947 / 0.833", "numbers results"),
     ("Precision from 5 dB downward?", "1.000 – misses launches, no false alarms", "numbers results"),
@@ -55,7 +53,7 @@ NUMBERS = [
     ("ESP32-S3 – latency per MFCC segment?", "32.0 ms (31.99–32.09 ms), classifier only", "numbers esp32"),
     ("Model size, tensor arena?", "81,400 B; 80 KiB", "numbers esp32"),
     ("Firmware flash code / flash data / RAM?", "201.5 kB / 144.0 kB / 143.8 kB", "numbers esp32"),
-    ("Talk length – target?", "script written to 13:00 (slot length to confirm)", "numbers talk"),
+    ("Talk length – target?", "script written to 11:40 (slot length to confirm)", "numbers talk"),
 ]
 
 # --------------------------------------------------------------------------- parsing
@@ -248,7 +246,7 @@ slide by slide, always \textbf{aloud}, standing if you can.
   \item \textbf{Part C -- anchors only.} Say the whole slide from the opening and closing
         sentence alone. This is the level you need on stage.
   \item \textbf{Time it.} Each page carries its time window. The pauses are part of the
-        timing. Target for the whole talk: \textbf{13:00}.
+        timing. Target for the whole talk: \textbf{11:40}.
   \item \textbf{Space it out.} Day 1: slides 1--6 to Part C. Day 2: slides 7--13, then re-test
         1--6. Day 3: two full runs with the PDF full-screen and a clicker, one of them recorded
         on your phone -- listen back. Day 4: open the booklet on a random page and start

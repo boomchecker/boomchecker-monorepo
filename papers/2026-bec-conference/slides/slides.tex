@@ -237,10 +237,10 @@
     \begin{column}{0.48\textwidth}
       \centering{\color{ctublue}\LARGE\faWaveSquare}\\[1mm]
       {\small\bfseries low SNR}\par\vspace{2mm}
-      \begin{block}{Q1\enspace Where to add the training noise?}
+      \begin{block}{Q1\enspace Does it hold at low SNR?}
         \small
-        Can cheap \textbf{MFCC-domain} augmentation replace \textbf{waveform-domain}
-        noise augmentation for a compact post-trigger classifier?
+        Can a compact post-trigger classifier, trained with noise added to the
+        \textbf{waveform}, stay reliable down to \textbf{5\,dB} SNR?
       \end{block}
     \end{column}
     \begin{column}{0.48\textwidth}
@@ -257,9 +257,8 @@
       \note{
 \textbf{[1:50--2:30]}\par\medskip
     These two problems give us two questions. //\par\medskip
-    First, low SNR. // To make the classifier robust, we add noise during training. // Can
-    we add it cheaply, to the MFCC features? // Or do we have to add it to the audio
-    signal itself? //\par\medskip
+    First, low SNR. // Can a small classifier stay reliable when the signal is weak --
+    down to five decibels? //\par\medskip
     Second, the edge. // Does this robustness survive when we quantize the model to int8
     and run it on a microcontroller? //
   }
@@ -491,59 +490,40 @@
   }
 \end{frame}
 
-\begin{frame}{Two ways to train for noise}
+\begin{frame}{Robustness training}
   \centering
   \begin{tikzpicture}[twoways]
-
-    % ---------------- A: noise on the MFCC features ----------------
-    \node[blk] (a1) at (0,0) {waveform};
-    \node[blk] (a2) at (2.2,0) {MFCC};
-    \node[sum=gray1] (as) at (4.4,0) {};
-    \node[blk] (a3) at (6.6,0) {CNN};
-    \noisesrc{an}{$(as)+(0,9.5mm)$}{gray1}
-    \node[font=\scriptsize\color{ink!65},anchor=west] at ($(an.east)+(1.5mm,0)$)
-      {Gaussian jitter on the matrix};
-    \draw[ar] (a1) -- (a2); \draw[ar] (a2) -- (as); \draw[ar] (as) -- (a3);
-    \draw[ar] (an) -- (as);
-    \node[why] (aw) at ($(a3.east)+(5mm,0)$)
-      {\textbf{cheap} -- MFCCs computed once,\\ noise added to the features};
-    \begin{scope}[on background layer]
-      \node[card=gray2,fit=(a1)(a3)(an)(aw)] (ca) {};
-    \end{scope}
-    \node[head=gray1] at ($(ca.north west)+(3mm,0)$) {A\enspace noise on the MFCC features};
-
-    % ---------------- B: noise on the waveform ----------------
-    \node[blk] (b1) at (0,-2.75) {waveform};
-    \node[sum=accent] (bs) at (2.2,-2.75) {};
-    \node[blk] (b2) at (4.4,-2.75) {MFCC};
-    \node[blk] (b3) at (6.6,-2.75) {CNN};
+    \node[blk] (b1) at (0,0) {waveform};
+    \node[sum=accent] (bs) at (2.2,0) {};
+    \node[blk] (b2) at (4.4,0) {MFCC};
+    \node[blk] (b3) at (6.6,0) {CNN};
     \noisesrc{bn}{$(bs)+(0,9.5mm)$}{accent}
     \node[font=\scriptsize\color{accent},anchor=west] at ($(bn.east)+(1.5mm,0)$)
-      {additive noise, 30--5\,dB SNR};
+      {additive noise, 30 / 20 / 10 / 5\,dB SNR};
     \draw[ar] (b1) -- (bs); \draw[ar] (bs) -- (b2); \draw[ar] (b2) -- (b3);
     \draw[ar] (bn) -- (bs);
     \node[why] (bw) at ($(b3.east)+(5mm,0)$)
-      {\textbf{costlier} -- MFCCs recomputed for\\ every noisy copy, as in the sensor};
-    \begin{scope}[on background layer]
-      \node[card=accent,fit=(b1)(b3)(bn)(bw)] (cb) {};
-    \end{scope}
-    \node[head=accent] at ($(cb.north west)+(3mm,0)$) {B\enspace noise on the waveform};
+      {noise enters \textbf{before} the MFCC --\\ the way it reaches the real sensor};
   \end{tikzpicture}
-  \par\vspace{2mm}
-  {\small Noise added \emph{before} MFCC extraction distorts the cepstrum
-   \textbf{nonlinearly} -- does A imitate it?}\\[0.5mm]
-  {\scriptsize\color{ink!60} Augmentation on the training split only.}
+  \par\vspace{5mm}
+  \raggedright
+  \begin{itemize}
+    \item \textbf{Expanded non-launch corpus} -- small-arms shots and other impulsive
+          sounds as hard negatives.
+    \item \textbf{Class-weighted loss} for the 1\,:\,4 launch / non-launch imbalance.
+    \item \textbf{Waveform-domain noise augmentation}, training split only -- the MFCCs
+          are recomputed for every noisy copy.
+  \end{itemize}
+  \vfill
+  {\scriptsize\color{ink!60} Control in the paper: the same noise added to the MFCC matrix
+   instead does not give robustness (appendix).}
       \note{
-\textbf{[6:40--7:40]}\par\medskip
-    To make the network robust, we add noise during training. // And there are two
-    places where we can add it. //\par\medskip
-    Option A: we compute the MFCCs once, and then add small random noise directly to the
-    feature matrix. // This is cheap and simple. //\par\medskip
-    Option B: we add noise to the audio signal first, and only then compute the MFCCs. //
-    This costs more, because we have to recompute the features every time. //\par\medskip
-    The question is whether A is good enough. // Noise in the audio does not stay simple
-    after the MFCC -- it changes the features in a nonlinear way. // So A may not look
-    like real noise at all. //
+\textbf{[6:40--7:30]}\par\medskip
+    To make the classifier robust, we train it on noisy data. //\par\medskip
+    We add noise to the training audio, at thirty down to five decibels, and only then
+    compute the MFCCs. // That's how noise reaches the real sensor. //\par\medskip
+    Together with that, we use a larger set of non-launch events, with gunshots as hard
+    negatives, and a class-weighted loss for the imbalance. //
   }
 \end{frame}
 
@@ -562,7 +542,7 @@
     \item Main metric: Matthews correlation coefficient (MCC).
   \end{itemize}
       \note{
-\textbf{[7:40--8:30]}\par\medskip
+\textbf{[7:30--8:20]}\par\medskip
     How do we test it? //\par\medskip
     We take the held-out test set and add noise to the audio -- again before the MFCC,
     because that's what happens in the real sensor. // The noise level is set per event,
@@ -577,39 +557,7 @@
 % ===========================================================================
 \section{Results}
 
-\begin{frame}{Result 1 -- where to add the noise}
-  \centering
-  \begin{tikzpicture}
-    \begin{axis}[snrslide,
-        xmin=-0.3,xmax=4.3,
-        xtick={0,1,2,3,4},xticklabels={clean,30\,dB,20\,dB,10\,dB,5\,dB},
-        ylabel={held-out int8 MCC (--)}]
-      \addplot[dim=gray3] coordinates {(0,0.82) (1,0.77) (2,0.56) (3,0.37) (4,0.30)}
-        node[lbl=gray1] {A: MFCC jitter};
-      \addplot[dim=gray2] coordinates {(0,0.97) (1,0.95) (2,0.92) (3,0.85) (4,0.86)}
-        node[lbl=gray1,yshift=-3pt] {A + B};
-      \addplot[hot] coordinates {(0,0.99) (1,0.99) (2,0.99) (3,0.98) (4,0.98)}
-        node[lbl=accent,font=\scriptsize\bfseries,yshift=3pt] {B: waveform noise};
-    \end{axis}
-  \end{tikzpicture}
-  \par\vspace{1mm}
-  {\scriptsize\color{ink!70} Same network, three augmentation strategies; mean over 25 runs.
-   At 5\,dB: A $0.30\pm0.21$, A\,+\,B $0.86\pm0.07$, B \hl{$0.98\pm0.04$}.}
-      \note{
-\textbf{[8:30--9:40]}\par\medskip
-    This is the first result. // Same network, trained three times -- only the
-    augmentation is different. //\par\medskip
-    The light grey line is option A, noise on the features. // It is fine on clean data,
-    but it falls apart in noise. // At five decibels the MCC is only zero point three.
-    //\par\medskip
-    The red line is option B, noise on the waveform. // It stays almost flat -- zero point
-    nine eight even at five decibels. //\par\medskip
-    And the surprise is the middle line. // When we combine both, it is worse than B alone.
-    // So feature noise is not just insufficient -- here it actually hurts. //
-  }
-\end{frame}
-
-\begin{frame}{Result 2 -- held-out robustness of the deployed model}
+\begin{frame}{Result 1 -- robustness at low SNR}
   \centering
   \begin{tikzpicture}
     \begin{axis}[snrslide,
@@ -635,8 +583,8 @@
    noise the model misses launches, it does not raise false alarms.
    float32 vs.\ int8: within $\pm0.02$ MCC, no consistent direction.}
       \note{
-\textbf{[9:40--10:50]}\par\medskip
-    Now the deployed model in more detail. //\par\medskip
+\textbf{[8:20--9:30]}\par\medskip
+    This is the main result -- the deployed model on the held-out test set. //\par\medskip
     In the trained range, from clean down to five decibels, the MCC stays between zero
     point nine eight and zero point nine nine. //\par\medskip
     In the grey area, beyond what the trigger can handle, it goes down slowly. // Zero
@@ -648,7 +596,7 @@
   }
 \end{frame}
 
-\begin{frame}{Result 3 -- on the ESP32-S3}
+\begin{frame}{Result 2 -- on the ESP32-S3}
   \begin{columns}[T,onlytextwidth]
     \begin{column}{0.48\textwidth}
       \begin{block}{Same answers as the PC}
@@ -683,7 +631,7 @@
     \end{column}
   \end{columns}
       \note{
-\textbf{[10:50--11:50]}\par\medskip
+\textbf{[9:30--10:30]}\par\medskip
     Finally, the microcontroller. //\par\medskip
     We sent all test inputs to the ESP32-S3, at all noise levels -- that's one thousand
     one hundred and seventy-six inferences. // One thousand one hundred and seventy-one
@@ -706,14 +654,14 @@
           the trigger found the peak.
     \item \textbf{Small positive class} -- 50 launch events, one gun type (152\,mm);
           other calibres untested.
-    \item \textbf{Synthetic Gaussian noise} -- closer to reality than feature jitter, but
-          no field noise, propagation or device shift.
+    \item \textbf{Synthetic Gaussian noise} -- added to the waveform, but no real field
+          noise, propagation or device shift.
     \item \textbf{One event-level split}; no session-independent evaluation.
     \item \textbf{MFCC on the host} -- on-device MFCC, end-to-end latency and energy per
           decision are future work.
   \end{itemize}
       \note{
-\textbf{[11:50--12:20]}\par\medskip
+\textbf{[10:30--11:00]}\par\medskip
     Of course, there are limitations. //\par\medskip
     We evaluate only the classifier, not the full stream. // We have only fifty launches,
     and one type of gun. // And the noise is synthetic. //\par\medskip
@@ -728,10 +676,8 @@
   \begin{itemize}
     \item A compact MFCC-CNN (72\,k parameters) works as the post-trigger stage of an
           embedded artillery launch detector.
-    \item \hl{Add the noise to the waveform, not to the features}: MFCC-domain jitter
-          collapses at 5\,dB (MCC 0.30) and even hurts when combined.
-    \item Waveform-trained model: \hl{MCC 0.99 at 30\,dB, 0.98 at 5\,dB}; precision 1.0
-          under heavy noise.
+    \item Trained with noise added to the waveform, it stays robust:
+          \hl{MCC 0.99 at 30\,dB, 0.98 at 5\,dB}; precision 1.0 under heavy noise.
     \item int8 is performance-neutral; ESP32-S3 matches the PC, 32\,ms per inference.
   \end{itemize}
   \vfill
@@ -739,15 +685,14 @@
   {\large Thank you -- questions?}\\[2mm]
   {\small\color{gray} maxamart@fel.cvut.cz}
       \note{
-\textbf{[12:20--13:00]}\par\medskip
+\textbf{[11:00--11:40]}\par\medskip
     To sum up. //\par\medskip
     A small CNN with seventy-two thousand parameters works well as the second stage of an
     artillery launch detector. //\par\medskip
-    If you want it robust to noise, add the noise to the audio, not to the features. //
-    Feature noise fails, and combined with waveform noise it even makes things worse.
-    //\par\medskip
-    Our model keeps an MCC of zero point nine eight at five decibels, and it runs on an
-    ESP32-S3 in thirty-two milliseconds. //\par\medskip
+    Trained with noise in the audio, it keeps an MCC of zero point nine eight at five
+    decibels. //\par\medskip
+    Quantization to int8 costs nothing, and it runs on an ESP32-S3 in thirty-two
+    milliseconds. //\par\medskip
     Thank you for your attention. // I'm happy to take your questions. //
   }
 \end{frame}
@@ -775,6 +720,27 @@
   {\scriptsize\color{ink!70} Deployed int8 classifier, mean $\pm$ std over 5 training and
    5 noise seeds. Test partition: 168 samples, 10 of them launches.
    $^{\mathrm{a}}$Beyond the trigger's validated 5\,dB envelope.}
+\end{frame}
+
+\begin{frame}{Appendix -- control: noise on the MFCC features}
+  \centering
+  \begin{tikzpicture}
+    \begin{axis}[snrslide,
+        xmin=-0.3,xmax=4.3,
+        xtick={0,1,2,3,4},xticklabels={clean,30\,dB,20\,dB,10\,dB,5\,dB},
+        ylabel={held-out int8 MCC (--)}]
+      \addplot[dim=gray3] coordinates {(0,0.82) (1,0.77) (2,0.56) (3,0.37) (4,0.30)}
+        node[lbl=gray1] {MFCC jitter};
+      \addplot[dim=gray2] coordinates {(0,0.97) (1,0.95) (2,0.92) (3,0.85) (4,0.86)}
+        node[lbl=gray1,yshift=-3pt] {jitter + waveform};
+      \addplot[hot] coordinates {(0,0.99) (1,0.99) (2,0.99) (3,0.98) (4,0.98)}
+        node[lbl=accent,font=\scriptsize\bfseries,yshift=3pt] {waveform noise (deployed)};
+    \end{axis}
+  \end{tikzpicture}
+  \par\vspace{1mm}
+  {\scriptsize\color{ink!70} Same network, three augmentation strategies; mean over 25 runs.
+   At 5\,dB: jitter $0.30\pm0.21$, jitter\,+\,waveform $0.86\pm0.07$, waveform \hl{$0.98\pm0.04$}.\\
+   Gaussian jitter on the precomputed MFCC matrix does not imitate noise that passes through the MFCC.}
 \end{frame}
 
 \begin{frame}{Appendix -- design choices}

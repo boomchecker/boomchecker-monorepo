@@ -3,7 +3,8 @@
 First draft, seeded from the four reviews of the paper (see
 `.agents/memories/2026-07-21_bec2026_reviews_camera_ready.md`) – the reviewers already
 asked the questions the audience is most likely to ask. Appendix slides: A1 full
-robustness table, A2 design choices, A3 the five ESP32 disagreements, A4 metrics.
+robustness table, A2 control: noise on the MFCC features, A3 design choices, A4 the
+five ESP32 disagreements, A5 metrics.
 
 Every number below is from `article/article_main.tex`. Do not improvise figures.
 
@@ -29,21 +30,25 @@ Every number below is from `article/article_main.tex`. Do not improvise figures.
 > After the trigger, every candidate is already anomalous – including small-arms
 > gunshots. An anomaly detector would flag a rifle shot too. We need the
 > artillery / non-artillery decision, so a supervised classifier. One-class methods fit
-> the first stage better. → **A2**
+> the first stage better. → **A3**
 
 **"Why MFCC and not GTCC, when your own group showed GTCC is better?"**
 > For gunshot classification, yes. Here we chose MFCC as the standardized front end
-> with mature embedded implementations. Trying GTCC on the MCU is a fair next step. → **A2**
+> with mature embedded implementations. Trying GTCC on the MCU is a fair next step. → **A3**
 
 **"Why 22.05 kHz and not 44.1?"**
 > The launch energy lies well below 11 kHz. Buffers and MFCC compute scale with the
-> sampling rate, so 44.1 kHz would cost RAM without adding usable signal. → **A2**
+> sampling rate, so 44.1 kHz would cost RAM without adding usable signal. → **A3**
 
-**"Why is the MFCC-jitter model so bad? Maybe the jitter was just too strong."**
-> Noise added to the waveform changes the cepstrum nonlinearly and depending on the
-> signal. Independent Gaussian jitter on the matrix does not look like that. And the
-> combination A + B is worse than B alone at every SNR – so it is not only a matter of
-> strength. *(TODO: have the jitter σ ready.)*
+**"The paper compares feature-domain and waveform-domain augmentation – why is that
+only in the appendix?"** / **"Why is the MFCC-jitter model so bad?"**
+> It was a control, and it answers a narrow question: independent Gaussian jitter on
+> the precomputed MFCC matrix does not imitate noise that has passed through the MFCC –
+> additive noise changes the log-mel cepstrum nonlinearly and depending on the signal.
+> At 5 dB it reaches MCC 0.30, against 0.98 with waveform noise. A feature-domain model
+> that follows how noise actually propagates through the MFCC might work – we did not
+> test that. → **A2**
+> *(TODO: have the jitter σ ready.)*
 
 ## Results
 
@@ -54,7 +59,7 @@ Every number below is from `article/article_main.tex`. Do not improvise figures.
 **"Why do five ESP32 inferences differ from the PC?"**
 > All five have a PC score of exactly 0.5. The model is very confident, so one LSB of the
 > output spans 10.8 logit units, and TFLite and TFLite Micro may round one LSB
-> differently. The other 1,171 of 1,176 are bit-exact. → **A3**
+> differently. The other 1,171 of 1,176 are bit-exact. → **A4**
 
 **"Is 32 ms the full latency?"**
 > No – only the network inference on one MFCC segment. The MFCCs were computed on the
@@ -67,7 +72,7 @@ Every number below is from `article/article_main.tex`. Do not improvise figures.
 
 **"Real noise, not Gaussian?"**
 > Agreed, Gaussian noise is a simplification. It is still closer to the real front end
-> than feature jitter, because it goes through the MFCC. Field noise and propagation
+> than a perturbation of the features, because it goes through the MFCC. Field noise and propagation
 > effects are next.
 
 **"Will you publish the dataset?"**
