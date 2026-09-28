@@ -166,10 +166,10 @@
       \begin{block}{\faMicrochip\enspace The decision has to be on the edge}
         \small
         \begin{itemize}\small
-          \item Cheap nodes $\Rightarrow$ many nodes, spread over a large area.
+          \item Cheap nodes mean many nodes, spread over a large area.
           \item Streaming raw audio from every node costs power and radio
                 bandwidth -- and a transmitting node is easier to find.
-          \item $\Rightarrow$ each node decides by itself and sends an
+          \item So each node decides by itself and sends an
                 \textbf{alert}, not the audio.
         \end{itemize}
       \end{block}
@@ -182,7 +182,7 @@
                 $\approx$\textbf{5--10\,km} from the station.
           \item The launch reaches the sensor attenuated, on top of wind, traffic and
                 other background.
-          \item $\Rightarrow$ the classifier has to work at \textbf{low SNR}.
+          \item So the classifier has to work at \textbf{low SNR}.
         \end{itemize}
       \end{block}
     \end{column}
@@ -290,7 +290,7 @@
               event.
         \item The trigger also fires on doors, shouts, small arms \ldots\ -- a
               \textbf{binary} classifier rejects them.
-        \item Launch / non-launch $\Rightarrow$ stage 2 is in effect the
+        \item Launch / non-launch: stage 2 is in effect the
               \textbf{artillery launch detector}. We evaluate this stage only.
       \end{itemize}
     \end{column}
@@ -402,7 +402,7 @@
         \item 2.5\,ms frames, 1\,ms hop, Hamming
         \item 512-point FFT, 40 mel filters
         \item first 12 coefficients
-        \item $\Rightarrow$ input tensor \textbf{$58\times12$}
+        \item input tensor \textbf{$58\times12$}
       \end{itemize}
       \vspace{2mm}
       \small\textbf{Training}
@@ -774,7 +774,7 @@
     \item The model is very confident, so the output quantization is coarse:
           \textbf{one LSB spans 10.8 logit units}.
     \item TFLite and TFLite Micro kernels may round one LSB differently -- both legal.
-    \item $\Rightarrow$ platform behaviour is equivalent up to rounding at the boundary;
+    \item Platform behaviour is equivalent up to rounding at the boundary;
           1\,171 / 1\,176 bit-exact.
   \end{itemize}
 \end{frame}
