@@ -99,7 +99,7 @@ re-plotted from `article/tables/` (keep them in sync if the tables are regenerat
 **Open points (first draft):**
 
 - Slot length is **not verified** – taltech.ee was not reachable when the draft was
-  written. The script is timed to 11:40; trim once
+  written. The script is timed to 12:40; trim once
   the programme gives the slot.
 - Exact day/session of the talk – `\date` on the title slide says only "October 2026".
 - No `[CUT IF LATE]` sentences marked yet, no cue card yet.

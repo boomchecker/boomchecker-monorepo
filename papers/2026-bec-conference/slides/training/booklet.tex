@@ -52,7 +52,7 @@ slide by slide, always \textbf{aloud}, standing if you can.
   \item \textbf{Part C -- anchors only.} Say the whole slide from the opening and closing
         sentence alone. This is the level you need on stage.
   \item \textbf{Time it.} Each page carries its time window. The pauses are part of the
-        timing. Target for the whole talk: \textbf{11:40}.
+        timing. Target for the whole talk: \textbf{12:40}.
   \item \textbf{Space it out.} Day 1: slides 1--6 to Part C. Day 2: slides 7--13, then re-test
         1--6. Day 3: two full runs with the PDF full-screen and a clicker, one of them recorded
         on your phone -- listen back. Day 4: open the booklet on a random page and start
@@ -148,8 +148,23 @@ In training we use all four channels, and a class-weighted loss for the imbalanc
 The test set has ten launches and one hundred and fifty-eight other events.\par
 }
 \newpage
-\slidehead{7}{MFCC front end and compact CNN}{5:40–6:40}{Part A -- full text}
+\slidehead{7}{Small positive class – why, and how we handle it}{5:40–6:40}{Part A -- full text}
 \thumb{7}
+{\Large\raggedright\sloppy\setlength{\parskip}{6pt}
+You may ask why we have only fifty launches.\par
+Artillery is not something you can record whenever you want.\par
+We could only record during a live-fire exercise, and it had to be arranged in advance.\par
+The number of rounds was given by the exercise, not by us.\par
+So we tried to get the most out of every shot.\par
+In training we use all four microphone channels, and we add noisy copies.\par
+We split by event, so no shot is in both training and test.\par
+The network is small, with dropout and early stopping.\par
+And every number is averaged over twenty-five runs.\par
+Still – ten test launches and one gun type is a real limitation.\par
+}
+\newpage
+\slidehead{8}{MFCC front end and compact CNN}{6:40–7:40}{Part A -- full text}
+\thumb{8}
 {\Large\raggedright\sloppy\setlength{\parskip}{6pt}
 Now the method.\par
 From each window we compute MFCCs.\par
@@ -161,8 +176,8 @@ In total it has about seventy-two thousand parameters.\par
 That is small enough for a microcontroller.\par
 }
 \newpage
-\slidehead{8}{Robustness training}{6:40–7:30}{Part A -- full text}
-\thumb{8}
+\slidehead{9}{Robustness training}{7:40–8:30}{Part A -- full text}
+\thumb{9}
 {\Large\raggedright\sloppy\setlength{\parskip}{6pt}
 To make the classifier robust, we train it on noisy data.\par
 We add noise to the training audio, at thirty down to five decibels, and only then compute the MFCCs.\par
@@ -170,8 +185,8 @@ That's how noise reaches the real sensor.\par
 Together with that, we use a larger set of non-launch events, with gunshots as hard negatives, and a class-weighted loss for the imbalance.\par
 }
 \newpage
-\slidehead{9}{Evaluation protocol}{7:30–8:20}{Part A -- full text}
-\thumb{9}
+\slidehead{10}{Evaluation protocol}{8:30–9:20}{Part A -- full text}
+\thumb{10}
 {\Large\raggedright\sloppy\setlength{\parskip}{6pt}
 How do we test it?\par
 We take the held-out test set and add noise to the audio – again before the MFCC, because that's what happens in the real sensor.\par
@@ -182,8 +197,8 @@ Every number is an average over twenty-five runs – five training seeds and fiv
 And we report mainly the MCC, because the classes are imbalanced.\par
 }
 \newpage
-\slidehead{10}{Result 1 – robustness at low SNR}{8:20–9:30}{Part A -- full text}
-\thumb{10}
+\slidehead{11}{Result 1 – robustness at low SNR}{9:20–10:30}{Part A -- full text}
+\thumb{11}
 {\Large\raggedright\sloppy\setlength{\parskip}{6pt}
 This is the main result – the deployed model on the held-out test set.\par
 In the trained range, from clean down to five decibels, the MCC stays between zero point nine eight and zero point nine nine.\par
@@ -197,8 +212,8 @@ And no small-arms gunshot was ever classified as artillery.\par
 Quantization to int8 made no real difference.\par
 }
 \newpage
-\slidehead{11}{Result 2 – on the ESP32-S3}{9:30–10:30}{Part A -- full text}
-\thumb{11}
+\slidehead{12}{Result 2 – on the ESP32-S3}{10:30–11:30}{Part A -- full text}
+\thumb{12}
 {\Large\raggedright\sloppy\setlength{\parskip}{6pt}
 Finally, the microcontroller.\par
 We sent all test inputs to the ESP32-S3, at all noise levels – that's one thousand one hundred and seventy-six inferences.\par
@@ -209,8 +224,8 @@ Please note, that's only the network – the MFCCs were computed on the host.\pa
 The model has about eighty kilobytes, and the whole firmware needs less than one hundred and fifty kilobytes of RAM.\par
 }
 \newpage
-\slidehead{12}{Limitations}{10:30–11:00}{Part A -- full text}
-\thumb{12}
+\slidehead{13}{Limitations}{11:30–12:00}{Part A -- full text}
+\thumb{13}
 {\Large\raggedright\sloppy\setlength{\parskip}{6pt}
 Of course, there are limitations.\par
 We evaluate only the classifier, not the full stream.\par
@@ -219,8 +234,8 @@ And the noise is synthetic.\par
 So these are the next steps for us.\par
 }
 \newpage
-\slidehead{13}{Conclusion}{11:00–11:40}{Part A -- full text}
-\thumb{13}
+\slidehead{14}{Conclusion}{12:00–12:40}{Part A -- full text}
+\thumb{14}
 {\Large\raggedright\sloppy\setlength{\parskip}{6pt}
 To sum up.\par
 A small CNN with seventy-two thousand parameters works well as the second stage of an artillery launch detector.\par
@@ -311,8 +326,23 @@ I t w u a f c, a a c-w l f t i.\par
 T t s h t l a o h a f-e o e.\par
 }
 \newpage
-\slidehead{7}{MFCC front end and compact CNN}{5:40–6:40}{Part B -- first letters}
+\slidehead{7}{Small positive class – why, and how we handle it}{5:40–6:40}{Part B -- first letters}
 \thumb{7}
+{\large\ttfamily\raggedright\linespread{1.5}\selectfont\setlength{\parskip}{7pt}
+Y m a w w h o f l.\par
+A i n s y c r w y w.\par
+W c o r d a l-f e, a i h t b a i a.\par
+T n o r w g b t e, n b u.\par
+S w t t g t m o o e s.\par
+I t w u a f m c, a w a n c.\par
+W s b e, s n s i i b t a t.\par
+T n i s, w d a e s.\par
+A e n i a o t-f r.\par
+S – t t l a o g t i a r l.\par
+}
+\newpage
+\slidehead{8}{MFCC front end and compact CNN}{6:40–7:40}{Part B -- first letters}
+\thumb{8}
 {\large\ttfamily\raggedright\linespread{1.5}\selectfont\setlength{\parskip}{7pt}
 N t m.\par
 F e w w c M.\par
@@ -324,8 +354,8 @@ I t i h a s-t t p.\par
 T i s e f a m.\par
 }
 \newpage
-\slidehead{8}{Robustness training}{6:40–7:30}{Part B -- first letters}
-\thumb{8}
+\slidehead{9}{Robustness training}{7:40–8:30}{Part B -- first letters}
+\thumb{9}
 {\large\ttfamily\raggedright\linespread{1.5}\selectfont\setlength{\parskip}{7pt}
 T m t c r, w t i o n d.\par
 W a n t t t a, a t d t f d, a o t c t M.\par
@@ -333,8 +363,8 @@ That's h n r t r s.\par
 T w t, w u a l s o n-l e, w g a h n, a a c-w l f t i.\par
 }
 \newpage
-\slidehead{9}{Evaluation protocol}{7:30–8:20}{Part B -- first letters}
-\thumb{9}
+\slidehead{10}{Evaluation protocol}{8:30–9:20}{Part B -- first letters}
+\thumb{10}
 {\large\ttfamily\raggedright\linespread{1.5}\selectfont\setlength{\parskip}{7pt}
 H d w t i?\par
 W t t h-o t s a a n t t a – a b t MFCC, b that's w h i t r s.\par
@@ -345,8 +375,8 @@ E n i a a o t-f r – f t s a f n s.\par
 A w r m t MCC, b t c a i.\par
 }
 \newpage
-\slidehead{10}{Result 1 – robustness at low SNR}{8:20–9:30}{Part B -- first letters}
-\thumb{10}
+\slidehead{11}{Result 1 – robustness at low SNR}{9:20–10:30}{Part B -- first letters}
+\thumb{11}
 {\large\ttfamily\raggedright\linespread{1.5}\selectfont\setlength{\parskip}{7pt}
 T i t m r – t d m o t h-o t s.\par
 I t t r, f c d t f d, t MCC s b z p n e a z p n n.\par
@@ -360,8 +390,8 @@ A n s-a g w e c a a.\par
 Q t int8 m n r d.\par
 }
 \newpage
-\slidehead{11}{Result 2 – on the ESP32-S3}{9:30–10:30}{Part B -- first letters}
-\thumb{11}
+\slidehead{12}{Result 2 – on the ESP32-S3}{10:30–11:30}{Part B -- first letters}
+\thumb{12}
 {\large\ttfamily\raggedright\linespread{1.5}\selectfont\setlength{\parskip}{7pt}
 F, t m.\par
 W s a t i t t ESP32-S3, a a n l – that's o t o h a s-s i.\par
@@ -372,8 +402,8 @@ P n, that's o t n – t M w c o t h.\par
 T m h a e k, a t w f n l t o h a f k o RAM.\par
 }
 \newpage
-\slidehead{12}{Limitations}{10:30–11:00}{Part B -- first letters}
-\thumb{12}
+\slidehead{13}{Limitations}{11:30–12:00}{Part B -- first letters}
+\thumb{13}
 {\large\ttfamily\raggedright\linespread{1.5}\selectfont\setlength{\parskip}{7pt}
 O c, t a l.\par
 W e o t c, n t f s.\par
@@ -382,8 +412,8 @@ A t n i s.\par
 S t a t n s f u.\par
 }
 \newpage
-\slidehead{13}{Conclusion}{11:00–11:40}{Part B -- first letters}
-\thumb{13}
+\slidehead{14}{Conclusion}{12:00–12:40}{Part B -- first letters}
+\thumb{14}
 {\large\ttfamily\raggedright\linespread{1.5}\selectfont\setlength{\parskip}{7pt}
 T s u.\par
 A s CNN w s-t t p w w a t s s o a a l d.\par
@@ -441,56 +471,64 @@ I'm h t t y q.\par
 {\Large\raggedright\bfseries The test set has ten launches and one hundred and fifty-eight other events.\par}
 \vspace{8mm}
 \newpage
-\slidehead{7}{MFCC front end and compact CNN}{5:40–6:40}{Part C -- anchors only}
+\slidehead{7}{Small positive class – why, and how we handle it}{5:40–6:40}{Part C -- anchors only}
 \thumb{7}
+\vspace{4mm}{\Large\raggedright\bfseries You may ask why we have only fifty launches.\par}
+\vspace{6mm}{\color{ink!40}\Huge\ldots}\par
+\vfill
+{\Large\raggedright\bfseries Still – ten test launches and one gun type is a real limitation.\par}
+\vspace{8mm}
+\newpage
+\slidehead{8}{MFCC front end and compact CNN}{6:40–7:40}{Part C -- anchors only}
+\thumb{8}
 \vspace{4mm}{\Large\raggedright\bfseries Now the method.\par}
 \vspace{6mm}{\color{ink!40}\Huge\ldots}\par
 \vfill
 {\Large\raggedright\bfseries That is small enough for a microcontroller.\par}
 \vspace{8mm}
 \newpage
-\slidehead{8}{Robustness training}{6:40–7:30}{Part C -- anchors only}
-\thumb{8}
+\slidehead{9}{Robustness training}{7:40–8:30}{Part C -- anchors only}
+\thumb{9}
 \vspace{4mm}{\Large\raggedright\bfseries To make the classifier robust, we train it on noisy data.\par}
 \vspace{6mm}{\color{ink!40}\Huge\ldots}\par
 \vfill
 {\Large\raggedright\bfseries Together with that, we use a larger set of non-launch events, with gunshots as hard negatives, and a class-weighted loss for the imbalance.\par}
 \vspace{8mm}
 \newpage
-\slidehead{9}{Evaluation protocol}{7:30–8:20}{Part C -- anchors only}
-\thumb{9}
+\slidehead{10}{Evaluation protocol}{8:30–9:20}{Part C -- anchors only}
+\thumb{10}
 \vspace{4mm}{\Large\raggedright\bfseries How do we test it?\par}
 \vspace{6mm}{\color{ink!40}\Huge\ldots}\par
 \vfill
 {\Large\raggedright\bfseries And we report mainly the MCC, because the classes are imbalanced.\par}
 \vspace{8mm}
 \newpage
-\slidehead{10}{Result 1 – robustness at low SNR}{8:20–9:30}{Part C -- anchors only}
-\thumb{10}
+\slidehead{11}{Result 1 – robustness at low SNR}{9:20–10:30}{Part C -- anchors only}
+\thumb{11}
 \vspace{4mm}{\Large\raggedright\bfseries This is the main result – the deployed model on the held-out test set.\par}
 \vspace{6mm}{\color{ink!40}\Huge\ldots}\par
 \vfill
 {\Large\raggedright\bfseries Quantization to int8 made no real difference.\par}
 \vspace{8mm}
 \newpage
-\slidehead{11}{Result 2 – on the ESP32-S3}{9:30–10:30}{Part C -- anchors only}
-\thumb{11}
+\slidehead{12}{Result 2 – on the ESP32-S3}{10:30–11:30}{Part C -- anchors only}
+\thumb{12}
 \vspace{4mm}{\Large\raggedright\bfseries Finally, the microcontroller.\par}
 \vspace{6mm}{\color{ink!40}\Huge\ldots}\par
 \vfill
 {\Large\raggedright\bfseries The model has about eighty kilobytes, and the whole firmware needs less than one hundred and fifty kilobytes of RAM.\par}
 \vspace{8mm}
 \newpage
-\slidehead{12}{Limitations}{10:30–11:00}{Part C -- anchors only}
-\thumb{12}
+\slidehead{13}{Limitations}{11:30–12:00}{Part C -- anchors only}
+\thumb{13}
 \vspace{4mm}{\Large\raggedright\bfseries Of course, there are limitations.\par}
 \vspace{6mm}{\color{ink!40}\Huge\ldots}\par
 \vfill
 {\Large\raggedright\bfseries So these are the next steps for us.\par}
 \vspace{8mm}
 \newpage
-\slidehead{13}{Conclusion}{11:00–11:40}{Part C -- anchors only}
-\thumb{13}
+\slidehead{14}{Conclusion}{12:00–12:40}{Part C -- anchors only}
+\thumb{14}
 \vspace{4mm}{\Large\raggedright\bfseries To sum up.\par}
 \vspace{6mm}{\color{ink!40}\Huge\ldots}\par
 \vfill
@@ -527,7 +565,7 @@ I'm h t t y q.\par
     ESP32-S3 – latency per MFCC segment? & \textbf{32.0 ms (31.99–32.09 ms), classifier only}\\
     Model size, tensor arena? & \textbf{81,400 B; 80 KiB}\\
     Firmware flash code / flash data / RAM? & \textbf{201.5 kB / 144.0 kB / 143.8 kB}\\
-    Talk length – target? & \textbf{script written to 11:40 (slot length to confirm)}\\
+    Talk length – target? & \textbf{script written to 12:40 (slot length to confirm)}\\
   \bottomrule
 \end{tabular}
 

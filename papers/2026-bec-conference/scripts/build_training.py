@@ -53,7 +53,7 @@ NUMBERS = [
     ("ESP32-S3 – latency per MFCC segment?", "32.0 ms (31.99–32.09 ms), classifier only", "numbers esp32"),
     ("Model size, tensor arena?", "81,400 B; 80 KiB", "numbers esp32"),
     ("Firmware flash code / flash data / RAM?", "201.5 kB / 144.0 kB / 143.8 kB", "numbers esp32"),
-    ("Talk length – target?", "script written to 11:40 (slot length to confirm)", "numbers talk"),
+    ("Talk length – target?", "script written to 12:40 (slot length to confirm)", "numbers talk"),
 ]
 
 # --------------------------------------------------------------------------- parsing
@@ -246,7 +246,7 @@ slide by slide, always \textbf{aloud}, standing if you can.
   \item \textbf{Part C -- anchors only.} Say the whole slide from the opening and closing
         sentence alone. This is the level you need on stage.
   \item \textbf{Time it.} Each page carries its time window. The pauses are part of the
-        timing. Target for the whole talk: \textbf{11:40}.
+        timing. Target for the whole talk: \textbf{12:40}.
   \item \textbf{Space it out.} Day 1: slides 1--6 to Part C. Day 2: slides 7--13, then re-test
         1--6. Day 3: two full runs with the PDF full-screen and a clicker, one of them recorded
         on your phone -- listen back. Day 4: open the booklet on a random page and start

@@ -425,6 +425,50 @@
   }
 \end{frame}
 
+\begin{frame}{Small positive class -- why, and how we handle it}
+  \begin{columns}[T,onlytextwidth]
+    \begin{column}{0.40\textwidth}
+      \begin{block}{\faCrosshairs\enspace Why only 50 launches}
+        \small
+        \begin{itemize}\small
+          \item Artillery cannot be recorded on demand -- only during a
+                \textbf{live-fire exercise}, by arrangement with the military.
+          \item The number of rounds was set by the exercise, \textbf{not by us}.
+          \item Two recording days, one gun type.
+        \end{itemize}
+      \end{block}
+    \end{column}
+    \begin{column}{0.56\textwidth}
+      {\small\bfseries\color{ctublue}How we limit the impact}
+      \begin{itemize}\small
+        \item \textbf{More views of each shot} -- all 4 synchronized channels in training,
+              plus one noisy copy per SNR level.
+        \item \textbf{No leakage} -- split by event, so no shot is in training and test.
+        \item \textbf{Imbalance} -- hard negatives and a class-weighted loss (1\,:\,4).
+        \item \textbf{Against overfitting} -- compact CNN (72\,k), dropout 0.5, early
+              stopping on a separate validation set.
+        \item \textbf{Honest numbers} -- test set used once; 5\,$\times$\,5 seeds;
+              MCC instead of accuracy.
+      \end{itemize}
+    \end{column}
+  \end{columns}
+  \vfill
+  {\scriptsize\color{ink!60} Still: 10 test launches and one gun type -- generalization to
+   other calibres is untested.}
+      \note{
+\textbf{[5:40--6:40]}\par\medskip
+    You may ask why we have only fifty launches. //\par\medskip
+    Artillery is not something you can record whenever you want. // We could only record
+    during a live-fire exercise, and it had to be arranged in advance. // The number of
+    rounds was given by the exercise, not by us. //\par\medskip
+    So we tried to get the most out of every shot. // In training we use all four
+    microphone channels, and we add noisy copies. // We split by event, so no shot is in
+    both training and test. // The network is small, with dropout and early stopping. //
+    And every number is averaged over twenty-five runs. //\par\medskip
+    Still -- ten test launches and one gun type is a real limitation. //
+  }
+\end{frame}
+
 % ===========================================================================
 \section{Method}
 
@@ -477,7 +521,7 @@
     \end{column}
   \end{columns}
       \note{
-\textbf{[5:40--6:40]}\par\medskip
+\textbf{[6:40--7:40]}\par\medskip
     Now the method. //\par\medskip
     From each window we compute MFCCs. // We use very short frames -- two and a half
     milliseconds, with a one millisecond step -- because the event is short and changes
@@ -518,7 +562,7 @@
   {\scriptsize\color{ink!60} Control in the paper: the same noise added to the MFCC matrix
    instead does not give robustness (appendix).}
       \note{
-\textbf{[6:40--7:30]}\par\medskip
+\textbf{[7:40--8:30]}\par\medskip
     To make the classifier robust, we train it on noisy data. //\par\medskip
     We add noise to the training audio, at thirty down to five decibels, and only then
     compute the MFCCs. // That's how noise reaches the real sensor. //\par\medskip
@@ -542,7 +586,7 @@
     \item Main metric: Matthews correlation coefficient (MCC).
   \end{itemize}
       \note{
-\textbf{[7:30--8:20]}\par\medskip
+\textbf{[8:30--9:20]}\par\medskip
     How do we test it? //\par\medskip
     We take the held-out test set and add noise to the audio -- again before the MFCC,
     because that's what happens in the real sensor. // The noise level is set per event,
@@ -583,7 +627,7 @@
    noise the model misses launches, it does not raise false alarms.
    float32 vs.\ int8: within $\pm0.02$ MCC, no consistent direction.}
       \note{
-\textbf{[8:20--9:30]}\par\medskip
+\textbf{[9:20--10:30]}\par\medskip
     This is the main result -- the deployed model on the held-out test set. //\par\medskip
     In the trained range, from clean down to five decibels, the MCC stays between zero
     point nine eight and zero point nine nine. //\par\medskip
@@ -631,7 +675,7 @@
     \end{column}
   \end{columns}
       \note{
-\textbf{[9:30--10:30]}\par\medskip
+\textbf{[10:30--11:30]}\par\medskip
     Finally, the microcontroller. //\par\medskip
     We sent all test inputs to the ESP32-S3, at all noise levels -- that's one thousand
     one hundred and seventy-six inferences. // One thousand one hundred and seventy-one
@@ -661,7 +705,7 @@
           decision are future work.
   \end{itemize}
       \note{
-\textbf{[10:30--11:00]}\par\medskip
+\textbf{[11:30--12:00]}\par\medskip
     Of course, there are limitations. //\par\medskip
     We evaluate only the classifier, not the full stream. // We have only fifty launches,
     and one type of gun. // And the noise is synthetic. //\par\medskip
@@ -685,7 +729,7 @@
   {\large Thank you -- questions?}\\[2mm]
   {\small\color{gray} maxamart@fel.cvut.cz}
       \note{
-\textbf{[11:00--11:40]}\par\medskip
+\textbf{[12:00--12:40]}\par\medskip
     To sum up. //\par\medskip
     A small CNN with seventy-two thousand parameters works well as the second stage of an
     artillery launch detector. //\par\medskip
