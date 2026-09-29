@@ -71,6 +71,33 @@
 \newcommand{\badge}[2]{\tikz[baseline=(b.base)]\node[circle,fill=#1,draw=white,line width=0.8pt,text=white,inner sep=1.2pt,
   minimum size=3.6mm,font=\scriptsize\bfseries] (b) {#2};}
 
+% Speaker badge (initials in a circle) next to the frame number, bottom right.
+% \speaker{JS} before a frame sets it for that frame and all following ones, \speaker{} switches it off.
+\def\speakerinitials{}
+\newcommand{\speaker}[1]{\gdef\speakerinitials{#1}}
+\newcommand{\speakerbadge}{%
+  \ifx\speakerinitials\empty\else
+    % zero height/depth so the badge does not make the footline taller and steal text space
+    \raisebox{0pt}[0pt][0pt]{\tikz[baseline=(s.base)]\node[circle,fill=ctunavy,text=white,inner sep=1.2pt,
+      minimum size=4.4mm,font=\tiny\bfseries] (s) {\speakerinitials};}\ \fi}
+% Schedule clock next to the badge: \budget{n} before a frame gives that frame n minutes and the
+% footer shows the wall-clock time at which you should ARRIVE at it, counted from \talkstart.
+% If the room clock is already past that time, you are behind schedule.
+\newcount\startmin
+\newcommand{\talkstart}[2]{\startmin=\numexpr#1*60+#2\relax}
+\talkstart{13}{00}
+\newcount\elapsedmin \elapsedmin=1   % the title slide / hello
+\newcount\clockh \newcount\clockm
+\def\timeat{}
+\newcommand{\budget}[1]{%
+  \clockh=\numexpr\startmin+\elapsedmin\relax
+  \clockm=\clockh \divide\clockh by 60 \clockm=\numexpr\clockm-60*\clockh\relax
+  \xdef\timeat{\the\clockh:\ifnum\clockm<10 0\fi\the\clockm}%
+  \global\advance\elapsedmin by #1\relax}
+\newcommand{\notimed}{\gdef\timeat{}}
+\newcommand{\timebadge}{\ifx\timeat\empty\else\faClock\ \timeat\quad\fi}
+\setbeamertemplate{frame numbering}{\timebadge\speakerbadge\insertframenumber/\inserttotalframenumber}
+
 % One slide per thesis: \thesis{colour}{letter}{title}{type / supervisor}{goal}{deliverables}{plugs in}
 \newcommand{\thesis}[7]{%
   \begin{frame}{\badge{#1}{#2}\ #3}
@@ -139,6 +166,8 @@
 \end{frame}
 
 % ==================================================
+\speaker{JS}
+\budget{0}
 \begin{frame}{Today}
   \begin{columns}[T,onlytextwidth]
     \column{0.55\textwidth}
@@ -165,6 +194,7 @@
 % ==================================================
 \section{What we build}
 
+\budget{2}
 \begin{frame}{Why drone detection?}
   \begin{columns}[T,onlytextwidth]
     \column{0.52\textwidth}
@@ -192,6 +222,7 @@
 \end{frame}
 
 % --------------------------------------------------
+\budget{2}
 \begin{frame}{The system and where your thesis fits}
   \centering
   \begin{tikzpicture}[node distance=5mm and 9mm,font=\small]
@@ -238,6 +269,7 @@
 \end{frame}
 
 % --------------------------------------------------
+\budget{2}
 \begin{frame}{Honest limits: this is research}
   \begin{columns}[T,onlytextwidth]
     \column{0.48\textwidth}
@@ -269,6 +301,8 @@
 % ==================================================
 \section{The five theses}
 
+\speaker{}
+\budget{2}
 \thesis{tA}{A}{Acoustic Drone Detection on the STM32 Platform}
   {\faUserGraduate\ \textbf{Jan Amos Vorel} \quad \faUserTie\ supervisor Martin Maxa}
   {Survey and compare features (spectral, MFCC / log-mel) and classifiers (classic ML, tiny NNs)
@@ -283,6 +317,7 @@
   {The \textbf{detection} block on the sensor node. It builds on the existing MFCC + classifier
    code in \code{fw/common/boomdetect} and \code{fw/bom-stm32node/App/detect}.}
 
+\budget{2}
 \thesis{tB}{B}{Firmware for Multi-Microphone PDM Acquisition on STM32H5}
   {\faUserGraduate\ \textbf{Ivan Dyryvolkov} \quad \faUserTie\ supervisor Martin Maxa}
   {Record 4--6 PDM MEMS microphones at once on the STM32H5 using SAI in PDM mode + DMA, and show
@@ -297,6 +332,7 @@
   {The \textbf{microphone front-end} of the node and the enabler for microphone arrays. It starts from
    the single-mic SAI + GPDMA path in \code{fw/bom-stm32node} (\code{mic.c}, \code{pdm\_pcm.c}).}
 
+\budget{2}
 \thesis{tC}{C}{Drone Localization Methods in UAV Detection Systems}
   {\faUserGraduate\ \textbf{Vojtěch Beneš} \quad \faUserTie\ supervisor Martin Maxa}
   {A systematic survey of how drones are localized (radar, RF, optical, thermal, \textbf{acoustic})
@@ -311,6 +347,7 @@
   {The \textbf{localization} block on the central side, and input for where we take the project next.
    Related code: \code{scripts/tdoa\_estimation}.}
 
+\budget{2}
 \thesis{tD}{D}{Web App for Data Collection \& Map Visualization}
   {\faUserGraduate\ \textbf{Martin Voplakal} \quad \faUserTie\ supervisor Jakub Svatoš}
   {A web application for the network of detection units: the server receives, validates and stores
@@ -323,6 +360,7 @@
    \end{itemize}}
   {The \textbf{backend + web map} on the central side. A first version lives in \code{apps/api-backend} and \code{apps/device-web}, but the technology choice is yours.}
 
+\budget{2}
 \thesis{tE}{E}{IMU Integration and Orientation Algorithms}
   {\faUserGraduate\ \textbf{Lumír Blažek} \quad \faUserTie\ supervisor Kamil Herman}
   {Know the node's \textbf{pitch, roll and yaw} so that acoustic measurements can be converted to
@@ -337,6 +375,8 @@
   {The \textbf{IMU + GPS} block of the sensor node. Without orientation, a direction of arrival
    from the node cannot be placed on the map.}
 
+\speaker{JS}
+\budget{2}
 \begin{frame}{Independent, but connected}
   \begin{columns}[c,onlytextwidth]
     \column{0.55\textwidth}
@@ -365,6 +405,8 @@
 % ==================================================
 \section{How we develop}
 
+\speaker{MM}
+\budget{2}
 \begin{frame}[fragile]{One repository for everything}
   \begin{columns}[T,onlytextwidth]
     \column{0.55\textwidth}
@@ -396,6 +438,7 @@
 \end{frame}
 
 % --------------------------------------------------
+\budget{1}
 \begin{frame}{There is documentation. Read it!}
   \begin{columns}[T,onlytextwidth]
     \column{0.42\textwidth}
@@ -422,6 +465,7 @@
 \end{frame}
 
 % --------------------------------------------------
+\budget{2}
 \begin{frame}{Devcontainers: the same toolchain for everyone}
   \begin{columns}[c,onlytextwidth]
     \column{0.58\textwidth}
@@ -458,6 +502,7 @@
 \end{frame}
 
 % --------------------------------------------------
+\budget{1}
 \begin{frame}{Where your work lives}
   \begin{columns}[T,onlytextwidth]
     \column{0.48\textwidth}
@@ -482,6 +527,7 @@
 \end{frame}
 
 % --------------------------------------------------
+\budget{2}
 \begin{frame}[fragile]{Git basics we use every day}
   \begin{columns}[T,onlytextwidth]
     \column{0.54\textwidth}
@@ -518,6 +564,7 @@ git push -u origin yourname/short-description
 \end{frame}
 
 % --------------------------------------------------
+\budget{1}
 \begin{frame}{Protected \texttt{main} and pull requests}
   \centering
   \begin{tikzpicture}
@@ -548,6 +595,7 @@ git push -u origin yourname/short-description
 \end{frame}
 
 % --------------------------------------------------
+\budget{3}
 \begin{frame}{What it looks like on GitHub}
   \centering
   \vspace{6pt}
@@ -569,38 +617,8 @@ git push -u origin yourname/short-description
 \end{frame}
 
 % --------------------------------------------------
-\begin{frame}{CI: the robot reviewer}
-  \begin{columns}[T,onlytextwidth]
-    \column{0.50\textwidth}
-      Every PR is built and tested automatically by \textbf{GitHub Actions}:\par\medskip
-      \small
-      \begin{itemize}
-        \setlength{\itemsep}{2pt}
-        \item \code{test-bom-stm32node-build}: STM32 firmware
-        \item \code{test-boomdetect-build}: detection library + tests
-        \item \code{test-boomlink-protocol-build}: LoRa protocol
-        \item \code{test-api-be-build}: Go backend
-        \item \code{test-stm32node-cli}: Python host tool
-        \item \code{docs-pages}: docs build (strict)
-      \end{itemize}
-    \column{0.45\textwidth}
-      \begin{alertblock}{Red check = no merge}
-        \small
-        If CI fails, open the log, fix it, and push again. The PR updates by itself.
-      \end{alertblock}
-      \vspace{4pt}
-      \begin{block}{Before you ask for review}
-        \small
-        \begin{itemize}
-          \item it builds in the devcontainer
-          \item the PR says \emph{what, why, how to test}
-          \item no build output, secrets or unrelated files
-        \end{itemize}
-      \end{block}
-  \end{columns}
-\end{frame}
-
-% --------------------------------------------------
+\speaker{KH}  % TODO confirm: frames 19--23 had no initials in the brief
+\budget{2}
 \begin{frame}{AI tools: what CTU says}\relax
   {\small\textbf{Metodický pokyn č.\ 5/2023}: \emph{Rámcová pravidla používání umělé inteligence na ČVUT\dots}\par}
   {\scriptsize\color{ink!65}version V02, in force since 19 Feb 2024 \quad
@@ -636,6 +654,7 @@ git push -u origin yourname/short-description
 \end{frame}
 
 % --------------------------------------------------
+\budget{2}
 \begin{frame}{AI tools in practice}
   \begin{columns}[T,onlytextwidth]
     \column{0.48\textwidth}
@@ -665,28 +684,7 @@ git push -u origin yourname/short-description
 \end{frame}
 
 % --------------------------------------------------
-\begin{frame}{Our stance: use it, but stay the engineer}
-  \begin{columns}[c,onlytextwidth]
-    \column{0.55\textwidth}
-      \begin{itemize}
-        \setlength{\itemsep}{6pt}
-        \item What you should learn here: \textbf{reading and navigating real code}, i.e.\ firmware,
-          drivers, DSP.
-        \item You \textbf{may generate code}, but you must understand it and think it through.
-        \item Review AI output like a PR from a colleague you don't fully trust.
-        \item If a thesis were \emph{about} agentic development, the rules would differ.
-          These theses are not.
-      \end{itemize}
-    \column{0.40\textwidth}
-      \begin{block}{Available in the devcontainers}
-        \small
-        Claude Code and Codex come pre-configured, and \code{.claude/skills} holds a few shared skills.\\[4pt]
-        Mention the AI tools you used in the thesis's list of software.
-      \end{block}
-  \end{columns}
-\end{frame}
-
-% --------------------------------------------------
+\budget{1}
 \begin{frame}{Claude for your thesis: we will try to get you a seat}
   \begin{columns}[T,onlytextwidth]
     \column{0.46\textwidth}
@@ -719,6 +717,7 @@ git push -u origin yourname/short-description
 % ==================================================
 \section{How we plan}
 
+\budget{2}
 \begin{frame}{Agile in a nutshell}
   \begin{columns}[T,onlytextwidth]
     \column{0.52\textwidth}
@@ -744,6 +743,8 @@ git push -u origin yourname/short-description
 
 % --------------------------------------------------
 % --------------------------------------------------
+\speaker{MM}
+\budget{5}
 \begin{frame}{Kanban on GitHub Projects}
   \centering
   \begin{tikzpicture}
@@ -779,6 +780,7 @@ git push -u origin yourname/short-description
 \end{frame}
 
 % --------------------------------------------------
+\budget{2}
 \begin{frame}{Issues and milestones}
   \begin{columns}[T,onlytextwidth]
     \column{0.47\textwidth}
@@ -816,6 +818,7 @@ git push -u origin yourname/short-description
 % ==================================================
 \section{Next steps}
 
+\budget{2}
 \begin{frame}{Next steps}
   \begin{columns}[T,onlytextwidth]
     \column{0.55\textwidth}
@@ -849,6 +852,8 @@ git push -u origin yourname/short-description
 
 % ==================================================
 \appendix
+\speaker{}
+\notimed
 \section{Backup}
 % Reference slides, not part of the 60-minute talk: shown only if there is time or a question.
 
@@ -881,6 +886,38 @@ $ task monitor   # talk to the board
 \end{frame}
 
 % --------------------------------------------------
+\begin{frame}{CI: the robot reviewer}
+  \begin{columns}[T,onlytextwidth]
+    \column{0.50\textwidth}
+      Every PR is built and tested automatically by \textbf{GitHub Actions}:\par\medskip
+      \small
+      \begin{itemize}
+        \setlength{\itemsep}{2pt}
+        \item \code{test-bom-stm32node-build}: STM32 firmware
+        \item \code{test-boomdetect-build}: detection library + tests
+        \item \code{test-boomlink-protocol-build}: LoRa protocol
+        \item \code{test-api-be-build}: Go backend
+        \item \code{test-stm32node-cli}: Python host tool
+        \item \code{docs-pages}: docs build (strict)
+      \end{itemize}
+    \column{0.45\textwidth}
+      \begin{alertblock}{Red check = no merge}
+        \small
+        If CI fails, open the log, fix it, and push again. The PR updates by itself.
+      \end{alertblock}
+      \vspace{4pt}
+      \begin{block}{Before you ask for review}
+        \small
+        \begin{itemize}
+          \item it builds in the devcontainer
+          \item the PR says \emph{what, why, how to test}
+          \item no build output, secrets or unrelated files
+        \end{itemize}
+      \end{block}
+  \end{columns}
+\end{frame}
+
+% --------------------------------------------------
 \begin{frame}{AI in the thesis text (Art.\ 4.1)}
   \small
   \renewcommand{\arraystretch}{1.25}
@@ -901,6 +938,28 @@ $ task monitor   # talk to the board
     \textbf{citations}     & \aino   & AI often invents sources; verify every single one \\
     \bottomrule
   \end{tabular}
+\end{frame}
+
+% --------------------------------------------------
+\begin{frame}{Our stance: use it, but stay the engineer}
+  \begin{columns}[c,onlytextwidth]
+    \column{0.55\textwidth}
+      \begin{itemize}
+        \setlength{\itemsep}{6pt}
+        \item What you should learn here: \textbf{reading and navigating real code}, i.e.\ firmware,
+          drivers, DSP.
+        \item You \textbf{may generate code}, but you must understand it and think it through.
+        \item Review AI output like a PR from a colleague you don't fully trust.
+        \item If a thesis were \emph{about} agentic development, the rules would differ.
+          These theses are not.
+      \end{itemize}
+    \column{0.40\textwidth}
+      \begin{block}{Available in the devcontainers}
+        \small
+        Claude Code and Codex come pre-configured, and \code{.claude/skills} holds a few shared skills.\\[4pt]
+        Mention the AI tools you used in the thesis's list of software.
+      \end{block}
+  \end{columns}
 \end{frame}
 
 \end{document}
