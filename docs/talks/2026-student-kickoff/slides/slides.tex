@@ -17,6 +17,8 @@
 \usepackage{FiraMono}
 \usepackage{newtxsf}
 \usepackage{fontawesome5}
+% Backup frames after \appendix are numbered separately and do not dilute the progress bar.
+\usepackage{appendixnumberbeamer}
 
 \definecolor{ctublue}{RGB}{0,101,189}
 \definecolor{ctunavy}{RGB}{0,55,110}
@@ -68,16 +70,6 @@
 % Thesis badge: \badge{colour}{letter}
 \newcommand{\badge}[2]{\tikz[baseline=(b.base)]\node[circle,fill=#1,draw=white,line width=0.8pt,text=white,inner sep=1.2pt,
   minimum size=3.6mm,font=\scriptsize\bfseries] (b) {#2};}
-
-% Screenshot or a dashed TODO box when the file has not been added yet.
-% \screenshot{file}{height}{what to capture}
-\newcommand{\screenshot}[3]{%
-  \IfFileExists{#1}%
-    {\tikz\node[draw=ink!25,line width=0.6pt,inner sep=0pt]
-      {\includegraphics[height=#2,width=\dimexpr\linewidth-1.2pt\relax,keepaspectratio]{#1}};}%
-    {\tikz\node[draw=ink!40,dashed,line width=0.8pt,fill=panel,rounded corners=2pt,
-      minimum height=#2,text width=0.92\linewidth,align=center,font=\small\color{ink!60}]
-      {\faCamera\\[3pt]\textbf{TODO screenshot}\\[2pt]#3\\[2pt]\scriptsize\code{#1}};}}
 
 % One slide per thesis: \thesis{colour}{letter}{title}{type / supervisor}{goal}{deliverables}{plugs in}
 \newcommand{\thesis}[7]{%
@@ -454,41 +446,14 @@
     \column{0.40\textwidth}
       \small
       \begin{itemize}
-        \setlength{\itemsep}{4pt}
+        \setlength{\itemsep}{2pt}
         \item \textbf{No manual toolchain install.} \emph{Reopen in Container} and you're done.
         \item \textbf{fw}: firmware for STM32 and ESP32, including flashing and debugging.
         \item \textbf{sw}: apps, scripts and docs.
+        \item \textbf{Taskfile} everywhere: \code{task -l} shows what you can run.
         \item \textbf{usbipd} forwards the ST-Link / USB serial port from Windows into WSL and then the container.
         \item ``Works on my machine'' becomes ``works in the container''.
       \end{itemize}
-  \end{columns}
-\end{frame}
-
-% --------------------------------------------------
-\begin{frame}[fragile]{Taskfile: one entry point for commands}
-  \begin{columns}[T,onlytextwidth]
-    \column{0.50\textwidth}
-      \small
-      Instead of remembering long commands, we write them once in a \code{Taskfile.yml}:\par\medskip
-      \scriptsize
-\begin{verbatim}
-$ cd fw/bom-stm32node
-$ task -l        # what can I run here?
-$ task build     # build the firmware
-$ task flash     # flash over ST-Link
-$ task monitor   # talk to the board
-\end{verbatim}
-    \column{0.45\textwidth}
-      \begin{block}{Docker + Task = tools that save you time}
-        \small
-        \begin{itemize}
-          \item the environment is defined by the devcontainer
-          \item the commands are defined by Taskfiles
-          \item you focus on your thesis, not on setup
-        \end{itemize}
-      \end{block}
-      \vspace{4pt}
-      {\scriptsize\color{ink!65}Add a task for anything you run more than twice.}
   \end{columns}
 \end{frame}
 
@@ -584,13 +549,22 @@ git push -u origin yourname/short-description
 
 % --------------------------------------------------
 \begin{frame}{What it looks like on GitHub}
+  \centering
+  \vspace{6pt}
+  \tikz\node[draw=ctublue,fill=panel,rounded corners=3pt,line width=0.8pt,inner sep=12pt,
+    text width=0.78\linewidth,align=center]{%
+    {\LARGE\faGithub}\\[6pt]
+    {\Large\textbf{Live demo: three minutes on GitHub}}\\[6pt]
+    {\small\color{ink!70}Slides pause here, we switch to the browser and come back.}};
+
+  \vspace{14pt}
   \begin{columns}[T,onlytextwidth]
     \column{0.48\textwidth}
-      \centering\textbf{Branch protection}\par\smallskip
-      \screenshot{figs/branch-protection.png}{0.6\textheight}{branch protection rule for \code{main}}
+      \textbf{\faLock\ Branch protection}\par\smallskip
+      {\small Settings $\to$ Rules: the rule that rejects a direct push to \code{main}.}
     \column{0.48\textwidth}
-      \centering\textbf{A pull request}\par\smallskip
-      \screenshot{figs/pr-checks.png}{0.6\textheight}{PR with green checks + approval}
+      \textbf{\faCodeBranch\ A pull request}\par\smallskip
+      {\small A merged PR: green CI checks, one approval, then the merge button.}
   \end{columns}
 \end{frame}
 
@@ -662,29 +636,6 @@ git push -u origin yourname/short-description
 \end{frame}
 
 % --------------------------------------------------
-\begin{frame}{AI in the thesis text (Art.\ 4.1)}
-  \small
-  \renewcommand{\arraystretch}{1.25}
-  \newcommand{\aiyes}{\textcolor{okgreen}{\faCheck\ yes}}
-  \newcommand{\aipart}{\textcolor{tD}{\faAdjust\ partially}}
-  \newcommand{\aino}{\textcolor{accent}{\faTimes\ no}}
-  \begin{tabular}{@{}l l >{\raggedright\arraybackslash\scriptsize}p{0.52\textwidth}@{}}
-    \toprule
-    \textbf{Activity} & & \textbf{Note} \\
-    \midrule
-    grammar check          & \aiyes  & no need to declare \\
-    rewording, editing     & \aiyes  & be critical, it can change the meaning; list the AI tool among the software used \\
-    finding authors, institutions & \aiyes & verify, or consult your supervisor \\
-    literature search      & \aipart & inspiration only, never the only source; AI hallucinates, verify everything \\
-    text structure         & \aipart & you are the author and responsible for it; list the AI tool \\
-    machine translation    & \aipart & only from/to a language you speak yourself \\
-    \textbf{theses, results} & \aino & must be your own; text you cannot explain means a disciplinary procedure \\
-    \textbf{citations}     & \aino   & AI often invents sources; verify every single one \\
-    \bottomrule
-  \end{tabular}
-\end{frame}
-
-% --------------------------------------------------
 \begin{frame}{AI tools in practice}
   \begin{columns}[T,onlytextwidth]
     \column{0.48\textwidth}
@@ -735,10 +686,40 @@ git push -u origin yourname/short-description
   \end{columns}
 \end{frame}
 
+% --------------------------------------------------
+\begin{frame}{Claude for your thesis: we will try to get you a seat}
+  \begin{columns}[T,onlytextwidth]
+    \column{0.46\textwidth}
+      \begin{block}{\faUsers\ \ AIMS}
+        \small
+        \textbf{Acoustic Instrumentation and Measurement Systems}, our research group at FEE CTU.
+        \emph{``We teach machines to listen.''}\\[3pt]
+        {\scriptsize\href{https://aims.fel.cvut.cz}{\code{aims.fel.cvut.cz}}}\\[5pt]
+        Gunshot and drone detection, microphone arrays and localization, acoustic scene
+        classification: your theses are part of this work, so we would add you to the group.
+      \end{block}
+    \column{0.50\textwidth}
+      \begin{exampleblock}{\faGift\ \ Claude Team plan for scientists}
+        \small
+        \begin{itemize}
+          \setlength{\itemsep}{1pt}
+          \item Standard seat \textbf{free for 12 months} (normally \$20/month), Premium \$15/month.
+          \item A verified PI adds members of the lab; you work on our research, so we count you in.
+          \item Claude, Claude Code and Cowork; Anthropic does not train on your data.
+          \item 1--25 seats per group; a seat unused for 90 days may be dropped.
+        \end{itemize}
+        {\scriptsize\href{https://claude.com/programs/team-plan-for-scientists}{\code{claude.com/programs/team-plan-for-scientists}}}
+      \end{exampleblock}
+  \end{columns}
+  \vspace{1pt}
+  {\small \faQuestionCircle\ \ \textbf{Would you use it?} Tell us today or on Discord and we apply as AIMS.
+  No promise: availability is limited and Anthropic verifies the group. The previous slides apply either way.\par}
+\end{frame}
+
 % ==================================================
 \section{How we plan}
 
-\begin{frame}{Agile in five minutes}
+\begin{frame}{Agile in a nutshell}
   \begin{columns}[T,onlytextwidth]
     \column{0.52\textwidth}
       \begin{itemize}
@@ -762,6 +743,7 @@ git push -u origin yourname/short-description
 \end{frame}
 
 % --------------------------------------------------
+% --------------------------------------------------
 \begin{frame}{Kanban on GitHub Projects}
   \centering
   \begin{tikzpicture}
@@ -779,17 +761,17 @@ git push -u origin yourname/short-description
     \node[card=okgreen] at ([yshift=-6mm]c4.north) {devcontainer works\\\color{ink!60}closed};
   \end{tikzpicture}
 
-  \vspace{6pt}
+  \vspace{2pt}
   \begin{columns}[T,onlytextwidth]
-    \column{0.55\textwidth}
+    \column{0.62\textwidth}
       \small
       \begin{itemize}
-        \setlength{\itemsep}{2pt}
-        \item one piece of work = one \textbf{issue}, assigned to you
-        \item \textbf{you manage your own issues}: create, split, move and close them as you work
-        \item PR description with \code{Closes \#N} closes the issue on merge
+        \setlength{\itemsep}{1pt}
+        \item \textbf{milestones} are set with your supervisor, \textbf{issues} are yours
+        \item one piece of work = one \textbf{issue}: create, split, move and close them yourself
+        \item \textbf{every PR links its issue} (\code{Closes \#N}): the goal is visible, card moves to Done on merge
       \end{itemize}
-    \column{0.40\textwidth}
+    \column{0.34\textwidth}
       \centering\small
       \faDesktop\ \ \textbf{Live demo}\\[-1pt]
       {\scriptsize\color{ink!65}create issue, then branch, PR, merge, card moves to Done\par}
@@ -814,7 +796,7 @@ git push -u origin yourname/short-description
     \column{0.49\textwidth}
       \centering
       \begin{tikzpicture}[font=\scriptsize]
-        \node[box=accent,font=\small] (m) at (4.2,0) {\faFlagCheckered\\[1pt]\textbf{milestone}\\[-1pt]\scriptsize agreed together};
+        \node[box=accent,font=\small] (m) at (4.2,0) {\faFlagCheckered\\[1pt]\textbf{milestone}\\[-1pt]\scriptsize set with your supervisor};
         \node[circle,fill=ctunavy,inner sep=2pt] (st) at (0,0) {};
         \node[below=1pt of st,font=\scriptsize] {now};
         \draw[flow,draw=ctublue] (st) to[out=40,in=180] node[pos=0.5,above,sloped]{your issues} (m.west);
@@ -824,8 +806,8 @@ git push -u origin yourname/short-description
       \raggedright\small
       \begin{itemize}
         \setlength{\itemsep}{3pt}
-        \item \textbf{Milestones}: the goals we agree on together.
-        \item \textbf{The path is yours}: which issues, in which order.
+        \item \textbf{Milestones}: agree on them with your supervisor, ideally create them together.
+        \item \textbf{Issues are yours}: you create them and pick the order, and every PR links to one so the goal is visible.
         \item \textbf{Consult it along the way} so you don't spend weeks in a dead end.
       \end{itemize}
   \end{columns}
@@ -842,7 +824,7 @@ git push -u origin yourname/short-description
         \item \textbf{GitHub access}: send your GitHub username to Martin (\code{maxamart@fel.cvut.cz}).
         \item Go through \textbf{Get Started} and have the devcontainer running before the first consultation.
         \item Make your \textbf{first PR}: e.g.\ fix something unclear in the docs.
-        \item Agree on your \textbf{milestones} with your supervisor, then create your issues.
+        \item Set your \textbf{milestones} with your supervisor (ideally together), then create your own issues.
         \item Book a \textbf{consultation} with your supervisor.
       \end{enumerate}
     \column{0.40\textwidth}
@@ -863,6 +845,62 @@ git push -u origin yourname/short-description
 \begin{frame}[standout]
   Questions?\par\bigskip
   {\normalsize\mdseries docs.boomchecker.cz}
+\end{frame}
+
+% ==================================================
+\appendix
+\section{Backup}
+% Reference slides, not part of the 60-minute talk: shown only if there is time or a question.
+
+% --------------------------------------------------
+\begin{frame}[fragile]{Taskfile: one entry point for commands}
+  \begin{columns}[T,onlytextwidth]
+    \column{0.50\textwidth}
+      \small
+      Instead of remembering long commands, we write them once in a \code{Taskfile.yml}:\par\medskip
+      \scriptsize
+\begin{verbatim}
+$ cd fw/bom-stm32node
+$ task -l        # what can I run here?
+$ task build     # build the firmware
+$ task flash     # flash over ST-Link
+$ task monitor   # talk to the board
+\end{verbatim}
+    \column{0.45\textwidth}
+      \begin{block}{Docker + Task = tools that save you time}
+        \small
+        \begin{itemize}
+          \item the environment is defined by the devcontainer
+          \item the commands are defined by Taskfiles
+          \item you focus on your thesis, not on setup
+        \end{itemize}
+      \end{block}
+      \vspace{4pt}
+      {\scriptsize\color{ink!65}Add a task for anything you run more than twice.}
+  \end{columns}
+\end{frame}
+
+% --------------------------------------------------
+\begin{frame}{AI in the thesis text (Art.\ 4.1)}
+  \small
+  \renewcommand{\arraystretch}{1.25}
+  \newcommand{\aiyes}{\textcolor{okgreen}{\faCheck\ yes}}
+  \newcommand{\aipart}{\textcolor{tD}{\faAdjust\ partially}}
+  \newcommand{\aino}{\textcolor{accent}{\faTimes\ no}}
+  \begin{tabular}{@{}l l >{\raggedright\arraybackslash\scriptsize}p{0.52\textwidth}@{}}
+    \toprule
+    \textbf{Activity} & & \textbf{Note} \\
+    \midrule
+    grammar check          & \aiyes  & no need to declare \\
+    rewording, editing     & \aiyes  & be critical, it can change the meaning; list the AI tool among the software used \\
+    finding authors, institutions & \aiyes & verify, or consult your supervisor \\
+    literature search      & \aipart & inspiration only, never the only source; AI hallucinates, verify everything \\
+    text structure         & \aipart & you are the author and responsible for it; list the AI tool \\
+    machine translation    & \aipart & only from/to a language you speak yourself \\
+    \textbf{theses, results} & \aino & must be your own; text you cannot explain means a disciplinary procedure \\
+    \textbf{citations}     & \aino   & AI often invents sources; verify every single one \\
+    \bottomrule
+  \end{tabular}
 \end{frame}
 
 \end{document}
