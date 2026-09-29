@@ -6,6 +6,17 @@ vars:
   JOB: slides
 
 tasks:
+  setup:
+    desc: Install LaTeX packages the deck needs (FiraSans/FiraMono, newtxsf, fontawesome5 from texlive-fonts-extra)
+    cmds:
+      - sudo apt-get update
+      - sudo apt-get install -y texlive-fonts-extra
+    status:
+      - kpsewhich FiraSans.sty
+      - kpsewhich FiraMono.sty
+      - kpsewhich newtxsf.sty
+      - kpsewhich fontawesome5.sty
+
   build:
     desc: Compile slides/slides.tex to slides/slides.pdf
     dir: '{{.TEX_DIR}}'
