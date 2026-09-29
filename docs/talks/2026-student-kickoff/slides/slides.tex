@@ -33,6 +33,7 @@
 \definecolor{tC}{RGB}{26,127,55}   % localization survey
 \definecolor{tD}{RGB}{214,120,0}   % web app
 \definecolor{tE}{RGB}{110,60,160}  % IMU
+\colorlet{mute}{ink!60}            % de-emphasised box (box/dir styles need a named colour)
 
 \setbeamercolor{normal text}{fg=ink,bg=paper}
 \setbeamercolor{structure}{fg=ctublue}
@@ -124,6 +125,9 @@
   c/.default=ctunavy,
   step/.style={box=#1,font=\scriptsize,inner sep=3pt},
   step/.default=ctublue,
+  % repository map
+  dir/.style={box=#1,text width=16mm,font=\scriptsize,inner sep=3pt,minimum height=12mm},
+  dir/.default=ctublue,
   % kanban board
   col/.style={draw=ink!25,fill=panel,rounded corners=2pt,minimum width=24.5mm,minimum height=34mm,anchor=north},
   hd/.style={font=\scriptsize\bfseries,text=ctunavy,anchor=north},
@@ -407,23 +411,35 @@
 
 \speaker{MM}
 \budget{2}
-\begin{frame}[fragile]{One repository for everything}
-  \begin{columns}[T,onlytextwidth]
-    \column{0.55\textwidth}
-      \small
-      \begin{tabular}{@{}l>{\raggedright\arraybackslash}p{0.60\linewidth}@{}}
-        \toprule
-        \code{fw/}       & firmware (STM32 node, ESP32, shared libs) \\
-        \code{apps/}     & backend, web, Discord bot \\
-        \code{hw/}       & hardware (Altium) \\
-        \code{scripts/}  & DSP experiments (TDOA, filters, \dots) \\
-        \code{projects/} & self-contained student projects \\
-        \code{papers/}   & publications and talks \\
-        \code{docs/}     & documentation (MkDocs) \\
-        \code{.devcontainer/} & dev environments \\
-        \bottomrule
-      \end{tabular}
-    \column{0.40\textwidth}
+\begin{frame}{One repository for everything}
+  \begin{columns}[c,onlytextwidth]
+    \column{0.60\textwidth}
+      \centering
+      \begin{tikzpicture}[font=\small,
+          lay/.style={rounded corners=3pt,line width=0.7pt},
+          ll/.style={font=\scriptsize\bfseries,anchor=north west,inner sep=2pt},
+          base/.style={font=\scriptsize,align=center,text=ctunavy}]
+        % the repository
+        \draw[lay,draw=ink!70] (0,-3.05) rectangle (8.3,2.5);
+        \node[ll,text=ink] at (0,2.5) {\faGithub\ boomchecker-monorepo};
+        % what runs in the field
+        \node[dir] (fw)   at (1.15,1.4) {\textbf{\small fw/}\\firmware:\\STM32, ESP32};
+        \node[dir] (apps) at (3.15,1.4) {\textbf{\small apps/}\\backend,\\web app};
+        \node[dir] (docs) at (5.15,1.4) {\textbf{\small docs/}\\MkDocs\\site};
+        \node[dir=mute] (hw) at (7.15,1.4) {\textbf{\small hw/}\\Altium\\boards};
+        % research and student work
+        \node[dir=tC] (scripts)  at (2.15,-0.5) {\textbf{\small scripts/}\\DSP\\experiments};
+        \node[dir=tC] (projects) at (4.15,-0.5) {\textbf{\small projects/}\\standalone\\student work};
+        \node[dir=tC] (papers)   at (6.15,-0.5) {\textbf{\small papers/}\\papers\\and talks};
+        % shared foundation
+        \draw[lay,draw=ctunavy,fill=panel] (0.15,-2.9) rectangle (8.15,-1.6);
+        \node[ll,text=ctunavy] at (0.15,-1.6) {shared by everything};
+        \node[base] at (1.15,-2.37) {\faDocker\\.devcontainer/};
+        \node[base] at (3.15,-2.37) {\faTasks\\Taskfile.yml};
+        \node[base] at (5.15,-2.37) {\faCheck\\.github/ CI};
+        \node[base] at (7.15,-2.37) {\faCodeBranch\\one git history};
+      \end{tikzpicture}
+    \column{0.38\textwidth}
       \begin{block}{Why a monorepo?}
         \small
         \begin{itemize}
