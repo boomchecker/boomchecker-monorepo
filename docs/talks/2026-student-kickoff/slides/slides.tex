@@ -90,13 +90,16 @@
 \newcount\elapsedmin \elapsedmin=1   % the title slide / hello
 \newcount\clockh \newcount\clockm
 \def\timeat{}
+\def\slidemin{}
 \newcommand{\budget}[1]{%
   \clockh=\numexpr\startmin+\elapsedmin\relax
   \clockm=\clockh \divide\clockh by 60 \clockm=\numexpr\clockm-60*\clockh\relax
   \xdef\timeat{\the\clockh:\ifnum\clockm<10 0\fi\the\clockm}%
+  \xdef\slidemin{#1}%
   \global\advance\elapsedmin by #1\relax}
-\newcommand{\notimed}{\gdef\timeat{}}
-\newcommand{\timebadge}{\ifx\timeat\empty\else\faClock\ \timeat\quad\fi}
+\newcommand{\notimed}{\gdef\timeat{}\gdef\slidemin{}}
+% "13:19 (2 min)": arrival time and the minutes this frame gets; the minutes are hidden for a 0-minute frame
+\newcommand{\timebadge}{\ifx\timeat\empty\else\faClock\ \timeat\ifnum\slidemin>0 \ (\slidemin\,min)\fi\quad\fi}
 \setbeamertemplate{frame numbering}{\timebadge\speakerbadge\insertframenumber/\inserttotalframenumber}
 
 % One slide per thesis: \thesis{colour}{letter}{title}{type / supervisor}{goal}{deliverables}{plugs in}

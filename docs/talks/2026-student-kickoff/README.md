@@ -31,9 +31,9 @@ The folder is excluded from the MkDocs site (`exclude_docs` in `mkdocs.yml`).
 That is 47 minutes of talk and 3 minutes for questions.
 
 Each main frame has `\budget{n}` (its minutes) in `slides.tex`; the footer then shows
-"⏱ 13:18": the wall-clock time at which you should arrive at that frame, counted from
-`\talkstart{13}{00}`. If the room clock is already past it, you are behind. Change
-`\talkstart` when the meeting starts at another time.
+"⏱ 13:18 (2 min)": the wall-clock time at which you should arrive at that frame, counted from
+`\talkstart{13}{00}`, and the minutes that frame gets. If the room clock is already past it,
+you are behind. Change `\talkstart` when the meeting starts at another time.
 
 Speaker badges (initials next to the frame number, set with `\speaker{..}` in `slides.tex`):
 JS on 1 to 4 and 10, MM on 11 to 17 and 22 to 24, KH on 18 to 21, the thesis frames 5 to 9
