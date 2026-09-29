@@ -10,9 +10,16 @@ ENV TZ=Etc/UTC
 # bind-mounted host files (/workspace) stay writable without a UID mismatch.
 # If your host user's UID (`id -u`) isn't 1000, adjust here and in
 # compose.devcontainer.yml's `user:` field to match.
+# boom joins the `root` group (gid 0) below. WSL2/usbipd creates the ST-Link
+# /dev/bus/usb node as root:root 0664 (owner rw, group rw, other r) with no udev
+# inside the container to widen it, and Docker can't remap a bind-mounted
+# device's ownership. gid-0 membership turns the node's group-rw bits into write
+# access so libusb_open() succeeds. It must live here in /etc/group (not compose
+# `group_add`) so `docker exec` shells — how Dev Containers runs the interactive
+# terminal as boom — inherit it too.
 RUN usermod -l boom -d /home/boom -m ubuntu && \
     groupmod -n boom ubuntu && \
-    usermod -a -G dialout boom && \
+    usermod -a -G dialout,root boom && \
     mkdir -p /home/boom/.ssh && \
     chown -R boom:boom /home/boom
 
@@ -75,18 +82,29 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     clang-format
 
 # STM32 platform support: ARM cross-toolchain + flashing/debugging tools.
-# arm-none-eabi-gcc is the bare-metal compiler; st-flash handles simple flashing
-# over ST-Link. CMake + Ninja are installed above, independent of ESP-IDF.
+# The ARM cross-compiler comes from Arm's OFFICIAL GNU toolchain tarball, NOT
+# Ubuntu's gcc-arm-none-eabi apt package. That package ships the compiler but no
+# C++ standard library (no <cstring>/libstdc++ for arm-none-eabi, and Ubuntu has
+# no separate package that provides it), which breaks the C++ firmware
+# (App/radio + RadioLib fail with `fatal error: cstring: No such file`). The
+# tarball bundles gcc/g++/binutils/newlib + libstdc++ with headers. Pinned to
+# 13.2.rel1 to match the compiler version the firmware has been built against.
+# st-flash handles simple flashing over ST-Link; CMake + Ninja are installed above.
 # NOTE: the Ubuntu `openocd` package is intentionally NOT installed here — plain
 # `openocd` must keep resolving to Espressif's fork (from ESP-IDF, needed for
 # ESP32), and a third OpenOCD install would only add PATH conflicts. STM32
 # debugging uses the ST fork built below as `openocd-stm32`.
+ARG ARM_TOOLCHAIN_VERSION=13.2.rel1
+RUN wget -qO /tmp/arm-toolchain.tar.xz \
+        "https://developer.arm.com/-/media/Files/downloads/gnu/${ARM_TOOLCHAIN_VERSION}/binrel/arm-gnu-toolchain-${ARM_TOOLCHAIN_VERSION}-x86_64-arm-none-eabi.tar.xz" && \
+    mkdir -p /opt/arm-gnu-toolchain && \
+    tar -xf /tmp/arm-toolchain.tar.xz -C /opt/arm-gnu-toolchain --strip-components=1 && \
+    rm /tmp/arm-toolchain.tar.xz
+ENV PATH="/opt/arm-gnu-toolchain/bin:${PATH}"
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc-arm-none-eabi \
-    binutils-arm-none-eabi \
-    libnewlib-arm-none-eabi \
     gdb-multiarch \
-    stlink-tools
+    stlink-tools && \
+    rm -rf /var/lib/apt/lists/*
 
 # STMicroelectronics OpenOCD fork (the one bundled with STM32CubeIDE), built from
 # source into /opt/openocd-stm32 and exposed as `openocd-stm32`. Unlike the
@@ -147,6 +165,14 @@ RUN npm install -g @openai/codex @anthropic-ai/claude-code
 # Prepare Codex/Claude config dirs so the mounted volumes keep correct ownership
 RUN mkdir -p /home/boom/.codex /home/boom/.claude && \
     chown -R boom:boom /home/boom/.codex /home/boom/.claude
+
+# Keep Claude Code fully inside the persisted claude-data volume (/home/boom/.claude).
+# By default Claude stores its OAuth token + history under ~/.claude (persisted) but
+# the account/onboarding config in ~/.claude.json at the home root, which is NOT on
+# the volume — so every rebuild wipes it and forces a re-login even though the token
+# survived. Pointing CLAUDE_CONFIG_DIR at the volume moves .claude.json inside it too
+# (Claude writes $CLAUDE_CONFIG_DIR/.claude.json), so login now persists across rebuilds.
+ENV CLAUDE_CONFIG_DIR=/home/boom/.claude
 
 # Set up PNPM storage to behave like on a local computer
 ENV PNPM_HOME="/pnpm-store"

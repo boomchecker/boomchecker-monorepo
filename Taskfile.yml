@@ -28,8 +28,9 @@ includes:
 
 tasks:
   setup:
-    desc: Bootstrap the workspace (install JS dependencies for all apps/packages)
+    desc: Bootstrap the workspace (init git submodules + install JS dependencies for all apps/packages)
     cmds:
+      - git submodule update --init --recursive
       - pnpm install
 
   changeset:
