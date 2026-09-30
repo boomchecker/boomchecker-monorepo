@@ -92,6 +92,36 @@ class DeviceClient:
         self._t.write(encode_command("version"))
         return self._read_response("version")
 
+    def list_models(self) -> list[str]:
+        """Send ``model`` and return the board's per-model listing lines verbatim.
+
+        The board prints one ``model: <name> ...`` line per classifier in the
+        image and then falls silent - there is no trailer - so we read until the
+        transport goes quiet and keep only the ``model: `` lines (the command echo
+        has no colon, so it is filtered out).
+        """
+        self._t.write(encode_command("model"))
+        return self._collect_prefixed("model: ")
+
+    def select_model(self, name: str) -> str:
+        """Send ``model <name>`` and return the board's single confirmation line.
+
+        The reply is ``model: <name> selected ...`` on success or
+        ``model: no such model '<name>'`` otherwise; both start with ``model: ``.
+        """
+        self._t.write(encode_command("model", name))
+        return self._read_prefixed("model: ")
+
+    def mic_slot(self) -> str:
+        """Send ``micslot`` and return the board's current-slot line verbatim."""
+        self._t.write(encode_command("micslot"))
+        return self._read_prefixed("micslot: ")
+
+    def select_mic_slot(self, slot: str) -> str:
+        """Send ``micslot <a|b>`` and return the board's confirmation line."""
+        self._t.write(encode_command("micslot", slot))
+        return self._read_prefixed("micslot: ")
+
     def start_stream(
         self,
         seconds: int,
@@ -274,6 +304,61 @@ class DeviceClient:
             if line and not line.replace(" ", "").startswith(target):
                 return line
         return ""
+
+    def _read_prefixed(self, prefix: str, *, max_lines: int = 8) -> str:
+        """Return the first reply line that starts with ``prefix``.
+
+        For commands whose answer echoes the command word (``model``, ``micslot``)
+        the echo-skipping in :meth:`_read_response` cannot help - the real lines
+        start with the command word too. Instead we key on the ``<cmd>: `` prefix,
+        which the raw echo (no colon) never has. ANSI escapes and a leading prompt
+        are stripped first. Returns ``""`` if no such line arrives.
+
+        Only non-empty lines count against ``max_lines``: an empty ``_read_line``
+        is a transport timeout, and a slow board must not have its echo lines plus
+        one silent gap mistaken for "no response". Two consecutive empty reads
+        (~2x the transport timeout of silence) do end the wait - the board has
+        either answered already or is not going to.
+        """
+        seen = 0
+        empties = 0
+        while seen < max_lines and empties < 2:
+            raw = self._read_line()
+            if not raw:
+                empties += 1
+                continue
+            empties = 0
+            seen += 1
+            line = _ANSI_RE.sub("", raw)
+            if line.startswith("> "):
+                line = line[2:]
+            line = line.strip()
+            if line.startswith(prefix):
+                return line
+        return ""
+
+    def _collect_prefixed(self, prefix: str, *, max_lines: int = 32) -> list[str]:
+        """Return all reply lines starting with ``prefix`` until the board goes quiet.
+
+        Used for the untrailed ``model`` listing: the board prints its lines in one
+        burst, so once at least one has arrived the first empty read (the transport
+        timeout) means the listing is done. Non-matching lines (the echo) are
+        skipped; ``max_lines`` bounds a misbehaving board.
+        """
+        lines: list[str] = []
+        for _ in range(max_lines):
+            raw = self._read_line()
+            if not raw:
+                if lines:
+                    break  # gone quiet after the burst - listing complete
+                continue  # still waiting for the first line
+            line = _ANSI_RE.sub("", raw)
+            if line.startswith("> "):
+                line = line[2:]
+            line = line.strip()
+            if line.startswith(prefix):
+                lines.append(line)
+        return lines
 
     # -- internals -----------------------------------------------------------
     def _read_line(self) -> str:

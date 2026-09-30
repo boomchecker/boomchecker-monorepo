@@ -161,3 +161,131 @@ def test_start_stream_rejects_seconds_over_max():
     client = DeviceClient(FakeTransport())
     with pytest.raises(ValueError):
         client.start_stream(61)
+
+
+# -- model / micslot -----------------------------------------------------------
+
+
+def test_list_models_collects_lines_and_skips_echo():
+    # Echoed command + prompt, then one line per model, then the next prompt (no
+    # trailing newline). The listing has no trailer, so the client reads until the
+    # transport goes quiet and keeps only the `model: ` lines.
+    stream = (
+        b"> model\r\n"
+        b"model: mlp_f1   * feat=1..69 thr=8466\r\n"
+        b"model: gbt_f1     feat=1..69 thr=2646\r\n"
+        b"> "
+    )
+    t = FakeTransport(to_read=stream)
+    assert DeviceClient(t).list_models() == [
+        "model: mlp_f1   * feat=1..69 thr=8466",
+        "model: gbt_f1     feat=1..69 thr=2646",
+    ]
+    assert t.written == b"model\n"
+
+
+def test_list_models_empty_on_silence():
+    assert DeviceClient(FakeTransport(to_read=b"")).list_models() == []
+
+
+def test_select_model_returns_confirmation_and_sends_name():
+    stream = b"> model gbt_f1\r\nmodel: gbt_f1 selected, default thr=2646 (not persisted)\r\n> "
+    t = FakeTransport(to_read=stream)
+    assert (
+        DeviceClient(t).select_model("gbt_f1")
+        == "model: gbt_f1 selected, default thr=2646 (not persisted)"
+    )
+    assert t.written == b"model gbt_f1\n"
+
+
+def test_select_model_reports_unknown():
+    t = FakeTransport(to_read=b"model: no such model 'nope'\r\n")
+    assert DeviceClient(t).select_model("nope") == "model: no such model 'nope'"
+
+
+def test_mic_slot_shows_current():
+    t = FakeTransport(to_read=b"micslot: B (0x07F8)\r\n")
+    assert DeviceClient(t).mic_slot() == "micslot: B (0x07F8)"
+    assert t.written == b"micslot\n"
+
+
+def test_select_mic_slot_returns_confirmation():
+    t = FakeTransport(to_read=b"micslot: A selected (next detect/stream)\r\n")
+    assert DeviceClient(t).select_mic_slot("a") == "micslot: A selected (next detect/stream)"
+    assert t.written == b"micslot a\n"
+
+
+class InterleavedTransport(FakeTransport):
+    """FakeTransport that injects empty reads (transport timeouts) mid-stream.
+
+    ``empties_at`` maps a read-call index to how many consecutive empty reads to
+    return there, simulating a slow board pausing between (or before) its lines.
+    """
+
+    def __init__(self, to_read: bytes, empties_at: dict[int, int]) -> None:
+        super().__init__(to_read)
+        self._empties_at = dict(empties_at)
+        self._calls = 0
+
+    def read(self, size: int) -> bytes:
+        pending = self._empties_at.get(self._calls, 0)
+        if pending:
+            self._empties_at[self._calls] = pending - 1
+            return b""
+        self._calls += 1
+        return super().read(size)
+
+
+def test_select_model_skips_autocomplete_echo_without_colon():
+    # Live autocompletion collapses the echo into a line that starts with the
+    # command word but has no colon ("modelgbt_f1odel"); the prefix filter must
+    # skip it and return the real reply on the next line.
+    stream = (
+        b"> \x1b[smodel\x1b[u gbt_f1\r\n"
+        b"modelgbt_f1odel\r\n"
+        b"model: gbt_f1 selected, default thr=2646 (not persisted)\r\n"
+    )
+    t = FakeTransport(to_read=stream)
+    assert (
+        DeviceClient(t).select_model("gbt_f1")
+        == "model: gbt_f1 selected, default thr=2646 (not persisted)"
+    )
+
+
+def test_select_model_survives_echo_lines_plus_silent_gap():
+    # Echo lines must not count against the line budget together with a silent
+    # gap: several non-matching lines, then one empty read (a 2s transport
+    # timeout on a slow board), then the reply - it must still be returned.
+    stream = (
+        b"> model gbt_f1\r\n"
+        b"modelgbt_f1odel\r\n"
+        b"model: gbt_f1 selected, default thr=2646 (not persisted)\r\n"
+    )
+    # Read-call index is per _read_line byte read; inject the gap after the two
+    # echo lines by counting their bytes.
+    echo_bytes = len(b"> model gbt_f1\r\n") + len(b"modelgbt_f1odel\r\n")
+    t = InterleavedTransport(stream, empties_at={echo_bytes: 1})
+    assert (
+        DeviceClient(t).select_model("gbt_f1")
+        == "model: gbt_f1 selected, default thr=2646 (not persisted)"
+    )
+
+
+def test_read_prefixed_gives_up_after_consecutive_silence():
+    # Two consecutive empty reads (board silent) end the wait with "".
+    assert DeviceClient(FakeTransport(to_read=b"")).select_model("nope") == ""
+
+
+def test_list_models_survives_slow_start():
+    # Empty reads BEFORE the first line (board still turning the command around)
+    # must not end the collection early.
+    stream = (
+        b"> model\r\n"
+        b"model: mlp_f1   * feat=1..69 thr=8466\r\n"
+        b"model: gbt_f1     feat=1..69 thr=2646\r\n"
+    )
+    t = InterleavedTransport(stream, empties_at={0: 3})
+    assert DeviceClient(t).list_models() == [
+        "model: mlp_f1   * feat=1..69 thr=8466",
+        "model: gbt_f1     feat=1..69 thr=2646",
+    ]
