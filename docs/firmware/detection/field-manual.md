@@ -7,11 +7,14 @@ jdeme ven testovat s dronem. Technický popis řetězce je v [index.md](index.md
 
 ## 1. Než začneš
 
-Připoj se na USB konzoli desky (embedded-cli, prompt `> `). Buď terminálem,
-nebo pomocníkem `boomdetect-data/tools/bdcli.py`:
+Dvě cesty, jak s deskou mluvit: pomocník `stm32node-cli`
+(`fw/apps/stm32node-cli`), který umí `model`, `micslot`, `detect` i `record`,
+takže celý test odbavíš z něj bez terminálu; nebo ruční terminál na USB konzoli
+desky (embedded-cli, prompt `> `; PuTTY, Tera Term). Starší
+`boomdetect-data/tools/bdcli.py` mluví stejnou konzolí.
 
 ```
-bdcli.py --port COM7 cmd "version" "model"
+stm32node-cli model --port COM7      # co je v image a co je aktivní
 ```
 
 Port COM se mezi relacemi mění, hledej VID 0483 / PID 5710.
@@ -19,9 +22,13 @@ Port COM se mezi relacemi mění, hledej VID 0483 / PID 5710.
 Po každém zapnutí desky udělej dvě věci, obě se po resetu zapomenou:
 
 ```
-micslot a        # živý mikrofon je na slotu A, deska startuje na B
-model            # zkontroluj, že je aktivní mlp_f1 (hvězdička) s thr=8466
+stm32node-cli micslot a --port COM7   # živý mik je na slotu A, deska startuje na B
+stm32node-cli model --port COM7       # ověř, že je aktivní mlp_f1 (hvězdička) thr=8466
 ```
+
+Výběr modelu i slotu přežije mezi jednotlivými voláními `stm32node-cli` (otevření
+portu desku neresetuje), takže je nastavíš jednou a pak jen pouštíš `detect`.
+Totéž jde napsat i do ruční konzole jako `micslot a` a `model`.
 
 ## 2. Příkazy
 
@@ -45,8 +52,12 @@ detect 0 3 8466          # bez limitu, zastaví libovolná klávesa v konzoli
 ```
 
 Během `detect` deska neobsluhuje rádio, takže dlouhý běh znamená dlouhý výpadek
-LoRa. Pomocník `bdcli.py` čeká na `DETEND` a klávesu poslat neumí, `detect 0`
-proto pouštěj z ručního terminálu (PuTTY, Tera Term), ne přes skript.
+LoRa. Běh bez limitu (`detect 0`) zastavíš v `stm32node-cli detect 0` libovolnou
+klávesou, v jeho TUI konzoli `q` a Enter, nebo v ručním terminálu libovolným
+bajtem. Deska se tak čistě zastaví a uvolní rádio; `stm32node-cli` vypíše
+`stopped`, v ručním terminálu navíc uvidíš `DETEND`. Běh s limitem vypíše
+`DETEND` vždy. (Starší `bdcli.py` klávesu poslat neumí, odtud `detect 0`
+nepouštěj.)
 
 ## 3. Co deska vypisuje
 
@@ -161,7 +172,8 @@ fw/bom-stm32node/App/detect/detect_service.h
 Přísnější brána (méně falešných): 3 ze 4 nebo 3 ze 6. Volnější: 1 ze 4 nebo
 2 ze 8. Změna znamená přeflashovat. Venku se ale dá vyhodnotit zpětně: z
 řádků `DET` v logu spočítáš, kolik alarmů by dala jiná kombinace, aniž bys
-měnil firmware. Loguj proto celé běhy (`bdcli.py --log soubor.txt`).
+měnil firmware. Loguj proto celé běhy (`stm32node-cli detect ... > beh.txt`,
+nebo `bdcli.py --log soubor.txt`).
 
 ## 7. Postup venku, ve zkratce
 
