@@ -288,6 +288,36 @@ def _cmd_detect(ctx: CommandContext, args: list[str]) -> None:
     )
 
 
+def _cmd_model(ctx: CommandContext, args: list[str]) -> None:
+    """List the classifiers in the image, or select one for later ``detect`` runs."""
+    if len(args) > 1:
+        ctx.emit("usage: model [name]")
+        return
+    with SerialTransport(ctx.port, timeout=DEFAULT_TIMEOUT_S) as transport:
+        client = DeviceClient(transport)
+        if not args:
+            lines = client.list_models()
+            if not lines:
+                ctx.emit("(no response)")
+                return
+            for line in lines:
+                ctx.emit(f"[red]{line}[/red]" if "*" in line else line)
+            return
+        result = client.select_model(args[0])
+    ctx.emit(result or "(no response)")
+
+
+def _cmd_micslot(ctx: CommandContext, args: list[str]) -> None:
+    """Show or select which PDM microphone of the pair is decoded."""
+    if len(args) > 1 or (args and args[0].lower() not in ("a", "b")):
+        ctx.emit("usage: micslot [a|b]")
+        return
+    with SerialTransport(ctx.port, timeout=DEFAULT_TIMEOUT_S) as transport:
+        client = DeviceClient(transport)
+        result = client.mic_slot() if not args else client.select_mic_slot(args[0].lower())
+    ctx.emit(result or "(no response)")
+
+
 register_command(
     Command(
         name="record",
@@ -324,5 +354,21 @@ register_command(
             "streams LVL/DET/ALM lines live and prints a DETEND summary."
         ),
         run=_cmd_detect,
+    )
+)
+register_command(
+    Command(
+        name="model",
+        usage="model [name]",
+        help="List the classifiers in the image, or select one for later detect runs.",
+        run=_cmd_model,
+    )
+)
+register_command(
+    Command(
+        name="micslot",
+        usage="micslot [a|b]",
+        help="Show or select which PDM microphone of the pair is decoded.",
+        run=_cmd_micslot,
     )
 )

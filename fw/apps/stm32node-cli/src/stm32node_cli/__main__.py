@@ -7,6 +7,7 @@ from pathlib import Path
 import typer
 
 from .config import DEFAULT_PORT, DEFAULT_TIMEOUT_S, default_output_dir
+from .keywatch import keypress_abort
 from .protocol.spec import (
     DETECT_MAX_SECONDS,
     DETECT_SQUELCH_MILLI_MAX,
@@ -122,23 +123,29 @@ def detect(
 ) -> None:
     """Run on-device drone detection, streaming the board's report lines.
 
-    Prints each LVL/DET/ALM line as it arrives and a final DETEND summary. With
-    SECONDS 0 the board runs until interrupted; Ctrl-C stops it and prints the
-    summary the board reports on the way out.
+    Prints each LVL/DET/ALM line as it arrives and a final DETEND summary. Press
+    any key to stop (the board is told to stop and reports its summary on the way
+    out); with SECONDS 0 this is the intended way to end the run. Ctrl-C also
+    stops it. A stop key works only on an interactive terminal; under a pipe use
+    Ctrl-C.
     """
     from .protocol.client import DeviceClient
     from .protocol.codec import StreamAborted
     from .transport.serial_transport import SerialTransport
 
+    ran = "until keypress" if seconds == 0 else f"{seconds}s"
+    typer.echo(f"detecting ({ran}) on {port} - press any key to stop")
     try:
-        with SerialTransport(port, timeout=DEFAULT_TIMEOUT_S) as transport:
-            trailer = DeviceClient(transport).run_detect(
-                seconds,
-                squelch_milli=squelch,
-                thr_milli=thr,
-                dbg=dbg,
-                on_line=typer.echo,
-            )
+        with keypress_abort() as should_abort:
+            with SerialTransport(port, timeout=DEFAULT_TIMEOUT_S) as transport:
+                trailer = DeviceClient(transport).run_detect(
+                    seconds,
+                    squelch_milli=squelch,
+                    thr_milli=thr,
+                    dbg=dbg,
+                    on_line=typer.echo,
+                    should_abort=should_abort,
+                )
     except (KeyboardInterrupt, StreamAborted):
         typer.echo("stopped")
         raise typer.Exit(code=1) from None
@@ -152,6 +159,64 @@ def detect(
     )
     if trailer.err:
         raise typer.Exit(code=1)
+
+
+@app.command()
+def model(
+    name: str | None = typer.Argument(None, help="Model to select; omit to list all."),
+    port: str = typer.Option(DEFAULT_PORT, "--port", "-p", help="Serial port."),
+) -> None:
+    """List the classifiers in the image, or select one for later detect runs.
+
+    The selection is not persisted on the board; a reset returns to the deployed
+    default. It does survive across separate CLI invocations, though - opening the
+    USB serial port does not reset the board.
+    """
+    from .protocol.client import DeviceClient
+    from .transport.serial_transport import SerialTransport
+
+    with SerialTransport(port, timeout=DEFAULT_TIMEOUT_S) as transport:
+        client = DeviceClient(transport)
+        if name is None:
+            lines = client.list_models()
+            if not lines:
+                typer.echo("no response - is the board connected?")
+                raise typer.Exit(code=1)
+            for line in lines:
+                typer.echo(line)
+            return
+        result = client.select_model(name)
+    if not result:
+        typer.echo("no response - is the board connected?")
+        raise typer.Exit(code=1)
+    typer.echo(result)
+    if result.startswith("model: no such model"):
+        raise typer.Exit(code=1)
+
+
+@app.command()
+def micslot(
+    slot: str | None = typer.Argument(None, help="Microphone to select (a|b); omit to show."),
+    port: str = typer.Option(DEFAULT_PORT, "--port", "-p", help="Serial port."),
+) -> None:
+    """Show or select which PDM microphone of the pair the board decodes.
+
+    Like the model selection this is a bring-up override that is not persisted
+    across a board reset. Takes effect on the next detect/stream.
+    """
+    from .protocol.client import DeviceClient
+    from .transport.serial_transport import SerialTransport
+
+    if slot is not None and slot.lower() not in ("a", "b"):
+        typer.echo("usage: micslot [a|b]")
+        raise typer.Exit(code=1)
+    with SerialTransport(port, timeout=DEFAULT_TIMEOUT_S) as transport:
+        client = DeviceClient(transport)
+        result = client.mic_slot() if slot is None else client.select_mic_slot(slot.lower())
+    if not result:
+        typer.echo("no response - is the board connected?")
+        raise typer.Exit(code=1)
+    typer.echo(result)
 
 
 @app.command()
