@@ -33,7 +33,8 @@ import numpy as np
 import pandas as pd
 
 from boomdetect_train.datasets.cache import FrameCache
-from boomdetect_train.decision import KofN, clip_alarmed
+from boomdetect_train.decision import Rule, clip_alarmed
+from boomdetect_train.decision import parse_rule as _parse_rule
 from boomdetect_train.evaluate import (
     SUITES,
     ClipScores,
@@ -56,13 +57,7 @@ DEFAULT_FA_PER_HOUR = 5.0
 FIELD_SQUELCHES = (0.010, 0.003)
 
 
-def parse_rule(text: str | None) -> KofN | None:
-    """'2of4' -> KofN(n=4, k_on=2, k_off=1); 'none' or None -> no rule."""
-    if text is None or text.lower() == "none":
-        return None
-    k, n = text.lower().split("of")
-    k, n = int(k), int(n)
-    return KofN(n=n, k_on=k, k_off=max(1, k - 1))
+parse_rule = _parse_rule  # '2of4' -> KofN, 'mean4' -> MeanN, 'none' -> None (decision.py)
 
 
 @dataclass
@@ -137,7 +132,7 @@ def evaluate_model(
     manifest: pd.DataFrame,
     cache: FrameCache,
     model: ModelUnderTest,
-    rule: KofN | None,
+    rule: Rule | None,
     fa_per_hour: float = DEFAULT_FA_PER_HOUR,
 ) -> tuple[pd.DataFrame, float, dict[str, list[ClipScores]]]:
     """Per-suite rows for one model at the threshold chosen on `val`."""
@@ -225,7 +220,7 @@ def _auc(pos: np.ndarray, neg: np.ndarray) -> float:
 
 
 def _recordings_alarmed(
-    clips: list[ClipScores], group_of: dict[str, str], thr: float, rule: KofN | None
+    clips: list[ClipScores], group_of: dict[str, str], thr: float, rule: Rule | None
 ) -> tuple[int, int]:
     """(recordings that alarmed, recordings) - a recording alarms if any of its runs does."""
     by_group: dict[str, bool] = {}
@@ -237,7 +232,7 @@ def _recordings_alarmed(
 
 
 def field_stats(
-    clips: list[ClipScores], group_of: dict[str, str], thr: float, rule: KofN | None
+    clips: list[ClipScores], group_of: dict[str, str], thr: float, rule: Rule | None
 ) -> dict:
     """Per drone and for the negatives: window AUC, windows called, recordings alarmed."""
     neg = [c for c in clips if c.label == 0]
@@ -303,7 +298,7 @@ def render_field_section(
     manifest: pd.DataFrame,
     cache: FrameCache,
     models: list[tuple[ModelUnderTest, float]],
-    rule: KofN | None,
+    rule: Rule | None,
     fa_per_hour: float = DEFAULT_FA_PER_HOUR,
 ) -> list[str]:
     """The field recordings, per drone and per recording, at FIELD_SQUELCHES."""
@@ -393,7 +388,7 @@ def render_report(
     manifest: pd.DataFrame,
     cache: FrameCache,
     models: list[ModelUnderTest],
-    rule: KofN | None,
+    rule: Rule | None,
     fa_per_hour: float = DEFAULT_FA_PER_HOUR,
 ) -> str:
     parts = [f"# {title}", ""]

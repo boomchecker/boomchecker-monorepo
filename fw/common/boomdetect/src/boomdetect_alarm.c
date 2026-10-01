@@ -1,6 +1,6 @@
 /**
  * @file boomdetect_alarm.c
- * @brief K-of-N with hysteresis; see boomdetect_alarm.h.
+ * @brief K-of-N with hysteresis, or the mean of the last n; see boomdetect_alarm.h.
  */
 #include "boomdetect_alarm.h"
 
@@ -12,8 +12,18 @@ bool boomdetect_alarm_init(boomdetect_alarm_t *a, const boomdetect_alarm_rule_t 
     {
         return false;
     }
-    if (rule->n == 0u || rule->n > BOOMDETECT_ALARM_MAX_N || rule->k_off == 0u ||
-        rule->k_off > rule->k_on || rule->k_on > rule->n)
+    if (rule->n == 0u || rule->n > BOOMDETECT_ALARM_MAX_N)
+    {
+        return false;
+    }
+    if (rule->mode == BOOMDETECT_ALARM_VOTE)
+    {
+        if (rule->k_off == 0u || rule->k_off > rule->k_on || rule->k_on > rule->n)
+        {
+            return false;
+        }
+    }
+    else if (rule->mode != BOOMDETECT_ALARM_MEAN)
     {
         return false;
     }
@@ -36,25 +46,53 @@ uint8_t boomdetect_alarm_hits(const boomdetect_alarm_t *a)
     return hits;
 }
 
-bool boomdetect_alarm_push(boomdetect_alarm_t *a, bool is_drone)
+float boomdetect_alarm_mean(const boomdetect_alarm_t *a)
+{
+    /* Summed afresh each time: n is at most 32 and a running sum would drift. */
+    float sum = 0.0f;
+    for (uint32_t i = 0u; i < a->rule.n; i++)
+    {
+        sum += a->ring[i];
+    }
+    return sum / (float)a->rule.n;
+}
+
+bool boomdetect_alarm_push_decision(boomdetect_alarm_t *a, float relative)
 {
     const bool was = a->on;
-    a->history = (a->history << 1) | (is_drone ? 1u : 0u);
+    a->history         = (a->history << 1) | ((relative >= 0.0f) ? 1u : 0u);
+    a->ring[a->head]   = relative;
+    a->head            = (uint8_t)((a->head + 1u) % a->rule.n);
     if (a->count < a->rule.n)
     {
         a->count++;
     }
-    const uint8_t hits = boomdetect_alarm_hits(a);
-    if (!a->on && hits >= a->rule.k_on)
+    if (a->rule.mode == BOOMDETECT_ALARM_MEAN)
     {
-        a->on = true;
+        a->on = boomdetect_alarm_mean(a) >= 0.0f;
+    }
+    else
+    {
+        const uint8_t hits = boomdetect_alarm_hits(a);
+        if (!a->on && hits >= a->rule.k_on)
+        {
+            a->on = true;
+        }
+        else if (a->on && hits < a->rule.k_off)
+        {
+            a->on = false;
+        }
+    }
+    if (a->on && !was)
+    {
         a->onsets++;
     }
-    else if (a->on && hits < a->rule.k_off)
-    {
-        a->on = false;
-    }
     return a->on != was;
+}
+
+bool boomdetect_alarm_push(boomdetect_alarm_t *a, bool is_drone)
+{
+    return boomdetect_alarm_push_decision(a, is_drone ? 1.0f : -1.0f);
 }
 
 bool boomdetect_alarm_on(const boomdetect_alarm_t *a)

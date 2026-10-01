@@ -24,6 +24,7 @@ from .spec import (
     DETECT_DEFAULT_MODEL_THR_MILLI,
     DETECT_DEFAULT_SQUELCH_MILLI,
     DETECT_MAX_SECONDS,
+    DETECT_RULE_RE,
     DETECT_TRAILER_PREFIX,
     HEADER_SIZE,
     MAGIC,
@@ -194,6 +195,7 @@ class DeviceClient:
         squelch_milli: int | None = None,
         thr_milli: int | None = None,
         dbg: bool = False,
+        rule: str | None = None,
         on_line: LineFn | None = None,
         should_abort: AbortFn | None = None,
         on_retry: RetryFn | None = None,
@@ -202,17 +204,18 @@ class DeviceClient:
     ) -> DetectTrailer | None:
         """Run the board's ``detect`` command and stream its report lines.
 
-        Sends ``detect <sec> [squelch_milli] [thr_milli] [dbg]`` and reads the
-        ``LVL``/``DET``/``ALM`` (and, with ``dbg``, ``F=``) lines the board emits,
-        handing each to ``on_line`` as it arrives. Returns the parsed ``DETEND``
-        trailer that always closes the run (even after a ``DETERR`` start failure),
-        or None if the board sent no trailer before the transport gave up.
+        Sends ``detect <sec> [squelch_milli] [thr_milli] [dbg] [rule]`` and reads
+        the ``LVL``/``DET``/``ALM`` (and, with ``dbg``, ``F=``) lines the board
+        emits, handing each to ``on_line`` as it arrives. Returns the parsed
+        ``DETEND`` trailer that always closes the run (even after a ``DETERR`` start
+        failure), or None if the board sent no trailer before the transport gave up.
 
         ``detect`` takes positional arguments, so to pass a later one every earlier
-        one must be present; a gap is filled with the firmware default. This only
-        matters when ``dbg`` is set without an explicit ``thr_milli``, in which case
-        the default model's threshold is sent - right after boot, wrong once
-        ``model`` has selected another one.
+        one must be present; a gap is filled with the firmware default. This
+        matters when ``dbg`` or ``rule`` is given without an explicit ``thr_milli``,
+        in which case the default model's threshold is sent - right after boot,
+        wrong once ``model`` has selected another one. ``rule`` is the alarm rule
+        for this run, ``<k>of<n>`` (a vote) or ``mean<n>``; see spec.DETECT_RULE_RE.
 
         Startup handshake mirrors :meth:`start_stream`: the command is resent only
         while the board stays *silent* (it was lost). Once any byte arrives the run
@@ -226,15 +229,19 @@ class DeviceClient:
         if retries < 1:
             raise ValueError("retries must be >= 1")
 
-        args: list[int] = [int(seconds)]
-        if squelch_milli is not None or thr_milli is not None or dbg:
+        if rule is not None and not DETECT_RULE_RE.fullmatch(rule):
+            raise ValueError(f"rule must be <k>of<n> or mean<n>, got {rule!r}")
+        args: list[int | str] = [int(seconds)]
+        if squelch_milli is not None or thr_milli is not None or dbg or rule is not None:
             args.append(
                 DETECT_DEFAULT_SQUELCH_MILLI if squelch_milli is None else int(squelch_milli)
             )
-        if thr_milli is not None or dbg:
+        if thr_milli is not None or dbg or rule is not None:
             args.append(DETECT_DEFAULT_MODEL_THR_MILLI if thr_milli is None else int(thr_milli))
-        if dbg:
-            args.append(1)
+        if dbg or rule is not None:
+            args.append(1 if dbg else 0)
+        if rule is not None:
+            args.append(rule.lower())
         encoded = encode_command("detect", *args)
 
         prefix = DETECT_TRAILER_PREFIX.decode("ascii")

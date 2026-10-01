@@ -97,6 +97,7 @@ bdtrain train --name f1 --field --augment 4 [--augment-profile far] ...
 bdtrain train --name f1_nr --field --field-exclude runner250 ...
                               # the same without one drone (or one negative category)
 bdtrain compare r1            # the comparison report -> runs/r1/report.md
+bdtrain compare r1 --rule mean4      # judged under another alarm rule (2of4 default, 1of4, mean8 ...)
 bdtrain export r1 [--models m ...]   # headers + translation units + parity vectors
 bdtrain export f1 --models mlp_l2=mlp_f1_l2 --keep full:gbt_l2 fw_aug:mlp_reg_l2=mlp_f1 ...
                               # export under a new C name; parity for registry models of
@@ -146,7 +147,7 @@ at the same time.
 |---|---|---|---|
 | 1 | `stats` | 52 | `mlp`, `mlp_reg`, `mlp2`, `svm`, `gbt`, `gbt_reg` |
 | 2 | `stats_spectral` | 69 | the same six |
-| 3 | `logmel` | 280 | `cnn_small`, `cnn_ds`, `cnn_1d`, `cnn_wide` |
+| 3 | `logmel` | 280 | `cnn_small`, `cnn_ds`, `cnn_1d`, `cnn_wide`, and the same six on the patch as a flat vector (`gbt_l3` ...) |
 
 `mlp` is 32 hidden units, `mlp_reg` 16 with alpha 1e-2, `mlp2` two hidden layers
 (32, 16) with the same alpha - the family behind `mlp_f2`. The C side takes an

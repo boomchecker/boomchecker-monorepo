@@ -80,6 +80,13 @@ def test_detect_alarm_rule_matches_firmware() -> None:
     assert spec.DETECT_ALARM_K_ON == _define(text, "DETECT_ALARM_K_ON", DETECT_SERVICE_H)
     assert spec.DETECT_ALARM_K_OFF == _define(text, "DETECT_ALARM_K_OFF", DETECT_SERVICE_H)
     assert 1 <= spec.DETECT_ALARM_K_OFF <= spec.DETECT_ALARM_K_ON <= spec.DETECT_ALARM_N
+    m = re.search(r'#define\s+DETECT_ALARM_RULE_DEFAULT\s+"([^"]+)"', text)
+    assert m, f"DETECT_ALARM_RULE_DEFAULT not found in {DETECT_SERVICE_H}"
+    assert spec.DETECT_ALARM_RULE_DEFAULT == m.group(1)
+    assert spec.DETECT_ALARM_RULE_DEFAULT == f"{spec.DETECT_ALARM_K_ON}of{spec.DETECT_ALARM_N}"
+    assert spec.DETECT_RULE_RE.fullmatch(spec.DETECT_ALARM_RULE_DEFAULT)
+    assert spec.DETECT_RULE_RE.fullmatch("mean4") and not spec.DETECT_RULE_RE.fullmatch("4")
+    assert "[rule]" in next(c for c in spec.COMMANDS if c.name == "detect").usage
 
 
 def test_detect_description_quotes_the_defaults() -> None:

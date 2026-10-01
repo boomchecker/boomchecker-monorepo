@@ -35,7 +35,7 @@ from boomdetect_train.datasets.manifest import (
     ROLE_TRAIN,
     ROLE_UNSEEN,
 )
-from boomdetect_train.decision import KofN, clip_alarmed
+from boomdetect_train.decision import Rule, clip_alarmed
 from boomdetect_train.dsp.windows import DEFAULT_SQUELCH, Gate, window_seconds, windows
 from boomdetect_train.features import (
     LAYOUT_LOGMEL,
@@ -236,7 +236,7 @@ def window_auc(clips: Iterable[ClipScores]) -> float:
 
 
 def clip_verdicts(
-    clips: Iterable[ClipScores], threshold: float, rule: KofN | None, min_windows: int = 1
+    clips: Iterable[ClipScores], threshold: float, rule: Rule | None, min_windows: int = 1
 ) -> np.ndarray:
     """Per-clip alarm verdicts. Without a rule, a clip alarms on >= min_windows drone windows."""
     out = []
@@ -267,7 +267,7 @@ class OperatingPoint:
 
 
 def operating_point(
-    clips: list[ClipScores], threshold: float, rule: KofN | None, min_windows: int = 1
+    clips: list[ClipScores], threshold: float, rule: Rule | None, min_windows: int = 1
 ) -> OperatingPoint:
     labels = np.asarray([c.label for c in clips])
     verdict = clip_verdicts(clips, threshold, rule, min_windows)
@@ -293,7 +293,7 @@ def threshold_grid(clips: list[ClipScores], n: int = 200) -> np.ndarray:
 
 
 def champion_threshold(
-    clips: list[ClipScores], rule: KofN | None, min_windows: int = 2
+    clips: list[ClipScores], rule: Rule | None, min_windows: int = 2
 ) -> OperatingPoint | None:
     """The deployed model's selection rule: zero alarmed negatives, then most detected positives.
 
@@ -311,7 +311,7 @@ def champion_threshold(
 
 
 def threshold_at_fa_rate(
-    clips: list[ClipScores], max_fa_per_hour: float, rule: KofN | None
+    clips: list[ClipScores], max_fa_per_hour: float, rule: Rule | None
 ) -> OperatingPoint | None:
     """Lowest threshold whose drone-called windows on negatives stay under a rate per hour."""
     best = None
@@ -396,7 +396,7 @@ class ClipRates:
         return self.detected / self.eligible_pos if self.eligible_pos else float("nan")
 
 
-def clip_rates(clips: list[ClipScores], threshold: float, rule: KofN | None) -> ClipRates:
+def clip_rates(clips: list[ClipScores], threshold: float, rule: Rule | None) -> ClipRates:
     need = rule.n if rule is not None else 1
     elig = [c for c in clips if c.decisions.shape[0] >= need]
     verdict = clip_verdicts(elig, threshold, rule)

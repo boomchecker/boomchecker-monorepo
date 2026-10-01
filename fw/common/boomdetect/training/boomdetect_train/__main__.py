@@ -196,7 +196,9 @@ def main(argv: list[str] | None = None) -> int:
     p.set_defaults(fn=cmd_features)
 
     p = sub.add_parser("baseline", help="score the shipped models")
-    p.add_argument("--rule", default="2of4", help="K-of-N alarm rule, e.g. 2of4, or 'none'")
+    p.add_argument(
+        "--rule", default="2of4", help="alarm rule: a vote like 2of4, a mean like mean4, or 'none'"
+    )
     p.set_defaults(fn=cmd_baseline)
 
     p = sub.add_parser("train", help="train the model families")

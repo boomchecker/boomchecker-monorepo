@@ -119,7 +119,7 @@ def _fit_families(
             if arch not in ARCHS:
                 continue
             t0 = time.time()
-            model = train_cnn(arch, ws.x, ws.y, epochs=cnn_epochs, log=log)
+            model = train_cnn(arch, ws.x, ws.y, sample_weight=ws.w, epochs=cnn_epochs, log=log)
             save_cnn(model, out_dir / "models" / arch)
             meta = {
                 "kind": "cnn",
@@ -133,7 +133,9 @@ def _fit_families(
             _save_meta(out_dir, arch, meta)
             metas[arch] = meta
             log(f"  {arch}: trained in {meta['seconds']} s, {meta['macs']} MACs")
-        return metas
+        # The scikit-learn families take the 280-value patch as a flat vector
+        # too (gbt_l3 ...): the forests need no scaler and the export writes any
+        # layout, so a model class the board already runs can read the spectrogram.
 
     for fam in families:
         if fam not in SKLEARN_FAMILIES:
@@ -200,8 +202,6 @@ def train_all(
     families = families or DEFAULT_FAMILIES
     layouts = layouts or DEFAULT_LAYOUTS
     field_exclude = list(field_exclude or [])
-    if shares and LAYOUT_LOGMEL in layouts and any(f in ARCHS for f in families):
-        raise ValueError("source shares are not implemented for the CNN families")
     if folds and not field:
         raise ValueError("folds split the field recordings; they need field=True")
     if augment and not field:

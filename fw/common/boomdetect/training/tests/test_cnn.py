@@ -48,6 +48,22 @@ def test_patch_to_input_layouts():
     assert mc[0, 5, 0, 3] == 3 * 20 + 5
 
 
+def test_train_takes_sample_weights():
+    rng = np.random.default_rng(2)
+    n = 400
+    y = (rng.random(n) < 0.5).astype(np.int64)
+    x = rng.normal(size=(n, 280)).astype(np.float32)
+    x[y == 1, :20] += 1.5
+    w = np.where(y == 1, 3.0, 1.0)  # a weighted set, the way share_weights hands one over
+    model = cnn.train_cnn(
+        "cnn_small", x, y, sample_weight=w, epochs=3, batch_size=64, log=lambda *_: None
+    )
+    s = model.score(x)
+    assert s.shape == (n,) and np.isfinite(s).all()
+    assert s[y == 1].mean() > s[y == 0].mean(), "the weighted fit still separates the blobs"
+    assert np.isfinite(model.meta["holdout_loss"])
+
+
 def test_train_saves_and_reloads(tmp_path):
     rng = np.random.default_rng(1)
     n = 400

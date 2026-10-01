@@ -43,6 +43,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "boomdetect_alarm.h"
 #include "classifier.h"
 
 /** Default RMS gate, in 1/1000 of full scale. 10 until 2026-09-26: outdoors
@@ -61,15 +62,20 @@
    at all and ends on the first byte from the console. */
 #define DETECT_MAX_SECONDS 86400
 
-/* The alarm rule above the classifier (fw/common/boomdetect/include/
+/* The default alarm rule above the classifier (fw/common/boomdetect/include/
    boomdetect_alarm.h): ON when at least K_ON of the last N classified windows
    were called drone, OFF when fewer than K_OFF were. One window is 448 ms and
    one logit; an alarm is a property of seconds. 2-of-4 with release below 1 is
    what the training package evaluates clip-level verdicts with, so the board
-   and the report mean the same thing by "alarm". */
+   and the report mean the same thing by "alarm". `detect` takes another rule
+   per run as its fifth argument (detect_service_parse_rule): `<k>of<n>` for a
+   vote, `mean<n>` for the mean of the last n decisions relative to the
+   threshold - the soft rule that, judged offline on the 2026-10-01 recordings,
+   kept every detection of mlp_f2 and dropped its one false alarm. */
 #define DETECT_ALARM_N     4
 #define DETECT_ALARM_K_ON  2
 #define DETECT_ALARM_K_OFF 1
+#define DETECT_ALARM_RULE_DEFAULT "2of4"
 
 /* The decision threshold is NOT here. It belongs to the model - a linear SVM's
    decisions live around +-3 while an MLP's are unbounded logits - so it is
@@ -83,9 +89,17 @@
  * @param squelch_milli RMS squelch threshold in 1/1000 (0 disables the gate)
  * @param thr_milli     decision threshold in 1/1000 (may be negative)
  * @param debug         non-zero: print an F=<frame> breadcrumb per frame
+ * @param rule          alarm rule for this run; NULL = the DETECT_ALARM_* default
  */
 void detect_service_run(uint32_t seconds, uint32_t squelch_milli, int32_t thr_milli,
-                        uint32_t debug);
+                        uint32_t debug, const boomdetect_alarm_rule_t *rule);
+
+/**
+ * @brief Parse an alarm rule token: `<k>of<n>` (vote, off below k-1, at least
+ *        1) or `mean<n>` (mean of the last n relative decisions), n 1..32.
+ * @return false if the token is not one of those or the rule is inconsistent.
+ */
+bool detect_service_parse_rule(const char *token, boomdetect_alarm_rule_t *out);
 
 /**
  * @brief Run the pipeline over a deterministic synthetic signal and print every

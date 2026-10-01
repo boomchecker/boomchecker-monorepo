@@ -293,6 +293,7 @@ def train_cnn(
     x_train: np.ndarray,
     y_train: np.ndarray,
     *,
+    sample_weight: np.ndarray | None = None,
     epochs: int = 40,
     batch_size: int = 256,
     lr: float = 2e-3,
@@ -303,7 +304,14 @@ def train_cnn(
     seed: int = 42,
     log=print,
 ) -> CnnModel:
-    """Adam + BCE-with-logits, class weighted, early stopping on a held-out slice."""
+    """Adam + BCE-with-logits, early stopping on a held-out slice.
+
+    Without `sample_weight` the loss is class weighted (pos_weight = neg / pos).
+    With it - train.share_weights, which already balances the classes - every
+    window carries its own weight and the loss is their weighted mean, so the
+    field recordings can outweigh their window count the way they do for the
+    scikit-learn families.
+    """
     import torch
     import torch.nn.functional as tf
 
@@ -317,9 +325,16 @@ def train_cnn(
     hold, tr = idx[:n_hold], idx[n_hold:]
     xt = torch.from_numpy(patch_to_input(x_train, net.input_layout))
     yt = torch.from_numpy(y_train.astype(np.float32))
+    wt = None if sample_weight is None else torch.from_numpy(np.asarray(sample_weight, np.float32))
     pos = float(yt[tr].sum().item())
     neg = float(tr.size - pos)
     pos_weight = torch.tensor([neg / max(pos, 1.0)], dtype=torch.float32)
+
+    def loss_of(logits, b):
+        if wt is None:
+            return tf.binary_cross_entropy_with_logits(logits, yt[b], pos_weight=pos_weight)
+        per = tf.binary_cross_entropy_with_logits(logits, yt[b], reduction="none")
+        return (per * wt[b]).sum() / wt[b].sum().clamp_min(1e-12)
 
     opt = torch.optim.Adam(module.parameters(), lr=lr, weight_decay=weight_decay)
     sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=epochs)
@@ -334,7 +349,7 @@ def train_cnn(
             if noise_std > 0:
                 xb = xb + torch.randn_like(xb) * noise_std
             logits = module(xb).reshape(-1)
-            loss = tf.binary_cross_entropy_with_logits(logits, yt[b], pos_weight=pos_weight)
+            loss = loss_of(logits, b)
             opt.zero_grad()
             loss.backward()
             opt.step()
@@ -344,9 +359,7 @@ def train_cnn(
         with torch.no_grad():
             hb = torch.from_numpy(hold)
             hl = module(xt[hb]).reshape(-1)
-            hloss = float(
-                tf.binary_cross_entropy_with_logits(hl, yt[hb], pos_weight=pos_weight).item()
-            )
+            hloss = float(loss_of(hl, hb).item())
         log(f"    {arch} epoch {epoch + 1:2d} train {total / perm.size:.4f} holdout {hloss:.4f}")
         if hloss < best_loss - 1e-4:
             best_loss, bad = hloss, 0

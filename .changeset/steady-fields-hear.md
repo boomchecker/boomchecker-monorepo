@@ -62,6 +62,7 @@ too (`detect 30 3 7660`); the host tool fills a skipped one with the default.
 | `squelch_milli` | 0..1000 | 3 (= RMS 0.003) | the per-frame RMS gate, in 1/1000 of full scale: a frame quieter than this is dropped and the 14-frame window starts over; 0 disables the gate |
 | `thr_milli` | -20000..20000 | the selected model's own (15855 for `mlp_f2`) | the decision threshold on the model's raw output (a logit for the MLPs and forests), in 1/1000; a window with `dec >= thr` is called DRONE; a value outside the range is rejected, not clamped |
 | `dbg` | 0 or 1 | 0 | 1 prints one line per frame (RMS, timing) on top of the window lines |
+| `rule` | `<k>of<n>` or `mean<n>`, n 1..32 | `2of4` | the alarm rule for this run, see below |
 
 What comes back: `LVL t=<s> rms=<+d.ddd>` about once a second (the input
 level - compare it with the squelch), `DET t=<s> span=<frames> dec=<+d.ddd>
@@ -70,12 +71,35 @@ how many frames it covered, which varies because the gate resets it),
 `ALM t=<s> on|off hits=<k>/4` when the alarm changes state, and the trailer
 `DETEND windows=<n> drones=<n> alarms=<n> overrun=<0|1> err=<0|1>`.
 
-The alarm is the K-of-N vote over the last four window decisions: on at 2 of
-4, off below 1 (`DETECT_ALARM_N`, `DETECT_ALARM_K_ON`, `DETECT_ALARM_K_OFF` in
-`fw/bom-stm32node/App/detect/detect_service.h`); changing it means a rebuild,
-but a logged run's `DET` lines let you count the alarms any other rule would
-have given before you do. While `detect` runs the board does not service the
-radio, and it needs `micslot a` after every reset - the board boots on slot B.
+The default alarm is the K-of-N vote over the last four window decisions: on
+at 2 of 4, off below 1 (`DETECT_ALARM_N`, `DETECT_ALARM_K_ON`,
+`DETECT_ALARM_K_OFF` in `fw/bom-stm32node/App/detect/detect_service.h`); the
+fifth argument picks another rule for one run. While `detect` runs the board
+does not service the radio, and it needs `micslot a` after every reset - the
+board boots on slot B.
+
+## The alarm rule is a `detect` argument now
+
+`detect <sec> [squelch_milli] [thr_milli] [dbg] [rule]` - `stm32node-cli detect
+<sec> --rule <rule>` - takes the alarm rule for the run, not persisted like the
+rest of `detect`:
+
+- `<k>of<n>`: the vote, ON at k DRONE windows of the last n, OFF below k-1 (at
+  least 1). The default stays `2of4` (`DETECT_ALARM_*` in detect_service.h).
+- `mean<n>`: soft integration - the mean of the last n decisions relative to
+  the threshold, ON while it is >= 0, windows before the first counting as 0.
+  One window well above the threshold carries a few weak ones; a run just
+  below never alarms. The `ALM` line then reads `mean=<+d.ddd>/<n>`.
+- n is 1..32. The same rules live in `boomdetect_alarm` (C) and
+  `boomdetect_train.decision` (Python), with one test scenario in both;
+  `bdtrain compare --rule mean4` judges a run under it.
+
+Replayed on the out-of-fold decisions of every field recording, `mean4` keeps
+every detection of `mlp_f2` at its default threshold (10 of 14 DJI, 15 of 19
+Runner) and drops its one false alarm (the mouth buzz), at 0.00 public false
+alarms per hour; `1of4` finds 12 and 16 with two own false alarms and 0.09 per
+hour. The default was left at `2of4` so the board behaves as before until the
+field confirms it.
 
 ## Making it more sensitive (or less)
 
@@ -99,8 +123,9 @@ and the same sequence of confusers (speech, walking, a car, wind) without it:
    false alarms in the quiet.
 3. **Switch the model**: `model gbt_f2` for the second opinion, `model mlp_f1`
    to compare with what was deployed before.
-4. **Loosen the alarm rule** last - 1 of 4 or 2 of 8 - after counting what it
-   would have done on the logs; it needs a rebuild.
+4. **Change the alarm rule** per run: `--rule mean4` to drop the buzz false
+   alarm without losing a detection, `--rule 1of4` to loosen the vote. Count
+   what another rule would have done on the logged `DET` lines first.
 5. Keep the microphone port unobstructed and pointed at the sky: the earlier
    playback test only detected with the port facing the source.
 

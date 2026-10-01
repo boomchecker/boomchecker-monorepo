@@ -13,6 +13,7 @@ from ..protocol.client import DeviceClient
 from ..protocol.codec import StreamAborted
 from ..protocol.spec import (
     DETECT_MAX_SECONDS,
+    DETECT_RULE_RE,
     DETECT_SQUELCH_MILLI_MAX,
     DETECT_THR_MILLI_LIMIT,
     STREAM_MAX_SECONDS,
@@ -194,12 +195,12 @@ def _cmd_version(ctx: CommandContext, args: list[str]) -> None:
     ctx.emit(version or "(no response)")
 
 
-DETECT_USAGE = "detect <sec> [squelch_milli] [thr_milli] [dbg]"
+DETECT_USAGE = "detect <sec> [squelch_milli] [thr_milli] [dbg] [rule]"
 
 
 def _parse_detect_args(
     ctx: CommandContext, args: list[str]
-) -> tuple[int, int | None, int | None, bool] | None:
+) -> tuple[int, int | None, int | None, bool, str | None] | None:
     """Parse and range-check ``detect`` arguments; None on a usage error.
 
     The firmware is the authoritative validator (and applies the selected model's
@@ -207,13 +208,20 @@ def _parse_detect_args(
     we check ranges up front only to keep an obvious typo from being mistaken for a
     missing acknowledgement.
     """
-    if not 1 <= len(args) <= 4:
+    if not 1 <= len(args) <= 5:
         ctx.emit(f"usage: {DETECT_USAGE}")
         return None
+    rule = None
+    if len(args) == 5:
+        rule = args[4].lower()
+        if not DETECT_RULE_RE.fullmatch(rule):
+            ctx.emit("rule must be <k>of<n> (e.g. 2of4) or mean<n> (e.g. mean4)")
+            return None
+        args = args[:4]
     try:
         values = [int(a) for a in args]
     except ValueError:
-        ctx.emit(f"usage: {DETECT_USAGE} (whole numbers)")
+        ctx.emit(f"usage: {DETECT_USAGE} (whole numbers, then the rule)")
         return None
 
     seconds = values[0]
@@ -232,7 +240,7 @@ def _parse_detect_args(
         ctx.emit("dbg must be 0 or 1")
         return None
     dbg = len(values) > 3 and values[3] == 1
-    return seconds, squelch, thr, dbg
+    return seconds, squelch, thr, dbg, rule
 
 
 def _cmd_detect(ctx: CommandContext, args: list[str]) -> None:
@@ -240,7 +248,7 @@ def _cmd_detect(ctx: CommandContext, args: list[str]) -> None:
     parsed = _parse_detect_args(ctx, args)
     if parsed is None:
         return
-    seconds, squelch, thr, dbg = parsed
+    seconds, squelch, thr, dbg, rule = parsed
     ran = "until any key" if seconds == 0 else f"{seconds}s"
     ctx.emit(f"-> detecting ({ran}) on {ctx.port} - press q then Enter to stop")
 
@@ -264,6 +272,7 @@ def _cmd_detect(ctx: CommandContext, args: list[str]) -> None:
                 squelch_milli=squelch,
                 thr_milli=thr,
                 dbg=dbg,
+                rule=rule,
                 on_line=on_line,
                 should_abort=ctx.should_abort,
                 on_retry=on_retry,

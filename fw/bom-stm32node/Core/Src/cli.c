@@ -158,9 +158,9 @@ static void cmd_detect(EmbeddedCli *cli, char *args, void *context)
   (void)context;
   char line[80];
   const uint16_t ntok = embeddedCliGetTokenCount(args);
-  if (ntok < 1 || ntok > 4)
+  if (ntok < 1 || ntok > 5)
   {
-    embeddedCliPrint(cli, "usage: detect <sec> [squelch_milli] [thr_milli] [dbg]");
+    embeddedCliPrint(cli, "usage: detect <sec> [squelch_milli] [thr_milli] [dbg] [rule]");
     return;
   }
   const char   *tok = embeddedCliGetToken(args, 1);
@@ -220,8 +220,24 @@ static void cmd_detect(EmbeddedCli *cli, char *args, void *context)
       return;
     }
   }
-  /* Emits LVL/DET/DETEND text lines on the console; see detect_service.h. */
-  detect_service_run((uint32_t)sec, (uint32_t)squelch, (int32_t)thr, (uint32_t)dbg);
+  /* The alarm rule for this run: a vote (`2of4`, the default) or the mean of
+     the last n decisions relative to the threshold (`mean4`). Not persisted,
+     like everything else about `detect`. */
+  boomdetect_alarm_rule_t rule;
+  const boomdetect_alarm_rule_t *rule_ptr = NULL;
+  if (ntok >= 5)
+  {
+    tok = embeddedCliGetToken(args, 5);
+    if (!detect_service_parse_rule(tok, &rule))
+    {
+      embeddedCliPrint(cli, "rule: <k>of<n> (default " DETECT_ALARM_RULE_DEFAULT
+                            ") or mean<n>, n 1..32");
+      return;
+    }
+    rule_ptr = &rule;
+  }
+  /* Emits LVL/DET/ALM/DETEND text lines on the console; see detect_service.h. */
+  detect_service_run((uint32_t)sec, (uint32_t)squelch, (int32_t)thr, (uint32_t)dbg, rule_ptr);
 }
 
 static void cmd_model(EmbeddedCli *cli, char *args, void *context)

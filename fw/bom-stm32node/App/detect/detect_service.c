@@ -30,11 +30,78 @@
 static boomdetect_t s_det;
 static int16_t      s_pcm[PCM_SAMPLES_PER_HALF];
 
-/* The K-of-N alarm over the window verdicts; re-initialised per run. */
+/* The alarm over the window decisions; rule and state re-initialised per run. */
 static boomdetect_alarm_t s_alarm;
-static const boomdetect_alarm_rule_t s_alarm_rule = {
+static const boomdetect_alarm_rule_t s_alarm_default = {
   .n = DETECT_ALARM_N, .k_on = DETECT_ALARM_K_ON, .k_off = DETECT_ALARM_K_OFF,
+  .mode = BOOMDETECT_ALARM_VOTE,
 };
+static float s_thr; /* this run's decision threshold, for the relative decision */
+
+/* "<k>of<n>" or "mean<n>", nothing else: the token has to be the whole string. */
+static bool parse_u8(const char *s, const char **end, uint8_t *out)
+{
+  unsigned long v = 0u;
+  const char   *p = s;
+  while (*p >= '0' && *p <= '9')
+  {
+    v = v * 10u + (unsigned long)(*p - '0');
+    if (v > 255u)
+    {
+      return false;
+    }
+    p++;
+  }
+  if (p == s)
+  {
+    return false;
+  }
+  *end = p;
+  *out = (uint8_t)v;
+  return true;
+}
+
+bool detect_service_parse_rule(const char *token, boomdetect_alarm_rule_t *out)
+{
+  boomdetect_alarm_rule_t rule = { 0 };
+  const char             *p    = token;
+  if (token == NULL || out == NULL)
+  {
+    return false;
+  }
+  if (strncmp(p, "mean", 4) == 0)
+  {
+    p += 4;
+    if (!parse_u8(p, &p, &rule.n) || *p != '\0')
+    {
+      return false;
+    }
+    rule.mode = BOOMDETECT_ALARM_MEAN;
+  }
+  else
+  {
+    if (!parse_u8(p, &p, &rule.k_on) || strncmp(p, "of", 2) != 0)
+    {
+      return false;
+    }
+    p += 2;
+    if (!parse_u8(p, &p, &rule.n) || *p != '\0')
+    {
+      return false;
+    }
+    /* Release one below the onset, at least 1: the hysteresis the training
+       package's parse_rule() gives the same token. */
+    rule.k_off = (rule.k_on > 1u) ? (uint8_t)(rule.k_on - 1u) : 1u;
+    rule.mode  = BOOMDETECT_ALARM_VOTE;
+  }
+  boomdetect_alarm_t probe;
+  if (!boomdetect_alarm_init(&probe, &rule))
+  {
+    return false;
+  }
+  *out = rule;
+  return true;
+}
 
 /* Selected model. NULL means "whatever the registry calls default", resolved
    late so this file does not need an initialiser that runs before main. */
@@ -165,20 +232,31 @@ static void det_report(const boomdetect_event_t *ev, uint32_t debug)
     det_print(line);
 
     /* The alarm is reported only when it changes, so a run over a steady drone
-       prints one ALM ON and one ALM OFF, not one line per window. */
-    if (boomdetect_alarm_push(&s_alarm, ev->window.is_drone))
+       prints one ALM ON and one ALM OFF, not one line per window. The vote
+       rule reports its hits, the mean rule its mean, each over the last n. */
+    if (boomdetect_alarm_push_decision(&s_alarm, ev->window.decision - s_thr))
     {
-      snprintf(line, sizeof(line), "ALM t=%lu.%03lu %s hits=%u/%u\r\n",
-               (unsigned long)(t_ms / 1000u), (unsigned long)(t_ms % 1000u),
-               boomdetect_alarm_on(&s_alarm) ? "ON" : "OFF",
-               (unsigned)boomdetect_alarm_hits(&s_alarm), (unsigned)DETECT_ALARM_N);
+      const char *state = boomdetect_alarm_on(&s_alarm) ? "ON" : "OFF";
+      if (s_alarm.rule.mode == BOOMDETECT_ALARM_MEAN)
+      {
+        fmt_milli(dec_str, sizeof(dec_str), boomdetect_alarm_mean(&s_alarm));
+        snprintf(line, sizeof(line), "ALM t=%lu.%03lu %s mean=%s/%u\r\n",
+                 (unsigned long)(t_ms / 1000u), (unsigned long)(t_ms % 1000u), state, dec_str,
+                 (unsigned)s_alarm.rule.n);
+      }
+      else
+      {
+        snprintf(line, sizeof(line), "ALM t=%lu.%03lu %s hits=%u/%u\r\n",
+                 (unsigned long)(t_ms / 1000u), (unsigned long)(t_ms % 1000u), state,
+                 (unsigned)boomdetect_alarm_hits(&s_alarm), (unsigned)s_alarm.rule.n);
+      }
       det_print(line);
     }
   }
 }
 
 void detect_service_run(uint32_t seconds, uint32_t squelch_milli, int32_t thr_milli,
-                        uint32_t debug)
+                        uint32_t debug, const boomdetect_alarm_rule_t *rule)
 {
   static uint8_t s_cyccnt_ready = 0u;
   char           line[80];
@@ -239,11 +317,13 @@ void detect_service_run(uint32_t seconds, uint32_t squelch_milli, int32_t thr_mi
     det_abort(reason);
     return;
   }
-  if (!boomdetect_alarm_init(&s_alarm, &s_alarm_rule))
+  s_thr = (float)thr_milli / 1000.0f;
+  if (!boomdetect_alarm_init(&s_alarm, (rule != NULL) ? rule : &s_alarm_default))
   {
-    /* The rule is three compile-time constants; this can only fail if someone
-       edits them into an inconsistent set, and it should say so rather than
-       run with an alarm that never fires. */
+    /* cli.c validates a rule it was given through detect_service_parse_rule,
+       and the default is three compile-time constants; this can only fail if
+       someone edits those into an inconsistent set, and it should say so
+       rather than run with an alarm that never fires. */
     det_abort("DETERR alarm rule invalid\r\n");
     return;
   }

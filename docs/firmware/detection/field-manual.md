@@ -37,7 +37,7 @@ Totéž jde napsat i do ruční konzole jako `micslot a` a `model`.
 |---|---|
 | `model` | vypíše modely v image, `*` označuje aktivní, u každého výchozí práh |
 | `model <jméno>` | přepne model, např. `model gbt_f2` (druhý názor) nebo `model mlp_f1` (předchozí výchozí) |
-| `detect <s> [squelch] [thr] [dbg]` | běží `<s>` sekund (až 86400), vypisuje okna a alarmy |
+| `detect <s> [squelch] [thr] [dbg] [rule]` | běží `<s>` sekund (až 86400), vypisuje okna a alarmy; `rule` = pravidlo alarmu, `2of4` (výchozí) nebo `mean4`, viz kap. 6 |
 | `detect 0 ...` | běží bez limitu, dokud v konzoli nestiskneš libovolnou klávesu; pak přijde `DETEND` |
 | `micslot a` | přepne na živý mikrofon |
 
@@ -180,24 +180,49 @@ nevznikne okno, nehne se alarm. Výchozí je **3** (RMS 0.003), do 26. 9. to byl
 Kontrola nastavení: `windows` v `DETEND` proti délce běhu. 30 s dává maximálně
 asi 66 oken. Když je `windows` výrazně méně, brána ořezává.
 
-### Alarm (K z N)
+### Alarm: hlasování K z N, nebo průměr
 
-Alarm se zapne, když jsou alespoň **2 ze 4** posledních oken DRONE, a vypne,
-když jich je méně než 1. Okno je 448 ms, takže alarm znamená zhruba sekundu
-dronu. Tahle pravidla jsou zatím konstanty při kompilaci:
+Pátý argument `detect` (za `dbg`), při každém běhu znovu, nic se neukládá:
 
 ```
-fw/bom-stm32node/App/detect/detect_service.h
-#define DETECT_ALARM_N     4
-#define DETECT_ALARM_K_ON  2
-#define DETECT_ALARM_K_OFF 1
+detect 30 3 15855 0 2of4     # výchozí: zapne při 2 DRONE ze 4 posledních oken, vypne pod 1
+detect 30 3 15855 0 mean4    # průměr posledních 4 rozhodnutí vůči prahu >= 0
+detect 30 3 15855 0 1of4     # volnější hlasování: stačí 1 okno ze 4
+stm32node-cli detect 30 --rule mean4 --port COM7
 ```
 
-Přísnější brána (méně falešných): 3 ze 4 nebo 3 ze 6. Volnější: 1 ze 4 nebo
-2 ze 8. Změna znamená přeflashovat. Venku se ale dá vyhodnotit zpětně: z
-řádků `DET` v logu spočítáš, kolik alarmů by dala jiná kombinace, aniž bys
-měnil firmware. Loguj proto celé běhy (`stm32node-cli detect ... > beh.txt`,
-nebo `bdcli.py --log soubor.txt`).
+Okno je 448 ms, takže alarm znamená zhruba sekundu dronu.
+
+- **`<k>of<n>`** (hlasování, výchozí `2of4`): počítá okna nad prahem. Zapne
+  při `k` z posledních `n`, vypne, když jich je méně než `k−1` (nejméně 1), aby
+  rozhodnutí kolem prahu neblikalo. Přísnější: `3of4`, `3of8`. Volnější:
+  `1of4`, `2of8`.
+- **`mean<n>`** (měkká integrace): průměruje samotná rozhodnutí (`dec` minus
+  práh) za posledních `n` oken a hlásí, dokud je průměr ≥ 0. Řada oken těsně
+  pod prahem nikdy nezahlásí, jedno okno vysoko nad prahem utáhne tři slabá.
+  V řádku `ALM` je pak místo `hits=k/n` hodnota `mean=+d.ddd/n`.
+- `n` je 1 až 32.
+
+Co to dělá s `mlp_f2` při výchozím prahu, spočítáno zpětně z rozhodnutí na
+všech terénních nahrávkách (mimo fold):
+
+| pravidlo | DJI /14 | Runner /19 | negativa /22 | veřejné fal. alarmy/h |
+|---|---|---|---|---|
+| `2of4` (výchozí) | 10 | 15 | 1 (bzučení) | 0,00 |
+| **`mean4`** | 10 | 15 | **0** | 0,00 |
+| `1of4` | 12 | 16 | 2 | 0,09 |
+| `3of8` | 9 | 13 | 0 | 0,00 |
+
+`mean4` tedy odstraní jediný falešný alarm beze ztráty detekce; `1of4` přidá
+dvě DJI a jednu Runner nahrávku za jeden falešný alarm navíc. Venku vyzkoušej
+obojí na stejném manévru. Hodnocení zpětně funguje dál: z řádků `DET` v logu
+spočítáš, co by dalo jiné pravidlo, aniž bys běh opakoval
+(`analysis/2026-10-01-retrain/decision_rules.py` to dělá přes všechny
+nahrávky). Loguj proto celé běhy (`stm32node-cli detect ... > beh.txt`).
+
+Výchozí pravidlo zůstává konstantou při kompilaci (`DETECT_ALARM_*` v
+`fw/bom-stm32node/App/detect/detect_service.h`); změnit ho natrvalo znamená
+přeflashovat.
 
 ## 7. Postup venku, ve zkratce
 

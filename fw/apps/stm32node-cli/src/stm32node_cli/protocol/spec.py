@@ -9,6 +9,7 @@ When the protocol changes, edit this file and run ``task proto`` to refresh
 
 from __future__ import annotations
 
+import re
 import struct
 from dataclasses import dataclass
 
@@ -46,6 +47,10 @@ DETECT_THR_MILLI_LIMIT = 20000  # accepted thr_milli range is -LIMIT..+LIMIT
 DETECT_ALARM_N = 4
 DETECT_ALARM_K_ON = 2
 DETECT_ALARM_K_OFF = 1
+DETECT_ALARM_RULE_DEFAULT = "2of4"  # DETECT_ALARM_RULE_DEFAULT in detect_service.h
+# The fifth `detect` argument: a vote `<k>of<n>` or the mean of the last n relative
+# decisions `mean<n>`; the firmware validates the numbers (n 1..32, 1 <= k <= n).
+DETECT_RULE_RE = re.compile(r"(\d{1,2}of\d{1,2}|mean\d{1,2})", re.IGNORECASE)
 
 # --- Framing -----------------------------------------------------------------
 PROTOCOL_VERSION = 1
@@ -133,7 +138,7 @@ COMMANDS: tuple[CommandSpec, ...] = (
     ),
     CommandSpec(
         name="detect",
-        usage="detect <sec> [squelch_milli] [thr_milli] [dbg]",
+        usage="detect <sec> [squelch_milli] [thr_milli] [dbg] [rule]",
         description=(
             "Run on-device drone detection for <sec> seconds (1..86400; 0 runs until the "
             "console receives any byte, which is discarded rather than executed): "
@@ -152,7 +157,13 @@ COMMANDS: tuple[CommandSpec, ...] = (
             "threshold with 1 false-alarm window per hour on the public validation "
             "negatives, at which it alarmed on 25 of 33 field recordings of two real drones "
             "and on 1 of 22 negative ones, each judged by a model that had not heard it; "
-            "7660 is its 5-per-hour point). A non-zero dbg adds one debug line per frame."
+            "7660 is its 5-per-hour point). A non-zero dbg adds one debug line per frame. "
+            f"rule picks the alarm rule for this run (default {DETECT_ALARM_RULE_DEFAULT}): "
+            "`<k>of<n>` is the vote - ON at k of the last n DRONE windows, OFF below k-1 (at "
+            "least 1) - and `mean<n>` the mean of the last n decisions relative to thr_milli, "
+            "ON while it is >= 0; n is 1..32. Judged offline on the field recordings, mean4 "
+            "kept every detection of mlp_f2 at its default threshold and dropped its one false "
+            "alarm; 1of4 adds detections at the cost of false alarms."
         ),
         response=(
             "A `LVL t=<s>.<ms> rms=<+d.ddd>` input-level line about once a second, one line "
@@ -161,11 +172,12 @@ COMMANDS: tuple[CommandSpec, ...] = (
             "is not a constant: the RMS gate resets accumulation, so a window can straddle "
             "silence and start arbitrarily far from where the decision was made (windows are "
             "~448 ms of audio at the default hop; input below the squelch yields no windows). "
-            "An `ALM t=<s>.<ms> <ON|OFF> hits=<k>/<n>` line whenever the K-of-N alarm changes "
-            "state: ON once at least "
+            "An `ALM t=<s>.<ms> <ON|OFF> hits=<k>/<n>` line whenever the alarm changes "
+            "state: under the default vote ON once at least "
             f"{DETECT_ALARM_K_ON} of the last {DETECT_ALARM_N} classified windows were DRONE, "
             f"OFF once fewer than {DETECT_ALARM_K_OFF} were - printed only on transitions, so "
-            "a steady drone gives one ON and one OFF, and a lone DRONE window gives nothing. "
+            "a steady drone gives one ON and one OFF, and a lone DRONE window gives nothing; "
+            "under a mean rule the line reads `mean=<+d.ddd>/<n>` instead of hits. "
             "Then a final "
             "`DETEND windows=<n> drones=<n> alarms=<n> overrun=<0|1> err=<0|1>` line, where "
             "alarms counts OFF-to-ON transitions. With dbg set, each "
@@ -211,7 +223,7 @@ COMMANDS: tuple[CommandSpec, ...] = (
             "for each window, `DSTDEC w=<window> logit=<8 hex digits>`, a "
             "`DSTSIG n=<samples> seed=<n> fnv=<8 hex digits>` line covering the generated "
             "input, and a final `DSTEND frames=<n> windows=<n> err=<0|1>` trailer. Every "
-            "float is its raw bit pattern, not a decimal, so \"unchanged\" means unchanged. "
+            'float is its raw bit pattern, not a decimal, so "unchanged" means unchanged. '
             "If the model is missing or the detector fails to init, `DSTERR <reason>` "
             "precedes the trailer with err=1."
         ),

@@ -10,6 +10,7 @@ from .config import DEFAULT_PORT, DEFAULT_TIMEOUT_S, default_output_dir
 from .keywatch import keypress_abort
 from .protocol.spec import (
     DETECT_MAX_SECONDS,
+    DETECT_RULE_RE,
     DETECT_SQUELCH_MILLI_MAX,
     DETECT_THR_MILLI_LIMIT,
     STREAM_MAX_SECONDS,
@@ -119,6 +120,12 @@ def detect(
         help="Decision threshold, 1/1000 (default: the selected model's own).",
     ),
     dbg: bool = typer.Option(False, "--dbg", help="Print a per-frame debug line."),
+    rule: str | None = typer.Option(
+        None,
+        "--rule",
+        help="Alarm rule for this run: a vote like 2of4 (the default) or a mean like mean4.",
+        metavar="RULE",
+    ),
     port: str = typer.Option(DEFAULT_PORT, "--port", "-p", help="Serial port."),
 ) -> None:
     """Run on-device drone detection, streaming the board's report lines.
@@ -133,6 +140,9 @@ def detect(
     from .protocol.codec import StreamAborted
     from .transport.serial_transport import SerialTransport
 
+    if rule is not None and not DETECT_RULE_RE.fullmatch(rule):
+        typer.echo("--rule must be <k>of<n> (e.g. 2of4) or mean<n> (e.g. mean4)")
+        raise typer.Exit(code=2)
     ran = "until keypress" if seconds == 0 else f"{seconds}s"
     typer.echo(f"detecting ({ran}) on {port} - press any key to stop")
     try:
@@ -143,6 +153,7 @@ def detect(
                     squelch_milli=squelch,
                     thr_milli=thr,
                     dbg=dbg,
+                    rule=rule,
                     on_line=typer.echo,
                     should_abort=should_abort,
                 )
