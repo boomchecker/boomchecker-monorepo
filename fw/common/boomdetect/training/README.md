@@ -91,12 +91,16 @@ bdtrain baseline              # score the shipped mlp_v6 / svm_v3 on every suite
 bdtrain train --name r1       # every family x layout (see run.py DEFAULT_FAMILIES)
 bdtrain train --name f1 --field --share field=0.25 drone_audio_dataset=0.15 --folds 4
                               # + the field recordings, sources weighted, 4 fold models
+bdtrain train --name f1 --field --augment 4 [--augment-profile far] ...
+                              # + 4 distance variants of every field clip (augment.py;
+                              # near = 20-250 m, far = 50-500 m, quieter, windier floor)
 bdtrain train --name f1_nr --field --field-exclude runner250 ...
                               # the same without one drone (or one negative category)
 bdtrain compare r1            # the comparison report -> runs/r1/report.md
 bdtrain export r1 [--models m ...]   # headers + translation units + parity vectors
-bdtrain export f1 --models mlp_l2=mlp_f1_l2 --keep full:gbt_l2 ...
-                              # export under a new C name; parity for registry models of older runs
+bdtrain export f1 --models mlp_l2=mlp_f1_l2 --keep full:gbt_l2 fw_aug:mlp_reg_l2=mlp_f1 ...
+                              # export under a new C name; parity for registry models of
+                              # older runs, under the name the registry knows them by
 bdtrain fixtures              # regenerate tests/vectors/extractor_expected.h
 ```
 
@@ -140,9 +144,13 @@ at the same time.
 
 | layout | extractor | width | families |
 |---|---|---|---|
-| 1 | `stats` | 52 | `mlp`, `mlp_reg`, `svm`, `gbt`, `gbt_reg` |
-| 2 | `stats_spectral` | 69 | the same five |
+| 1 | `stats` | 52 | `mlp`, `mlp_reg`, `mlp2`, `svm`, `gbt`, `gbt_reg` |
+| 2 | `stats_spectral` | 69 | the same six |
 | 3 | `logmel` | 280 | `cnn_small`, `cnn_ds`, `cnn_1d`, `cnn_wide` |
+
+`mlp` is 32 hidden units, `mlp_reg` 16 with alpha 1e-2, `mlp2` two hidden layers
+(32, 16) with the same alpha - the family behind `mlp_f2`. The C side takes an
+MLP with one or two hidden layers (export.py writes either header format).
 
 `features.py` is the specification of the three layouts; the C extractors are
 held to it by `extractor_test`. `models/cnn.py`'s architecture list builds the

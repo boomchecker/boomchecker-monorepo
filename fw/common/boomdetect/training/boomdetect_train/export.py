@@ -106,20 +106,23 @@ def parity_vectors(
     return ParityVectors(feats, np.asarray(model.score(feats), dtype=np.float32).reshape(-1))
 
 
+def mlp_hidden_layers(model: ScaledModel) -> int:
+    """How many hidden layers an MLP has; the C translation unit differs per count."""
+    return len(model.model.coefs_) - 1
+
+
 def export_mlp(model: ScaledModel, tag: str, provenance: list[str]) -> str:
+    """One hidden layer: mlp_w2/MLP_B2 are the output. Two: mlp_w2/mlp_b2 are the
+    second hidden layer and mlp_w3/MLP_B3 the output (MLP_HIDDEN2 marks the format)."""
     clf = model.model
+    layers = mlp_hidden_layers(model)
+    if layers not in (1, 2):
+        raise ValueError(f"the C side takes one or two hidden layers, not {layers}")
     w1 = clf.coefs_[0].T.astype(np.float32)  # (hidden, inputs)
     b1 = clf.intercepts_[0].astype(np.float32)
-    w2 = clf.coefs_[1][:, 0].astype(np.float32)
-    b2 = float(clf.intercepts_[1][0])
     hidden, inputs = w1.shape
     guard = f"MLP_MODEL_DATA_{tag.upper()}_H"
-    lines = _header(guard, f"MLP {tag}: {inputs} -> {hidden} -> 1, ReLU, logit output", provenance)
-    lines += [
-        f"#define MLP_NUM_INPUTS {inputs}",
-        f"#define MLP_HIDDEN {hidden}",
-        f"#define MLP_B2 {_c_float(b2)}",
-        "",
+    scaler = [
         _c_array("mlp_scaler_mean", "float", model.scaler_mean, (inputs,), _c_float),
         "",
         _c_array("mlp_scaler_inv_std", "float", model.scaler_inv_std, (inputs,), _c_float),
@@ -128,11 +131,42 @@ def export_mlp(model: ScaledModel, tag: str, provenance: list[str]) -> str:
         "",
         _c_array("mlp_b1", "float", b1, (hidden,), _c_float),
         "",
-        _c_array("mlp_w2", "float", w2, (hidden,), _c_float),
-        "",
-        f"#endif /* {guard} */",
-        "",
     ]
+    if layers == 1:
+        w2 = clf.coefs_[1][:, 0].astype(np.float32)
+        b2 = float(clf.intercepts_[1][0])
+        title = f"MLP {tag}: {inputs} -> {hidden} -> 1, ReLU, logit output"
+        lines = _header(guard, title, provenance)
+        lines += [
+            f"#define MLP_NUM_INPUTS {inputs}",
+            f"#define MLP_HIDDEN {hidden}",
+            f"#define MLP_B2 {_c_float(b2)}",
+            "",
+            *scaler,
+            _c_array("mlp_w2", "float", w2, (hidden,), _c_float),
+        ]
+    else:
+        w2 = clf.coefs_[1].T.astype(np.float32)  # (hidden2, hidden)
+        b2 = clf.intercepts_[1].astype(np.float32)
+        w3 = clf.coefs_[2][:, 0].astype(np.float32)
+        b3 = float(clf.intercepts_[2][0])
+        hidden2 = w2.shape[0]
+        title = f"MLP {tag}: {inputs} -> {hidden} -> {hidden2} -> 1, ReLU, logit output"
+        lines = _header(guard, title, provenance)
+        lines += [
+            f"#define MLP_NUM_INPUTS {inputs}",
+            f"#define MLP_HIDDEN {hidden}",
+            f"#define MLP_HIDDEN2 {hidden2}",
+            f"#define MLP_B3 {_c_float(b3)}",
+            "",
+            *scaler,
+            _c_array("mlp_w2", "float", w2, (hidden2, hidden), _c_float),
+            "",
+            _c_array("mlp_b2", "float", b2, (hidden2,), _c_float),
+            "",
+            _c_array("mlp_w3", "float", w3, (hidden2,), _c_float),
+        ]
+    lines += ["", f"#endif /* {guard} */", ""]
     return "\n".join(lines)
 
 

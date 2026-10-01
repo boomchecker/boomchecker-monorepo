@@ -20,14 +20,19 @@
 
 /* First entry is the default. */
 static const classifier_t *const s_models[] = {
-    /* mlp_f1 is the first model trained on the node's own field recordings
-       (run fw_aug, 2026-09-26; see models/models.h). Out of fold it alarmed on
-       14 of 17 drone recordings and none of 11 negatives with 0.26 false
-       alarms per hour on held-out public negatives; mlp_v6 at the same budget
-       found 2 of 17, and its hand-set 3.0 buys 10 of 17 with 16.7 false alarms
-       per hour. mlp_v6 and the rest stay in the image so the same audio can be
-       scored by each, and moving mlp_v6 back to the front is the whole
-       rollback. */
+    /* mlp_f2 and gbt_f2 (2026-10-01) add the second outdoor session - DJI at
+       10-70 m, Runner 250 at 20-40 m, wind on the microphone - and a day of
+       office confusers to the training set. On those 30.9 recordings mlp_f1
+       alarmed on 2 of 16 (nothing beyond 10 m); mlp_f2, judged out of fold at
+       its shipped threshold (1 false-alarm window per hour on public val),
+       alarms on 10 of 16 and on 25 of all 33 drone recordings, with one false
+       alarm in 22 own negatives (mouth buzz) and none per hour on 11.6 h of
+       held-out public negatives. gbt_f2 is the second opinion from another
+       family (23 of 33, 0 of 22, 1.9 public alarms per hour). Everything
+       older stays in the image for `model`; moving mlp_f1 back to the front
+       is the whole rollback. */
+    &classifier_mlp_f2,
+    &classifier_gbt_f2,
     &classifier_mlp_f1,
     &classifier_gbt_f1,
     &classifier_mlp_v6,

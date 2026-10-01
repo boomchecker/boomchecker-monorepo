@@ -20,7 +20,12 @@ from boomdetect_train.paths import MODELS_DIR
 
 @dataclass(frozen=True)
 class MlpHeader:
-    """A scaler followed by one hidden ReLU layer and a linear output (a logit)."""
+    """A scaler, one or two hidden ReLU layers and a linear output (a logit).
+
+    With one hidden layer `w2` is the output vector and `b2` the output bias
+    (the format of every header before mlp_f2). With two, `w2`/`b2` are the
+    second hidden layer and `w3`/`b3` the output.
+    """
 
     name: str
     offset: int  # first feature read (the MLPs skip feature 0)
@@ -28,8 +33,10 @@ class MlpHeader:
     scaler_inv_std: np.ndarray
     w1: np.ndarray  # (hidden, inputs)
     b1: np.ndarray  # (hidden,)
-    w2: np.ndarray  # (hidden,)
-    b2: float
+    w2: np.ndarray  # (hidden,) or (hidden2, hidden)
+    b2: float | np.ndarray  # output bias, or (hidden2,)
+    w3: np.ndarray | None = None  # (hidden2,)
+    b3: float | None = None
 
     @property
     def n_features(self) -> int:
@@ -41,7 +48,11 @@ class MlpHeader:
         x = x[:, self.offset : self.offset + self.n_features]
         z = (x - self.scaler_mean) * self.scaler_inv_std
         h = np.maximum(z @ self.w1.T + self.b1, np.float32(0.0))
-        out = h @ self.w2 + np.float32(self.b2)
+        if self.w3 is None:
+            out = h @ self.w2 + np.float32(self.b2)
+        else:
+            h = np.maximum(h @ self.w2.T + self.b2, np.float32(0.0))
+            out = h @ self.w3 + np.float32(self.b3)
         return out.astype(np.float32) if np.ndim(features) > 1 else np.float32(out[0])
 
 
@@ -81,6 +92,7 @@ def load_mlp_header(path: Path | str, name: str, offset: int = 1) -> MlpHeader:
     text = Path(path).read_text(encoding="utf-8")
     defines = parse_defines(text)
     arrays = parse_arrays(text, defines)
+    two_layers = "MLP_HIDDEN2" in defines
     return MlpHeader(
         name=name,
         offset=offset,
@@ -89,7 +101,9 @@ def load_mlp_header(path: Path | str, name: str, offset: int = 1) -> MlpHeader:
         w1=arrays["mlp_w1"],
         b1=arrays["mlp_b1"],
         w2=arrays["mlp_w2"],
-        b2=_float_define(text, "MLP_B2"),
+        b2=arrays["mlp_b2"] if two_layers else _float_define(text, "MLP_B2"),
+        w3=arrays["mlp_w3"] if two_layers else None,
+        b3=_float_define(text, "MLP_B3") if two_layers else None,
     )
 
 

@@ -105,6 +105,7 @@ def cmd_train(args: argparse.Namespace) -> int:
         shares=parse_shares(args.share),
         folds=args.folds,
         augment=args.augment,
+        augment_profile=args.augment_profile,
     )
     print(f"run written to {run_dir}")
     return 0
@@ -235,6 +236,12 @@ def main(argv: list[str] | None = None) -> int:
         metavar="N",
         help="N distance variants of every field clip (augment.py), source 'field_aug'",
     )
+    p.add_argument(
+        "--augment-profile",
+        default="near",
+        choices=["near", "far"],
+        help="distances the variants draw from: near = 20-250 m, far = 50-500 m, quieter, windier",
+    )
     p.set_defaults(fn=cmd_train)
 
     p = sub.add_parser("compare", help="evaluate a run against the baseline")
@@ -262,8 +269,9 @@ def main(argv: list[str] | None = None) -> int:
         "--keep",
         nargs="*",
         default=None,
-        metavar="RUN:MODEL",
-        help="registry models from earlier runs that need parity vectors, e.g. full:mlp_l2",
+        metavar="RUN:MODEL[=CNAME]",
+        help="registry models from earlier runs that need parity vectors, e.g. full:mlp_l2 "
+        "or fw_aug:mlp_reg_l2=mlp_f1 when the registry knows it under another name",
     )
     p.add_argument(
         "--fa-per-hour",

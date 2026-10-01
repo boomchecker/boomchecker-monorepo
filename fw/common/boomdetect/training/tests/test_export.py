@@ -46,6 +46,18 @@ def test_mlp_round_trip(ws, tmp_path):
     np.testing.assert_allclose(got, want, rtol=1e-5, atol=1e-5)
 
 
+def test_two_layer_mlp_round_trip(ws, tmp_path):
+    model = train_mlp(ws, hidden=(8, 4))
+    assert export.mlp_hidden_layers(model) == 2
+    text = export.export_mlp(model, "t3", ["test"])
+    assert "#define MLP_HIDDEN2 4" in text and "MLP_B3" in text and "MLP_B2" not in text
+    hdr = load_mlp_header(_tmp_header(tmp_path, text, "mlp2.h"), "t3", offset=model.offset)
+    assert hdr.w2.shape == (4, 8) and hdr.w3.shape == (4,)
+    np.testing.assert_allclose(hdr.score(ws.x[:50]), model.score(ws.x[:50]), rtol=1e-5, atol=1e-5)
+    with pytest.raises(ValueError):
+        export.export_mlp(train_mlp(ws, hidden=(6, 5, 4)), "t4", ["test"])
+
+
 def test_linear_round_trip(ws, tmp_path):
     model = train_svm(ws)
     text = export.export_linear(model, "t2", ["test"])
@@ -129,6 +141,19 @@ def test_export_names_rename_and_refuse_what_the_c_cannot_take():
         _export_names(["mlp_l9"], run_models)
     with pytest.raises(ValueError):
         _export_names(["mlp_l2=mlp-f1"], run_models)
+
+
+def test_keep_specs_take_the_registry_name():
+    from boomdetect_train.run import _keep_specs
+
+    assert _keep_specs(["full:mlp_l2", "fw_aug:mlp_reg_l2=mlp_f1"]) == [
+        ("full", "mlp_l2", "mlp_l2"),
+        ("fw_aug", "mlp_reg_l2", "mlp_f1"),
+    ]
+    assert _keep_specs(None) == []
+    for bad in ["mlp_l2", "full:", "fw_aug:mlp_reg_l2=mlp-f1"]:
+        with pytest.raises(ValueError):
+            _keep_specs([bad])
 
 
 def test_c_float_round_trips_float32():

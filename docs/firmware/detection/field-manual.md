@@ -3,7 +3,8 @@
 Krátký návod, jak na desce přepínat modely a ladit citlivost detekce, když
 jdeme ven testovat s dronem. Technický popis řetězce je v [index.md](index.md).
 Čísla platí pro firmware z větve `hermakam/newdetection` s výchozím modelem
-`mlp_f1` (26. 9. 2026), prvním natrénovaným i na našich terénních nahrávkách.
+`mlp_f2` (1. 10. 2026), natrénovaným na veřejných datech a na všech našich
+terénních nahrávkách včetně dronů na 10–70 m z 30. 9.
 
 ## 1. Než začneš
 
@@ -23,7 +24,7 @@ Po každém zapnutí desky udělej dvě věci, obě se po resetu zapomenou:
 
 ```
 stm32node-cli micslot a --port COM7   # živý mik je na slotu A, deska startuje na B
-stm32node-cli model --port COM7       # ověř, že je aktivní mlp_f1 (hvězdička) thr=8466
+stm32node-cli model --port COM7       # ověř, že je aktivní mlp_f2 (hvězdička) thr=15855
 ```
 
 Výběr modelu i slotu přežije mezi jednotlivými voláními `stm32node-cli` (otevření
@@ -35,20 +36,20 @@ Totéž jde napsat i do ruční konzole jako `micslot a` a `model`.
 | příkaz | co dělá |
 |---|---|
 | `model` | vypíše modely v image, `*` označuje aktivní, u každého výchozí práh |
-| `model <jméno>` | přepne model, např. `model gbt_f1` |
+| `model <jméno>` | přepne model, např. `model gbt_f2` (druhý názor) nebo `model mlp_f1` (předchozí výchozí) |
 | `detect <s> [squelch] [thr] [dbg]` | běží `<s>` sekund (až 86400), vypisuje okna a alarmy |
 | `detect 0 ...` | běží bez limitu, dokud v konzoli nestiskneš libovolnou klávesu; pak přijde `DETEND` |
 | `micslot a` | přepne na živý mikrofon |
 
 Argumenty `detect` jsou poziční. Když chceš zadat práh, musíš zadat i squelch
-před ním. Obě čísla jsou v tisícinách: `8466` znamená 8.466, `3` znamená RMS 0.003.
+před ním. Obě čísla jsou v tisícinách: `15855` znamená 15.855, `3` znamená RMS 0.003.
 
 ```
 detect 30                # výchozí squelch 3, práh aktivního modelu
 detect 30 3 5800         # squelch 3, práh 5.8 (citlivější, dál dosáhne)
-detect 30 3 8466 1       # výchozí práh mlp_f1 a ladicí výpis po snímcích
+detect 30 3 15855 1      # výchozí práh mlp_f2 a ladicí výpis po snímcích
 detect 600               # deset minut, výchozí squelch a práh
-detect 0 3 8466          # bez limitu, zastaví libovolná klávesa v konzoli
+detect 0 3 15855         # bez limitu, zastaví libovolná klávesa v konzoli
 ```
 
 Během `detect` deska neobsluhuje rádio, takže dlouhý běh znamená dlouhý výpadek
@@ -80,53 +81,76 @@ Zapiš si při každém běhu rozsah `dec` pro dron a pro rušiče, tím se prá
 
 ## 4. Modely v image
 
-Vyhodnoceno na terénních nahrávkách z 23. a 25. 9. 2026 (6× DJI Phantom 4,
-11× Runner 250, 11× negativa) při squelchi 3, alarm 2 ze 4. Nové modely jsou
-hodnocené „mimo fold“: každou nahrávku posuzuje model, který ji při tréninku
-neslyšel. Poslední sloupec jsou falešné alarmy za hodinu na 11,6 h veřejných
-negativních nahrávek, které nikdo netrénoval.
+Vyhodnoceno na všech terénních nahrávkách z 23. 9., 25. 9. a 30. 9. 2026
+(14× DJI Phantom 4, 19× Runner 250) a na 22 negativech (25. 9. venku a
+1. 10. kancelář: vrtačka, skartovačka, větrák, vítr z větráku, tleskání,
+luskání, bzučení pusou, klíče, sklenička, řeč) při squelchi 3, alarm 2 ze 4.
+Modely z terénních dat jsou hodnocené „mimo fold“: každou nahrávku posuzuje
+model, který ji při tréninku neslyšel. Poslední sloupec jsou falešné alarmy za
+hodinu na 11,6 h veřejných negativních nahrávek, které nikdo netrénoval.
 
 | model | výchozí práh | DJI | Runner | negativa | fal. alarmy/h | poznámka |
 |---|---|---|---|---|---|---|
-| **mlp_f1** (výchozí) | 8.466 | 6/6 | 8/11 | 0/11 | 0,26 | MLP 68→16→1, trénováno i na terénu a na „oddálených“ kopiích |
-| gbt_f1 | 2.646 | 5/6 | 7/11 | 0/11 | 0,6 | 120 stromů, stejná data |
-| mlp_v6 | 3.0 | 3/6 | 7/11 | 0/11 | 16,7 | předchozí výchozí; práh 3.0 byl laděn na Runneru |
+| **mlp_f2** (výchozí) | 15.855 | 10/14 | 15/19 | 1/22 | 0,00 | MLP 68→32→16→1; práh je přísný bod 1 FA/h, viz kap. 5 |
+| gbt_f2 | 3.263 | 9/14 | 14/19 | 0/22 | 1,9 | 200 stromů, stejná data; druhý názor jiné rodiny |
+| mlp_f1 | 8.466 | 6/14 | 10/19 | 2/22 | 0,26 | předchozí výchozí (26. 9.); z nahrávek 30. 9. chytil 2 z 16, nic nad 10 m |
+| gbt_f1 | 2.646 | 5/14 | 9/19 | 0/22 | 0,6 | 120 stromů, data do 25. 9. |
+| mlp_v6 | 3.0 | 7/14 | 10/19 | 5/22 | 16,7 | jen veřejná data; práh 3.0 byl laděn na Runneru |
 | svm_v3 | 0.5 | – | – | – | – | pálí na čtvrtinu negativních oken, nepoužívat |
-| mlp_l2 | 6.072 | 5/6 | 0/11 | 0/11 | – | jen veřejná data, Runner nezná |
-| gbt_l2, gbt_reg_l2 | 4.81 / 2.28 | 0/6 | 0/11 | 0/11 | – | jen veřejná data, při svých prazích skoro nic |
+| mlp_l2, gbt_l2, gbt_reg_l2 | 6.07 / 4.81 / 2.28 | – | – | – | – | jen veřejná data, při svých prazích skoro nic |
 | cnn_small | 5.127 | – | – | – | – | překračuje časový rozpočet (9.9 ms na okno) |
 
 Co z toho plyne pro test venku:
 
-- `mlp_f1` zachytí i Runner, který dřív neznal nikdo kromě `mlp_v6`. Nahrávky,
-  které nechytil, jsou nejtišší (`runner_daleko`, `runner_zboku`, -48 dBFS).
-- Dosah: nahrávky uměle „oddálené“ na 200 m (útlum vzduchu, o 10 dB tišší, šum
-  pozadí) zachytí `mlp_f1` ve 2 ze 6 DJI a 5 z 11 Runnerů, s prahem 5.8 v 5 ze
-  6 a 5 z 11. Model bez oddálených kopií v tréninku dal 0 a 1.
-- **Známá slabina:** když se ze vstupu odřízne všechno nad 6 kHz, nepozná
-  nic. Vzduch výšky takhle ostře neusekne, ale pásmově omezený záznam (telefon)
-  ano – na přehrávky z mobilu se proto nespoléhej.
-- Typ dronu, který v trénovacích datech není, zatím spolehlivě nepozná. Každý
-  nový dron (FPV, jiná DJI) potřebuje vlastní nahrávky.
-- `mlp_v6` a ostatní zůstávají v image pro srovnání na stejném zvuku.
+- **Dosah je teď hlavní limit, ne typ dronu.** Nahrávky z 30. 9. podle
+  vzdálenosti, `mlp_f2` při výchozím prahu, hodnoceno mimo fold (podíl oken
+  nad prahem, `*` = alarm): DJI 10 m 19 %\*, 15 m 56 %\*, 20 m 38 %\*, 30 m 2 %,
+  40 m 21 %\*, 50 m 47 %\*, 50 m přes korunu stromu 0 %, 70 m 0 %; Runner 20 m
+  71–94 %\* při všech výkonech motorů, 40 m 0–1 %. Při chůzi s Runnerem od
+  mikrofonu detekce odezní kolem 25–30 m. Žádný z modelů nedal nic na DJI
+  od 50 m přes strom a na 70 m: tam je nad 6 kHz už jen úroveň pozadí.
+- Venku 30. 9. tvořil vítr a dunění 85–90 % energie (pod 300 Hz) a DJI na
+  10 m byla třikrát tišší než „blízko“ z 25. 9. – přesně tohle staré modely
+  neznaly, proto `mlp_f1` z těch nahrávek nechytil skoro nic. Nový trénink to
+  zná, ale jen z jednoho dne. **Příště nahraj i pozadí bez dronu** na stejném
+  místě (aspoň 2–3 min), to v datech chybí.
+- `gbt_f2` je na vlastních negativech úplně čistý (0/22), na veřejných pálí
+  častěji (1,9/h). Hodí se jako druhý názor: když hlásí oba, je to dron.
+- Umělé „oddálení“ nahrávek na 50–500 m v tréninku (běh `fw2_far`) nepomohlo
+  vůbec, 50–70 m zůstalo na nule. Dosah posunou jen další skutečné nahrávky
+  z větších vzdáleností.
+- **Známá slabina trvá:** když se ze vstupu odřízne všechno nad 6 kHz, model
+  nepozná nic. Na přehrávky z mobilu se nespoléhej.
+- Typ dronu, který v trénovacích datech není, zatím spolehlivě nepozná. Na
+  cizích dronech (sada Halmstad) jsou `mlp_f2` i `gbt_f2` na úrovni `mlp_f1`
+  (5–7 z 21 klipů). Každý nový dron (FPV, jiná DJI) potřebuje vlastní nahrávky.
+- `mlp_f1` a ostatní zůstávají v image pro srovnání na stejném zvuku;
+  `model mlp_f1` je rollback.
 
-## 5. Citlivost mlp_f1: jak si s prahem hrát
+## 5. Citlivost mlp_f2: jak si s prahem hrát
 
 Vyšší práh = méně citlivé, méně falešných poplachů. Nižší práh = citlivější,
-víc falešných. Tři body z vyhodnocení (stejné nahrávky jako v kapitole 4):
+víc falešných. Výchozí práh `mlp_f2` je schválně přísný (1 falešné okno za
+hodinu na veřejných negativech); ostatní modely mají 5. Tři body z vyhodnocení
+(stejné nahrávky jako v kapitole 4, mimo fold):
 
 | práh | DJI | Runner | terénní negativa | fal. alarmy/h (veřejná negativa) |
 |---|---|---|---|---|
-| **8.466** (výchozí) | 6/6 | 8/11 | 0/11 | 0,26 |
-| 5.8 | 6/6 | 9/11 | 0/11 | 3,1 |
-| 3.1 | 6/6 | 10/11 | 2/11 | 12,0 |
+| **15.855** (výchozí, 1 FA/h) | 10/14 | 15/19 | 1/22 (bzučení pusou) | 0,00 |
+| 7.66 (5 FA/h) | 11/14 | 18/19 | 4/22 (vrtačka, bzučení, skartovačka, větrák) | 2,0 |
+| 5.57 (20 FA/h) | 12/14 | 18/19 | 5/22 | 3,9 |
+
+Na nahrávkách z 30. 9. přidá práh 7.66 k výchozímu bodu DJI 40 m (48 % oken) a
+50 m (87 %) a Runner na 40 m (3–10 %, těsně nad alarmem); 30 m DJI a 70 m
+nedá ani ten. Pro `gbt_f2` je žebřík 4.12 (1 FA/h: 6/14, 8/19, 0/22) –
+**3.263** (5 FA/h, výchozí) – 2.46 (20 FA/h: 11/14, 17/19, 2/22).
 
 Doporučený žebřík na venkovní test, každý krok 30 s se stejným manévrem dronu:
 
 ```
-detect 30 3 8466
-detect 30 3 5800
-detect 30 3 3100
+detect 30 3 15855
+detect 30 3 7660
+detect 30 3 5570
 ```
 
 A ke každému kroku stejnou sekvenci bez dronu (mluvení, chůze, auto, vítr),
@@ -177,11 +201,13 @@ nebo `bdcli.py --log soubor.txt`).
 
 ## 7. Postup venku, ve zkratce
 
-1. `micslot a`, `model`, ověř `mlp_f1 * thr=8466`.
+1. `micslot a`, `model`, ověř `mlp_f2 * thr=15855`.
 2. Klid bez dronu: `detect 30` a sleduj `LVL rms=`, podle toho nastav squelch.
-3. Rušiče bez dronu (řeč, auto, vítr) při prahu 5.8 a 8.466. Musí být `alarms=0`.
-4. Dron: hover blízko, hover daleko, přelet. Žebřík prahů z kapitoly 5.
-5. Stejné manévry s `model gbt_f1` a `model mlp_v6` pro srovnání.
+   Zároveň **nahraj pozadí bez dronu** (`record 1 120`), v tréninku chybí.
+3. Rušiče bez dronu (řeč, auto, vítr) při prahu 15.855 a 7.66. Musí být `alarms=0`.
+4. Dron: hover blízko, hover daleko, přelet; k tomu známé vzdálenosti
+   (20, 40, 60, 80 m), protože dosah je teď hlavní otázka. Žebřík prahů z kapitoly 5.
+5. Stejné manévry s `model gbt_f2` a `model mlp_f1` pro srovnání.
 6. Nahraj i syrový zvuk jako WAV, doma ho pak přehraje
    `bdtrain score nahravka.wav` přes všechny modely bez dalšího létání:
 
@@ -201,8 +227,8 @@ nebo `bdcli.py --log soubor.txt`).
    (hover 2 m: 003–005, přelet: 006, ...). Doma pak práh doladíš přesně na
    to, co bylo slyšet, bez dalšího létání.
 
-Vše se loguje, nic se na desce neukládá. Po resetu jsi zpátky na mlp_f1,
-prahu 8.466, squelchi 3 a slotu B.
+Vše se loguje, nic se na desce neukládá. Po resetu jsi zpátky na mlp_f2,
+prahu 15.855, squelchi 3 a slotu B.
 
 ## 8. Nahrávky pro trénink
 

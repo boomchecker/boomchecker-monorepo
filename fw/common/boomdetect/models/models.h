@@ -54,4 +54,12 @@ extern const classifier_t classifier_cnn_small;
 extern const classifier_t classifier_mlp_f1;
 extern const classifier_t classifier_gbt_f1;
 
+/* Run fw2_mlp2 / fw2_aug, 2026-10-01: the public sets plus 55 field recordings
+   (two outdoor sessions, office confusers) and four distance variants of each.
+   mlp_f2 is the first two-hidden-layer MLP (68 -> 32 -> 16 -> 1); its threshold
+   is the 1 FA/h point, stricter than the others' 5 FA/h. gbt_f2 is the
+   unregularised forest (200 trees, 5800 nodes). */
+extern const classifier_t classifier_mlp_f2;
+extern const classifier_t classifier_gbt_f2;
+
 #endif /* BOOMDETECT_MODELS_H */

@@ -7,6 +7,7 @@ import pytest
 from scipy import signal
 
 from boomdetect_train.augment import (
+    PROFILES,
     Variant,
     absorb,
     air_loss_db,
@@ -60,3 +61,18 @@ def test_negatives_keep_their_level_and_variants_are_reproducible():
     assert (
         20.0 <= min(v.distance_m for _, _, v in a) and max(v.distance_m for _, _, v in a) <= 250.0
     )
+
+
+def test_the_far_profile_draws_further_out_and_quieter():
+    x = np.random.default_rng(5).standard_normal(SR).astype(np.float32) * 0.01
+    far = [v for _, _, v in variants_of("field/s/rec", x, SR, 1, 40, profile="far")]
+    near = [v for _, _, v in variants_of("field/s/rec", x, SR, 1, 40)]
+    assert all(50.0 <= v.distance_m <= 500.0 for v in far)
+    assert all(-25.0 <= v.gain_db <= -6.0 for v in far)
+    assert all(-55.0 <= v.rumble_dbfs <= -40.0 for v in far)
+    assert all(-58.0 <= v.rumble_dbfs <= -48.0 for v in near)
+    assert np.median([v.distance_m for v in far]) > np.median([v.distance_m for v in near])
+    neg = draw_variant(np.random.default_rng(6), drone=False, profile=PROFILES["far"])
+    assert neg.gain_db == 0.0
+    with pytest.raises(KeyError):
+        variants_of("field/s/rec", x, SR, 1, 1, profile="orbit")

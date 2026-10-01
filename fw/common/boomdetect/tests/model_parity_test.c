@@ -99,5 +99,5 @@ int main(void)
     /* Exact count from running the compiled binary: eight models x 16 vectors x 2
        checks plus the registry cross-checks. Re-read it off the binary whenever
        a model is added or removed. */
-    BD_TEST_REPORT("model_parity_test", 297);
+    BD_TEST_REPORT("model_parity_test", 371);
 }

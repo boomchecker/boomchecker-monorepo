@@ -39,7 +39,7 @@ import pandas as pd
 
 from boomdetect_train import export as ex
 from boomdetect_train import export_c as exc
-from boomdetect_train.augment import variants_of
+from boomdetect_train.augment import PROFILES, variants_of
 from boomdetect_train.datasets.cache import CachedFrames, FrameCache, frame_rows
 from boomdetect_train.datasets.field import SPLIT as FIELD_SPLIT
 from boomdetect_train.datasets.field import assign_folds, load_field_audio
@@ -72,6 +72,9 @@ SKLEARN_FAMILIES = {
     # the training sources and losing on the unseen ones.
     "mlp_reg": lambda ws: train_mlp(ws, hidden=(16,), alpha=1e-2),
     "gbt_reg": lambda ws: train_gbt(ws, max_iter=120, max_leaf_nodes=7, learning_rate=0.05),
+    # Two hidden layers, regularised like mlp_reg: a candidate only, the C export
+    # (export.py, export_c.py) still writes one hidden layer.
+    "mlp2": lambda ws: train_mlp(ws, hidden=(32, 16), alpha=1e-2),
 }
 DEFAULT_FAMILIES = ["mlp", "svm", "gbt", "mlp_reg", "gbt_reg", *sorted(ARCHS)]
 DEFAULT_LAYOUTS = [LAYOUT_STATS, LAYOUT_STATS_SPECTRAL, LAYOUT_LOGMEL]
@@ -163,17 +166,17 @@ def _weighted(ws: WindowSet, shares: dict[str, float] | None) -> WindowSet:
 AUG_SOURCE = "field_aug"
 
 
-def _augmented_frames(field_rows: pd.DataFrame, count: int, log) -> list[tuple]:
+def _augmented_frames(field_rows: pd.DataFrame, count: int, profile: str, log) -> list[tuple]:
     """(variant id, group, label, CachedFrames) for `count` variants of every field clip."""
     fe = Frontend()
     out = []
     t0 = time.time()
     for rec in field_rows.itertuples(index=False):
         x, sr = load_field_audio(rec.path)
-        for vid, y, _ in variants_of(rec.id, x, sr, int(rec.label), count):
+        for vid, y, _ in variants_of(rec.id, x, sr, int(rec.label), count, profile=profile):
             cf = CachedFrames(frame_rows(fe.process(to_16k(y, sr))))
             out.append((vid, rec.group, int(rec.label), cf))
-    log(f"{len(out)} augmented field clips in {time.time() - t0:.0f} s")
+    log(f"{len(out)} augmented field clips ({profile}) in {time.time() - t0:.0f} s")
     return out
 
 
@@ -191,6 +194,7 @@ def train_all(
     shares: dict[str, float] | None = None,
     folds: int = 0,
     augment: int = 0,
+    augment_profile: str = "near",
     log=print,
 ) -> Path:
     families = families or DEFAULT_FAMILIES
@@ -202,6 +206,8 @@ def train_all(
         raise ValueError("folds split the field recordings; they need field=True")
     if augment and not field:
         raise ValueError("augmentation makes variants of the field recordings; it needs field=True")
+    if augment_profile not in PROFILES:
+        raise ValueError(f"augment profile {augment_profile!r} is not one of {sorted(PROFILES)}")
     run_dir = runs_dir() / (run_name or time.strftime("%Y%m%d-%H%M%S"))
     (run_dir / "models").mkdir(parents=True, exist_ok=True)
 
@@ -222,7 +228,13 @@ def train_all(
     for lay in layouts:
         caps[str(lay)] = max_neg_windows_per_clip
     info["max_neg_windows_per_clip"] = caps
-    info["field"] = {"used": field, "exclude": field_exclude, "folds": folds, "augment": augment}
+    info["field"] = {
+        "used": field,
+        "exclude": field_exclude,
+        "folds": folds,
+        "augment": augment,
+        "augment_profile": augment_profile,
+    }
     info["shares"] = dict(shares or {})
 
     field_rows = _field_manifest(manifest, field_exclude) if field else manifest.iloc[:0]
@@ -234,7 +246,7 @@ def train_all(
     group_of_clip = dict(zip(field_rows["id"], field_rows["group"], strict=True))
     # Variants carry the group of the recording they came from, so a fold that
     # holds a recording out holds its variants out too.
-    augmented = _augmented_frames(field_rows, augment, log) if augment else []
+    augmented = _augmented_frames(field_rows, augment, augment_profile, log) if augment else []
     group_of_clip |= {vid: group for vid, group, _, _ in augmented}
 
     for layout in layouts:
@@ -266,6 +278,7 @@ def train_all(
             "field": bool(field),
             "field_exclude": field_exclude,
             "augment": augment,
+            "augment_profile": augment_profile,
             "shares": dict(shares or {}),
         }
         info["models"].update(
@@ -379,6 +392,25 @@ def _export_names(models: list[str] | None, run_models: dict) -> list[tuple[str,
     return pairs
 
 
+def _keep_specs(keep: list[str] | None) -> list[tuple[str, str, str]]:
+    """(run, model in the run, registry name) of every `RUN:MODEL[=CNAME]` to keep.
+
+    The parity header names a model as the registry does, so a model that was
+    exported under another name (fw_aug:mlp_reg_l2=mlp_f1) keeps that name here.
+    """
+    out = []
+    for spec in keep or []:
+        run, sep, rest = spec.partition(":")
+        if not sep or not rest:
+            raise ValueError(f"--keep wants RUN:MODEL[=CNAME], got {spec!r}")
+        src, _, dst = rest.partition("=")
+        dst = dst or src
+        if not dst.isidentifier():
+            raise ValueError(f"{dst!r} is not a C identifier")
+        out.append((run, src, dst))
+    return out
+
+
 def export_run(
     run_dir: Path,
     manifest: pd.DataFrame,
@@ -419,15 +451,12 @@ def export_run(
         )
 
     loaded: dict[str, dict] = {}
-    for spec in keep or []:
-        run, sep, name = spec.partition(":")
-        if not sep:
-            raise ValueError(f"--keep wants RUN:MODEL, got {spec!r}")
+    for run, src, name in _keep_specs(keep):
         if run not in loaded:
             loaded[run] = load_run_models(runs_dir() / run)
-        m = loaded[run][name]
+        m = loaded[run][src]
         entries.append((name, m.layout, m.offset, ex.parity_vectors(m, feats(m.layout))))
-        log(f"{name}: parity vectors from run {run} (already in the C tree)")
+        log(f"{name}: parity vectors from run {run} model {src} (already in the C tree)")
 
     names = [dst for _, dst in pairs]
     for src, name in pairs:
@@ -453,6 +482,8 @@ def export_run(
             prefix = {"mlp": "mlp", "svm": "svm", "gbt": "gbt"}[m.kind]
             written.append(ex.write_text(MODELS_DIR / f"{prefix}_model_data_{name}.h", header))
             tu = {"mlp": exc.mlp_tu, "svm": exc.linear_tu, "gbt": exc.gbt_tu}[m.kind]
+            if m.kind == "mlp" and ex.mlp_hidden_layers(m) == 2:
+                tu = exc.mlp2_tu
             written.append(
                 ex.write_text(
                     MODELS_DIR / f"model_{name}.c", tu(name, m.layout, m.offset, thr_milli, p)

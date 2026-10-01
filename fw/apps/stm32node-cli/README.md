@@ -45,7 +45,7 @@ stm32node-cli micslot a          # select slot A (the live mic on this build)
 ```
 
 Both selections mirror the firmware `model`/`micslot` console commands. Neither
-is persisted on the board — a reset returns to the deployed default (`mlp_f1`,
+is persisted on the board — a reset returns to the deployed default (`mlp_f2`,
 and the firmware's default slot). They **do** survive across separate CLI calls,
 though: opening the USB serial port does not reset the board, so
 `stm32node-cli model gbt_f1` followed by a separate `stm32node-cli detect 30`

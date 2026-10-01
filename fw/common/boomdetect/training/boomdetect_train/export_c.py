@@ -95,6 +95,65 @@ const classifier_t classifier_{name} = {{
 """
 
 
+def mlp2_tu(name: str, layout: int, offset: int, thr_milli: int, provenance: list[str]) -> str:
+    layout_macro, width_macro = LAYOUT_MACRO[layout]
+    what = f"MLP {name}: scaler, two hidden ReLU layers, logit output."
+    head = _tu_header(name, what, provenance)
+    return f"""{head}
+#include "classifier.h"
+#include "dsp_config.h"
+#include "models.h"
+
+#include "arm_math.h"
+#include "mlp_model_data_{name}.h"
+
+#define OFFSET {offset}u
+
+_Static_assert(OFFSET + MLP_NUM_INPUTS == {width_macro},
+               "{name}'s slice does not cover the features its layout produces");
+
+static float decide(void *ctx, const float *features, uint16_t n)
+{{
+    (void)n;
+    (void)ctx;
+    float32_t x[MLP_NUM_INPUTS];
+    float32_t h1[MLP_HIDDEN];
+    float32_t h2[MLP_HIDDEN2];
+    for (uint32_t i = 0u; i < MLP_NUM_INPUTS; i++)
+    {{
+        x[i] = (features[i] - mlp_scaler_mean[i]) * mlp_scaler_inv_std[i];
+    }}
+    for (uint32_t j = 0u; j < MLP_HIDDEN; j++)
+    {{
+        float32_t acc = 0.0f;
+        arm_dot_prod_f32(x, mlp_w1[j], MLP_NUM_INPUTS, &acc);
+        acc += mlp_b1[j];
+        h1[j] = (acc > 0.0f) ? acc : 0.0f;
+    }}
+    for (uint32_t k = 0u; k < MLP_HIDDEN2; k++)
+    {{
+        float32_t acc = 0.0f;
+        arm_dot_prod_f32(h1, mlp_w2[k], MLP_HIDDEN, &acc);
+        acc += mlp_b2[k];
+        h2[k] = (acc > 0.0f) ? acc : 0.0f;
+    }}
+    float32_t out = 0.0f;
+    arm_dot_prod_f32(h2, mlp_w3, MLP_HIDDEN2, &out);
+    return out + MLP_B3;
+}}
+
+const classifier_t classifier_{name} = {{
+    .name              = "{name}",
+    .layout_id         = {layout_macro},
+    .n_features        = MLP_NUM_INPUTS,
+    .feature_offset    = OFFSET,
+    .default_thr_milli = {thr_milli},
+    .decide            = decide,
+    .ctx               = NULL,
+}};
+"""
+
+
 def linear_tu(name: str, layout: int, offset: int, thr_milli: int, provenance: list[str]) -> str:
     layout_macro, width_macro = LAYOUT_MACRO[layout]
     return f"""{_tu_header(name, f"Linear SVM {name}: scaler and a dot product.", provenance)}

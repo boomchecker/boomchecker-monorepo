@@ -36,8 +36,8 @@ STREAM_MAX_SECONDS = 60
 DETECT_MAX_SECONDS = 86400  # DETECT_MAX_SECONDS in detect_service.h; 0 = until any key
 DETECT_DEFAULT_SQUELCH_MILLI = 3
 DETECT_SQUELCH_MILLI_MAX = 1000
-DETECT_DEFAULT_MODEL = "mlp_f1"  # first entry of classifier_registry.c
-DETECT_DEFAULT_MODEL_THR_MILLI = 8466  # default_thr_milli of model_mlp_f1.c
+DETECT_DEFAULT_MODEL = "mlp_f2"  # first entry of classifier_registry.c
+DETECT_DEFAULT_MODEL_THR_MILLI = 15855  # default_thr_milli of model_mlp_f2.c
 DETECT_MLP_V6_DEFAULT_THR_MILLI = 3000  # default_thr_milli of model_mlp_v6.c
 DETECT_THR_MILLI_LIMIT = 20000  # accepted thr_milli range is -LIMIT..+LIMIT
 # The K-of-N alarm above the classifier (App/detect/detect_service.h): ON when at
@@ -141,18 +141,18 @@ COMMANDS: tuple[CommandSpec, ...] = (
             "decimated to 16 kHz, MFCC features are extracted (1024-sample frames, hop 512), "
             "every run of 14 frames above the RMS squelch is aggregated to a feature vector "
             "(the layout the selected model reads) and classified by the model `model` last "
-            "selected. The image boots with mlp_f1, a small MLP trained with the node's own "
-            "field recordings, whose decision value is a raw logit, not a probability. "
-            "Optional overrides in units of 1/1000: squelch_milli (default "
+            "selected. The image boots with mlp_f2, a small two-layer MLP trained with the "
+            "node's own field recordings, whose decision value is a raw logit, not a "
+            "probability. Optional overrides in units of 1/1000: squelch_milli (default "
             f"{DETECT_DEFAULT_SQUELCH_MILLI} = RMS 0.003, 0 disables the gate, 0..1000) and "
             "thr_milli (defaults to the selected model's own operating point, "
-            f"{DETECT_DEFAULT_MODEL_THR_MILLI} = logit 8.466 for mlp_f1 and "
+            f"{DETECT_DEFAULT_MODEL_THR_MILLI} = logit 15.855 for mlp_f2 and "
             f"{DETECT_MLP_V6_DEFAULT_THR_MILLI} for mlp_v6, may be negative, -20000..20000 - "
-            "a value outside that range is rejected, not clamped; mlp_f1's default is the "
-            "threshold with 5 false-alarm windows per hour on the public validation "
-            "negatives, at which it alarmed on 14 of 17 field recordings of two real drones "
-            "and on none of 11 negative ones, each judged by a model that had not heard it). "
-            "A non-zero dbg adds one debug line per frame."
+            "a value outside that range is rejected, not clamped; mlp_f2's default is the "
+            "threshold with 1 false-alarm window per hour on the public validation "
+            "negatives, at which it alarmed on 25 of 33 field recordings of two real drones "
+            "and on 1 of 22 negative ones, each judged by a model that had not heard it; "
+            "7660 is its 5-per-hour point). A non-zero dbg adds one debug line per frame."
         ),
         response=(
             "A `LVL t=<s>.<ms> rms=<+d.ddd>` input-level line about once a second, one line "

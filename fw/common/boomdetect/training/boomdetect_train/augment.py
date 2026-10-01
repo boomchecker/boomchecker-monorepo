@@ -53,6 +53,25 @@ class Variant:
     rumble_dbfs: float  # RMS of the < 200 Hz rumble
 
 
+@dataclass(frozen=True)
+class Profile:
+    """What a variant draws: distance (log-uniform), a drone's sink, the rumble floor (uniform)."""
+
+    distance_m: tuple[float, float]
+    drone_gain_db: tuple[float, float]
+    rumble_dbfs: tuple[float, float] = (-58.0, -48.0)
+
+
+PROFILES = {
+    # The range the first field recordings were made in, and some way beyond it.
+    "near": Profile((20.0, 250.0), (-20.0, -3.0)),
+    # The far end, as the 2026-09-30 takes sound: a drone at 50-70 m sits close to
+    # the floor, and the floor itself is wind - 85-90 % of the energy below 300 Hz,
+    # rumble around -47 dBFS - so the variants go further out and get a windier floor.
+    "far": Profile((50.0, 500.0), (-25.0, -6.0), (-55.0, -40.0)),
+}
+
+
 def air_loss_db(freqs_hz: np.ndarray, distance_m: float) -> np.ndarray:
     """Loss in dB at each frequency over `distance_m` of air (log-f interpolation)."""
     f = np.asarray(sorted(AIR_DB_PER_M), dtype=np.float64)
@@ -92,13 +111,16 @@ def apply_variant(x: np.ndarray, sr: int, v: Variant, rng: np.random.Generator) 
     return np.clip(y, -1.0, 32767.0 / 32768.0).astype(np.float32)
 
 
-def draw_variant(rng: np.random.Generator, *, drone: bool) -> Variant:
-    """Random distance log-uniform over 20-250 m; a drone also sinks 3-20 dB."""
+def draw_variant(
+    rng: np.random.Generator, *, drone: bool, profile: Profile = PROFILES["near"]
+) -> Variant:
+    """Random distance log-uniform over the profile's range; a drone also sinks (its gain range)."""
+    lo, hi = profile.distance_m
     return Variant(
-        distance_m=float(np.exp(rng.uniform(np.log(20.0), np.log(250.0)))),
-        gain_db=float(rng.uniform(-20.0, -3.0)) if drone else 0.0,
+        distance_m=float(np.exp(rng.uniform(np.log(lo), np.log(hi)))),
+        gain_db=float(rng.uniform(*profile.drone_gain_db)) if drone else 0.0,
         white_dbfs=float(rng.uniform(-70.0, -62.0)),
-        rumble_dbfs=float(rng.uniform(-58.0, -48.0)),
+        rumble_dbfs=float(rng.uniform(*profile.rumble_dbfs)),
     )
 
 
@@ -109,12 +131,20 @@ def seed_for(clip_id: str, k: int, seed: int = 0) -> int:
 
 
 def variants_of(
-    clip_id: str, x: np.ndarray, sr: int, label: int, count: int, seed: int = 0
+    clip_id: str,
+    x: np.ndarray,
+    sr: int,
+    label: int,
+    count: int,
+    seed: int = 0,
+    profile: str | Profile = "near",
 ) -> list[tuple[str, np.ndarray, Variant]]:
     """`count` variants of one clip, as (variant clip id, audio, parameters)."""
+    if isinstance(profile, str):
+        profile = PROFILES[profile]
     out = []
     for k in range(count):
         rng = np.random.default_rng(seed_for(clip_id, k, seed))
-        v = draw_variant(rng, drone=label == 1)
+        v = draw_variant(rng, drone=label == 1, profile=profile)
         out.append((f"{clip_id}#aug{k + 1}", apply_variant(x, sr, v, rng), v))
     return out
