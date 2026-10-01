@@ -75,9 +75,10 @@ raw/field/2026-09-23/Positive/runner_03_hover_2m.wav      a single WAV works too
 
 The prefix of a positive names the drone (`dji_` -> `dji_phantom4`, `runner_`
 -> `runner250`, see `datasets/field.py`); a negative's folder name is its
-category. Delete the first chunk of every stream (it carries the PDM start
-transient) or leave it: a clip that starts at the stream's first sample drops
-0.2 s either way. A folder is one recording and one leakage group, whatever
+category. Recordings from firmware before the PDM warm-up fix start every
+stream with a pop (DC step, clipped ~0.12 s, decayed by ~0.4 s): delete the
+first chunk of every stream or leave it - a clip that starts at the stream's
+first sample drops 0.5 s either way. A folder is one recording and one leakage group, whatever
 chunks are missing from it. Then `bdtrain manifest` and `bdtrain features field`.
 
 ## Commands

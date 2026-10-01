@@ -79,8 +79,9 @@ number, real length and the stream's overrun/err health.
 The board is asked for the longest `stream` that holds a whole number of chunks
 (60 s = six 10-second files) and the host cuts it as it arrives. Boundaries
 inside one stream are gapless; between streams there is a command round-trip
-and the PDM settling transient (~0.12 s clipped), so the first chunk of every
-stream starts with it. A chunk longer than 60 s is rejected.
+and the mic start-up (the board drops its first 107 ms). Firmware before that
+fix started every stream with a pop (DC step, clipped ~0.12 s, decayed by
+~0.4 s), so the first chunk of each such stream should be deleted. A chunk longer than 60 s is rejected.
 
 ## Protocol
 

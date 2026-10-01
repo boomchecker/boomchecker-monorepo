@@ -5,12 +5,14 @@ moment its ten seconds have arrived, while the board is still streaming the
 next ones, so an abort or a cable pulled halfway leaves every finished chunk on
 disk and an ``index.csv`` beside them.
 
-Why not twenty ``record 10`` calls: every ``stream`` starts with a PDM settling
-transient (~0.12 s clipped) and a command round-trip, so back-to-back single
-recordings lose a slice of audio at every boundary. Here the board is asked for
-the longest stream that holds a whole number of chunks (60 s = six 10-second
-chunks) and the host cuts it as it arrives, so boundaries inside one stream are
-gapless and the transient hits only the first chunk of each stream.
+Why not twenty ``record 10`` calls: every ``stream`` restarts the microphone
+(the board drops its first 107 ms while it settles; older firmware let a
+clipped pop through instead) and costs a command round-trip, so back-to-back
+single recordings lose a slice of audio at every boundary. Here the board is
+asked for the longest stream that holds a whole number of chunks (60 s = six
+10-second chunks) and the host cuts it as it arrives, so boundaries inside one
+stream are gapless and a start-up gap falls only before the first chunk of each
+stream.
 """
 
 from __future__ import annotations

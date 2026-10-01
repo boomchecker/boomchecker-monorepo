@@ -41,7 +41,8 @@ void pdm_pcm_init(pdm_pcm_t *st, uint16_t slot_mask)
 {
   memset(st, 0, sizeof(*st));
   st->slot_mask = slot_mask;
-  st->pcm_mute = 64; /* ~1.3 ms: cover the filter settling ramp (comb hides DC seed) */
+  st->dc_fast   = PDM_WARMUP_SAMPLES;
+  st->pcm_mute  = PDM_WARMUP_SAMPLES + FIR_TAPS; /* fast-DC phase + its FIR tail */
 }
 
 /* One ring half (8192 halfwords = 131072 PDM bits) -> PCM_SAMPLES_PER_HALF samples.
@@ -91,9 +92,19 @@ void pdm_pcm_process_half(pdm_pcm_t *st, const uint16_t *src, int16_t *dst)
       continue;
     }
     /* DC blocker: v = y - (dc_acc>>11), dc_acc += v. The accumulator form has
-       no residue from the truncating shift. dc_acc max 2^18 * 2^11 = 2^29. */
+       no residue from the truncating shift. dc_acc max 2^18 * 2^11 = 2^29.
+       During warm-up the step is 32x (tau 64 samples) so the estimate follows
+       the mic while it settles; |v| <= 2^19, so 32 * v stays far from overflow. */
     int32_t v = y - (st->dc_acc >> 11);
-    st->dc_acc += v;
+    if (st->dc_fast)
+    {
+      st->dc_fast--;
+      st->dc_acc += v * 32;
+    }
+    else
+    {
+      st->dc_acc += v;
+    }
     x[s] = sat16(v >> 3);
   }
 

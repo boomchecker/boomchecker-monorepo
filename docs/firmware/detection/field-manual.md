@@ -220,8 +220,10 @@ Aby šla rovnou použít (`bdtrain` ji najde sám):
    (Runner 250). Nový dron = nová předpona, stačí ji doplnit do
    `DRONE_PREFIXES` v `fw/common/boomdetect/training/boomdetect_train/datasets/field.py`.
 3. Jméno složky negativ je jejich kategorie a objeví se v reportu (co mate model).
-4. První chunk streamu (náběh PDM) smazat můžeš, ale nemusíš, trénink z něj
-   stejně zahodí 0,2 s.
+4. Nahrávky ze staršího firmwaru (do 30. 9. 2026 včetně) začínají každý stream
+   lupem: skok DC, ~0,12 s na plné škále, doznívá do ~0,4 s. První chunk
+   streamu proto smaž; když zůstane, trénink z jeho začátku zahodí 0,5 s.
+   Firmware s opravou náběhu mikrofonu (zahodí prvních 107 ms) lup nemá.
 5. Pak `bdtrain manifest`, `bdtrain features field --force` a trénink s `--field`.
 
 Co nejvíc chybí, v tomhle pořadí:

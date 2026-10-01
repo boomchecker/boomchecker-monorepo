@@ -42,10 +42,11 @@ LABEL_DIRS = {"positive": 1, "negative": 0}
 DRONE_PREFIXES = {"dji": "dji_phantom4", "runner": "runner250"}
 UNKNOWN_DRONE = "drone"
 
-# The PDM chain needs ~0.12 s to settle after a stream starts (clipped
-# transient, DC step); a clip that begins at the first sample of a stream
-# drops this much.
-START_SKIP_S = 0.2
+# Firmware before the PDM warm-up fix started every stream with a DC step:
+# clipped for ~0.12 s, then decaying with the DC blocker's 43 ms tau, still
+# 3-10x the background at 0.35 s (measured on the 2026-09-30 takes). A clip
+# that begins at the first sample of a stream drops this much.
+START_SKIP_S = 0.5
 
 CHUNK_GLOB = "chunk-*.wav"
 
