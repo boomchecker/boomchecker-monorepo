@@ -579,6 +579,8 @@
           at \textbf{30, 20, 10, 5\,dB} -- plus 0 and $-5$\,dB as a stress test,
           beyond the trigger's 5\,dB envelope.
     \item Peak detection and windowing re-run on the noisy signal.
+    \item \textbf{168 test events $\times$ 7 conditions} (clean + 6 SNR levels)
+          = \hl{1\,176 inputs} per run.
     \item \textbf{5 training seeds $\times$ 5 noise seeds} = 25 runs per cell,
           mean $\pm$ std; threshold 0.5.
     \item Three regimes: \textbf{float32} and \textbf{int8} on the PC, int8 on the
@@ -592,7 +594,9 @@
     because that's what happens in the real sensor. // The noise level is set per event,
     from the power of the event itself. //\par\medskip
     We test thirty, twenty, ten and five decibels. // And then zero and minus five, which
-    is already beyond what the trigger can handle. //\par\medskip
+    is already beyond what the trigger can handle. // So one hundred and sixty-eight test
+    events times seven conditions -- that's one thousand one hundred and seventy-six
+    inputs. //\par\medskip
     Every number is an average over twenty-five runs -- five training seeds and five noise
     seeds. // And we report mainly the MCC, because the classes are imbalanced. //
   }
@@ -700,16 +704,67 @@
           other calibres untested.
     \item \textbf{Synthetic Gaussian noise} -- added to the waveform, but no real field
           noise, propagation or device shift.
+    \item \textbf{One recording position} -- atmospheric absorption attenuates high
+          frequencies more with distance, so other ranges change the spectrum.
     \item \textbf{One event-level split}; no session-independent evaluation.
     \item \textbf{MFCC on the host} -- on-device MFCC, end-to-end latency and energy per
           decision are future work.
   \end{itemize}
       \note{
-\textbf{[11:30--12:00]}\par\medskip
+\textbf{[11:30--12:15]}\par\medskip
     Of course, there are limitations. //\par\medskip
     We evaluate only the classifier, not the full stream. // We have only fifty launches,
     and one type of gun. // And the noise is synthetic. //\par\medskip
+    We also recorded from one place only. // But the atmosphere absorbs high frequencies
+    more than low ones, so at a different distance the launch sounds different. //\par\medskip
     So these are the next steps for us. //
+  }
+\end{frame}
+
+\begin{frame}{Future work}
+  \begin{columns}[T,onlytextwidth]
+    \begin{column}{0.48\textwidth}
+      \begin{block}{\faMicrophone\enspace New recording campaign}
+        \small
+        \begin{itemize}\small
+          \item Another artillery recording planned in the near future.
+          \item Same reference setup as last time.
+          \item Goal: \textbf{more launch events} -- a larger dataset.
+        \end{itemize}
+      \end{block}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{block}{\faMicrochip\enspace Field test of the device}
+        \small
+        \begin{itemize}\small
+          \item In parallel: \textbf{one embedded node} deployed next to the
+                reference setup.
+          \item Goal: can the node \textbf{detect launches on its own}, in the field?
+        \end{itemize}
+      \end{block}
+    \end{column}
+  \end{columns}
+  \vspace{2mm}
+  \begin{block}{\faWaveSquare\enspace Different distances}
+    \small
+    \begin{itemize}\small
+      \item Record from \textbf{two or three distances}; model the atmospheric
+            propagation and train through it.
+      \item Goal: detection across ranges -- and possibly a \textbf{rough distance
+            estimate}.
+    \end{itemize}
+  \end{block}
+      \note{
+\textbf{[12:15--13:15]}\par\medskip
+    What comes next. //\par\medskip
+    In the near future we plan another artillery recording. // First, to get more launches
+    and extend the dataset. // We will record with the same setup as last time. //\par\medskip
+    And at the same time, we will take one embedded device into the field. // That way we
+    can test whether the node itself can detect the launches. //\par\medskip
+    We would also like to record from two or three distances. // From that we can model
+    how the atmosphere changes the signal, and pass the training data through this model.
+    // Then the detector should work at different distances -- and maybe it can even
+    roughly estimate the distance. //
   }
 \end{frame}
 
@@ -729,7 +784,7 @@
   {\large Thank you -- questions?}\\[2mm]
   {\small\color{gray} maxamart@fel.cvut.cz}
       \note{
-\textbf{[12:00--12:40]}\par\medskip
+\textbf{[13:15--13:55]}\par\medskip
     To sum up. //\par\medskip
     A small CNN with seventy-two thousand parameters works well as the second stage of an
     artillery launch detector. //\par\medskip

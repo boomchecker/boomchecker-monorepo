@@ -193,6 +193,7 @@ We take the held-out test set and add noise to the audio – again before the MF
 The noise level is set per event, from the power of the event itself.\par
 We test thirty, twenty, ten and five decibels.\par
 And then zero and minus five, which is already beyond what the trigger can handle.\par
+So one hundred and sixty-eight test events times seven conditions – that's one thousand one hundred and seventy-six inputs.\par
 Every number is an average over twenty-five runs – five training seeds and five noise seeds.\par
 And we report mainly the MCC, because the classes are imbalanced.\par
 }
@@ -224,18 +225,34 @@ Please note, that's only the network – the MFCCs were computed on the host.\pa
 The model has about eighty kilobytes, and the whole firmware needs less than one hundred and fifty kilobytes of RAM.\par
 }
 \newpage
-\slidehead{13}{Limitations}{11:30–12:00}{Part A -- full text}
+\slidehead{13}{Limitations}{11:30–12:15}{Part A -- full text}
 \thumb{13}
 {\Large\raggedright\sloppy\setlength{\parskip}{6pt}
 Of course, there are limitations.\par
 We evaluate only the classifier, not the full stream.\par
 We have only fifty launches, and one type of gun.\par
 And the noise is synthetic.\par
+We also recorded from one place only.\par
+But the atmosphere absorbs high frequencies more than low ones, so at a different distance the launch sounds different.\par
 So these are the next steps for us.\par
 }
 \newpage
-\slidehead{14}{Conclusion}{12:00–12:40}{Part A -- full text}
+\slidehead{14}{Future work}{12:15–13:15}{Part A -- full text}
 \thumb{14}
+{\Large\raggedright\sloppy\setlength{\parskip}{6pt}
+What comes next.\par
+In the near future we plan another artillery recording.\par
+First, to get more launches and extend the dataset.\par
+We will record with the same setup as last time.\par
+And at the same time, we will take one embedded device into the field.\par
+That way we can test whether the node itself can detect the launches.\par
+We would also like to record from two or three distances.\par
+From that we can model how the atmosphere changes the signal, and pass the training data through this model.\par
+Then the detector should work at different distances – and maybe it can even roughly estimate the distance.\par
+}
+\newpage
+\slidehead{15}{Conclusion}{13:15–13:55}{Part A -- full text}
+\thumb{15}
 {\Large\raggedright\sloppy\setlength{\parskip}{6pt}
 To sum up.\par
 A small CNN with seventy-two thousand parameters works well as the second stage of an artillery launch detector.\par
@@ -371,6 +388,7 @@ W t t h-o t s a a n t t a – a b t MFCC, b that's w h i t r s.\par
 T n l i s p e, f t p o t e i.\par
 W t t, t, t a f d.\par
 A t z a m f, w i a b w t t c h.\par
+S o h a s-e t e t s c – that's o t o h a s-s i.\par
 E n i a a o t-f r – f t s a f n s.\par
 A w r m t MCC, b t c a i.\par
 }
@@ -402,18 +420,34 @@ P n, that's o t n – t M w c o t h.\par
 T m h a e k, a t w f n l t o h a f k o RAM.\par
 }
 \newpage
-\slidehead{13}{Limitations}{11:30–12:00}{Part B -- first letters}
+\slidehead{13}{Limitations}{11:30–12:15}{Part B -- first letters}
 \thumb{13}
 {\large\ttfamily\raggedright\linespread{1.5}\selectfont\setlength{\parskip}{7pt}
 O c, t a l.\par
 W e o t c, n t f s.\par
 W h o f l, a o t o g.\par
 A t n i s.\par
+W a r f o p o.\par
+B t a a h f m t l o, s a a d d t l s d.\par
 S t a t n s f u.\par
 }
 \newpage
-\slidehead{14}{Conclusion}{12:00–12:40}{Part B -- first letters}
+\slidehead{14}{Future work}{12:15–13:15}{Part B -- first letters}
 \thumb{14}
+{\large\ttfamily\raggedright\linespread{1.5}\selectfont\setlength{\parskip}{7pt}
+W c n.\par
+I t n f w p a a r.\par
+F, t g m l a e t d.\par
+W w r w t s s a l t.\par
+A a t s t, w w t o e d i t f.\par
+T w w c t w t n i c d t l.\par
+W w a l t r f t o t d.\par
+F t w c m h t a c t s, a p t t d t t m.\par
+T t d s w a d d – a m i c e r e t d.\par
+}
+\newpage
+\slidehead{15}{Conclusion}{13:15–13:55}{Part B -- first letters}
+\thumb{15}
 {\large\ttfamily\raggedright\linespread{1.5}\selectfont\setlength{\parskip}{7pt}
 T s u.\par
 A s CNN w s-t t p w w a t s s o a a l d.\par
@@ -519,7 +553,7 @@ I'm h t t y q.\par
 {\Large\raggedright\bfseries The model has about eighty kilobytes, and the whole firmware needs less than one hundred and fifty kilobytes of RAM.\par}
 \vspace{8mm}
 \newpage
-\slidehead{13}{Limitations}{11:30–12:00}{Part C -- anchors only}
+\slidehead{13}{Limitations}{11:30–12:15}{Part C -- anchors only}
 \thumb{13}
 \vspace{4mm}{\Large\raggedright\bfseries Of course, there are limitations.\par}
 \vspace{6mm}{\color{ink!40}\Huge\ldots}\par
@@ -527,8 +561,16 @@ I'm h t t y q.\par
 {\Large\raggedright\bfseries So these are the next steps for us.\par}
 \vspace{8mm}
 \newpage
-\slidehead{14}{Conclusion}{12:00–12:40}{Part C -- anchors only}
+\slidehead{14}{Future work}{12:15–13:15}{Part C -- anchors only}
 \thumb{14}
+\vspace{4mm}{\Large\raggedright\bfseries What comes next.\par}
+\vspace{6mm}{\color{ink!40}\Huge\ldots}\par
+\vfill
+{\Large\raggedright\bfseries Then the detector should work at different distances – and maybe it can even roughly estimate the distance.\par}
+\vspace{8mm}
+\newpage
+\slidehead{15}{Conclusion}{13:15–13:55}{Part C -- anchors only}
+\thumb{15}
 \vspace{4mm}{\Large\raggedright\bfseries To sum up.\par}
 \vspace{6mm}{\color{ink!40}\Huge\ldots}\par
 \vfill
