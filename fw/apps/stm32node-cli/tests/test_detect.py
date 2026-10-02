@@ -45,14 +45,14 @@ def test_run_detect_fills_positional_gap_before_dbg():
     # filled with the firmware default rather than shifting dbg into thr's slot.
     t = FakeTransport(to_read=b"DETEND windows=0 drones=0 alarms=0 overrun=0 err=0\r\n")
     DeviceClient(t).run_detect(5, dbg=True)
-    assert t.written == b"detect 5 3 15855 1\n"
+    assert t.written == b"detect 5 3 7656 1\n"
 
 
 def test_run_detect_sends_the_rule_as_the_fifth_argument():
     # A rule alone fills squelch, thr and dbg with the defaults in front of it.
     t = FakeTransport(to_read=b"DETEND windows=0 drones=0 alarms=0 overrun=0 err=0\r\n")
     DeviceClient(t).run_detect(30, rule="mean4")
-    assert t.written == b"detect 30 3 15855 0 mean4\n"
+    assert t.written == b"detect 30 3 7656 0 mean4\n"
     t = FakeTransport(to_read=b"DETEND windows=0 drones=0 alarms=0 overrun=0 err=0\r\n")
     DeviceClient(t).run_detect(30, squelch_milli=2, thr_milli=7660, dbg=True, rule="1of4")
     assert t.written == b"detect 30 2 7660 1 1of4\n"

@@ -280,6 +280,7 @@ add_library(boomdetect_core OBJECT
 # training/README.md, "Adding a model to the board").
 set(BOOMDETECT_MODEL_SOURCES
   models/model_mlp_f2.c
+  models/model_gbt_f3.c
   models/model_gbt_f2.c
   models/model_mlp_f1.c
   models/model_gbt_f1.c

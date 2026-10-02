@@ -30,8 +30,18 @@ static const classifier_t *const s_models[] = {
        held-out public negatives. gbt_f2 is the second opinion from another
        family (23 of 33, 0 of 22, 1.9 public alarms per hour). Everything
        older stays in the image for `model`; moving mlp_f1 back to the front
-       is the whole rollback. */
+       is the whole rollback.
+
+       2026-10-02: the DJI straight overhead at 20-90 m and 30 min of traffic
+       showed mlp_f2's raw logit positive out to 90 m while the 1 FA/h
+       threshold cut everything past 30 m, so it ships at the usual 5 FA/h
+       point (7.656) like every other model: all 7 heights, 13 of 16 of the
+       30.9 takes, no alarm on 37 min of outdoor background and traffic,
+       three office confusers. gbt_f3 is the forest retrained with those
+       recordings: all 7 heights, none of 27 negatives. Not yet checked on
+       the board. */
     &classifier_mlp_f2,
+    &classifier_gbt_f3,
     &classifier_gbt_f2,
     &classifier_mlp_f1,
     &classifier_gbt_f1,

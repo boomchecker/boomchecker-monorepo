@@ -62,4 +62,9 @@ extern const classifier_t classifier_gbt_f1;
 extern const classifier_t classifier_mlp_f2;
 extern const classifier_t classifier_gbt_f2;
 
+/* Run fw3_aug, 2026-10-02: the forest retrained with the DJI ladder straight
+   overhead (20-90 m), the first outdoor backgrounds and 30 min of traffic
+   (67 field recordings, 84 min). Same shape as gbt_f2 (200 trees, 5800 nodes). */
+extern const classifier_t classifier_gbt_f3;
+
 #endif /* BOOMDETECT_MODELS_H */

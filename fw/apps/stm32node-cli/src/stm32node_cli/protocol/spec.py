@@ -38,7 +38,7 @@ DETECT_MAX_SECONDS = 86400  # DETECT_MAX_SECONDS in detect_service.h; 0 = until 
 DETECT_DEFAULT_SQUELCH_MILLI = 3
 DETECT_SQUELCH_MILLI_MAX = 1000
 DETECT_DEFAULT_MODEL = "mlp_f2"  # first entry of classifier_registry.c
-DETECT_DEFAULT_MODEL_THR_MILLI = 15855  # default_thr_milli of model_mlp_f2.c
+DETECT_DEFAULT_MODEL_THR_MILLI = 7656  # default_thr_milli of model_mlp_f2.c
 DETECT_MLP_V6_DEFAULT_THR_MILLI = 3000  # default_thr_milli of model_mlp_v6.c
 DETECT_THR_MILLI_LIMIT = 20000  # accepted thr_milli range is -LIMIT..+LIMIT
 # The K-of-N alarm above the classifier (App/detect/detect_service.h): ON when at
@@ -151,13 +151,15 @@ COMMANDS: tuple[CommandSpec, ...] = (
             "probability. Optional overrides in units of 1/1000: squelch_milli (default "
             f"{DETECT_DEFAULT_SQUELCH_MILLI} = RMS 0.003, 0 disables the gate, 0..1000) and "
             "thr_milli (defaults to the selected model's own operating point, "
-            f"{DETECT_DEFAULT_MODEL_THR_MILLI} = logit 15.855 for mlp_f2 and "
+            f"{DETECT_DEFAULT_MODEL_THR_MILLI} = logit 7.656 for mlp_f2 and "
             f"{DETECT_MLP_V6_DEFAULT_THR_MILLI} for mlp_v6, may be negative, -20000..20000 - "
             "a value outside that range is rejected, not clamped; mlp_f2's default is the "
-            "threshold with 1 false-alarm window per hour on the public validation "
-            "negatives, at which it alarmed on 25 of 33 field recordings of two real drones "
-            "and on 1 of 22 negative ones, each judged by a model that had not heard it; "
-            "7660 is its 5-per-hour point). A non-zero dbg adds one debug line per frame. "
+            "threshold with 5 false-alarm windows per hour on the public validation "
+            "negatives, at which it alarmed on the DJI straight overhead at every height "
+            "from 20 to 90 m and on 13 of 16 earlier outdoor takes, with no alarm on 37 "
+            "minutes of outdoor background and traffic it had not heard; 15855 is its "
+            "stricter 1-per-hour point, 9000 with rule mean4 the point with no false alarm "
+            "on any recording so far). A non-zero dbg adds one debug line per frame. "
             f"rule picks the alarm rule for this run (default {DETECT_ALARM_RULE_DEFAULT}): "
             "`<k>of<n>` is the vote - ON at k of the last n DRONE windows, OFF below k-1 (at "
             "least 1) - and `mean<n>` the mean of the last n decisions relative to thr_milli, "

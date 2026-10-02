@@ -34,6 +34,8 @@ static void scenario_lookup(void)
 
     CHECK(classifier_by_name("mlp_f2") == def,
           "by_name(\"mlp_f2\") did not return the same entry as default()");
+    CHECK(classifier_by_name("gbt_f3") != NULL,
+          "gbt_f3 is missing - the forest retrained with the 2026-10-02 recordings");
     CHECK(classifier_by_name("gbt_f2") != NULL,
           "gbt_f2 is missing - the second opinion trained on the same data");
     CHECK(classifier_by_name("mlp_f1") != NULL,
@@ -375,5 +377,5 @@ int main(void)
     scenario_two_families_differ();
     scenario_init_rejects_bad_models();
     scenario_real_models_actually_run();
-    BD_TEST_REPORT("registry_test", 109); /* exact count from running the compiled binary */
+    BD_TEST_REPORT("registry_test", 115); /* exact count from running the compiled binary */
 }
