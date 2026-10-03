@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from .spec import (
+    DETECT_TRAILER_PREFIX,
     HEADER_SIZE,
     HEADER_STRUCT,
     LINE_TERMINATOR,
@@ -61,6 +62,46 @@ def parse_trailer(line: str) -> StreamTrailer | None:
         key, _, value = token.partition("=")
         fields[key] = value
     return StreamTrailer(overrun=fields.get("overrun") == "1", err=fields.get("err") == "1")
+
+
+@dataclass(frozen=True)
+class DetectTrailer:
+    """Parsed ``DETEND`` trailer that always closes a ``detect`` run."""
+
+    windows: int  # classified windows in the run
+    drones: int  # windows called DRONE
+    alarms: int  # OFF-to-ON alarm transitions
+    overrun: bool  # mic overran or the detector dropped frames
+    err: bool  # mic failed/timed out, or the host disconnected mid-run
+
+
+def parse_detect_trailer(line: str) -> DetectTrailer | None:
+    """Parse a ``DETEND windows=.. drones=.. alarms=.. overrun=0 err=0`` line.
+
+    Returns None if the line is not a DETEND trailer. Missing count fields
+    default to 0 and missing flags to False, mirroring :func:`parse_trailer`.
+    """
+    text = line.strip()
+    if not text.startswith(DETECT_TRAILER_PREFIX.decode("ascii")):
+        return None
+    fields: dict[str, str] = {}
+    for token in text.split()[1:]:
+        key, _, value = token.partition("=")
+        fields[key] = value
+
+    def _int(key: str) -> int:
+        try:
+            return int(fields.get(key, "0"))
+        except ValueError:
+            return 0
+
+    return DetectTrailer(
+        windows=_int("windows"),
+        drones=_int("drones"),
+        alarms=_int("alarms"),
+        overrun=fields.get("overrun") == "1",
+        err=fields.get("err") == "1",
+    )
 
 
 def encode_command(name: str, *args: object) -> bytes:

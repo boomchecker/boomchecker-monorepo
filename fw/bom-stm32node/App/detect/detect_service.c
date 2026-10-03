@@ -8,6 +8,7 @@
 #include "detect_service.h"
 
 #include "boomdetect.h"
+#include "boomdetect_alarm.h"
 #include "boomdetect_selftest.h"
 #include "classifier.h"
 #include "main.h"    /* HAL_GetTick, DWT */
@@ -17,8 +18,6 @@
 
 #include <stdio.h>
 #include <string.h>
-
-#define DET_MAX_SECONDS 60u
 
 /* Report the input level once a second (31 frames) so the operator can aim the
    source or the volume even when the squelch keeps windows from completing. */
@@ -30,6 +29,79 @@
 /* ~21 KB, so static rather than a stack frame. */
 static boomdetect_t s_det;
 static int16_t      s_pcm[PCM_SAMPLES_PER_HALF];
+
+/* The alarm over the window decisions; rule and state re-initialised per run. */
+static boomdetect_alarm_t s_alarm;
+static const boomdetect_alarm_rule_t s_alarm_default = {
+  .n = DETECT_ALARM_N, .k_on = DETECT_ALARM_K_ON, .k_off = DETECT_ALARM_K_OFF,
+  .mode = BOOMDETECT_ALARM_VOTE,
+};
+static float s_thr; /* this run's decision threshold, for the relative decision */
+
+/* "<k>of<n>" or "mean<n>", nothing else: the token has to be the whole string. */
+static bool parse_u8(const char *s, const char **end, uint8_t *out)
+{
+  unsigned long v = 0u;
+  const char   *p = s;
+  while (*p >= '0' && *p <= '9')
+  {
+    v = v * 10u + (unsigned long)(*p - '0');
+    if (v > 255u)
+    {
+      return false;
+    }
+    p++;
+  }
+  if (p == s)
+  {
+    return false;
+  }
+  *end = p;
+  *out = (uint8_t)v;
+  return true;
+}
+
+bool detect_service_parse_rule(const char *token, boomdetect_alarm_rule_t *out)
+{
+  boomdetect_alarm_rule_t rule = { 0 };
+  const char             *p    = token;
+  if (token == NULL || out == NULL)
+  {
+    return false;
+  }
+  if (strncmp(p, "mean", 4) == 0)
+  {
+    p += 4;
+    if (!parse_u8(p, &p, &rule.n) || *p != '\0')
+    {
+      return false;
+    }
+    rule.mode = BOOMDETECT_ALARM_MEAN;
+  }
+  else
+  {
+    if (!parse_u8(p, &p, &rule.k_on) || strncmp(p, "of", 2) != 0)
+    {
+      return false;
+    }
+    p += 2;
+    if (!parse_u8(p, &p, &rule.n) || *p != '\0')
+    {
+      return false;
+    }
+    /* Release one below the onset, at least 1: the hysteresis the training
+       package's parse_rule() gives the same token. */
+    rule.k_off = (rule.k_on > 1u) ? (uint8_t)(rule.k_on - 1u) : 1u;
+    rule.mode  = BOOMDETECT_ALARM_VOTE;
+  }
+  boomdetect_alarm_t probe;
+  if (!boomdetect_alarm_init(&probe, &rule))
+  {
+    return false;
+  }
+  *out = rule;
+  return true;
+}
 
 /* Selected model. NULL means "whatever the registry calls default", resolved
    late so this file does not need an initialiser that runs before main. */
@@ -82,7 +154,7 @@ static void det_print(const char *line)
 static void det_abort(const char *reason)
 {
   det_print(reason);
-  det_print("DETEND windows=0 drones=0 overrun=0 err=1\r\n");
+  det_print("DETEND windows=0 drones=0 alarms=0 overrun=0 err=1\r\n");
 }
 
 /* Wait for one processed PCM block, keeping the USB device serviced. The pump
@@ -158,11 +230,33 @@ static void det_report(const boomdetect_event_t *ev, uint32_t debug)
              (unsigned long)span, dec_str,
              ev->window.is_drone ? "DRONE" : "noise");
     det_print(line);
+
+    /* The alarm is reported only when it changes, so a run over a steady drone
+       prints one ALM ON and one ALM OFF, not one line per window. The vote
+       rule reports its hits, the mean rule its mean, each over the last n. */
+    if (boomdetect_alarm_push_decision(&s_alarm, ev->window.decision - s_thr))
+    {
+      const char *state = boomdetect_alarm_on(&s_alarm) ? "ON" : "OFF";
+      if (s_alarm.rule.mode == BOOMDETECT_ALARM_MEAN)
+      {
+        fmt_milli(dec_str, sizeof(dec_str), boomdetect_alarm_mean(&s_alarm));
+        snprintf(line, sizeof(line), "ALM t=%lu.%03lu %s mean=%s/%u\r\n",
+                 (unsigned long)(t_ms / 1000u), (unsigned long)(t_ms % 1000u), state, dec_str,
+                 (unsigned)s_alarm.rule.n);
+      }
+      else
+      {
+        snprintf(line, sizeof(line), "ALM t=%lu.%03lu %s hits=%u/%u\r\n",
+                 (unsigned long)(t_ms / 1000u), (unsigned long)(t_ms % 1000u), state,
+                 (unsigned)boomdetect_alarm_hits(&s_alarm), (unsigned)s_alarm.rule.n);
+      }
+      det_print(line);
+    }
   }
 }
 
 void detect_service_run(uint32_t seconds, uint32_t squelch_milli, int32_t thr_milli,
-                        uint32_t debug)
+                        uint32_t debug, const boomdetect_alarm_rule_t *rule)
 {
   static uint8_t s_cyccnt_ready = 0u;
   char           line[80];
@@ -171,17 +265,13 @@ void detect_service_run(uint32_t seconds, uint32_t squelch_milli, int32_t thr_mi
   {
     return;
   }
-  /* Clamped to 1..60, as the header says and as cli.c already enforces. It used
-     to return silently on 0, which contradicted both the header's contract and
-     the "the trailer always arrives" rule the other error paths follow - a host
-     driving this directly would have waited for a DETEND that never came. */
-  if (seconds == 0u)
+  /* 0 means "until a key is pressed"; anything else is clamped to the header's
+     limit, which cli.c already enforces. Every path still ends in DETEND: a
+     host driving this directly must never wait for a trailer that cannot come. */
+  const bool until_key = (seconds == 0u);
+  if (seconds > DETECT_MAX_SECONDS)
   {
-    seconds = 1u;
-  }
-  if (seconds > DET_MAX_SECONDS)
-  {
-    seconds = DET_MAX_SECONDS;
+    seconds = DETECT_MAX_SECONDS;
   }
 
   if (!s_cyccnt_ready)
@@ -190,11 +280,29 @@ void detect_service_run(uint32_t seconds, uint32_t squelch_milli, int32_t thr_mi
     s_cyccnt_ready = 1u;
   }
 
+  /* The extractor follows the model, not the board: boomdetect_init() compares
+     the model's layout_id against the CONFIGURED extractor and, told nothing,
+     configures `stats` (layout 1). Leaving this field out therefore made every
+     layout-2/3 model in the registry fail init on hardware while passing the
+     host suite, whose tests all resolve the extractor this way (2026-09-07:
+     svm_l2, gbt_reg_l2 and cnn_small all answered DETERR). */
+  const classifier_t           *model = detect_service_model();
+  const boomdetect_extractor_t *ex    = boomdetect_extractor_for_layout(model->layout_id);
+  if (ex == NULL)
+  {
+    char reason[80];
+    snprintf(reason, sizeof(reason), "DETERR no extractor for layout %u (model %s)\r\n",
+             (unsigned)model->layout_id, model->name);
+    det_abort(reason);
+    return;
+  }
+
   const boomdetect_config_t cfg = {
     .decimation    = (uint16_t)(PCM_FS_HZ / 16000u), /* 48 kHz in, 16 kHz chain */
     .squelch_milli = squelch_milli,
     .thr_milli     = thr_milli,
-    .classifier    = detect_service_model(),
+    .classifier    = model,
+    .extractor     = ex,
   };
   if (!boomdetect_init(&s_det, &cfg))
   {
@@ -207,6 +315,16 @@ void detect_service_run(uint32_t seconds, uint32_t squelch_milli, int32_t thr_mi
     snprintf(reason, sizeof(reason), "DETERR init failed for model %s\r\n",
              detect_service_model()->name);
     det_abort(reason);
+    return;
+  }
+  s_thr = (float)thr_milli / 1000.0f;
+  if (!boomdetect_alarm_init(&s_alarm, (rule != NULL) ? rule : &s_alarm_default))
+  {
+    /* cli.c validates a rule it was given through detect_service_parse_rule,
+       and the default is three compile-time constants; this can only fail if
+       someone edits those into an inconsistent set, and it should say so
+       rather than run with an alarm that never fires. */
+    det_abort("DETERR alarm rule invalid\r\n");
     return;
   }
 
@@ -226,11 +344,24 @@ void detect_service_run(uint32_t seconds, uint32_t squelch_milli, int32_t thr_mi
   bool mic_got = false;
   bool mic_ok  = true;
 
-  const uint32_t halves =
-      (seconds * PCM_FS_HZ + PCM_SAMPLES_PER_HALF - 1u) / PCM_SAMPLES_PER_HALF;
+  /* 64-bit: a day of blocks is 4.05e9, past what uint32_t holds with the
+     rounding term. An open-ended run simply never reaches its bound. */
+  const uint64_t halves =
+      until_key ? UINT64_MAX
+                : ((uint64_t)seconds * PCM_FS_HZ + PCM_SAMPLES_PER_HALF - 1u) /
+                      PCM_SAMPLES_PER_HALF;
 
-  for (uint32_t h = 0u; h < halves; h++)
+  for (uint64_t h = 0u; h < halves; h++)
   {
+    /* Polled once per mic block (~21 ms), before waiting for it, so the run
+       stops within a block of the keystroke. Bytes are discarded, not queued:
+       the line that stopped the run must not execute as a command afterwards.
+       Only the open-ended run listens - a timed run is what a script drives,
+       and a script's next command must not cut its own measurement short. */
+    if (until_key && usb_cli_key_pressed())
+    {
+      break;
+    }
     size_t nsamp = 0u;
     if (!det_wait_block(&nsamp))
     {
@@ -257,8 +388,9 @@ void detect_service_run(uint32_t seconds, uint32_t squelch_milli, int32_t thr_mi
 
   uint32_t windows = 0u, drones = 0u;
   boomdetect_counts(&s_det, &windows, &drones);
-  snprintf(line, sizeof(line), "DETEND windows=%lu drones=%lu overrun=%u err=%u\r\n",
-           (unsigned long)windows, (unsigned long)drones,
+  snprintf(line, sizeof(line),
+           "DETEND windows=%lu drones=%lu alarms=%lu overrun=%u err=%u\r\n",
+           (unsigned long)windows, (unsigned long)drones, (unsigned long)s_alarm.onsets,
            ((mic_got && mic_overrun()) || boomdetect_dropped(&s_det) != 0u) ? 1u : 0u,
            (mic_ok && mic_got) ? 0u : 1u);
   det_print(line);

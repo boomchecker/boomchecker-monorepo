@@ -33,6 +33,24 @@
 #define PCM_GAIN             16                                     /* +24 dB       */
 #define FIR_TAPS             101u
 
+/* Start-up: the mic powers up with its clock (<= 20 ms) and settles on a DC
+   level other than its first outputs. Seeded from those, the slow DC blocker
+   left a step that took ~8 tau (350 ms) to decay and PCM_GAIN clipped it to
+   full scale - the pop at the start of every stream. For the first
+   PDM_WARMUP_SAMPLES the blocker tracks fast (tau 64 samples = 1.3 ms) and the
+   output is muted; the caller then drops PDM_WARMUP_BLOCKS whole blocks, so the
+   first delivered sample is settled audio, not silence. A mic still settling
+   after the fast phase brings the pop back, hence 4x the datasheet's 20 ms.
+   Measured on board B (IM67D130A): the pop (full scale) is gone; what remains
+   is the mic's own sub-20 Hz drift, ~0.005 FS over the first ~0.4 s, which a
+   256 ms warm-up barely reduced. */
+#define PDM_WARMUP_SAMPLES   (4u * PCM_SAMPLES_PER_HALF)            /* 85 ms        */
+#define PDM_WARMUP_BLOCKS    5u                                     /* 107 ms       */
+
+#if (PDM_WARMUP_BLOCKS * PCM_SAMPLES_PER_HALF) < (PDM_WARMUP_SAMPLES + FIR_TAPS)
+#error "dropped warm-up blocks must cover the fast-DC phase and the FIR history"
+#endif
+
 /* Slot mask: selects the bits of one microphone from the 16-bit frame.
    0xF807 = channel A (lowest noise in Mik_stm, -92 dBFS), 0x07F8 = channel B. */
 #define PDM_SLOT_MASK_A      0xF807u
@@ -47,6 +65,7 @@ typedef struct
   uint64_t cic_c1, cic_c2, cic_c3, cic_c4, cic_c5; /* CIC combs       */
   int32_t  dc_acc;                                 /* DC blocker accumulator (Q11) */
   uint8_t  dc_seeded;                              /* seeding counter (0..8)       */
+  uint32_t dc_fast;                                /* fast-tracking samples left   */
   uint32_t pcm_mute;                               /* mute ramp after reset        */
   uint16_t slot_mask;                              /* microphone slot selection    */
   int16_t  fir_x[FIR_TAPS - 1u + PCM_SAMPLES_PER_HALF]; /* FIR history + block     */

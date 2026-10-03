@@ -34,6 +34,13 @@ bool usb_cli_connected(void);
  *  blocking loop (e.g. waiting for a PCM block) to keep the device alive. */
 void usb_cli_pump(void);
 
+/** Poll the console for input without feeding it to the CLI. Runs the CDC read
+ *  state machine once; if the host sent anything since the last poll, the bytes
+ *  are DISCARDED and true is returned. For a long-running command to notice
+ *  "any key" while the CLI is blocked inside it (`detect 0` runs until this
+ *  says true). Call it from the same loop that calls usb_cli_pump(). */
+bool usb_cli_key_pressed(void);
+
 /** Push any pending console text out to the host synchronously. Call before a
  *  binary transfer so the CLI's text (command echo) does not interleave with
  *  the payload.

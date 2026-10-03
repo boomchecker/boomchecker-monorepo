@@ -39,3 +39,27 @@ def test_header_duration():
     # 1 second mono @ 48 kHz, 16-bit = 96000 bytes
     header = codec.parse_header(codec.pack_header(SAMPLE_RATE_HZ * 2))
     assert header.duration_s == pytest.approx(1.0)
+
+
+def test_parse_detect_trailer_reads_counts_and_flags():
+    trailer = codec.parse_detect_trailer("DETEND windows=42 drones=8 alarms=3 overrun=1 err=0")
+    assert trailer is not None
+    assert (trailer.windows, trailer.drones, trailer.alarms) == (42, 8, 3)
+    assert trailer.overrun is True
+    assert trailer.err is False
+
+
+def test_parse_detect_trailer_none_for_other_lines():
+    assert codec.parse_detect_trailer("DET t=2.567 span=14 dec=+5.234 DRONE") is None
+    assert codec.parse_detect_trailer("") is None
+
+
+def test_parse_detect_trailer_defaults_missing_fields():
+    # A truncated trailer still parses; absent counts default to 0, flags to False.
+    trailer = codec.parse_detect_trailer("DETEND windows=5")
+    assert trailer is not None
+    assert trailer.windows == 5
+    assert trailer.drones == 0
+    assert trailer.alarms == 0
+    assert trailer.overrun is False
+    assert trailer.err is False
