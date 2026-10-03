@@ -218,13 +218,14 @@
       \note{
 \textbf{[0:40--1:50]}\par\medskip
     Let me start with the motivation. //\par\medskip
-    Recent conflicts have shown that we need cheap systems that can warn about artillery
+    Recent conflicts have shown that we need systems that can warn about artillery
     fire. // Acoustic sensing is a good candidate. // It is passive, it needs little
     power, and it doesn't send out any signal. //\par\medskip
-    But if the sensor is cheap, we want many of them. // And then we cannot stream raw
+    Instead of an expensive high-end system, we build cheap embedded nodes. // But a
+    cheap node covers less, so we need many of them. // And then we cannot stream raw
     audio from every node to a server. // It costs power and bandwidth, and a node that
-    transmits all the time is easy to find. // So the decision has to be made on the
-    edge -- on the node itself. // The node sends only an alert. //\par\medskip
+    transmits all the time is easy to find. // So each node decides on the edge and
+    sends only an alert. //\par\medskip
     The second problem is the signal. // Artillery usually fires from far away -- in our
     recordings, five to ten kilometres. // So the launch arrives weak, and the signal-to-noise
     ratio is low. // The classifier has to work in noise. //
