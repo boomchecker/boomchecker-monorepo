@@ -27,7 +27,7 @@ from tqdm import tqdm
 
 from boomdetect_train.datasets.field import is_field_path, load_field_audio
 from boomdetect_train.dsp.audio import read_audio, to_16k
-from boomdetect_train.dsp.mfcc import N_MELS, N_MFCC, FrameData, Frontend
+from boomdetect_train.dsp.mfcc import ENV_PER_FRAME, N_MELS, N_MFCC, FrameData, Frontend
 from boomdetect_train.features import N_SCALARS, frame_scalars_batch
 from boomdetect_train.paths import cache_dir
 
@@ -35,15 +35,18 @@ COL_RMS = 0
 COL_MFCC = slice(1, 1 + N_MFCC)
 COL_LOGMEL = slice(1 + N_MFCC, 1 + N_MFCC + N_MELS)
 COL_SCALARS = slice(1 + N_MFCC + N_MELS, 1 + N_MFCC + N_MELS + N_SCALARS)
-FRAME_WIDTH = 1 + N_MFCC + N_MELS + N_SCALARS  # 42
+# The 1-4 kHz envelope at 1 kHz, 32 samples per hop: what the modulation features
+# of layout 4 read over the last two seconds of frames (features.modulation_stats).
+COL_ENV = slice(1 + N_MFCC + N_MELS + N_SCALARS, 1 + N_MFCC + N_MELS + N_SCALARS + ENV_PER_FRAME)
+FRAME_WIDTH = 1 + N_MFCC + N_MELS + N_SCALARS + ENV_PER_FRAME  # 74
 
 
 def frame_rows(frames: FrameData) -> np.ndarray:
     """Pack a FrameData into cache rows."""
     scal = frame_scalars_batch(frames.mag)
-    return np.concatenate([frames.rms[:, None], frames.mfcc, frames.logmel, scal], axis=1).astype(
-        np.float32
-    )
+    return np.concatenate(
+        [frames.rms[:, None], frames.mfcc, frames.logmel, scal, frames.env], axis=1
+    ).astype(np.float32)
 
 
 @dataclass
@@ -71,6 +74,10 @@ class CachedFrames:
     @property
     def scalars(self) -> np.ndarray:
         return self.rows[:, COL_SCALARS]
+
+    @property
+    def env(self) -> np.ndarray:
+        return self.rows[:, COL_ENV]
 
 
 def _load_clip(path: str) -> tuple[np.ndarray, int]:
@@ -111,6 +118,11 @@ class FrameCache:
             return
         with np.load(self.path_for(source), allow_pickle=False) as z:
             self._data[source] = z["frames"]
+            if self._data[source].shape[1] != FRAME_WIDTH:
+                raise ValueError(
+                    f"{self.path_for(source)} has {self._data[source].shape[1]} columns per frame, "
+                    f"this code expects {FRAME_WIDTH}: run `bdtrain features {source} --force`"
+                )
             idx = pd.DataFrame(
                 {"id": z["ids"].astype(str), "offset": z["offsets"], "count": z["counts"]}
             )

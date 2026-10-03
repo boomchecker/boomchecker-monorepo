@@ -60,10 +60,59 @@ class FrameData:
     mag: np.ndarray  # (F, n_bins) float64 magnitude spectrum, bins 0..N/2
     logmel: np.ndarray  # (F, n_mels) float32, ln(mel + 1e-6)
     mfcc: np.ndarray  # (F, n_mfcc) float32
+    env: np.ndarray  # (F, ENV_PER_FRAME) float32, the 1-4 kHz envelope of each hop at 1 kHz
 
     @property
     def n(self) -> int:
         return int(self.rms.shape[0])
+
+
+# The envelope behind the modulation features (features.modulation_stats): the
+# 1-4 kHz band - where the DJI's rotor noise sits - rectified, low-passed and
+# kept at 1 kHz, 32 samples per 512-sample hop. A hovering drone's noise is
+# amplitude-modulated at its blade-pass rate (~170-180 Hz for a Phantom 4) and
+# the modulation stays put while the rotor lines themselves wander; backgrounds
+# have none. Causal biquads only, so the C can run the same chain sample by sample.
+ENV_RATE_HZ = 1000
+ENV_DECIM = SAMPLE_RATE_HZ // ENV_RATE_HZ  # 16
+ENV_PER_FRAME = HOP // ENV_DECIM  # 32
+ENV_BAND_HZ = (1000.0, 4000.0)
+ENV_LOWPASS_HZ = 400.0
+
+
+_ENV_SOS: tuple[np.ndarray, np.ndarray] | None = None
+
+
+def envelope_filters() -> tuple[np.ndarray, np.ndarray]:
+    """(band-pass, low-pass) second-order sections, designed once; the C gets the coefficients."""
+    global _ENV_SOS
+    if _ENV_SOS is None:
+        from scipy import signal
+
+        bp = signal.butter(2, ENV_BAND_HZ, btype="bandpass", fs=SAMPLE_RATE_HZ, output="sos")
+        lp = signal.butter(2, ENV_LOWPASS_HZ, btype="lowpass", fs=SAMPLE_RATE_HZ, output="sos")
+        _ENV_SOS = (bp, lp)
+    return _ENV_SOS
+
+
+def envelope_1k(x16k: np.ndarray) -> np.ndarray:
+    """The 1-4 kHz envelope of a 16 kHz signal, sampled at 1 kHz (len(x) // 16 values)."""
+    from scipy import signal
+
+    bp, lp = envelope_filters()
+    y = signal.sosfilt(bp, np.asarray(x16k, dtype=np.float64))
+    e = signal.sosfilt(lp, np.abs(y))
+    return e[::ENV_DECIM].astype(np.float32)
+
+
+def frame_envelope(env: np.ndarray, n_frames_: int) -> np.ndarray:
+    """(F, ENV_PER_FRAME): the envelope samples of each frame's hop, frame f at hop f."""
+    need = n_frames_ * ENV_PER_FRAME
+    if n_frames_ == 0:
+        return np.empty((0, ENV_PER_FRAME), dtype=np.float32)
+    if env.shape[0] < need:
+        env = np.concatenate([env, np.zeros(need - env.shape[0], dtype=np.float32)])
+    return env[:need].reshape(n_frames_, ENV_PER_FRAME)
 
 
 class Frontend:
@@ -99,4 +148,5 @@ class Frontend:
         mag = self.spectrum(frames)
         logmel = self.logmel_from_mag(mag)
         mfcc = self.mfcc_from_logmel(logmel)
-        return FrameData(rms=rms, mag=mag, logmel=logmel, mfcc=mfcc)
+        env = frame_envelope(envelope_1k(x16k), frames.shape[0])
+        return FrameData(rms=rms, mag=mag, logmel=logmel, mfcc=mfcc, env=env)

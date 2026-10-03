@@ -26,17 +26,64 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from boomdetect_train.dsp.mfcc import HOP, N_MELS, N_MFCC, SAMPLE_RATE_HZ, WINDOW_SIZE
+from boomdetect_train.dsp.mfcc import (
+    ENV_PER_FRAME,
+    ENV_RATE_HZ,
+    HOP,
+    N_MELS,
+    N_MFCC,
+    SAMPLE_RATE_HZ,
+    WINDOW_SIZE,
+)
 from boomdetect_train.dsp.windows import ACCUM_FRAMES
 
 LAYOUT_STATS = 1
 LAYOUT_STATS_SPECTRAL = 2
 LAYOUT_LOGMEL = 3
+LAYOUT_STATS_SPECTRAL_MOD = 4
 
 N_STATS = 4 * N_MFCC  # 52
 N_SCALARS = 8
 N_STATS_SPECTRAL = N_STATS + 2 * N_SCALARS + 1  # 69
 N_LOGMEL_PATCH = ACCUM_FRAMES * N_MELS  # 280
+N_MOD = 10
+N_STATS_SPECTRAL_MOD = N_STATS_SPECTRAL + N_MOD  # 79
+
+# Layout 4, "stats_spectral_mod" (79): layout 2, then ten numbers from the
+# modulation spectrum of the 1-4 kHz envelope over the two seconds of frames
+# that end with the window (MOD_FRAMES x ENV_PER_FRAME samples at 1 kHz). A
+# drone's rotor noise is amplitude-modulated at its blade-pass rate and the
+# modulation survives at distances where the spectrum itself is at the
+# background (the 2026-10-02 takes: DJI at 80-90 m overhead). Prominence of a
+# modulation bin = its log power over the mean log power of the +-40 Hz around
+# it. A window without the full ring behind it (the first two seconds of a
+# clip) carries NaN here: training fills those with the column mean
+# (train._impute_missing) so that no model can learn which sources have short
+# clips, and the board, whose ring is always full, never produces them.
+MOD_FRAMES = 62  # 62 x 32 = 1984 samples, 1.98 s
+MOD_SEG = 512  # Welch segments of the envelope: 0.512 s, bins of 1.95 Hz
+MOD_HOP = 128  # 75 % overlap: 12 segments over the full buffer, averaged
+MOD_NFFT = MOD_SEG
+MOD_BIN_HZ = ENV_RATE_HZ / MOD_NFFT  # 1.953
+MOD_BASELINE_BINS = 41  # +-39 Hz
+MOD_SAMPLES = MOD_FRAMES * ENV_PER_FRAME  # 1984: the full ring, or the features are missing
+MOD_LINE_DB = 6.0
+MOD_MAIN_HZ = (50.0, 400.0)
+MOD_BANDS_HZ = ((50.0, 150.0), (150.0, 250.0), (250.0, 400.0), (400.0, 800.0))
+MOD_SHARE_HZ = (100.0, 250.0)
+MOD_TOTAL_HZ = (10.0, 500.0)
+MOD_NAMES = (
+    "mod_prom_max",  # strongest line in 50-400 Hz, dB / 20
+    "mod_lines",  # share of 50-400 Hz bins above MOD_LINE_DB
+    "mod_f_peak",  # its frequency / 400 Hz
+    "mod_prom_2f",  # prominence at twice that frequency, dB / 20
+    "mod_band_50_150",  # strongest line per band, dB / 20
+    "mod_band_150_250",
+    "mod_band_250_400",
+    "mod_band_400_800",
+    "mod_depth",  # envelope std over mean
+    "mod_share_100_250",  # envelope power 100-250 Hz over 10-500 Hz
+)
 
 SCALAR_NAMES = (
     "hi_ratio",  # power 4..8 kHz over power 0..8 kHz
@@ -226,6 +273,72 @@ def logmel_patch(logmel_win: np.ndarray) -> np.ndarray:
     return (lm - lm.mean(dtype=np.float32)).reshape(-1).astype(np.float32)
 
 
+_MOD_FREQS = np.arange(MOD_NFFT // 2 + 1) * MOD_BIN_HZ
+_MOD_WINDOW = np.hanning(MOD_SEG)
+
+
+def _band(lo: float, hi: float) -> np.ndarray:
+    return (_MOD_FREQS >= lo) & (_MOD_FREQS < hi)
+
+
+def modulation_spectrum(env: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """(power, prominence_db) of an envelope buffer of MOD_SEG..MOD_FRAMES * ENV_PER_FRAME samples.
+
+    Welch's estimate: MOD_SEG-sample segments every MOD_HOP samples, each
+    centred and Hann-windowed, their power spectra averaged - the averaging is
+    what keeps a background's strongest bin near the baseline while a real
+    modulation line adds up. The prominence of a bin is its log power over the
+    mean log power of the MOD_BASELINE_BINS around it (a mean rather than a
+    median so the C can do it with one running sum).
+    """
+    e = np.asarray(env, dtype=np.float64)
+    n_seg = (e.shape[0] - MOD_SEG) // MOD_HOP + 1
+    p = np.zeros(MOD_NFFT // 2 + 1, dtype=np.float64)
+    for s in range(n_seg):
+        seg = e[s * MOD_HOP : s * MOD_HOP + MOD_SEG]
+        seg = (seg - seg.mean()) * _MOD_WINDOW
+        p += np.abs(np.fft.rfft(seg)) ** 2
+    p = p / n_seg + 1e-20
+    logp = 10.0 * np.log10(p)
+    half = MOD_BASELINE_BINS // 2
+    padded = np.pad(logp, half, mode="edge")
+    csum = np.concatenate([[0.0], np.cumsum(padded)])
+    base = (csum[MOD_BASELINE_BINS:] - csum[:-MOD_BASELINE_BINS]) / MOD_BASELINE_BINS
+    return p, logp - base
+
+
+def modulation_stats(env_rows: np.ndarray, idx: np.ndarray) -> np.ndarray:
+    """The N_MOD layout-4 additions for the window whose frames are `idx`.
+
+    Reads the envelope of the MOD_FRAMES frames that end with the window's last
+    frame - the ring the board keeps. NaN for every feature until that ring is
+    full (the first two seconds of a clip), see train._impute_missing.
+    """
+    end = int(np.asarray(idx)[-1])
+    start = max(0, end - MOD_FRAMES + 1)
+    e = np.asarray(env_rows[start : end + 1], dtype=np.float32).reshape(-1)
+    if e.shape[0] < MOD_SAMPLES:
+        return np.full(N_MOD, np.nan, dtype=np.float32)
+    out = np.zeros(N_MOD, dtype=np.float32)
+    p, prom = modulation_spectrum(e)
+    main = _band(*MOD_MAIN_HZ)
+    k = int(np.argmax(np.where(main, prom, -np.inf)))
+    f_peak = _MOD_FREQS[k]
+    out[0] = prom[k] / 20.0
+    out[1] = float((prom[main] > MOD_LINE_DB).mean())
+    out[2] = f_peak / MOD_MAIN_HZ[1]
+    k2 = int(round(2.0 * f_peak / MOD_BIN_HZ))
+    lo2, hi2 = max(0, k2 - 2), min(prom.shape[0], k2 + 3)
+    out[3] = (prom[lo2:hi2].max() / 20.0) if hi2 > lo2 else 0.0
+    for j, (lo, hi) in enumerate(MOD_BANDS_HZ):
+        out[4 + j] = prom[_band(lo, hi)].max() / 20.0
+    mean = float(e.mean())
+    out[8] = float(e.std()) / (mean + 1e-9) if mean > 0 else 0.0
+    total = float(p[_band(*MOD_TOTAL_HZ)].sum())
+    out[9] = float(p[_band(*MOD_SHARE_HZ)].sum()) / total if total > 0 else 0.0
+    return out.astype(np.float32)
+
+
 @dataclass(frozen=True)
 class Layout:
     id: int
@@ -237,6 +350,9 @@ LAYOUTS = {
     LAYOUT_STATS: Layout(LAYOUT_STATS, "stats", N_STATS),
     LAYOUT_STATS_SPECTRAL: Layout(LAYOUT_STATS_SPECTRAL, "stats_spectral", N_STATS_SPECTRAL),
     LAYOUT_LOGMEL: Layout(LAYOUT_LOGMEL, "logmel", N_LOGMEL_PATCH),
+    LAYOUT_STATS_SPECTRAL_MOD: Layout(
+        LAYOUT_STATS_SPECTRAL_MOD, "stats_spectral_mod", N_STATS_SPECTRAL_MOD
+    ),
 }
 
 
@@ -248,6 +364,9 @@ def extract(layout: int, frames, idx: np.ndarray) -> np.ndarray:
         return stats_spectral(frames.mfcc[idx], frames.mag[idx], frames.logmel[idx])
     if layout == LAYOUT_LOGMEL:
         return logmel_patch(frames.logmel[idx])
+    if layout == LAYOUT_STATS_SPECTRAL_MOD:
+        base = stats_spectral(frames.mfcc[idx], frames.mag[idx], frames.logmel[idx])
+        return np.concatenate([base, modulation_stats(frames.env, idx)]).astype(np.float32)
     raise ValueError(f"unknown layout {layout}")
 
 

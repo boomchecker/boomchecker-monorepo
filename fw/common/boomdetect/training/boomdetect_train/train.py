@@ -229,6 +229,9 @@ class ScaledModel:
     scaler_inv_std: np.ndarray | None
     model: object
     meta: dict = field(default_factory=dict)
+    # Per-feature fill for NaN inputs: a layout-4 window whose modulation ring was
+    # not yet full carries NaN there, and trains and scores as the training mean.
+    impute: np.ndarray | None = None
 
     @property
     def n_features(self) -> int:
@@ -236,7 +239,11 @@ class ScaledModel:
 
     def _slice(self, features: np.ndarray) -> np.ndarray:
         x = np.atleast_2d(np.asarray(features, dtype=np.float32))
-        return x[:, self.offset : self.offset + self.n_features]
+        x = x[:, self.offset : self.offset + self.n_features]
+        fill = getattr(self, "impute", None)  # models pickled before the field have none
+        if fill is not None and np.isnan(x).any():
+            x = np.where(np.isnan(x), fill, x)
+        return x
 
     def _scaled(self, features: np.ndarray) -> np.ndarray:
         x = self._slice(features)
@@ -269,6 +276,22 @@ def mlp_logit(clf: MLPClassifier, z: np.ndarray) -> np.ndarray:
     ).astype(np.float32)
 
 
+def _impute_missing(x: np.ndarray) -> tuple[np.ndarray, np.ndarray | None]:
+    """NaN features filled with their training-column means, plus the fill (None if none missing).
+
+    Only layout 4 produces NaN (features.modulation_stats on a window that does not
+    have the full modulation ring behind it). Filling with the mean hands the model
+    a window that says nothing about modulation, instead of letting it learn which
+    sources have short clips.
+    """
+    missing = np.isnan(x)
+    if not missing.any():
+        return x, None
+    fill = np.nanmean(x, axis=0)
+    fill = np.where(np.isnan(fill), 0.0, fill).astype(x.dtype)
+    return np.where(missing, fill, x), fill.astype(np.float32)
+
+
 def _fit_scaler(x: np.ndarray) -> tuple[StandardScaler, np.ndarray, np.ndarray]:
     scaler = StandardScaler().fit(x)
     mean = scaler.mean_.astype(np.float32)
@@ -287,7 +310,7 @@ def train_mlp(
         sw = None
     else:
         x, y, sw = ws.x, ws.y, ws.w
-    x = x[:, off:]
+    x, fill = _impute_missing(x[:, off:])
     scaler, mean, inv = _fit_scaler(x)
     clf = MLPClassifier(
         hidden_layer_sizes=hidden,
@@ -302,17 +325,17 @@ def train_mlp(
         random_state=seed,
     )
     clf.fit((x - mean) * inv, y, sample_weight=sw)
-    return ScaledModel("mlp", ws.layout, off, mean, inv, clf, {"hidden": list(hidden)})
+    return ScaledModel("mlp", ws.layout, off, mean, inv, clf, {"hidden": list(hidden)}, impute=fill)
 
 
 def train_svm(ws: WindowSet, c: float = 1.0, seed: int = SEED) -> ScaledModel:
     off = feature_offset(ws.layout)
-    x = ws.x[:, off:]
+    x, fill = _impute_missing(ws.x[:, off:])
     scaler, mean, inv = _fit_scaler(x)
     balance = "balanced" if ws.w is None else None  # share_weights balanced it already
     clf = LinearSVC(C=c, class_weight=balance, max_iter=20000, random_state=seed)
     clf.fit((x - mean) * inv, ws.y, sample_weight=ws.w)
-    return ScaledModel("svm", ws.layout, off, mean, inv, clf, {"C": c})
+    return ScaledModel("svm", ws.layout, off, mean, inv, clf, {"C": c}, impute=fill)
 
 
 def train_gbt(
@@ -325,7 +348,7 @@ def train_gbt(
 ) -> ScaledModel:
     """Gradient-boosted trees. No scaler: trees are invariant to monotone rescaling."""
     off = feature_offset(ws.layout)
-    x = ws.x[:, off:].astype(np.float64)
+    x, fill = _impute_missing(ws.x[:, off:].astype(np.float64))
     if ws.w is None:
         n_pos, n_neg = int((ws.y == 1).sum()), int((ws.y == 0).sum())
         w = np.where(ws.y == 1, n_neg / max(n_pos, 1), 1.0)
@@ -349,4 +372,5 @@ def train_gbt(
         None,
         clf,
         {"max_iter": max_iter, "max_leaf_nodes": max_leaf_nodes, "learning_rate": learning_rate},
+        impute=fill,
     )

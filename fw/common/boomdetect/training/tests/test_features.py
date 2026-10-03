@@ -18,6 +18,7 @@ def test_layout_widths():
     assert F.LAYOUTS[F.LAYOUT_STATS].n_features == 52
     assert F.LAYOUTS[F.LAYOUT_STATS_SPECTRAL].n_features == 69
     assert F.LAYOUTS[F.LAYOUT_LOGMEL].n_features == 280
+    assert F.LAYOUTS[F.LAYOUT_STATS_SPECTRAL_MOD].n_features == 79
     assert len(F.SCALAR_NAMES) == F.N_SCALARS == 8
 
 
@@ -120,5 +121,71 @@ def test_extract_dispatch(frames):
     assert F.extract(F.LAYOUT_STATS, frames, idx).shape == (52,)
     assert F.extract(F.LAYOUT_STATS_SPECTRAL, frames, idx).shape == (69,)
     assert F.extract(F.LAYOUT_LOGMEL, frames, idx).shape == (280,)
+    l4 = F.extract(F.LAYOUT_STATS_SPECTRAL_MOD, frames, idx)
+    assert l4.shape == (79,) and F.LAYOUTS[F.LAYOUT_STATS_SPECTRAL_MOD].n_features == 79
+    np.testing.assert_array_equal(l4[:69], F.extract(F.LAYOUT_STATS_SPECTRAL, frames, idx))
     with pytest.raises(ValueError):
         F.extract(99, frames, idx)
+
+
+def _am_noise(rng, seconds, f_mod, depth, sr=16000):
+    """1-4 kHz noise, amplitude-modulated at f_mod (depth 0 = none)."""
+    from scipy import signal
+
+    x = rng.standard_normal(int(seconds * sr))
+    sos = signal.butter(4, [1000, 4000], btype="bandpass", fs=sr, output="sos")
+    x = signal.sosfiltfilt(sos, x)
+    t = np.arange(x.shape[0]) / sr
+    return (x * (1.0 + depth * np.sin(2 * np.pi * f_mod * t)) * 0.05).astype(np.float32)
+
+
+def test_envelope_follows_the_hops(frontend):
+    from boomdetect_train.dsp.mfcc import ENV_PER_FRAME, envelope_1k
+
+    rng = np.random.default_rng(7)
+    x = _am_noise(rng, 3.0, 180.0, 0.5)
+    fd = frontend.process(x)
+    assert fd.env.shape == (fd.n, ENV_PER_FRAME)
+    env = envelope_1k(x)
+    np.testing.assert_array_equal(fd.env[5], env[5 * ENV_PER_FRAME : 6 * ENV_PER_FRAME])
+    assert (fd.env >= 0).all()
+
+
+def test_modulation_stats_find_the_blade_pass_rate(frontend):
+    rng = np.random.default_rng(8)
+    modulated = frontend.process(_am_noise(rng, 3.0, 180.0, 0.5))
+    plain = frontend.process(_am_noise(rng, 3.0, 180.0, 0.0))
+    idx = np.arange(modulated.n - 14, modulated.n)  # the last window, two seconds behind it
+    m = F.modulation_stats(modulated.env, idx)
+    p = F.modulation_stats(plain.env, idx)
+    assert m.shape == (F.N_MOD,) and p.shape == (F.N_MOD,)
+    assert abs(m[2] * 400.0 - 180.0) < 3.0, f"peak at {m[2] * 400:.1f} Hz"
+    assert m[0] * 20.0 > 12.0, f"prominence {m[0] * 20:.1f} dB"
+    assert p[0] * 20.0 < 7.0, f"unmodulated noise shows {p[0] * 20:.1f} dB"
+    assert m[1] > p[1] and m[5] > p[5]  # lines, and the 150-250 Hz band
+    assert np.isfinite(m).all() and np.isfinite(p).all()
+    # Until the two-second ring is full the features are missing, not zero.
+    first = F.modulation_stats(modulated.env, np.arange(14))
+    assert np.isnan(first).all()
+    last_short = F.modulation_stats(modulated.env, np.arange(F.MOD_FRAMES - 15, F.MOD_FRAMES - 1))
+    assert np.isnan(last_short).all()
+    just_full = F.modulation_stats(modulated.env, np.arange(F.MOD_FRAMES - 14, F.MOD_FRAMES))
+    assert np.isfinite(just_full).all()
+
+
+def test_cache_rows_carry_the_envelope(frames):
+    from boomdetect_train.datasets.cache import FRAME_WIDTH, CachedFrames, frame_rows
+
+    rows = frame_rows(frames)
+    assert rows.shape == (frames.n, FRAME_WIDTH) and FRAME_WIDTH == 74
+    cf = CachedFrames(rows)
+    np.testing.assert_array_equal(cf.env, frames.env)
+    idx = np.arange(14)
+    from boomdetect_train.evaluate import window_features
+
+    np.testing.assert_allclose(
+        window_features(F.LAYOUT_STATS_SPECTRAL_MOD, cf, idx),
+        F.extract(F.LAYOUT_STATS_SPECTRAL_MOD, frames, idx),
+        rtol=1e-5,
+        atol=1e-6,
+    )
