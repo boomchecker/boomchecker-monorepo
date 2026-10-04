@@ -83,7 +83,9 @@ seconds. Above the classifier sits a K-of-N rule with hysteresis
 (`boomdetect_alarm.h`): the alarm turns ON when at least 2 of the last 4
 classified windows were called `DRONE`, and OFF when fewer than 1 were. The
 board prints `ALM t=<s>.<ms> ON|OFF hits=<k>/<n>` only on transitions, and
-`DETEND` counts the OFF→ON transitions in `alarms=`. Squelched frames yield no
+`DETEND` counts the OFF→ON transitions in `alarms=` and stamps the first `DRONE`
+window and the first alarm (`first_drone=`, `first_alarm=`, seconds into the run,
+`-` if never) so a field log needs nothing but the trailer. Squelched frames yield no
 window and do not move the history. The constants are in `detect_service.h` and
 pinned by the host tool's tests; the training package evaluates clip-level
 verdicts with the same rule, so "alarm" means one thing on both sides.

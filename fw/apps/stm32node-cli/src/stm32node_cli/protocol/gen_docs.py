@@ -32,11 +32,7 @@ def _header_table() -> str:
 def _commands_section() -> str:
     blocks = []
     for c in spec.COMMANDS:
-        blocks.append(
-            f"### `{c.usage}`\n\n"
-            f"{c.description}\n\n"
-            f"**Response:** {c.response}"
-        )
+        blocks.append(f"### `{c.usage}`\n\n{c.description}\n\n**Response:** {c.response}")
     return "\n\n".join(blocks)
 
 

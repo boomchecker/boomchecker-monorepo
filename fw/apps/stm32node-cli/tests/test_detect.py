@@ -13,7 +13,7 @@ _RUN = (
     b"LVL t=1.000 rms=+0.012\r\n"
     b"DET t=2.567 span=14 dec=+5.234 DRONE\r\n"
     b"ALM t=2.567 ON hits=2/4\r\n"
-    b"DETEND windows=1 drones=1 alarms=1 overrun=0 err=0\r\n"
+    b"DETEND windows=1 drones=1 alarms=1 first_drone=2.567 first_alarm=2.567 overrun=0 err=0\r\n"
 )
 
 
@@ -26,6 +26,8 @@ def test_run_detect_sends_command_and_returns_trailer():
     assert trailer is not None
     assert (trailer.windows, trailer.drones, trailer.alarms) == (1, 1, 1)
     assert trailer.overrun is False and trailer.err is False
+    assert trailer.first_drone_s == pytest.approx(2.567)
+    assert trailer.first_alarm_s == pytest.approx(2.567)
     # The report lines reach on_line; the terminal DETEND does not.
     assert lines == [
         "LVL t=1.000 rms=+0.012",

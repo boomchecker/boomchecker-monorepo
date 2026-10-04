@@ -38,6 +38,26 @@ static const boomdetect_alarm_rule_t s_alarm_default = {
 };
 static float s_thr; /* this run's decision threshold, for the relative decision */
 
+/* When this run first called a window DRONE and first raised the alarm, in ms
+   since the run started; UINT32_MAX until it happens. Both go into DETEND so a
+   field log needs nothing but the trailer: how long the drone had to be
+   audible before the first window and the first alarm said so. */
+static uint32_t s_first_drone_ms;
+static uint32_t s_first_alarm_ms;
+
+/* "<s>.<mmm>" for a time that happened, "-" for one that did not. */
+static void fmt_when(char *out, size_t len, uint32_t ms)
+{
+  if (ms == UINT32_MAX)
+  {
+    snprintf(out, len, "-");
+  }
+  else
+  {
+    snprintf(out, len, "%lu.%03lu", (unsigned long)(ms / 1000u), (unsigned long)(ms % 1000u));
+  }
+}
+
 /* "<k>of<n>" or "mean<n>", nothing else: the token has to be the whole string. */
 static bool parse_u8(const char *s, const char **end, uint8_t *out)
 {
@@ -154,7 +174,7 @@ static void det_print(const char *line)
 static void det_abort(const char *reason)
 {
   det_print(reason);
-  det_print("DETEND windows=0 drones=0 alarms=0 overrun=0 err=1\r\n");
+  det_print("DETEND windows=0 drones=0 alarms=0 first_drone=- first_alarm=- overrun=0 err=1\r\n");
 }
 
 /* Wait for one processed PCM block, keeping the USB device serviced. The pump
@@ -230,6 +250,10 @@ static void det_report(const boomdetect_event_t *ev, uint32_t debug)
              (unsigned long)span, dec_str,
              ev->window.is_drone ? "DRONE" : "noise");
     det_print(line);
+    if (ev->window.is_drone && s_first_drone_ms == UINT32_MAX)
+    {
+      s_first_drone_ms = t_ms;
+    }
 
     /* The alarm is reported only when it changes, so a run over a steady drone
        prints one ALM ON and one ALM OFF, not one line per window. The vote
@@ -237,6 +261,10 @@ static void det_report(const boomdetect_event_t *ev, uint32_t debug)
     if (boomdetect_alarm_push_decision(&s_alarm, ev->window.decision - s_thr))
     {
       const char *state = boomdetect_alarm_on(&s_alarm) ? "ON" : "OFF";
+      if (boomdetect_alarm_on(&s_alarm) && s_first_alarm_ms == UINT32_MAX)
+      {
+        s_first_alarm_ms = t_ms;
+      }
       if (s_alarm.rule.mode == BOOMDETECT_ALARM_MEAN)
       {
         fmt_milli(dec_str, sizeof(dec_str), boomdetect_alarm_mean(&s_alarm));
@@ -259,7 +287,9 @@ void detect_service_run(uint32_t seconds, uint32_t squelch_milli, int32_t thr_mi
                         uint32_t debug, const boomdetect_alarm_rule_t *rule)
 {
   static uint8_t s_cyccnt_ready = 0u;
-  char           line[80];
+  char           line[128]; /* the DETEND trailer with its two times is ~100 chars */
+  char           first_drone[16];
+  char           first_alarm[16];
 
   if (!usb_cli_connected())
   {
@@ -317,7 +347,9 @@ void detect_service_run(uint32_t seconds, uint32_t squelch_milli, int32_t thr_mi
     det_abort(reason);
     return;
   }
-  s_thr = (float)thr_milli / 1000.0f;
+  s_thr            = (float)thr_milli / 1000.0f;
+  s_first_drone_ms = UINT32_MAX;
+  s_first_alarm_ms = UINT32_MAX;
   if (!boomdetect_alarm_init(&s_alarm, (rule != NULL) ? rule : &s_alarm_default))
   {
     /* cli.c validates a rule it was given through detect_service_parse_rule,
@@ -388,9 +420,13 @@ void detect_service_run(uint32_t seconds, uint32_t squelch_milli, int32_t thr_mi
 
   uint32_t windows = 0u, drones = 0u;
   boomdetect_counts(&s_det, &windows, &drones);
+  fmt_when(first_drone, sizeof(first_drone), s_first_drone_ms);
+  fmt_when(first_alarm, sizeof(first_alarm), s_first_alarm_ms);
   snprintf(line, sizeof(line),
-           "DETEND windows=%lu drones=%lu alarms=%lu overrun=%u err=%u\r\n",
+           "DETEND windows=%lu drones=%lu alarms=%lu first_drone=%s first_alarm=%s "
+           "overrun=%u err=%u\r\n",
            (unsigned long)windows, (unsigned long)drones, (unsigned long)s_alarm.onsets,
+           first_drone, first_alarm,
            ((mic_got && mic_overrun()) || boomdetect_dropped(&s_det) != 0u) ? 1u : 0u,
            (mic_ok && mic_got) ? 0u : 1u);
   det_print(line);

@@ -42,11 +42,23 @@ def test_header_duration():
 
 
 def test_parse_detect_trailer_reads_counts_and_flags():
-    trailer = codec.parse_detect_trailer("DETEND windows=42 drones=8 alarms=3 overrun=1 err=0")
+    trailer = codec.parse_detect_trailer(
+        "DETEND windows=42 drones=8 alarms=3 first_drone=2.432 first_alarm=3.328 overrun=1 err=0"
+    )
     assert trailer is not None
     assert (trailer.windows, trailer.drones, trailer.alarms) == (42, 8, 3)
     assert trailer.overrun is True
     assert trailer.err is False
+    assert trailer.first_drone_s == pytest.approx(2.432)
+    assert trailer.first_alarm_s == pytest.approx(3.328)
+
+
+def test_parse_detect_trailer_times_are_none_when_nothing_happened():
+    trailer = codec.parse_detect_trailer(
+        "DETEND windows=40 drones=0 alarms=0 first_drone=- first_alarm=- overrun=0 err=0"
+    )
+    assert trailer is not None
+    assert trailer.first_drone_s is None and trailer.first_alarm_s is None
 
 
 def test_parse_detect_trailer_none_for_other_lines():
@@ -63,3 +75,4 @@ def test_parse_detect_trailer_defaults_missing_fields():
     assert trailer.alarms == 0
     assert trailer.overrun is False
     assert trailer.err is False
+    assert trailer.first_drone_s is None and trailer.first_alarm_s is None

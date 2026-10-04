@@ -100,6 +100,4 @@ class RecordSession(Session):
             sample_rate=handle.header.sample_rate,
             channels=handle.header.channels,
         )
-        return RecordResult(
-            path=path, header=handle.header, byte_length=len(buf), trailer=trailer
-        )
+        return RecordResult(path=path, header=handle.header, byte_length=len(buf), trailer=trailer)

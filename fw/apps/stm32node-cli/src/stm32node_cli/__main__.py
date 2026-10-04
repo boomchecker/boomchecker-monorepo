@@ -6,6 +6,8 @@ from pathlib import Path
 
 import typer
 
+from stm32node_cli.protocol.codec import describe_first_times
+
 from .config import DEFAULT_PORT, DEFAULT_TIMEOUT_S, default_output_dir
 from .keywatch import keypress_abort
 from .protocol.spec import (
@@ -165,7 +167,8 @@ def detect(
         typer.echo("no DETEND trailer - run may be incomplete")
         raise typer.Exit(code=1)
     typer.echo(
-        f"{trailer.windows} window(s), {trailer.drones} drone, {trailer.alarms} alarm(s) "
+        f"{trailer.windows} window(s), {trailer.drones} drone, {trailer.alarms} alarm(s)"
+        f"{describe_first_times(trailer)} "
         f"(overrun={int(trailer.overrun)} err={int(trailer.err)})"
     )
     if trailer.err:

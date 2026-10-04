@@ -69,13 +69,17 @@ LVL t=1.984 rms=+0.031            úroveň vstupu, asi 1x za sekundu
 DET t=2.432 span=14 dec=+4.120 DRONE   jedno klasifikované okno (~448 ms)
 DET t=2.880 span=14 dec=-12.500 noise
 ALM t=3.328 ON hits=2/4           alarm změnil stav
-DETEND windows=64 drones=27 alarms=1 overrun=0 err=0
+DETEND windows=64 drones=27 alarms=1 first_drone=2.432 first_alarm=3.328 overrun=0 err=0
 ```
 
-Pro hodnocení citlivosti sleduj dvě čísla z `DETEND`:
+Pro hodnocení citlivosti sleduj čísla z `DETEND`:
 
 - `drones` / `windows` = podíl oken nad prahem. To je hrubá citlivost.
 - `alarms` = kolikrát alarm přešel z OFF na ON. To je, co by šlo rádiem.
+- `first_drone` a `first_alarm` = čas (s od startu běhu) prvního okna
+  označeného DRONE a prvního zapnutí alarmu; `-` když se to nestalo. U
+  `gbt_m1` a `mlp_m1` odečti 2,2 s zahřívání, dřív okno přijít nemůže.
+- `overrun=1` znamená ztracené vzorky, zapiš si to k běhu.
 
 Hodnota `dec` je rozhodnutí modelu (logit). Práh se porovnává přímo s ním,
 takže z výpisu vidíš, o kolik drony a rušiče přelétají nebo podlétají práh.

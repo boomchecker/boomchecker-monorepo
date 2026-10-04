@@ -8,6 +8,8 @@ Importing this module registers the commands with the registry in
 
 from __future__ import annotations
 
+from stm32node_cli.protocol.codec import describe_first_times
+
 from ..config import DEFAULT_TIMEOUT_S
 from ..protocol.client import DeviceClient
 from ..protocol.codec import StreamAborted
@@ -293,7 +295,7 @@ def _cmd_detect(ctx: CommandContext, args: list[str]) -> None:
     colour = "red" if trailer.drones else "green"
     ctx.emit(
         f"[{colour}]v[/{colour}] {trailer.windows} window(s), {trailer.drones} drone, "
-        f"{trailer.alarms} alarm(s){health}"
+        f"{trailer.alarms} alarm(s){describe_first_times(trailer)}{health}"
     )
 
 
