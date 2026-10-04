@@ -267,6 +267,8 @@ add_library(boomdetect_core OBJECT
   src/extractor_stats.c
   src/extractor_spectral.c
   src/extractor_logmel.c
+  src/extractor_mod.c
+  src/envelope.c
   src/frame_scalars.c
   src/nn_infer.c
   src/boomdetect_mfcc_f32.c
@@ -280,6 +282,8 @@ add_library(boomdetect_core OBJECT
 # training/README.md, "Adding a model to the board").
 set(BOOMDETECT_MODEL_SOURCES
   models/model_mlp_f2.c
+  models/model_gbt_m1.c
+  models/model_mlp_m1.c
   models/model_gbt_f3.c
   models/model_gbt_f2.c
   models/model_mlp_f1.c

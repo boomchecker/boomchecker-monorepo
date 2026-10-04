@@ -50,10 +50,9 @@ void boomdetect_aggregate_stats(const float *frames, uint32_t nframes, uint32_t 
     }
 }
 
-static void spectral_extract(void *ctx, const float *frames, uint32_t nframes, uint32_t stride,
-                             float *out)
+void boomdetect_extract_stats_spectral(const float *frames, uint32_t nframes, uint32_t stride,
+                                       float *out)
 {
-    (void)ctx;
     boomdetect_aggregate_stats(frames, nframes, stride, BOOMDETECT_MFCC_COEFFS, out);
 
     float *smean = out + 4u * BOOMDETECT_MFCC_COEFFS;
@@ -94,6 +93,14 @@ static void spectral_extract(void *ctx, const float *frames, uint32_t nframes, u
         flux = acc / (float)((nframes - 1u) * BOOMDETECT_MEL_FILTERS);
     }
     sstd[BOOMDETECT_FRAME_SCALARS] = flux;
+}
+
+static void spectral_extract(void *ctx, const float *frames, uint32_t nframes, uint32_t stride,
+                             const boomdetect_side_t *side, float *out)
+{
+    (void)ctx;
+    (void)side;
+    boomdetect_extract_stats_spectral(frames, nframes, stride, out);
 }
 
 const boomdetect_extractor_t boomdetect_extractor_stats_spectral = {

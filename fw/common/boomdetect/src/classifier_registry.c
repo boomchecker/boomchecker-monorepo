@@ -39,8 +39,18 @@ static const classifier_t *const s_models[] = {
        30.9 takes, no alarm on 37 min of outdoor background and traffic,
        three office confusers. gbt_f3 is the forest retrained with those
        recordings: all 7 heights, none of 27 negatives. Not yet checked on
-       the board. */
+       the board.
+
+       2026-10-03: gbt_m1 and mlp_m1 are the first layout-4 models - the
+       modulation spectrum of the 1-4 kHz envelope added to layout 2 (see
+       models.h). Out of fold they keep the DJI at 60-90 m overhead at 70-87 %
+       of windows where the layout-2 models fall to 5-44 %, with no alarm on
+       the traffic and outdoor backgrounds. They stay behind mlp_f2 as the
+       default until the board has run them: the extractor is new C, and the
+       first two seconds of a run produce no decision while its ring fills. */
     &classifier_mlp_f2,
+    &classifier_gbt_m1,
+    &classifier_mlp_m1,
     &classifier_gbt_f3,
     &classifier_gbt_f2,
     &classifier_mlp_f1,

@@ -90,8 +90,13 @@ class ParityVectors:
 def parity_vectors(
     model: ScaledModel, x_full: np.ndarray, n: int = PARITY_N, seed: int = 7
 ) -> ParityVectors:
-    """Pick `n` real windows spread over the score range and score them in Python."""
+    """Pick `n` real windows spread over the score range and score them in Python.
+
+    Windows with a missing feature (layout 4 before its ring is full) are left
+    out: the board never classifies those, so the C has no fill to compare.
+    """
     rng = np.random.default_rng(seed)
+    x_full = np.asarray(x_full)[np.isfinite(np.asarray(x_full)).all(axis=1)]
     if x_full.shape[0] <= n:
         pick = np.arange(x_full.shape[0])
     else:

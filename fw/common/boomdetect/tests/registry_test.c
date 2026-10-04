@@ -36,6 +36,14 @@ static void scenario_lookup(void)
           "by_name(\"mlp_f2\") did not return the same entry as default()");
     CHECK(classifier_by_name("gbt_f3") != NULL,
           "gbt_f3 is missing - the forest retrained with the 2026-10-02 recordings");
+    const classifier_t *gm = classifier_by_name("gbt_m1");
+    const classifier_t *mm = classifier_by_name("mlp_m1");
+    CHECK(gm != NULL && mm != NULL,
+          "gbt_m1 / mlp_m1 are missing - the layout-4 models with the modulation features");
+    CHECK(gm == NULL || gm->layout_id == BOOMDETECT_LAYOUT_STATS_SPECTRAL_MOD,
+          "gbt_m1 declares layout %u, not the modulation layout", gm ? gm->layout_id : 0u);
+    CHECK(mm == NULL || mm->layout_id == BOOMDETECT_LAYOUT_STATS_SPECTRAL_MOD,
+          "mlp_m1 declares layout %u, not the modulation layout", mm ? mm->layout_id : 0u);
     CHECK(classifier_by_name("gbt_f2") != NULL,
           "gbt_f2 is missing - the second opinion trained on the same data");
     CHECK(classifier_by_name("mlp_f1") != NULL,
@@ -228,12 +236,22 @@ static void scenario_real_models_actually_run(void)
             };
             REQUIRE(boomdetect_init(&d, &cfg), "init failed for %s", model->name);
 
-            bool got = false;
-            for (uint32_t f = 0u; f < BOOMDETECT_ACCUM_FRAMES + 4u && !got; f++)
+            /* Enough frames for a layout-4 model too: its extractor waits for
+               two seconds of envelope (BOOMDETECT_MOD_FRAMES hops) before the
+               first window carries a decision, and the windows before that
+               close `warming`. */
+            bool     got    = false;
+            uint32_t warmed = 0u;
+            for (uint32_t f = 0u;
+                 f < BOOMDETECT_MOD_FRAMES + BOOMDETECT_ACCUM_FRAMES + 4u && !got; f++)
             {
                 boomdetect_push(&d, input, BOOMDETECT_HOP * 3u);
                 while (boomdetect_step(&d, &ev))
                 {
+                    if (ev.window.warming)
+                    {
+                        warmed++;
+                    }
                     if (ev.window.complete)
                     {
                         decisions[m][sig] = ev.window.decision;
@@ -242,6 +260,10 @@ static void scenario_real_models_actually_run(void)
                 }
             }
             REQUIRE(got, "%s never completed a window on signal %zu", model->name, sig);
+            const bool waits = d.cfg.extractor->env_required > 0u;
+            CHECK(waits == (warmed > 0u),
+                  "%s: extractor %s waits for the envelope ring, yet %lu windows closed warming",
+                  model->name, d.cfg.extractor->name, (unsigned long)warmed);
             CHECK(isfinite(decisions[m][sig]),
                   "%s produced a non-finite decision (%g) - a NaN here means a weight "
                   "table or a scaler is wrong, and nothing else would catch it",
@@ -259,8 +281,8 @@ static void scenario_real_models_actually_run(void)
     }
 
     CHECK(decisions[0][0] != decisions[1][0],
-          "mlp_v6 and svm_v3 returned the same decision (%.9g) on identical input; "
-          "one forward pass is probably being dispatched twice",
+          "the first two registry models returned the same decision (%.9g) on identical "
+          "input; one forward pass is probably being dispatched twice",
           (double)decisions[0][0]);
 }
 
@@ -271,12 +293,13 @@ static void scenario_real_models_actually_run(void)
 #define FAKE_WIDTH  6u
 
 static void fake_extract(void *ctx, const float *frames, uint32_t nframes, uint32_t coeffs,
-                         float *out)
+                         const boomdetect_side_t *side, float *out)
 {
     (void)ctx;
     (void)frames;
     (void)nframes;
     (void)coeffs;
+    (void)side;
     for (uint32_t i = 0u; i < FAKE_WIDTH; i++)
     {
         out[i] = 100.0f + (float)i;
@@ -377,5 +400,5 @@ int main(void)
     scenario_two_families_differ();
     scenario_init_rejects_bad_models();
     scenario_real_models_actually_run();
-    BD_TEST_REPORT("registry_test", 115); /* exact count from running the compiled binary */
+    BD_TEST_REPORT("registry_test", 132); /* exact count from running the compiled binary */
 }

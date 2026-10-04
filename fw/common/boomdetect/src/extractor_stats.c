@@ -13,9 +13,10 @@
 #include <string.h>
 
 static void stats_extract(void *ctx, const float *frames, uint32_t nframes, uint32_t stride,
-                          float *out)
+                          const boomdetect_side_t *side, float *out)
 {
     (void)ctx;
+    (void)side;
     boomdetect_aggregate_stats(frames, nframes, stride, BOOMDETECT_MFCC_COEFFS, out);
 }
 
@@ -32,6 +33,7 @@ static const boomdetect_extractor_t *const s_extractors[] = {
     &boomdetect_extractor_stats,
     &boomdetect_extractor_stats_spectral,
     &boomdetect_extractor_logmel,
+    &boomdetect_extractor_stats_spectral_mod,
 };
 
 size_t boomdetect_extractor_count(void)

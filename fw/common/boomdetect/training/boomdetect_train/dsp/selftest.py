@@ -85,3 +85,32 @@ def parse_fixture(path: Path | str) -> dict:
         "dec": dec,
         "sig": sig,
     }
+
+
+# --- the layout-4 fixture signal -------------------------------------------
+#
+# The LCG above is 1.4 s long, and the modulation features need two seconds of
+# envelope before they say anything, so layout 4 gets its own signal: the same
+# LCG noise, amplitude-modulated in integer arithmetic at AM_HZ so both sides
+# see identical int16 samples and the envelope has one line to find.
+AM_INPUT_LEN = 240000  # 5 s at 48 kHz: 155 frames, the ring full from frame 61
+AM_PERIOD = 250  # samples at 48 kHz -> 192 Hz, inside the 150-250 Hz band
+AM_HZ = 48000 / AM_PERIOD
+AM_DEPTH_Q10 = 512  # modulation depth 0.5 in Q10
+
+
+def am_table(period: int = AM_PERIOD, depth_q10: int = AM_DEPTH_Q10) -> np.ndarray:
+    """int16 Q10 modulator, one period: round(depth * sin(2 pi k / period))."""
+    k = np.arange(period)
+    return np.round(depth_q10 * np.sin(2.0 * np.pi * k / period)).astype(np.int16)
+
+
+def am_lcg_signal(n: int = AM_INPUT_LEN, seed: int = SELFTEST_SEED) -> np.ndarray:
+    """lcg_signal() times (1024 + am_table[i mod period]) / 1024, truncated like C."""
+    base = lcg_signal(n, seed).astype(np.int64)
+    table = am_table().astype(np.int64)
+    gain = 1024 + table[np.arange(n) % table.shape[0]]
+    prod = base * gain
+    # C integer division truncates toward zero; numpy's // floors.
+    out = np.sign(prod) * (np.abs(prod) // 1024)
+    return out.astype(np.int16)

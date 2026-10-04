@@ -155,9 +155,14 @@ def cmd_score(args: argparse.Namespace) -> int:
 
 
 def cmd_fixtures(args: argparse.Namespace) -> int:
-    from boomdetect_train.fixtures import write_extractor_fixture
+    from boomdetect_train.fixtures import (
+        write_envelope_coefs,
+        write_extractor_fixture,
+        write_mod_fixture,
+    )
 
-    print(f"wrote {write_extractor_fixture()}")
+    for p in (write_extractor_fixture(), write_mod_fixture(), write_envelope_coefs()):
+        print(f"wrote {p}")
     return 0
 
 

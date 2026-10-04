@@ -53,7 +53,27 @@
     (BOOMDETECT_FEATURE_COUNT + 2u * BOOMDETECT_FRAME_SCALAR_COUNT + 1u)
 /* Layout 3: the log-mel patch, frame-major. */
 #define BOOMDETECT_FEATURE_COUNT_LOGMEL (BOOMDETECT_ACCUM_FRAMES_MAX * BOOMDETECT_MEL_FILTERS)
+/* Layout 4: layout 2, then the modulation features of the 1-4 kHz envelope
+   (src/extractor_mod.c; features.py MOD_NAMES). */
+#define BOOMDETECT_MOD_FEATURES 10u
+#define BOOMDETECT_FEATURE_COUNT_STATS_SPECTRAL_MOD \
+    (BOOMDETECT_FEATURE_COUNT_STATS_SPECTRAL + BOOMDETECT_MOD_FEATURES)
 /* What boomdetect_t::features must hold: the widest layout. */
 #define BOOMDETECT_FEATURE_MAX BOOMDETECT_FEATURE_COUNT_LOGMEL
+
+/* The envelope behind layout 4. The 1-4 kHz band of the chain, rectified and
+   low-passed (three biquads, src/envelope_coefs.h), kept every
+   BOOMDETECT_ENV_DECIM-th sample - 1 kHz, BOOMDETECT_ENV_PER_HOP values per
+   512-sample hop - in a ring of BOOMDETECT_MOD_FRAMES hops (1.98 s) that
+   boomdetect_t carries across windows. A hovering drone's rotor noise is
+   amplitude-modulated at its blade-pass rate and the ring is what the
+   modulation spectrum is taken over. Twins: dsp/mfcc.py ENV_DECIM/ENV_PER_FRAME
+   and features.py MOD_FRAMES; the ring length is in samples so that a host run
+   with another hop still integrates the same two seconds. */
+#define BOOMDETECT_ENV_DECIM    16u
+#define BOOMDETECT_ENV_PER_HOP  (512u / BOOMDETECT_ENV_DECIM) /* at the default hop */
+#define BOOMDETECT_ENV_SECTIONS 3u                            /* biquads in the chain */
+#define BOOMDETECT_MOD_FRAMES   62u
+#define BOOMDETECT_ENV_RING     (BOOMDETECT_MOD_FRAMES * BOOMDETECT_ENV_PER_HOP) /* 1984 */
 
 #endif /* BOOMDETECT_DSP_CONFIG_H */

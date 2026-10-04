@@ -4,8 +4,9 @@ Krátký návod, jak na desce přepínat modely a ladit citlivost detekce, když
 jdeme ven testovat s dronem. Technický popis řetězce je v [index.md](index.md).
 Čísla platí pro firmware z větve `hermakam/newdetection` s výchozím modelem
 `mlp_f2` (1. 10. 2026, od 2. 10. s prahem 7.656), natrénovaným na veřejných
-datech a na terénních nahrávkách do 1. 10., a s `gbt_f3` (2. 10.) jako
-druhým názorem.
+datech a na terénních nahrávkách do 1. 10., s `gbt_f3` (2. 10.) jako
+druhým názorem a od 3. 10. s `gbt_m1` a `mlp_m1` (modulační příznaky, viz
+kap. 4), které jsou na desce zatím jen změřené, s dronem venku ne.
 
 ## 1. Než začneš
 
@@ -94,6 +95,8 @@ hodinu na 11,6 h veřejných negativních nahrávek, které nikdo netrénoval.
 |---|---|---|---|---|---|---|
 | **mlp_f2** (výchozí) | 7.656 | 11/14 | 18/19 | 4/22 | 2,0 | MLP 68→32→16→1; od 2. 10. na bodu 5 FA/h (dřív 15.855), viz kap. 5 |
 | **gbt_f3** | 3.438 | 16/21 | 13/19 | 0/27 | 0,9 | les přetrénovaný i s nahrávkami z 2. 10.; jiný základ (21 DJI, 27 negativ) |
+| gbt_m1 | 3.211 | 21/21 | 14/19 | 1/27 | 1,7 | 3. 10., vrstva 4 (modulace obálky); stejný základ jako gbt_f3; první 2 s běhu bez rozhodnutí; na desce změřeno 4. 10., venku zatím ne |
+| mlp_m1 | 8.400 | 21/21 | 14/19 | 2/27 | 1,9 | 3. 10., vrstva 4, MLP 78→32→16→1; nejvyšší polní AUC, slabší nad mikrofonem 20–30 m z 30. 9.; na desce změřeno 4. 10., venku zatím ne |
 | gbt_f2 | 3.263 | 9/14 | 14/19 | 0/22 | 1,9 | 200 stromů, data do 1. 10.; nahrazen gbt_f3 |
 | mlp_f1 | 8.466 | 6/14 | 10/19 | 2/22 | 0,26 | předchozí výchozí (26. 9.); z nahrávek 30. 9. chytil 2 z 16, nic nad 10 m |
 | gbt_f1 | 2.646 | 5/14 | 9/19 | 0/22 | 0,6 | 120 stromů, data do 25. 9. |
@@ -132,6 +135,22 @@ Co z toho plyne pro test venku:
   (5–7 z 21 klipů). Každý nový dron (FPV, jiná DJI) potřebuje vlastní nahrávky.
 - `mlp_f1` a ostatní zůstávají v image pro srovnání na stejném zvuku;
   `model mlp_f1` je rollback.
+- **Nové od 3. 10.: `gbt_m1` a `mlp_m1` (vrstva 4).** K dosavadním příznakům
+  přibylo modulační spektrum obálky pásma 1–4 kHz za poslední dvě sekundy:
+  visící dron „seká“ svůj šum frekvencí průchodu listů (Phantom 4 asi
+  170–185 Hz, s harmonickou na dvojnásobku) a tahle čára drží i tam, kde je
+  spektrum už na úrovni pozadí. Mimo fold, stejné foldy jako `gbt_f3`, práh
+  5 FA/h: DJI z 2. 10. na 60/80/90 m 86/85/71 % oken (`gbt_m1`) a 87/83/72 %
+  (`mlp_m1`) proti 38/44/17 % u rodiny `mlp_f2`; 70 m z 30. 9. 78/89 % místo
+  0 %; poslední úsek stoupání do 100 m 64/57 % místo 0 %. Negativa: `gbt_m1`
+  1/27, `mlp_m1` 2/27, 30 min dopravy 0 alarmů u obou. Runner na 40 m ani
+  tady nic. Modulace je podpis stálých otáček: při manévrech se čára rozmaže
+  (30. 9. na 30 m jen 6 dB, jinde 9–11 dB). Dvě věci navíc: první dvě
+  sekundy po startu `detect` tyto modely nic nevypíšou (plní se kruh obálky,
+  totéž po výpadku vzorků), první rozhodnutí přijde v čase 2,2 s; a venku s
+  dronem zatím neběžely. Na desce B ověřeno 4. 10.: `selftest` sedí, snímek
+  uzavírající okno trvá 4,7 ms (u `mlp_f2` 1,2 ms) z rozpočtu 21 ms, běžný
+  snímek 1,2 ms, žádný overrun, v kanceláři bez alarmu.
 
 ## 5. Citlivost mlp_f2: jak si s prahem hrát
 
@@ -253,7 +272,8 @@ přeflashovat.
 3. Rušiče bez dronu (řeč, auto, vítr) při prahu 7.656 a 9.0 (`mean4`). Musí být `alarms=0`.
 4. Dron: hover blízko, hover daleko, přelet; k tomu známé vzdálenosti
    (20, 40, 60, 80 m), protože dosah je teď hlavní otázka. Žebřík prahů z kapitoly 5.
-5. Stejné manévry s `model gbt_f3` (druhý názor) a `model mlp_f1` pro srovnání.
+5. Stejné manévry s `model gbt_f3` (druhý názor), `model gbt_m1` a `model mlp_m1`
+   (modulace, vrstva 4) a `model mlp_f1` pro srovnání.
 6. Nahraj i syrový zvuk jako WAV, doma ho pak přehraje
    `bdtrain score nahravka.wav` přes všechny modely bez dalšího létání:
 

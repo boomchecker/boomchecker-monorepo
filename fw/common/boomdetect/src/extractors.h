@@ -39,6 +39,8 @@ extern const boomdetect_extractor_t boomdetect_extractor_stats;
 extern const boomdetect_extractor_t boomdetect_extractor_stats_spectral;
 /** Layout 3: the 14 x 20 log-mel patch minus its mean, frame-major (280). */
 extern const boomdetect_extractor_t boomdetect_extractor_logmel;
+/** Layout 4: layout 2, then the modulation spectrum of the envelope ring (79). */
+extern const boomdetect_extractor_t boomdetect_extractor_stats_spectral_mod;
 
 /**
  * @brief [mean, std, dmean, cmax] of the first `coeffs` values of each row.
@@ -52,6 +54,25 @@ extern const boomdetect_extractor_t boomdetect_extractor_logmel;
  */
 void boomdetect_aggregate_stats(const float *frames, uint32_t nframes, uint32_t stride,
                                 uint32_t coeffs, float *out);
+
+/**
+ * @brief The whole of layout 2, BOOMDETECT_FEATURE_COUNT_STATS_SPECTRAL floats.
+ *
+ * Shared by layouts 2 and 4 for the same reason: the first 69 values of layout
+ * 4 are bit-identical to layout 2.
+ */
+void boomdetect_extract_stats_spectral(const float *frames, uint32_t nframes, uint32_t stride,
+                                       float *out);
+
+/**
+ * @brief The BOOMDETECT_MOD_FEATURES modulation features of a full envelope ring.
+ *
+ * Specified by features.modulation_stats(): Welch spectrum of the 1 kHz
+ * envelope, prominence over a running mean, the strongest line in 50-400 Hz
+ * and what sits around it. NaN in every output when @p side does not hold the
+ * whole ring - the pipeline never calls it then, a direct caller learns so.
+ */
+void boomdetect_modulation_features(const boomdetect_side_t *side, float *out);
 
 #ifdef __cplusplus
 }

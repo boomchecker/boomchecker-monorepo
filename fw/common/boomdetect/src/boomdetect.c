@@ -12,6 +12,7 @@
 
 #include "arm_math.h"
 #include "classifier.h"
+#include "envelope.h"
 #include "extractors.h"
 #include "frame_scalars.h"
 #include "mfcc_processor.h"
@@ -21,8 +22,11 @@
 
 _Static_assert(BOOMDETECT_FEATURE_COUNT <= BOOMDETECT_FEATURE_MAX &&
                    BOOMDETECT_FEATURE_COUNT_STATS_SPECTRAL <= BOOMDETECT_FEATURE_MAX &&
-                   BOOMDETECT_FEATURE_COUNT_LOGMEL <= BOOMDETECT_FEATURE_MAX,
+                   BOOMDETECT_FEATURE_COUNT_LOGMEL <= BOOMDETECT_FEATURE_MAX &&
+                   BOOMDETECT_FEATURE_COUNT_STATS_SPECTRAL_MOD <= BOOMDETECT_FEATURE_MAX,
                "boomdetect_t::features cannot hold every layout this build produces");
+_Static_assert(BOOMDETECT_HOP / BOOMDETECT_ENV_DECIM == BOOMDETECT_ENV_PER_HOP,
+               "dsp_config.h's envelope samples per hop assume the default hop");
 _Static_assert(BOOMDETECT_FRAME_SCALAR_COUNT == BOOMDETECT_FRAME_SCALARS,
                "dsp_config.h and frame_scalars.h disagree about the scalar count");
 _Static_assert(BOOMDETECT_SCALAR_BINS <= BOOMDETECT_WINDOW_SIZE,
@@ -121,6 +125,13 @@ bool boomdetect_init(boomdetect_t *d, const boomdetect_config_t *cfg)
         }
         s_mfcc_ready = true;
     }
+    /* Whatever the extractor needs set up happens here, not in the first
+       window: on the board a window closes inside the real-time loop, and
+       layout 4's tables took 6 ms there - a lost block. */
+    if (ex->prepare != NULL && !ex->prepare(ex->ctx))
+    {
+        return false;
+    }
 
     memset(d, 0, sizeof(*d));
     d->cfg = *cfg;
@@ -146,6 +157,7 @@ bool boomdetect_init(boomdetect_t *d, const boomdetect_config_t *cfg)
         d->cfg.thr_milli = model->default_thr_milli;
     }
     d->last_mfcc_slot = BOOMDETECT_NO_MFCC;
+    boomdetect_envelope_reset(d);
     return true;
 }
 
@@ -219,6 +231,25 @@ bool boomdetect_step(boomdetect_t *d, boomdetect_event_t *out)
        classified at all. */
     out->window.decision = NAN;
 
+    /* The envelope follows the audio whether or not this frame is accepted: a
+       window's modulation spectrum is taken over the last two seconds of
+       sound, silence between accepted frames included, exactly as the
+       training package computed it over contiguous recordings. Frames overlap
+       by WINDOW - hop, so the first `hop` samples of this one are the only
+       ones the chain has not seen; they are read before the MFCC destroys the
+       buffer. A gap means the ring no longer describes two continuous seconds
+       and starts filling again. Only kept for an extractor that asks for it:
+       the three biquads cost about 0.15 ms per frame on the board, a tenth of
+       the frame, and a layout-2 model never reads the ring. */
+    if (d->cfg.extractor->env_required > 0u)
+    {
+        if (out->gap)
+        {
+            boomdetect_envelope_gap(d);
+        }
+        boomdetect_envelope_push(d, d->frame, d->cfg.hop);
+    }
+
     const float    squelch = (float)d->cfg.squelch_milli / 1000.0f;
     const uint32_t accum_target = d->cfg.accum_frames;
 
@@ -268,10 +299,21 @@ bool boomdetect_step(boomdetect_t *d, boomdetect_event_t *out)
                 (d->cfg.gate != BOOMDETECT_GATE_WINDOW_MEDIAN) ||
                 (median_of(d->rms_hist, d->accum) >= squelch);
 
-            if (keep)
+            const boomdetect_extractor_t *ext = d->cfg.extractor;
+            if (keep && ext->env_required > d->env_fill)
             {
-                const boomdetect_extractor_t *ext = d->cfg.extractor;
-                ext->extract(ext->ctx, d->mfccs, d->accum, BOOMDETECT_FRAME_WIDTH,
+                /* Layout 4 in its first two seconds, or after a gap: the window
+                   is consumed, there is no decision, and the event says why. The
+                   training package has NaN here and never fitted a model on
+                   such a window, so there is nothing right to hand the model. */
+                out->window.warming     = true;
+                out->window.start_frame = d->window_start_frame;
+                out->window.end_frame   = d->frame_index;
+            }
+            else if (keep)
+            {
+                const boomdetect_side_t side = boomdetect_envelope_side(d);
+                ext->extract(ext->ctx, d->mfccs, d->accum, BOOMDETECT_FRAME_WIDTH, &side,
                              d->features);
                 const classifier_t *model = d->cfg.classifier;
                 /* The entry declares where its slice starts and how wide it is,

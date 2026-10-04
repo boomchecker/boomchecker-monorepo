@@ -103,6 +103,7 @@ are unchanged bit for bit.
 | 1 | `stats` | 52 | `[mean, std, dmean, cmax] × 13` — what `mlp_v6` and `svm_v3` read |
 | 2 | `stats_spectral` | 69 | layout 1, then mean and std of the eight scalars, then log-mel flux |
 | 3 | `logmel` | 280 | the 14 × 20 log-mel patch minus its mean, frame-major — a CNN's input |
+| 4 | `stats_spectral_mod` | 79 | layout 2, then ten numbers from the modulation spectrum of the 1–4 kHz envelope over the last two seconds (`src/extractor_mod.c`) |
 
 The scalars are the things an MFCC envelope smooths away and that separate a
 rotor from a hum: a closed mouth has almost nothing above 4 kHz, a single stable
@@ -111,6 +112,26 @@ arithmetic is specified by `training/boomdetect_train/features.py`; the C is
 held to it by `extractor_test` on the `detselftest` signal, with stated
 tolerances and the two discrete values (roll-off bin, comb fundamental) compared
 only on windows the fixture marks as numerically stable.
+
+Layout 4 adds the one thing the frame descriptors cannot see: the rhythm of
+the sound. A rotor's broadband noise is amplitude-modulated at the blade-pass
+rate — about 170–185 Hz for a hovering Phantom 4, with a harmonic at twice it
+— and that modulation survives at 60–90 m overhead, where the spectrum itself
+has sunk to the background. The pipeline therefore keeps a second signal
+beside the frames: the 1–4 kHz band, rectified and low-passed (three biquads,
+`src/envelope.c`, coefficients from `src/envelope_coefs.h`), sampled at 1 kHz
+into a ring of 1984 values (`boomdetect_t::env_ring`) that follows the audio
+continuously, gated frames included. When a window closes, the extractor takes
+a Welch spectrum of the ring (12 Hann segments of 512 every 128), measures how
+far each bin stands above the mean of the 41 bins around it, and reports the
+strongest line in 50–400 Hz, its frequency, the harmonic, per-band maxima,
+the share of bins that are lines, the envelope's depth and the share of its
+power in 100–250 Hz. Until the ring has two seconds in it — after init, and
+after a gap — a layout-4 window closes `warming`, with no decision; the
+training package has NaN there and never fitted a model on such a window.
+The fixture for it is a 5 s LCG noise amplitude-modulated at 192 Hz in integer
+arithmetic (`tests/vectors/extractor_mod_expected.h`), so both sides see the
+same samples; `extractor_test` holds the envelope and the ten features to it.
 
 ## Training package
 
@@ -159,13 +180,12 @@ export` generates the file and its weight header; the registry lines stay a
 hand edit, and `model_parity_test` fails for any exported model the registry
 does not list.
 
-The image currently carries six: the deployed `mlp_v6` and `svm_v3` on layout 1,
-and the comparison set from training run r2 — the model of each family that
-generalised best to the unseen Halmstad recordings: `svm_l1` (layout 1),
-`svm_l2` and `gbt_reg_l2` (gradient-boosted trees) on layout 2, `cnn_small` on
-layout 3 — each with the threshold that kept its false-alarm windows under 5
-per hour on the validation negatives. `model <name>` switches; the default stays
-`mlp_v6`.
+`models/models.h` lists what the image carries, with each model's provenance;
+the field manual ([field-manual.md](field-manual.md)) has the numbers. The
+default is `mlp_f2` on layout 2; `gbt_m1` and `mlp_m1` (2026-10-03) are the
+first on layout 4. Every model ships at the threshold that kept its
+false-alarm windows under 5 per hour on the validation negatives, and
+`model <name>` switches between them.
 
 A model needing a different feature *representation* — raw frames for a CNN, say
 — adds a **feature extractor** rather than an edit to the pipeline.

@@ -14,9 +14,10 @@
 #include <string.h>
 
 static void logmel_extract(void *ctx, const float *frames, uint32_t nframes, uint32_t stride,
-                           float *out)
+                           const boomdetect_side_t *side, float *out)
 {
     (void)ctx;
+    (void)side;
     const uint32_t rows = (nframes < BOOMDETECT_ACCUM_FRAMES_MAX) ? nframes : BOOMDETECT_ACCUM_FRAMES_MAX;
     const uint32_t n    = rows * BOOMDETECT_MEL_FILTERS;
 

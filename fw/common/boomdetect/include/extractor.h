@@ -9,8 +9,8 @@
  * declaring a new layout made init fail. The id was a version tag with exactly
  * one legal value, and the docs said otherwise.
  *
- * There are now three extractors (src/extractors.h), and the seam is what made
- * the second and third additions rather than edits to the pipeline: each is a
+ * There are now four extractors (src/extractors.h), and the seam is what made
+ * the later ones additions rather than edits to the pipeline: each is a
  * file under src/, an id below, a line in the registry, and a model that
  * declares the same id. boomdetect_init() checks the model against the
  * CONFIGURED extractor's layout, never against a constant.
@@ -39,6 +39,23 @@ extern "C" {
 #define BOOMDETECT_LAYOUT_MEAN_STD_DMEAN_CMAX 1u /* "stats", 52 */
 #define BOOMDETECT_LAYOUT_STATS_SPECTRAL      2u /* "stats_spectral", 69 */
 #define BOOMDETECT_LAYOUT_LOGMEL              3u /* "logmel", 280 */
+#define BOOMDETECT_LAYOUT_STATS_SPECTRAL_MOD  4u /* "stats_spectral_mod", 79 */
+
+/**
+ * What the pipeline knows beyond the window's own frames: the envelope ring
+ * (dsp_config.h, BOOMDETECT_ENV_*), which outlives any window. Layouts 1-3
+ * ignore it; layout 4 reads its modulation spectrum. Passed by pointer so a
+ * future side channel is one more field here rather than another parameter.
+ */
+typedef struct
+{
+    /** BOOMDETECT_ENV_RING envelope samples at 1 kHz, a ring: the oldest is
+        env[env_head], the newest env[(env_head + env_fill - 1) % ring]. */
+    const float *env;
+    uint32_t     env_head;
+    /** Samples the ring holds; BOOMDETECT_ENV_RING once it is full. */
+    uint32_t     env_fill;
+} boomdetect_side_t;
 
 /**
  * @brief Turn a window of frame descriptors into a feature vector.
@@ -51,10 +68,13 @@ extern "C" {
  * @param nframes frames actually accumulated; never more than the window size
  * @param stride  floats per row (BOOMDETECT_FRAME_WIDTH today; passed so an
  *                extractor never hardcodes it)
+ * @param side    the pipeline's side channel; never NULL from boomdetect_step(),
+ *                and holding at least `env_required` samples when it calls
  * @param out     n_features floats
  */
 typedef void (*boomdetect_extract_fn)(void *ctx, const float *frames, uint32_t nframes,
-                                      uint32_t stride, float *out);
+                                      uint32_t stride, const boomdetect_side_t *side,
+                                      float *out);
 
 typedef struct
 {
@@ -66,6 +86,19 @@ typedef struct
 
     /** Width of the vector this produces. */
     uint16_t n_features;
+
+    /** Envelope samples the side channel must hold before this extractor can
+        run; 0 for the layouts that never look at it. boomdetect_step() lets a
+        window close without a decision until the ring has that many, which is
+        the first two seconds after init or after a gap - the training package
+        has NaN there and never fits a model on those windows. */
+    uint16_t env_required;
+
+    /** One-time set-up - a transform instance, a window table - done by
+        boomdetect_init() rather than inside the first window, which on the
+        board is real time: layout 4's tables took 6 ms there and cost a block.
+        NULL when there is nothing to prepare; returning false fails init. */
+    bool (*prepare)(void *ctx);
 
     boomdetect_extract_fn extract;
     void                 *ctx;

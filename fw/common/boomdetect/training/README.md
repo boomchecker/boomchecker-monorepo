@@ -102,7 +102,8 @@ bdtrain export r1 [--models m ...]   # headers + translation units + parity vect
 bdtrain export f1 --models mlp_l2=mlp_f1_l2 --keep full:gbt_l2 fw_aug:mlp_reg_l2=mlp_f1 ...
                               # export under a new C name; parity for registry models of
                               # older runs, under the name the registry knows them by
-bdtrain fixtures              # regenerate tests/vectors/extractor_expected.h
+bdtrain fixtures              # regenerate tests/vectors/extractor_expected.h,
+                              # extractor_mod_expected.h and src/envelope_coefs.h
 ```
 
 `bdtrain` is `python -m boomdetect_train`.
@@ -148,12 +149,13 @@ at the same time.
 | 1 | `stats` | 52 | `mlp`, `mlp_reg`, `mlp2`, `svm`, `gbt`, `gbt_reg` |
 | 2 | `stats_spectral` | 69 | the same six |
 | 3 | `logmel` | 280 | `cnn_small`, `cnn_ds`, `cnn_1d`, `cnn_wide`, and the same six on the patch as a flat vector (`gbt_l3` ...) |
+| 4 | `stats_spectral_mod` | 79 | the same six; layout 2 plus ten modulation features of the 1-4 kHz envelope over the last 2 s (`features.modulation_stats`) - the family behind `gbt_m1` / `mlp_m1` |
 
 `mlp` is 32 hidden units, `mlp_reg` 16 with alpha 1e-2, `mlp2` two hidden layers
 (32, 16) with the same alpha - the family behind `mlp_f2`. The C side takes an
 MLP with one or two hidden layers (export.py writes either header format).
 
-`features.py` is the specification of the three layouts; the C extractors are
+`features.py` is the specification of the four layouts; the C extractors are
 held to it by `extractor_test`. `models/cnn.py`'s architecture list builds the
 PyTorch module, the numpy reference of the C interpreter and the exported
 descriptor table from one description, so the three cannot drift apart.

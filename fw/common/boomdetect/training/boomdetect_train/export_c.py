@@ -18,7 +18,12 @@ from __future__ import annotations
 import numpy as np
 
 from boomdetect_train.export import _c_array, _c_float, _header
-from boomdetect_train.features import LAYOUT_LOGMEL, LAYOUT_STATS, LAYOUT_STATS_SPECTRAL
+from boomdetect_train.features import (
+    LAYOUT_LOGMEL,
+    LAYOUT_STATS,
+    LAYOUT_STATS_SPECTRAL,
+    LAYOUT_STATS_SPECTRAL_MOD,
+)
 from boomdetect_train.models.cnn import L_CONV, L_DENSE, L_DWCONV, L_GAP, L_POOL, CnnModel
 
 LAYOUT_MACRO = {
@@ -28,6 +33,10 @@ LAYOUT_MACRO = {
         "BOOMDETECT_FEATURE_COUNT_STATS_SPECTRAL",
     ),
     LAYOUT_LOGMEL: ("BOOMDETECT_LAYOUT_LOGMEL", "BOOMDETECT_FEATURE_COUNT_LOGMEL"),
+    LAYOUT_STATS_SPECTRAL_MOD: (
+        "BOOMDETECT_LAYOUT_STATS_SPECTRAL_MOD",
+        "BOOMDETECT_FEATURE_COUNT_STATS_SPECTRAL_MOD",
+    ),
 }
 
 

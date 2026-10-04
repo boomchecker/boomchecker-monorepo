@@ -148,6 +148,11 @@ typedef struct
     struct
     {
         bool     complete;
+        /** The window closed but the extractor's envelope ring was not yet
+            full (boomdetect_extractor_t::env_required): consumed, no
+            decision, `complete` false. Only layout 4 ever sets it, during the
+            first two seconds after init or after a gap. */
+        bool     warming;
         uint32_t start_frame;
         /** Frame that closed the window. Not `start_frame + accum_frames - 1`:
             under BOOMDETECT_GATE_PER_FRAME a squelched frame resets the
@@ -161,8 +166,8 @@ typedef struct
 } boomdetect_event_t;
 
 /**
- * Detector state. Big (about 21 KB, mostly the FIFO), so give it static storage
- * rather than a stack frame. Held by the caller rather than hidden in this
+ * Detector state. Big (about 29 KB: the FIFO and the envelope ring), so give it
+ * static storage rather than a stack frame. Held by the caller rather than hidden in this
  * translation unit rather than a hidden singleton, so several detectors can be
  * driven side by side - pipeline_test does exactly that.
  *
@@ -191,6 +196,17 @@ typedef struct
     /** Per-frame RMS of the frames held in the current window, for
         BOOMDETECT_GATE_WINDOW_MEDIAN. Unused by the per-frame gate. */
     float    rms_hist[BOOMDETECT_ACCUM_FRAMES];
+
+    /** The 1-4 kHz envelope at 1 kHz (src/envelope.c): the last
+        BOOMDETECT_ENV_RING samples of CONTINUOUS audio, accepted frames or not,
+        which is what layout 4 takes its modulation spectrum over. Oldest sample
+        at env_head; env_fill is below the ring length for the first two seconds
+        after init and after a gap, and an extractor that needs the ring full
+        (boomdetect_extractor_t::env_required) gets no window before that. */
+    float    env_ring[BOOMDETECT_ENV_RING];
+    uint32_t env_head, env_fill;
+    uint32_t env_phase; /**< chain samples until the next kept envelope sample */
+    float    env_state[BOOMDETECT_ENV_SECTIONS][2]; /**< biquad states, DF2T */
     /** The configured extractor's output; only its n_features are meaningful. */
     float    features[BOOMDETECT_FEATURE_MAX];
     uint32_t last_mfcc_slot;
@@ -235,6 +251,11 @@ size_t boomdetect_push(boomdetect_t *d, const int16_t *pcm, size_t n);
  * At most one, never "as much as possible": one MFCC per caller iteration is
  * what keeps the firmware inside its real-time budget. A host test that wants
  * to drain everything simply loops.
+ *
+ * Every frame, accepted or squelched, also feeds the envelope ring (the first
+ * `hop` samples of the frame are the ones not seen before). An extractor that
+ * needs the ring full lets its first windows close without a decision; the
+ * event says so (`window.warming`).
  */
 bool boomdetect_step(boomdetect_t *d, boomdetect_event_t *out);
 
