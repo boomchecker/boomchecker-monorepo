@@ -151,10 +151,15 @@ Co z toho plyne pro test venku:
   tady nic. Modulace je podpis stálých otáček: při manévrech se čára rozmaže
   (30. 9. na 30 m jen 6 dB, jinde 9–11 dB). Dvě věci navíc: první dvě
   sekundy po startu `detect` tyto modely nic nevypíšou (plní se kruh obálky,
-  totéž po výpadku vzorků), první rozhodnutí přijde v čase 2,2 s; a venku s
-  dronem zatím neběžely. Na desce B ověřeno 4. 10.: `selftest` sedí, snímek
-  uzavírající okno trvá 4,7 ms (u `mlp_f2` 1,2 ms) z rozpočtu 21 ms, běžný
-  snímek 1,2 ms, žádný overrun, v kanceláři bez alarmu.
+  totéž po výpadku vzorků), první rozhodnutí přijde v čase 2,2 s. Na desce B
+  ověřeno 4. 10.: `selftest` sedí, snímek uzavírající okno trvá 4,7 ms (u
+  `mlp_f2` 1,2 ms) z rozpočtu 21 ms, běžný snímek 1,2 ms, žádný overrun.
+  **Venku 5. 10.** ([mereni-2026-10-05.md](mereni-2026-10-05.md)): při visení
+  od 60 m výš vrstva 4 jasně vede (60 m 100 % oken proti 58 %, 80 m 65 % proti
+  21 %, 100 m `gbt_m1` 100 % proti 3 % u `mlp_f2`), pozadí s lidmi bez
+  falešného alarmu. Ve 120 m nechytil nikdo, nejspíš brána (squelch 3): už na
+  80–100 m prošlo jen 20–43 oken ze 60. Při přeletu a klesání modulace slábne
+  (otáčky se mění), detekce je o dost horší než při visení.
 
 ## 5. Citlivost mlp_f2: jak si s prahem hrát
 
