@@ -49,10 +49,77 @@ Cílem práce je připravit podklady pro mikrofonní pole se dvěma kruhy po osm
 
 \section{Beamforming a odhad směru příchodu}
 \label{sec:sota}
-% TODO M2: far-field model a steering vektor, TDOA, prostorovy aliasing,
-% DAS/SRP, MVDR (Capon), GCC-PHAT (Knapp & Carter), SRP-PHAT (DiBiase),
-% MUSIC (Schmidt), TOPS, UCA vs 3D pole, aktualni prace o lokalizaci UAV.
-\placeholder{Přehled metod beamformingu a~DOA doplnit v~milníku M2.}
+\subsection{Signálový model}
+Dron bývá vůči mikrofonnímu poli ve vzdáleném poli, zvuk tedy dopadá jako rovinná vlna a~z~pole lze odhadnout směr, ne vzdálenost \cite{altena2025frequency}. Směr popisuje jednotkový vektor $\mathbf{u}(\Omega)=[\cos\theta\cos\phi,\ \cos\theta\sin\phi,\ \sin\theta]^T$ s~azimutem $\phi$ a~elevací $\theta$ měřenou od vodorovné roviny. Mikrofon v~poloze $\mathbf{r}_m$ zachytí vlnu s~předstihem $\tau_m(\Omega)=\mathbf{r}_m^T\mathbf{u}(\Omega)/c$ vůči počátku. Rozdíl $\tau_{mn}=\tau_m-\tau_n$ je časový rozdíl příchodu (TDOA) dvojice mikrofonů. Po STFT platí v~binu $k$ s~frekvencí $f_k$ pro vektor $M$ mikrofonních spekter
+\begin{equation}
+  \mathbf{x}(k) = \mathbf{a}(k,\Omega)\,s(k) + \mathbf{n}(k), \quad a_m(k,\Omega) = e^{\,j2\pi f_k \tau_m(\Omega)},
+  \label{eq:model}
+\end{equation}
+kde $\mathbf{a}$ je steering vektor, $s$ spektrum zdroje a~$\mathbf{n}$ šum. Kovarianční matice binu se odhaduje průměrem přes $L$ rámců, $\hat{\mathbf{R}}(k)=\frac{1}{L}\sum_l \mathbf{x}_l(k)\mathbf{x}_l^H(k)$. Metody níže hledají směr $\Omega$ maximalizací prostorového spektra $P(\Omega)$ na gridu směrů.
+
+Fáze steering vektoru je jednoznačná, jen pokud jsou sousední mikrofony blíž než $\lambda/2$. Nad touto mezí vznikají falešné laloky (prostorový aliasing); meze pro uvažované kruhy jsou v~tab.~\ref{tab:alias}. Dolní mez pásma naopak určuje apertura $L_a$: šířka hlavního laloku roste přibližně jako $\lambda/L_a$, takže pole o~průměru 160 až 250\,mm má pod 1\,kHz velmi široký lalok.
+
+\subsection{Beamforming}
+Konvenční beamformer (delay-and-sum, DAS) srovná fáze kanálů podle kandidátního směru a~sečte je. V~jednom binu je jeho výstupní výkon $\mathbf{a}^H\hat{\mathbf{R}}\mathbf{a}$ \cite{vanveen1988beamforming}, širokopásmový výkon řízené odezvy (SRP) je součet přes biny pásma
+\begin{equation}
+  P_{\mathrm{DAS}}(\Omega) = \sum_k \mathbf{a}^H(k,\Omega)\,\hat{\mathbf{R}}(k)\,\mathbf{a}(k,\Omega).
+  \label{eq:das}
+\end{equation}
+Rozlišení DAS je dané aperturou pole měřenou ve vlnových délkách. Jeho váhy nezávisí na datech, takže na rozdíl od statisticky optimálních beamformerů nepotlačí žádaný signál při nepřesné znalosti jeho směru \cite{vanveen1988beamforming}. Beamformer MVDR (Capon) propustí rovinnou vlnu ze směru $\Omega$ s~jednotkovým ziskem a~minimalizuje výkon ostatních složek \cite{capon1969mvdr}. Jeho spektra v~jednotlivých binech sčítáme nekoherentně:
+\begin{equation}
+  P_{\mathrm{MVDR}}(\Omega) = \sum_k \frac{1}{\mathbf{a}^H(k,\Omega)\,\big(\hat{\mathbf{R}}(k)+\varepsilon\mathbf{I}\big)^{-1}\mathbf{a}(k,\Omega)},
+  \label{eq:mvdr}
+\end{equation}
+kde $\varepsilon\mathbf{I}$ je diagonální loading, u~Capona přidání malého nekoherentního šumu \cite{capon1969mvdr}. Při malém podílu nekoherentního šumu má MVDR užší lalok než DAS \cite{capon1969mvdr}, ale potřebuje inverzi matice $M\times M$ v~každém binu a~je citlivé na chyby polohy mikrofonů. Itare et~al. adaptivní beamforming pro dron právě z~těchto důvodů zamítli \cite{itare2022frequency}.
+
+\subsection{Korelační metody}
+Zobecněná křížová korelace (GCC) dvojice mikrofonů váží křížové spektrum frekvenční vahou a~poloha maxima zpětné transformace odhaduje zpoždění \cite{knapp1976gcc}. S~vahou PHAT zůstane jen fáze:
+\begin{equation}
+  R_{mn}(\tau) = \sum_k \frac{X_m(k)X_n^*(k)}{|X_m(k)X_n^*(k)|}\,e^{-j2\pi f_k\tau}.
+  \label{eq:gcc}
+\end{equation}
+PHAT zplošťuje spektrum, takže zostří korelační pík, ale chyby zesiluje v~binech se slabým signálem \cite{knapp1976gcc}. Z~odhadů $\hat\tau_{mn}$ všech dvojic (pro 16 mikrofonů 120) se směr získá metodou nejmenších čtverců z~lineární soustavy $(\mathbf{r}_m-\mathbf{r}_n)^T\mathbf{u}=c\,\hat\tau_{mn}$ bez prohledávání gridu. Chyba jednotlivých dvojic se ale do výsledku přenáší přímo. SRP-PHAT místo toho sčítá GCC-PHAT všech dvojic v~zpožděních odpovídajících kandidátnímu směru \cite{dibiase2001srpphat}:
+\begin{equation}
+  P_{\mathrm{SRP\text{-}PHAT}}(\Omega) = \sum_{m<n} R_{mn}\big(\tau_{mn}(\Omega)\big).
+  \label{eq:srpphat}
+\end{equation}
+Pro dron však celopásmový SRP-PHAT nestačí. Uluskan uvádí, že běžný SRP-PHAT dron nelokalizoval při žádné úrovni šumu, kdežto varianta počítaná jen v~okolí harmonických základní frekvence vrtule uspěla \cite{uluskan2024srpphat}.
+
+\subsection{Podprostorové a širokopásmové metody}
+MUSIC rozloží kovarianční matici na signálový a~šumový podprostor $\mathbf{E}_n$ a~využije, že steering vektor skutečného směru je na šumový podprostor kolmý. Počet zdrojů Schmidt odhaduje z~násobnosti nejmenšího vlastního čísla \cite{schmidt1986music}. Úzkopásmová pseudospektra binů sčítáme nekoherentně:
+\begin{equation}
+  P_{\mathrm{MU}}(\Omega) = \sum_k \frac{1}{\mathbf{a}^H(k,\Omega)\,\mathbf{E}_n(k)\mathbf{E}_n^H(k)\,\mathbf{a}(k,\Omega)}.
+  \label{eq:music}
+\end{equation}
+MUSIC dává ostré maximum, ale vyžaduje vlastní rozklad v~každém binu. Koherentní metody místo nekoherentního součtu převedou kovariance všech binů fokusačními maticemi na jednu referenční frekvenci (CSSM \cite{wang1985cssm}), případně fokusují a~váženě průměrují signálové podprostory jednotlivých binů (WAVES \cite{diclaudio2001waves}). TOPS převádí signálový podprostor referenčního binu pro každý hypotetický směr do ostatních binů a~testuje jeho ortogonalitu na jejich šumové podprostory, takže počáteční odhad směru nepotřebuje. Výkonem leží mezi koherentními metodami a~nekoherentním MUSIC a~odvozen je pro lineární a~rovinná pole \cite{yoon2006tops}.
+
+Adaptivní a~podprostorové metody potřebují dobře podmíněný odhad $\hat{\mathbf{R}}(k)$. Úsek 100\,ms však dává jen $L=5$ rámců STFT (sekce~\ref{sec:vypocty}), takže matice $16\times16$ má hodnost nejvýš 5 a~bez diagonálního loadingu je singulární; regulární odhad vyžaduje aspoň tolik rámců jako mikrofonů \cite{capon1969mvdr}. Nejmenší vlastní číslo má pak násobnost aspoň 11 bez ohledu na počet zdrojů, takže Schmidtův odhad počtu zdrojů selže. Podobně krátký úsek volí i~Altena et~al., kteří kvůli nestacionaritě dronu počítají kovarianci z~jediného rámce a~používají konvenční beamforming \cite{altena2025frequency}. Oulahcine et~al. porovnali na kruhovém poli s~osmi mikrofony SRP, SRP-PHAT, MVDR, MUSIC a~diagonal unloading (DU). Uvádějí, že DU dosahuje výsledků srovnatelných s~MUSIC při nižší výpočetní složitosti, kterou však nekvantifikují \cite{oulahcine2024du}.
+
+\subsection{Geometrie pole a lokalizace UAV}
+Rovinné kruhové pole (UCA) určí azimut ve všech směrech, ale elevaci jen slabě: zpoždění závisí na $\cos\theta$, jehož derivace je u~horizontu nulová. Altena et~al. pozorují pokles efektivní apertury pro elevaci u~zdrojů pod nízkým úhlem \cite{altena2026joint}. U~rovinného pole osmi MEMS mikrofonů byla chyba lokalizace o~20 až 25\,\% vyšší pro dron přímo nad polem než pro průlet do strany \cite{ghouli2026mems}. Druhý kruh posunutý o~$h$ ve svislé ose přidává vertikální aperturu a~zlepšuje odhad elevace u~horizontu, za cenu dalších osmi kanálů.
+
+Současné práce lokalizují dron většinou konvenčním frekvenčním beamformingem ve zvolených pásmech. Altena et~al. pro 64mikrofonové pole našli nejlepší pásma mezi 200 a~2000\,Hz a~beamforming se v~dosahu vyrovnal negridové optimalizaci \cite{altena2025frequency}. V~navazující práci beamformují jednotlivé frekvence v~pásmu 140 až 1200\,Hz; dolní mez dává vítr, horní měřitelnost hluku dronu a~útlum v~atmosféře \cite{altena2026joint}. Itare et~al. zvyšují SNR beamformingu výběrem čas-frekvenčních binů kolem harmonických \cite{itare2022frequency}. Tyto práce podporují pásmo 300\,Hz až 2\,kHz ze sekce~\ref{sec:spektrum} i~výběr binů podle harmonické struktury. Tab.~\ref{tab:metody} shrnuje nároky metod.
+
+\begin{table}[t]
+\centering
+\caption{Srovnání metod DOA. Cena je vlastní řádový odhad pro $M$ mikrofonů, $P=M(M-1)/2$ dvojic a~$D$ zdrojů.}
+\label{tab:metody}
+\small
+\begin{tabularx}{\columnwidth}{@{}lYYl@{}}
+\toprule
+Metoda & Potřebuje & Cena na bin a~směr & Zdroj \\
+\midrule
+DAS/SRP & $\hat{\mathbf{R}}$ & $O(M^2)$ & \cite{vanveen1988beamforming} \\
+MVDR & $(\hat{\mathbf{R}}+\varepsilon\mathbf{I})^{-1}$ & $O(M^3)$ na bin + $O(M^2)$ & \cite{capon1969mvdr} \\
+GCC-PHAT+LS & IFFT na dvojici & bez gridu, $P$ IFFT & \cite{knapp1976gcc} \\
+SRP-PHAT & GCC-PHAT & $O(P)$ & \cite{dibiase2001srpphat} \\
+MUSIC & EVD $\hat{\mathbf{R}}$ & $O(M^3)$ na bin + $O(M^2)$ & \cite{schmidt1986music} \\
+TOPS & EVD + SVD & $O(M^3)$ na bin + $O(D^3)$ & \cite{yoon2006tops} \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+V~sekci~\ref{sec:geometrie} porovnáváme vlastní implementace DAS, MVDR, SRP-PHAT, GCC-PHAT s~LS a~MUSIC na společném gridu směrů v~pásmu 300\,Hz až 2\,kHz. Metody TOPS, CSSM a~WAVES slouží jen ke kontrole přes knihovnu pyroomacoustics \cite{scheibler2018pyroomacoustics}.
 
 \section{Spektrum dronového hluku}
 \label{sec:spektrum}
