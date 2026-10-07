@@ -182,3 +182,39 @@ tasks:
       - test -f generated/features_new_seed44/features_manifest.csv
       - test -f generated/features_new_seed45/features_manifest.csv
       - test -f generated/features_new_seed46/features_manifest.csv
+
+  # ---- Conference talk (slides/) -- same layout as the IMEKO TC4 2026 talk --------
+  slides:build:
+    desc: Compile slides/slides.tex to slides/slides.pdf (the deck)
+    dir: slides
+    cmds:
+      - pdflatex -interaction=nonstopmode -halt-on-error slides.tex
+      - pdflatex -interaction=nonstopmode -halt-on-error slides.tex
+
+  slides:notes:
+    desc: Compile the speaker-notes PDF (script + slide thumbnail per page)
+    dir: slides
+    cmds:
+      - pdflatex -interaction=nonstopmode -halt-on-error slides-notes.tex
+      - pdflatex -interaction=nonstopmode -halt-on-error slides-notes.tex
+
+  slides:training:
+    desc: Generate the training booklet from the notes in slides.tex (needs a built deck)
+    cmds:
+      - python3 scripts/build_training.py
+      - cd slides/training && pdflatex -interaction=nonstopmode -halt-on-error booklet.tex
+
+  slides:all:
+    desc: Build the deck, the notes and the training booklet
+    cmds:
+      - task: slides:build
+      - task: slides:notes
+      - task: slides:training
+
+  slides:clean:
+    desc: Remove LaTeX auxiliary files of the talk
+    dir: slides
+    cmds:
+      - rm -f slides.aux slides.log slides.out slides.nav slides.snm slides.toc slides.vrb
+      - rm -f slides-notes.aux slides-notes.log slides-notes.out slides-notes.nav slides-notes.snm slides-notes.toc slides-notes.vrb
+      - rm -f training/booklet.aux training/booklet.log training/booklet.out
