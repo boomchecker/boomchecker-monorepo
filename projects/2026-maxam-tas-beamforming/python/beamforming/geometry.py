@@ -76,22 +76,33 @@ def azimuth_error_deg(az_est: NDArray | float, az_true: NDArray | float) -> NDAr
     return np.abs(np.rad2deg(d))
 
 
+def _check_step(step_deg: float) -> None:
+    """The grid must hit the zenith and close the azimuth circle exactly."""
+    if step_deg <= 0 or any(
+        abs(full / step_deg - round(full / step_deg)) > 1e-9 for full in (90.0, 360.0)
+    ):
+        raise ValueError(f"grid step {step_deg} deg must divide 90 and 360 deg")
+
+
 def coarse_grid(step_deg: float = 5.0) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
     """Regular azimuth x elevation grid over the upper hemisphere.
 
     Returns flat ``(az, el)`` arrays of length ``n_az * n_el`` in azimuth-major order, so a
     power vector reshapes to a map with ``P.reshape(n_az, n_el)``. With 5 deg this is
     72 x 19 = 1368 directions (report, section 6). The zenith row repeats the same direction
-    for every azimuth, which is harmless for an argmax search.
+    for every azimuth, which is harmless for an argmax search. ``step_deg`` must divide 90
+    and 360.
     """
-    az = np.deg2rad(np.arange(0.0, 360.0, step_deg))
-    el = np.deg2rad(np.arange(0.0, 90.0 + 1e-9, step_deg))
+    n_az, n_el = grid_shape(step_deg)
+    az = np.deg2rad(step_deg * np.arange(n_az))
+    el = np.deg2rad(step_deg * np.arange(n_el))
     a, e = np.meshgrid(az, el, indexing="ij")
     return a.ravel(), e.ravel()
 
 
 def grid_shape(step_deg: float = 5.0) -> tuple[int, int]:
     """``(n_az, n_el)`` of :func:`coarse_grid`."""
+    _check_step(step_deg)
     return int(round(360.0 / step_deg)), int(round(90.0 / step_deg)) + 1
 
 
@@ -113,12 +124,15 @@ def fine_cap(
 ) -> NDArray[np.float64]:
     """Fine search directions (D, 3) around ``u0``.
 
-    A fixed square of ``(2 * span / step + 1)^2`` points (11 x 11 for the defaults) on the
-    tangent plane at ``u0`` (gnomonic projection), so the spacing is ``step_deg`` along both
-    axes at any elevation, including the zenith, and azimuth wrap needs no special case.
+    A fixed square of ``(2 n + 1)^2`` points with ``n = round(span / step)`` (11 x 11 for the
+    defaults) on the tangent plane at ``u0`` (gnomonic projection). The cap is always symmetric
+    and contains ``u0`` even when ``step`` does not divide ``span``. The spacing is ``step_deg``
+    along both axes at any elevation, including the zenith, and azimuth wrap needs no special
+    case.
     Points below the horizon are dropped.
     """
-    offsets = np.deg2rad(np.arange(-span_deg, span_deg + 1e-9, step_deg))
+    n = int(round(span_deg / step_deg))  # always symmetric and includes the centre point
+    offsets = np.deg2rad(step_deg * np.arange(-n, n + 1))
     dx, dy = np.meshgrid(offsets, offsets, indexing="ij")
     east, north = tangent_basis(u0)
     v = (

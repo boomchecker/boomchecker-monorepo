@@ -164,3 +164,26 @@ def test_power_map_peaks_at_true_direction(drone_clips, rng):
 def test_unknown_method_raises():
     with pytest.raises(ValueError, match="unknown method"):
         doa.localize("nope", np.zeros((16, 1600)), g.make_array("2x8"))
+
+
+@pytest.mark.parametrize("method", doa.METHODS)
+@pytest.mark.parametrize("scale", [1e-9, 1e7])
+def test_localize_is_invariant_to_input_scale(method, scale, drone_clips, rng):
+    mic = g.make_array("2x8_rot", 0.20, 0.07)
+    x, _ = simulate(drone_clips[5], mic, 200.0, 40.0, 10.0, rng)
+    ref = doa.localize(method, x, mic)
+    got = doa.localize(method, x * scale, mic)
+    err = g.angular_error_deg(g.unit_vector(*got), g.unit_vector(*ref))
+    assert err <= 0.05
+
+
+@pytest.mark.parametrize("method", doa.METHODS)
+def test_silent_segment_raises(method):
+    with pytest.raises(ValueError, match="silent"):
+        doa.localize(method, np.zeros((16, 1600)), g.make_array("2x8_rot"))
+
+
+def test_mvdr_requires_positive_loading(rng):
+    X, mic, freqs, dirs = make_bins(rng)
+    with pytest.raises(ValueError, match="loading"):
+        doa.mvdr_bins(X, mic, freqs, dirs, doa.Config(loading=0.0))

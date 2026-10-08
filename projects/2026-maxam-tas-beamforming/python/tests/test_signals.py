@@ -99,3 +99,13 @@ def test_decimation_passband_and_stopband():
     assert np.std(low[len(h) :]) == pytest.approx(1 / np.sqrt(2), rel=0.02)
     high = sg.decimate_48k_to_16k(np.sin(2 * np.pi * 12_000 * t))  # would alias to 4 kHz
     assert np.std(high[len(h) :]) < 1e-2
+
+
+def test_band_bins_never_leave_the_band():
+    # 1024 point FFT at 16 kHz: df = 15.625 Hz, so 290 Hz lies between bins 18 and 19
+    bins = sg.band_bins(nfft=1024, band=(290.0, 2000.0))
+    freqs = sg.bin_freqs(bins, nfft=1024)
+    assert freqs.min() >= 290.0 and freqs.max() <= 2000.0
+    assert bins[0] == 19 and bins[-1] == 128
+    # an edge exactly on a bin is included
+    np.testing.assert_array_equal(sg.band_bins(), np.arange(10, 65))

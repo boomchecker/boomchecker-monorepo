@@ -88,3 +88,42 @@ def test_random_directions_uniform_on_hemisphere():
     assert np.mean(u[:, 2]) == pytest.approx(0.5, abs=0.01)
     assert np.mean(u[:, 0]) == pytest.approx(0.0, abs=0.02)
     assert np.mean(u[:, 1]) == pytest.approx(0.0, abs=0.02)
+
+
+@pytest.mark.parametrize("step", [2.0, 0.7, 1.0, 0.5])
+def test_fine_cap_is_symmetric_and_contains_centre(step):
+    u0 = g.unit_vector(np.deg2rad(120), np.deg2rad(60))
+    cap = g.fine_cap(u0, span_deg=5, step_deg=step)
+    n = int(round(5 / step))
+    assert cap.shape[0] == (2 * n + 1) ** 2
+    assert g.angular_error_deg(cap, u0).min() == pytest.approx(0.0, abs=1e-9)
+    east, north = g.tangent_basis(u0)
+    x, y = (
+        np.rad2deg(np.arctan2(cap @ east, cap @ u0)),
+        np.rad2deg(np.arctan2(cap @ north, cap @ u0)),
+    )
+    assert x.min() == pytest.approx(-x.max()) and y.min() == pytest.approx(-y.max())
+
+
+def test_fine_cap_zero_span_is_the_centre_only():
+    u0 = g.unit_vector(np.deg2rad(10), np.deg2rad(20))
+    cap = g.fine_cap(u0, span_deg=0.0)
+    assert cap.shape == (1, 3)
+    np.testing.assert_allclose(cap[0], u0)
+
+
+@pytest.mark.parametrize("step", [1.0, 2.5, 3.0, 5.0, 10.0])
+def test_grid_shape_matches_coarse_grid(step):
+    az, el = g.coarse_grid(step)
+    n_az, n_el = g.grid_shape(step)
+    assert az.shape == el.shape == (n_az * n_el,)
+    assert np.rad2deg(el.max()) == pytest.approx(90.0)  # the zenith is on the grid
+    assert len(np.unique(np.round(np.rad2deg(az), 6))) == n_az
+
+
+@pytest.mark.parametrize("step", [7.0, 0.0, -5.0, 25.0])
+def test_grid_step_must_divide_90_and_360(step):
+    with pytest.raises(ValueError, match="must divide"):
+        g.coarse_grid(step)
+    with pytest.raises(ValueError, match="must divide"):
+        g.grid_shape(step)

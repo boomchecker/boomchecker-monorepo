@@ -83,6 +83,8 @@ def srp_phat_bins(
 
 def mvdr_bins(X: NDArray, mic_pos: NDArray, freqs: NDArray, dirs: NDArray, cfg: Config) -> NDArray:
     """MVDR pseudo-spectrum ``1 / (a^H (R + eps tr(R)/M I)^-1 a)`` per bin (eq. mvdr)."""
+    if cfg.loading <= 0:
+        raise ValueError(f"MVDR needs diagonal loading > 0, got {cfg.loading}")
     M = X.shape[0]
     R = _covariance(X)
     trace = np.trace(R, axis1=1, axis2=2).real
@@ -227,11 +229,21 @@ def localize(
     mic_pos: NDArray,
     cfg: Config = DEFAULT,
 ) -> tuple[float, float]:
-    """Direction ``(azimuth, elevation)`` in radians from time-domain array signals ``x``."""
+    """Direction ``(azimuth, elevation)`` in radians from time-domain array signals ``x``.
+
+    The signal is scaled to unit RMS first, so the absolute floors inside the methods do not
+    depend on the input scale (float audio in [-1, 1) and raw integer samples alike). A silent
+    segment has no direction and raises ``ValueError``.
+    """
+    if method != "gcc_phat_ls" and method not in GRID_METHODS:
+        raise ValueError(f"unknown method {method!r}, expected one of {METHODS}")
+    x = np.atleast_2d(np.asarray(x, dtype=float))
+    rms = float(np.sqrt(np.mean(x**2)))
+    if not np.isfinite(rms) or rms == 0.0:
+        raise ValueError("silent or non-finite segment: no direction can be estimated")
+    x = x / rms
     if method == "gcc_phat_ls":
         return gcc_phat_ls(x, mic_pos, cfg)
-    if method not in GRID_METHODS:
-        raise ValueError(f"unknown method {method!r}, expected one of {METHODS}")
     X = sg.stft(x, cfg.nfft, cfg.hop)
     bins = sg.band_bins(cfg.fs, cfg.nfft, cfg.band)
     return search(method, X[:, bins], mic_pos, sg.bin_freqs(bins, cfg.fs, cfg.nfft), cfg)

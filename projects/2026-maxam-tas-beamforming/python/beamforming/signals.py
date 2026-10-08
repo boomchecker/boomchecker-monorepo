@@ -122,9 +122,15 @@ def stft(x: NDArray, nfft: int = NFFT, hop: int = HOP) -> NDArray[np.complex128]
 def band_bins(
     fs: int = FS, nfft: int = NFFT, band: tuple[float, float] = BAND_HZ
 ) -> NDArray[np.int64]:
-    """STFT bin indices covering ``band`` inclusive; 300 Hz to 2 kHz at 512/16 kHz is 10..64."""
+    """STFT bins whose centre frequency lies inside ``band`` (inclusive).
+
+    300 Hz to 2 kHz at 512 points and 16 kHz is bins 10..64. A band edge between two bins
+    rounds inwards, so no used bin is outside the band.
+    """
     df = fs / nfft
-    return np.arange(int(round(band[0] / df)), int(round(band[1] / df)) + 1)
+    lo = int(np.ceil(band[0] / df - 1e-9))
+    hi = int(np.floor(band[1] / df + 1e-9))
+    return np.arange(lo, hi + 1)
 
 
 def bin_freqs(bins: NDArray, fs: int = FS, nfft: int = NFFT) -> NDArray[np.float64]:
