@@ -142,3 +142,32 @@ def test_load_selected_builds_the_geometry(tmp_path):
     )
     sel = rs.load_selected(path)
     assert sel["geometry"] == ex.Geometry("2x8_rot", 0.2, 0.07) and sel["methods"] == ["das"]
+
+
+def test_comparisons_csv_keeps_other_stages_and_formats_the_interval(tmp_path):
+    path = tmp_path / "comparisons.csv"
+    rows = [
+        rs.comparison_row("snr", "music", "das", "music", s, 500, (1.05, 1.01, 1.1))
+        for s in (0.0, 10.0)
+    ]
+    rs.update_comparisons(path, "snr", rows)
+    rs.update_comparisons(
+        path,
+        "ablation",
+        [rs.comparison_row("ablation", "snr", "baseline", "all", 0.0, 500, (0.9, 0.85, 0.95))],
+    )
+    got = rs.read_summary(path)
+    assert [r["stage"] for r in got] == ["ablation", "snr", "snr"]
+    assert [r["snr_db"] for r in got if r["stage"] == "snr"] == ["10", "0"]
+    assert got[0]["ratio"] == "0.9000" and got[0]["high"] == "0.9500" and got[0]["n"] == "500"
+    rs.update_comparisons(path, "snr", [])
+    assert [r["stage"] for r in rs.read_summary(path)] == ["ablation"]
+
+
+def test_geometry_scores_can_select_a_variant():
+    rows = rows_with_rmse({GEO_A: {"das": 1.0}})
+    rows += [
+        dict(r, variant="band1750", rmse="2.0000") for r in rows_with_rmse({GEO_A: {"das": 1.0}})
+    ]
+    assert rs.geometry_scores(rows, "screening")[GEO_A] == pytest.approx(1.0)
+    assert rs.geometry_scores(rows, "screening", variant="band1750")[GEO_A] == pytest.approx(2.0)

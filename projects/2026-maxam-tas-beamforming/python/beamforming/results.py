@@ -111,18 +111,52 @@ def read_summary(path: Path) -> list[Row]:
         return list(csv.DictReader(f))
 
 
-def update_summary(path: Path, stage: str, rows: Iterable[Row]) -> None:
-    """Replace all rows of ``stage`` in the file (created when missing) and keep the others."""
+def _replace_stage(path: Path, stage: str, rows: Iterable[Row], columns: tuple, key) -> None:
     if stage not in STAGES:
         raise ValueError(f"unknown stage {stage!r}, expected one of {STAGES}")
     kept = [r for r in read_summary(path) if r["stage"] != stage]
-    merged = sorted([*kept, *rows], key=_sort_key)
+    merged = sorted([*kept, *rows], key=key)
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=COLUMNS, lineterminator="\n")
+        writer = csv.DictWriter(f, fieldnames=columns, lineterminator="\n")
         writer.writeheader()
         writer.writerows(merged)
+
+
+def update_summary(path: Path, stage: str, rows: Iterable[Row]) -> None:
+    """Replace all rows of ``stage`` in the file (created when missing) and keep the others."""
+    _replace_stage(path, stage, rows, COLUMNS, _sort_key)
+
+
+COMPARISON_COLUMNS = ("stage", "a", "b", "method", "snr_db", "n", "ratio", "low", "high")
+
+
+def comparison_row(
+    stage: str, a: str, b: str, method: str, snr_db: float, n: int, ci: tuple[float, float, float]
+) -> Row:
+    """One paired comparison: RMSE of ``a`` over RMSE of ``b`` with its 95 % interval."""
+    ratio, low, high = ci
+    return {
+        "stage": stage,
+        "a": a,
+        "b": b,
+        "method": method,
+        "snr_db": f"{snr_db:.0f}",
+        "n": str(n),
+        "ratio": f"{ratio:.4f}",
+        "low": f"{low:.4f}",
+        "high": f"{high:.4f}",
+    }
+
+
+def _comparison_key(row: Row) -> tuple:
+    return (STAGES.index(row["stage"]), row["a"], row["b"], row["method"], -float(row["snr_db"]))
+
+
+def update_comparisons(path: Path, stage: str, rows: Iterable[Row]) -> None:
+    """Replace the comparison rows of ``stage`` in ``comparisons.csv``."""
+    _replace_stage(path, stage, rows, COMPARISON_COLUMNS, _comparison_key)
 
 
 def stage_rows(rows: Iterable[Row], stage: str, **match: str) -> list[Row]:
@@ -135,14 +169,16 @@ def geometry_of(row: Row) -> Geometry:
     return Geometry(row["topology"], float(row["diameter_mm"]) / 1000, height)  # type: ignore[arg-type]
 
 
-def geometry_scores(rows: Iterable[Row], stage: str, snr_db: float = 0.0) -> dict[Geometry, float]:
+def geometry_scores(
+    rows: Iterable[Row], stage: str, snr_db: float = 0.0, variant: str = ""
+) -> dict[Geometry, float]:
     """Geometric mean over the methods of the angular RMSE at ``snr_db``, per geometry.
 
     Methods are weighed equally so that the geometry is ranked, not the method that happens to
     be best on it; the CRB rows are not a method.
     """
     logs: dict[Geometry, list[float]] = {}
-    for r in stage_rows(rows, stage, snr_db=f"{snr_db:.0f}", variant=""):
+    for r in stage_rows(rows, stage, snr_db=f"{snr_db:.0f}", variant=variant):
         if r["method"] != "crb":
             logs.setdefault(geometry_of(r), []).append(math.log(float(r["rmse"])))
     return {geo: math.exp(sum(v) / len(v)) for geo, v in logs.items()}

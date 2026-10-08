@@ -10,7 +10,7 @@ lokalizovalo dron v úseku 100 ms po triggeru. Slouží k volbě geometrie a met
 ```bash
 task setup           # venv v python/venv, pinované závislosti, pip install -e python/
 task sim:fetch       # 100 dronových klipů z DADS do data/dads (jednou, ~40 s)
-task sim:test        # pytest (198 testů, ~20 s)
+task sim:test        # pytest (přes 300 testů, ~90 s)
 task sim:lint        # ruff + mypy
 task sim:demo        # report/figures/doa_demo.pdf + report/generated/demo.tex
 task sim:validate    # report/generated/validation.tex, 30/10/0 dB (~9 min na 4 jádrech)
@@ -159,6 +159,12 @@ dokončení ani na tom, které SNR a metody se počítají společně. Procesy s
 | citlivost | `sweep.py sensitivity` | vybraná geometrie a 1x8 stejného Ø: c = 331 a 355 m/s v simulaci (metody počítají s 343), σ polohy 0,5, 1, 2 mm, 10 dB |
 | grafy | `figures.py` | čte `summary.csv`, nic nesimuluje |
 
+Každá stage ukládá odhady jednotlivých trialů do `python/out/<stage>.npz` (mimo git) a párové
+poměry RMSE s 95% bootstrap intervalem (převzorkování trialů, stejné pro obě strany) do
+`python/results/comparisons.csv` (`a` proti `b`, metoda nebo `all` = geometrický průměr přes
+metody). Potvrzení navíc přepočítá kandidáty s Ø250 mm s pásmem do 1750 Hz (varianta
+`band1750`), protože jejich kruh aliasuje od 1,79 kHz.
+
 `python/results/summary.csv` obsahuje jeden řádek na stage, geometrii, variantu, metodu a SNR
 (`n`, RMSE, medián, RMSE azimutu vážené cos(el) a elevace, podíl nad 5°, RMSE a podíl po třech
 elevačních pásmech stejné plochy); řádky `method == crb` nesou Cramérovu-Raovu mez.
@@ -166,8 +172,9 @@ Každá stage nahradí jen své řádky, soubor je stabilní na bajty. `beampatt
 laloku a PSL všech geometrií.
 
 Doplňující moduly: `metrics.py` (chyby, pásma elevace, souhrn), `crb.py` (CRB deterministického
-signálu v tečných souřadnicích, uzavřený tvar přes rozptyl poloh mikrofonů v tečné rovině),
-`beampattern.py` (DAS: šířka −3 dB v řezu azimutem a elevací, PSL), `cost.py` (analytický počet
+signálu v tečných souřadnicích z jediného obdélníkového rámce celého úseku, aby se šum nepočítal
+dvakrát; uzavřený tvar přes rozptyl poloh mikrofonů v tečné rovině),
+`beampattern.py` (DAS: šířka −3 dB v řezu azimutem a zvlášť k zenitu a dolů přes horizont, kde planární pole zrcadlí lalok; PSL), `cost.py` (analytický počet
 MAC metod pro 16 kanálů, 5 rámců, 55 binů; odhad času při 2 cyklech na MAC a 250 MHz je
 předpoklad, ne měření), `results.py` (`summary.csv`, pořadí geometrií).
 

@@ -141,6 +141,7 @@ tasks:
       - report/generated/confirm.tex
       - report/generated/beampattern.tex
       - report/generated/cost.tex
+      - python/results/beampattern.csv
     cmds:
       - '{{.PY}} python/scripts/figures.py {{.CLI_ARGS}}'
 

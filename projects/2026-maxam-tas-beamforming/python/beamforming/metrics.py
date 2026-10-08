@@ -24,7 +24,9 @@ from . import geometry as g
 
 ZENITH_DEG = 85.0
 OUTLIER_DEG = 5.0
-INDISTINGUISHABLE = 0.15  # relative RMSE differences below this are not resolved by 100 trials
+INDISTINGUISHABLE = 0.15  # tolerance agreed for ranking geometries (screening on 100 trials)
+BOOT_SEED = 2026
+N_BOOT = 2000
 BAND_EDGES_DEG = tuple(float(np.rad2deg(np.arcsin(s))) for s in (0.0, 1 / 3, 2 / 3, 1.0))
 N_BANDS = len(BAND_EDGES_DEG) - 1
 
@@ -121,3 +123,28 @@ def summarize(e: Errors) -> Summary:
 def distinguishable(a: float, b: float, margin: float = INDISTINGUISHABLE) -> bool:
     """Whether two RMSEs differ by more than ``margin`` relative to the smaller one."""
     return abs(a - b) > margin * min(a, b)
+
+
+def paired_ratio(
+    a: NDArray, b: NDArray, n_boot: int = N_BOOT, seed: int = BOOT_SEED, level: float = 0.95
+) -> tuple[float, float, float]:
+    """RMSE ratio of paired errors with a percentile bootstrap interval over the trials.
+
+    ``a`` and ``b`` are errors ``(n_trials,)`` or ``(n_trials, k)`` of the same trials. With
+    several columns (methods) the ratio is the geometric mean over the columns of
+    ``RMSE_a / RMSE_b``, as in the geometry score. Trials are resampled together for ``a`` and
+    ``b``, which keeps the pairing. Returns ``(ratio, low, high)``.
+    """
+    a2 = np.atleast_2d(np.asarray(a, dtype=float).T).T ** 2
+    b2 = np.atleast_2d(np.asarray(b, dtype=float).T).T ** 2
+    if a2.shape != b2.shape:
+        raise ValueError(f"paired errors need the same shape, got {a2.shape} and {b2.shape}")
+
+    def ratio(ms_a: NDArray, ms_b: NDArray) -> NDArray:
+        return np.exp(np.mean(0.5 * np.log(ms_a / ms_b), axis=-1))
+
+    point = float(ratio(a2.mean(axis=0), b2.mean(axis=0)))
+    idx = np.random.default_rng(seed).integers(0, len(a2), (n_boot, len(a2)))
+    boot = ratio(a2[idx].mean(axis=1), b2[idx].mean(axis=1))
+    lo, hi = np.quantile(boot, [(1 - level) / 2, (1 + level) / 2])
+    return point, float(lo), float(hi)

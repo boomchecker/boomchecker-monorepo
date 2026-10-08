@@ -72,3 +72,34 @@ def test_distinguishable_uses_the_smaller_rmse_as_reference():
     assert not mt.distinguishable(1.0, 1.14)
     assert mt.distinguishable(1.0, 1.16)
     assert mt.distinguishable(1.16, 1.0)
+
+
+def test_paired_ratio_of_identical_errors_is_one_with_a_point_interval():
+    e = np.abs(np.random.default_rng(1).normal(0, 2, 300))
+    assert mt.paired_ratio(e, e) == (1.0, 1.0, 1.0)
+
+
+def test_paired_ratio_matches_the_rmse_ratio_and_covers_it():
+    rng = np.random.default_rng(2)
+    b = np.abs(rng.normal(0, 1.0, 500))
+    a = 1.1 * b + np.abs(rng.normal(0, 0.05, 500))  # 10 % worse on the same trials
+    ratio, lo, hi = mt.paired_ratio(a, b)
+    assert ratio == pytest.approx(mt.rmse(a) / mt.rmse(b))
+    assert lo < ratio < hi and lo > 1.05  # pairing resolves a 10 % difference
+    unpaired = mt.paired_ratio(rng.permutation(a), b)
+    assert unpaired[2] - unpaired[1] > 3 * (hi - lo)  # without pairing the interval is wide
+
+
+def test_paired_ratio_over_columns_is_the_geometric_mean():
+    rng = np.random.default_rng(3)
+    b = np.abs(rng.normal(0, 1.0, (400, 2)))
+    a = b * np.array([1.0, 4.0])
+    assert mt.paired_ratio(a, b)[0] == pytest.approx(2.0)
+    with pytest.raises(ValueError, match="same shape"):
+        mt.paired_ratio(a, b[:, :1])
+
+
+def test_paired_ratio_is_deterministic():
+    rng = np.random.default_rng(4)
+    a, b = np.abs(rng.normal(0, 1, 100)), np.abs(rng.normal(0, 1, 100))
+    assert mt.paired_ratio(a, b) == mt.paired_ratio(a, b)

@@ -121,3 +121,42 @@ def test_each_option_still_localises_at_high_snr(method, options, drone_clips, r
     x, u = simulate(drone_clips[3], MIC, 211.3, 38.4, 30.0, rng)
     az, el = doa.localize(method, x, MIC, cfg)
     assert g.angular_error_deg(g.unit_vector(az, el), u) <= 2.0
+
+
+# (azimuth, elevation) in radians from the M3 code (commit 525c3ee) for DAS, MVDR, SRP-PHAT and
+# MUSIC on three fixed cases; bin_weighting="max" must reproduce them exactly
+M3_ESTIMATES = [
+    [
+        [0.6298139095045002, 0.40136115799661537],
+        [0.6296774444110212, 0.3839109759817981],
+        [0.6605091421951368, 0.3837266252787979],
+        [0.6296774444110212, 0.3839109759817981],
+    ],
+    [
+        [3.553668025291943, 0.7677978470243935],
+        [3.553668025291943, 0.7677978470243935],
+        [3.577924966588375, 0.7853981633974482],
+        [3.553668025291943, 0.7677978470243935],
+    ],
+    [
+        [5.00999056011561, 0.22675233751024693],
+        [5.025652638851784, 0.22675233751024687],
+        [5.025652638851784, 0.22675233751024687],
+        [5.009852412054861, 0.20931018586616565],
+    ],
+]
+M3_CASES = [(37.3, 22.7, 0.0), (203.8, 41.9, 5.0), (287.2, 11.4, 10.0)]
+
+
+@pytest.mark.parametrize("case", range(3))
+def test_max_weighting_reproduces_the_m3_processing(case, drone_clips):
+    from beamforming import dads
+
+    az, el, snr = M3_CASES[case]
+    clip = drone_clips[case]
+    rng = np.random.default_rng(100 + case)
+    u = g.unit_vector(np.deg2rad(az), np.deg2rad(el))
+    x = sg.add_noise(sg.observe(clip, MIC, u, dads.random_offset(len(clip), rng)), snr, rng)
+    cfg = doa.Config(bin_weighting="max")
+    got = [doa.localize(m, x, MIC, cfg) for m in ("das", "mvdr", "srp_phat", "music")]
+    np.testing.assert_allclose(got, M3_ESTIMATES[case], rtol=1e-12, atol=1e-12)

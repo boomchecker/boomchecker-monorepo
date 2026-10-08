@@ -23,6 +23,7 @@ from pathlib import Path  # noqa: E402
 
 from beamforming import dads, doa  # noqa: E402
 from beamforming import experiment as ex  # noqa: E402
+from beamforming import metrics as mt  # noqa: E402
 from beamforming import results as rs  # noqa: E402
 
 REFERENCE = ex.Geometry("2x8_rot", 0.20, 0.07)
@@ -46,10 +47,29 @@ VARIANTS: dict[str, tuple[dict, tuple[str, ...]]] = {
 }
 
 
+def comparisons(errors: dict, n: int) -> list[rs.Row]:
+    """Every variant against the baseline: per method and over its methods, at every SNR."""
+    base_methods, base = errors[rs.ABLATION_BASELINE]
+    out = []
+    for name, (methods, err) in errors.items():
+        if name == rs.ABLATION_BASELINE:
+            continue
+        cols = [base_methods.index(m) for m in methods]
+        for s, snr in enumerate(SNRS):
+            ci = mt.paired_ratio(err[:, s, :], base[:, s, cols])
+            out.append(rs.comparison_row("ablation", name, rs.ABLATION_BASELINE, "all", snr, n, ci))
+            for k, m in enumerate(methods):
+                ci = mt.paired_ratio(err[:, s, k], base[:, s, cols[k]])
+                out.append(rs.comparison_row("ablation", name, rs.ABLATION_BASELINE, m, snr, n, ci))
+    return out
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--data", type=Path, default=dads.DEFAULT_OUT)
     parser.add_argument("--summary", type=Path, default=Path("python/results/summary.csv"))
+    parser.add_argument("--comparisons", type=Path, default=Path("python/results/comparisons.csv"))
+    parser.add_argument("--raw", type=Path, default=Path("python/out"), help="per-trial npz dir")
     parser.add_argument("--dirs", type=int, default=5, help="directions per clip")
     parser.add_argument("--limit", type=int, default=0, help="use only the first N clips (debug)")
     parser.add_argument("--workers", type=int, default=os.cpu_count() or 1)
@@ -58,12 +78,18 @@ def main() -> None:
     trials = ex.load_trials(args.data, args.dirs, args.limit)
     truth = ex.truth(trials)
     rows: list[rs.Row] = []
+    errors: dict[str, tuple[tuple[str, ...], object]] = {}
     for name, (overrides, methods) in VARIANTS.items():
         cond = ex.Condition(REFERENCE, replace(doa.DEFAULT, **overrides))
         (ev,) = ex.evaluate([cond], trials, SNRS, methods, workers=args.workers)
         rows += rs.make_rows("ablation", REFERENCE, name, methods, SNRS, ev.est, truth)
+        ex.save_raw(
+            args.raw / f"ablation-{name}.npz", trials, [name], [ev], methods=methods, snrs=SNRS
+        )
+        errors[name] = (methods, ex.angular_errors(ev.est, trials))
         print(f"{name}: done", flush=True)
     rs.update_summary(args.summary, "ablation", rows)
+    rs.update_comparisons(args.comparisons, "ablation", comparisons(errors, len(trials)))
 
     print(f"\n{len(trials)} trials on {REFERENCE.label}; angular RMSE in degrees")
     header = " ".join(f"{m:>9s}" for m in GRID)

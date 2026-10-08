@@ -24,6 +24,7 @@ from collections.abc import Callable, Sequence
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 from numpy.typing import NDArray
@@ -203,3 +204,30 @@ def load_trials(data_dir: Path, n_dirs: int, limit: int = 0) -> list[Trial]:
     """Trials of the cached clips (the first ``limit`` clips if ``limit`` is positive)."""
     clips = dads.list_clips(data_dir)
     return make_trials(clips[:limit] if limit else clips, n_dirs)
+
+
+def angular_errors(est: NDArray, trials: Sequence[Trial]) -> NDArray[np.float64]:
+    """Great-circle errors in degrees of estimates ``(n_trials, ...)`` against their trials."""
+    u = truth(trials).reshape(len(trials), *([1] * (np.ndim(est) - 2)), 3)
+    return g.angular_error_deg(est, u)
+
+
+def save_raw(
+    path: Path,
+    trials: Sequence[Trial],
+    labels: Sequence[str],
+    evals: Sequence[Evaluation],
+    **meta: object,
+) -> None:
+    """Per-trial estimates of a stage (``python/out/<stage>.npz``) for later statistics."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    arrays: dict[str, Any] = {
+        "labels": np.array(labels),
+        "est": np.stack([ev.est for ev in evals]),
+        "truth": truth(trials),
+        "clip": np.array([t.index for t in trials]),
+        "direction": np.array([t.d for t in trials]),
+        **{k: np.asarray(v) for k, v in meta.items()},
+    }
+    np.savez_compressed(path, **arrays)
