@@ -3,8 +3,10 @@
 A *trial* is one DADS clip with one random 100 ms segment and one random direction on the
 upper hemisphere. Direction ``d`` of all clips comes from its own seeded generator, so the
 trials of ``n_dirs = 1`` are the first trials of any larger run, and direction 0 is the one the
-validation table uses (the screening, the validation and the first direction of every later run
-share their trials). Every random draw of a trial
+validation table uses: the screening, the validation and the first direction of every later run
+share directions and segment offsets (the noise streams of ``scripts/validate.py`` differ).
+``load_trials(limit=...)`` draws the directions for the cut clip list, so a limited debug run
+does not reuse the directions of the full run. Every random draw of a trial
 (segment, noise at a given SNR, microphone perturbation) has its own generator keyed by
 ``(SEED, clip, direction, purpose)``, so results do not depend on the worker count, the order
 of completion or on which SNRs or methods are run next to each other.
@@ -143,7 +145,7 @@ def run_job(job: Job) -> Outcome:
         for m, method in enumerate(job.methods):
             est[s, m] = g.unit_vector(*doa.localize(method, x, nominal, cond.cfg))
         if bounds is not None:
-            b = crb.bound(clean, true_mics, trial.u, snr)
+            b = crb.bound(clean, true_mics, trial.u, snr, c=cond.c_true)
             bounds[s] = (b.azimuth, b.elevation, b.angular)
     return Outcome(est, bounds)
 

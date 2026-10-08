@@ -1,17 +1,21 @@
 """Cramér-Rao bound on the direction of one far-field source (deterministic signal model).
 
-Per STFT bin ``k`` and frame ``t`` the array sees ``x = a_k(u) s_kt + n`` with unknown
-complex ``s_kt`` and white noise ``n ~ CN(0, sigma_k^2 I)``, independent over bins and frames
-(Stoica and Nehorai, IEEE TASSP 1989). The Fisher information of ``u`` is the sum over bins
-and frames of ``(2 |s_kt|^2 / sigma_k^2) Re[D^H P D]`` with ``D = da/du`` and
-``P = I - a a^H / M``. The direction is parametrised by the east/north offsets ``(e_E, e_N)``
-in the tangent plane at ``u`` (:func:`geometry.tangent_basis`); both are arc lengths, so the
-bound has no singularity at the zenith and ``e_E`` is already cos(el)-weighted azimuth.
+The segment is transformed as one rectangular frame (a plain DFT of all ``n`` samples), so for
+white noise the DFT bins are exactly independent and every noise sample is used once. The
+overlapping, windowed STFT frames of the estimators are not used here: they hold 2560 windowed
+samples for 1600 real ones, and treating them as independent would overstate the information
+by about 1.6. In bin ``k`` the array sees ``x = a_k(u) s_k + n`` with unknown complex ``s_k``
+and white noise ``n ~ CN(0, sigma^2 n I)`` (Stoica and Nehorai, IEEE TASSP 1989). The Fisher
+information of ``u`` is the sum over bins of ``(2 |s_k|^2 / sigma_k^2) Re[D^H P D]`` with
+``D = da/du`` and ``P = I - a a^H / M``. The direction is parametrised by the east/north
+offsets ``(e_E, e_N)`` in the tangent plane at ``u`` (:func:`geometry.tangent_basis`); both
+are arc lengths, so the bound has no singularity at the zenith and ``e_E`` is already
+cos(el)-weighted azimuth.
 With ``D_m = j (2 pi f / c) rho_m a_m`` and ``rho_m = (r_m . east, r_m . north)`` the
 projection removes the common part of ``rho``, leaving the scatter matrix of the
 microphone positions in the tangent plane:
 
-    FIM = sum_kt (2 |s_kt|^2 / sigma_k^2) (2 pi f_k / c)^2 sum_m (rho_m - mean rho)(...)^T
+    FIM = sum_k (2 |s_k|^2 / sigma_k^2) (2 pi f_k / c)^2 sum_m (rho_m - mean rho)(...)^T
 
 A planar array at the horizon has no scatter along ``north`` (its z axis), so the elevation
 bound is infinite there. The bound is for unbiased estimators of the true direction; it
@@ -25,7 +29,6 @@ from dataclasses import dataclass
 
 import numpy as np
 from numpy.typing import NDArray
-from scipy import signal as sps
 
 from . import geometry as g
 from . import signals as sg
@@ -46,9 +49,10 @@ def fisher(
 ) -> NDArray[np.float64]:
     """Fisher information (2, 2) in (east, north) arc length, units 1/rad^2.
 
-    ``clean_X`` is the STFT ``(M, K, T)`` of the noise-free array signals, ``freqs`` the bin
-    frequencies in Hz and ``noise_var`` the noise power ``E|n|^2`` of one channel in one bin.
-    The source power ``|s_kt|^2`` is the matched-filter estimate ``|a^H x|^2 / M^2``.
+    ``clean_X`` is the spectrum ``(M, K, T)`` of the noise-free array signals (``T`` independent
+    frames; the segment bound uses ``T = 1``), ``freqs`` the bin frequencies in Hz and
+    ``noise_var`` the noise power ``E|n|^2`` of one channel in one bin. The source power
+    ``|s_kt|^2`` is the matched-filter estimate ``|a^H x|^2 / M^2``.
     """
     a = sg.steering(mic_pos, freqs, np.asarray(u, dtype=float)[None, :], c)[:, :, 0]  # (M, K)
     s = np.einsum("mk,mkt->kt", a.conj(), clean_X) / a.shape[0]
@@ -73,14 +77,14 @@ class Bound:
     angular: float  # sqrt(trace), the bound on the great-circle error
 
 
-def noise_var_per_bin(clean: NDArray, snr_db: float, nfft: int = sg.NFFT) -> float:
-    """``E|n|^2`` of one channel in one STFT bin for white noise added at ``snr_db``.
+def noise_var_per_bin(clean: NDArray, snr_db: float) -> float:
+    """``E|n|^2`` of one channel in one DFT bin of the whole segment for white noise at ``snr_db``.
 
     :func:`signals.add_noise` sets the sample variance to the array-mean power of the clean
-    signal over ``10^(snr/10)``; the unnormalised Hann STFT scales it by ``sum(w^2)``.
+    signal over ``10^(snr/10)``; the unnormalised DFT of ``n`` samples scales it by ``n``.
     """
-    sigma2 = sg.band_power(clean) / 10 ** (snr_db / 10)
-    return float(sigma2 * np.sum(sps.get_window("hann", nfft) ** 2))
+    n = np.atleast_2d(clean).shape[1]
+    return float(sg.band_power(clean) / 10 ** (snr_db / 10) * n)
 
 
 def bound(
@@ -88,18 +92,17 @@ def bound(
     mic_pos: NDArray,
     u: NDArray,
     snr_db: float,
-    nfft: int = sg.NFFT,
-    hop: int = sg.HOP,
     band: tuple[float, float] = sg.BAND_HZ,
     fs: int = sg.FS,
     c: float = sg.C,
 ) -> Bound:
     """CRB of one simulated trial from its noise-free array signals ``clean`` (M, n)."""
-    bins = sg.band_bins(fs, nfft, band)
-    X = sg.stft(clean, nfft, hop)[:, bins]
-    fim = fisher(
-        X, mic_pos, sg.bin_freqs(bins, fs, nfft), u, noise_var_per_bin(clean, snr_db, nfft), c
-    )
+    clean = np.atleast_2d(np.asarray(clean, dtype=float))
+    n = clean.shape[1]
+    freqs = np.fft.rfftfreq(n, 1 / fs)
+    bins = np.flatnonzero((freqs >= band[0]) & (freqs <= band[1]))
+    X = np.fft.rfft(clean, axis=1)[:, bins, None]
+    fim = fisher(X, mic_pos, freqs[bins], u, noise_var_per_bin(clean, snr_db), c)
     cov = covariance(fim)
     rad = np.sqrt(np.array([cov[0, 0], cov[1, 1], cov[0, 0] + cov[1, 1]]))
     az, el, ang = np.rad2deg(rad)
@@ -108,8 +111,6 @@ def bound(
 
 def rms(bounds: list[Bound]) -> Bound:
     """RMS over trials, comparable to an RMSE over the same trials."""
-    out = [
-        float(np.sqrt(np.mean([getattr(b, f) ** 2 for b in bounds])))
-        for f in ("azimuth", "elevation", "angular")
-    ]
+    fields = ("azimuth", "elevation", "angular")
+    out = [float(np.sqrt(np.mean([getattr(b, f) ** 2 for b in bounds]))) for f in fields]
     return Bound(*out)

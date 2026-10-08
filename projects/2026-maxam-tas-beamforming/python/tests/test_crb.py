@@ -95,8 +95,23 @@ def test_planar_array_has_no_elevation_bound_at_the_horizon(rng):
 def test_noise_variance_matches_add_noise(rng):
     x = band_noise(rng, 1600)[None, :].repeat(4, axis=0)
     noise = sg.add_noise(x, 10.0, np.random.default_rng(1)) - x
-    var_bin = np.mean(np.abs(sg.stft(noise)[:, 12:60]) ** 2)
+    var_bin = np.mean(
+        np.abs(np.fft.rfft(noise, axis=1)[:, 40:180]) ** 2
+    )  # rectangular, all samples
     assert var_bin == pytest.approx(crb.noise_var_per_bin(x, 10.0), rel=0.1)
+
+
+def test_segment_bound_equals_the_sum_over_independent_dft_bins(drone_clips):
+    clip = drone_clips[0]
+    u = g.unit_vector(np.deg2rad(40.0), np.deg2rad(30.0))
+    clean = sg.observe(clip, MIC, u, 3000)
+    freqs = np.fft.rfftfreq(1600, 1 / sg.FS)
+    bins = np.flatnonzero((freqs >= 300.0) & (freqs <= 2000.0))
+    assert len(bins) == 171  # 10 Hz spacing, both ends inclusive
+    X = np.fft.rfft(clean, axis=1)[:, bins, None]
+    fim = crb.fisher(X, MIC, freqs[bins], u, crb.noise_var_per_bin(clean, 10.0), sg.C)
+    want = np.sqrt(np.trace(np.linalg.inv(fim)))
+    assert np.rad2deg(want) == pytest.approx(crb.bound(clean, MIC, u, 10.0).angular, rel=1e-9)
 
 
 def test_bound_per_trial_follows_the_snr(drone_clips):
@@ -127,4 +142,5 @@ def test_bound_stays_below_the_error_of_a_real_estimator(drone_clips):
         errs.append(
             float(g.angular_error_deg(g.unit_vector(*doa.localize("music", x, MIC, cfg)), u))
         )
-    assert np.sqrt(np.mean(np.square(errs))) > crb.bound(clean, MIC, u, 5.0).angular
+    ratio = np.sqrt(np.mean(np.square(errs))) / crb.bound(clean, MIC, u, 5.0).angular
+    assert 1.0 < ratio < 4.0  # above the bound, but not by orders of magnitude
