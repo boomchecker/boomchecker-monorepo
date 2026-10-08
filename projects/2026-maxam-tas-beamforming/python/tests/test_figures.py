@@ -79,7 +79,9 @@ def test_main_writes_every_figure_and_table(figures, summary, tmp_path, monkeypa
     for name in ("ablation", "confirm", "beampattern", "cost"):
         assert (tmp_path / "gen" / f"{name}.tex").read_text().startswith("% generated")
     abl = (tmp_path / "gen" / "ablation.tex").read_text()
-    assert "baseline & " in abl and "smooth1 & -- &" in abl  # no das/srp rows for smoothing
+    assert (
+        "bez úprav (M3) & " in abl and "vyhlazení $\\pm1$ bin & -- &" in abl
+    )  # no das/srp rows for smoothing
     assert "{,}" in (tmp_path / "gen" / "confirm.tex").read_text()
 
 

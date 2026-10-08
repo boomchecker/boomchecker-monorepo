@@ -7,8 +7,8 @@ Stages (each replaces its own rows in the summary):
   the methods at 0 dB), five directions per clip,
 * ``snr``: the selected geometry (``python/results/selected.json``, written by hand after the
   confirm stage) at -10 to 30 dB in 5 dB steps, with the CRB,
-* ``sensitivity``: the selected geometry and a 1x8 of the same diameter with a wrong speed of
-  sound and microphone position errors at 10 dB.
+* ``sensitivity``: DAS, SRP-PHAT, MVDR and MUSIC on the selected geometry and a 1x8 of the
+  same diameter with a wrong speed of sound and microphone position errors at 10 dB.
 
 Every stage is deterministic (see :mod:`beamforming.experiment`).
 """
@@ -31,7 +31,7 @@ from beamforming import results as rs  # noqa: E402
 GEOMETRY_SNRS = (10.0, 0.0)
 SNR_SWEEP = tuple(float(s) for s in range(30, -15, -5))
 SENSITIVITY_SNR = 10.0
-SENSITIVITY_METHODS = ("srp_phat", "mvdr", "music")
+SENSITIVITY_METHODS = ("das", "srp_phat", "mvdr", "music")
 SOUND_SPEEDS = (331.0, 355.0)
 POSITION_SIGMAS_MM = (0.5, 1.0, 2.0)
 
