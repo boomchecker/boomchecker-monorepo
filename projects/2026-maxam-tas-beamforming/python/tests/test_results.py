@@ -24,7 +24,7 @@ def test_make_rows_has_one_row_per_snr_and_method():
     assert set(rows[0]) == set(rs.COLUMNS)
     first = rows[0]
     assert (first["topology"], first["diameter_mm"], first["height_mm"]) == ("2x8_rot", "200", "70")
-    assert (first["method"], first["snr_db"], first["n"]) == ("das", "10", "20.0000")
+    assert (first["method"], first["snr_db"], first["n"]) == ("das", "10", "20")
     assert 0.5 < float(first["rmse"]) < 3.0
 
 
@@ -91,3 +91,54 @@ def test_preferred_takes_the_smallest_within_the_margin():
     assert rs.preferred(scores) == GEO_B  # smallest diameter among all three
     assert rs.preferred({GEO_A: 1.0, GEO_B: 1.2, GEO_C: 1.3}) == GEO_A  # B and C are not close
     assert rs.preferred({GEO_A: 1.0, GEO_B: 1.15}) == GEO_B  # exactly at the margin
+
+
+def ablation_rows(table):
+    """``table = {variant: {snr: {method: rmse}}}`` as ablation rows."""
+    out = []
+    for variant, by_snr in table.items():
+        for snr, methods in by_snr.items():
+            for method, value in methods.items():
+                row = {c: "nan" for c in rs.COLUMNS}
+                row.update(stage="ablation", topology="2x8_rot", diameter_mm="200", height_mm="70")
+                row.update(variant=variant, method=method, snr_db=f"{snr:.0f}", rmse=f"{value:.4f}")
+                out.append(row)
+    return out
+
+
+def test_variant_ratio_is_the_geometric_mean_over_the_variants_methods():
+    rows = ablation_rows(
+        {
+            "baseline": {0: {"das": 2.0, "music": 2.0, "gcc": 9.0}},
+            "snr": {0: {"das": 1.0, "music": 4.0}},  # no gcc row: not part of the mean
+        }
+    )
+    assert rs.variant_ratio(rows, "snr", 0.0) == pytest.approx(np.sqrt(0.5 * 2.0))
+    with pytest.raises(ValueError, match="no ablation rows"):
+        rs.variant_ratio(rows, "missing", 0.0)
+
+
+def test_adopt_needs_a_gain_at_0_db_and_no_loss_at_30_db():
+    base = {0: {"a": 2.0}, 30: {"a": 1.0}}
+    rows = ablation_rows(
+        {
+            "baseline": base,
+            "good": {0: {"a": 1.8}, 30: {"a": 1.04}},
+            "weak": {0: {"a": 1.95}, 30: {"a": 1.0}},
+            "costly": {0: {"a": 1.0}, 30: {"a": 1.06}},
+        }
+    )
+    assert rs.adopt(rows, "good")
+    assert not rs.adopt(rows, "weak")  # only 2.5 % better
+    assert not rs.adopt(rows, "costly")  # 6 % worse at 30 dB
+
+
+def test_load_selected_builds_the_geometry(tmp_path):
+    path = tmp_path / "selected.json"
+    with pytest.raises(FileNotFoundError, match="selected"):
+        rs.load_selected(path)
+    path.write_text(
+        '{"topology": "2x8_rot", "diameter_mm": 200, "height_mm": 70, "methods": ["das"]}'
+    )
+    sel = rs.load_selected(path)
+    assert sel["geometry"] == ex.Geometry("2x8_rot", 0.2, 0.07) and sel["methods"] == ["das"]

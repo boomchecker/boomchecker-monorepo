@@ -156,3 +156,42 @@ def run_parallel[T, R](
         return [fn(t) for t in tasks]
     with ProcessPoolExecutor(max_workers=workers) as pool:
         return list(pool.map(fn, tasks, chunksize=max(1, len(tasks) // (workers * 8))))
+
+
+@dataclass(frozen=True)
+class Evaluation:
+    """Estimates ``(n_trials, n_snr, n_methods, 3)`` and CRB ``(n_trials, n_snr, 3)`` or None."""
+
+    est: NDArray[np.float64]
+    crb: NDArray[np.float64] | None
+
+
+def truth(trials: Sequence[Trial]) -> NDArray[np.float64]:
+    """True unit vectors ``(n_trials, 3)``."""
+    return np.array([t.u for t in trials])
+
+
+def evaluate(
+    conditions: Sequence[Condition],
+    trials: Sequence[Trial],
+    snrs: Sequence[float],
+    methods: Sequence[str] = METHODS,
+    with_crb: bool = False,
+    workers: int | None = None,
+) -> list[Evaluation]:
+    """Every condition on every trial, in one pool; one :class:`Evaluation` per condition."""
+    jobs = [Job(t, c, tuple(snrs), tuple(methods), with_crb) for c in conditions for t in trials]
+    outcomes = run_parallel(run_job, jobs, workers)
+    n = len(trials)
+    out = []
+    for k in range(len(conditions)):
+        chunk = outcomes[k * n : (k + 1) * n]
+        bounds = np.stack([o.crb for o in chunk]) if with_crb else None  # type: ignore[misc]
+        out.append(Evaluation(np.stack([o.est for o in chunk]), bounds))
+    return out
+
+
+def load_trials(data_dir: Path, n_dirs: int, limit: int = 0) -> list[Trial]:
+    """Trials of the cached clips (the first ``limit`` clips if ``limit`` is positive)."""
+    clips = dads.list_clips(data_dir)
+    return make_trials(clips[:limit] if limit else clips, n_dirs)

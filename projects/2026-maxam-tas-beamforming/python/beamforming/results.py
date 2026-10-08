@@ -8,6 +8,7 @@ format). ``method == "crb"`` rows hold the Cramér-Rao bound in the ``rmse*`` co
 from __future__ import annotations
 
 import csv
+import json
 import math
 from collections.abc import Iterable, Sequence
 from pathlib import Path
@@ -61,7 +62,7 @@ def make_rows(
                     "variant": variant,
                     "method": method,
                     "snr_db": f"{snr:.0f}",
-                    **{k: _fmt(stats[k]) for k in STATS},
+                    **{k: str(len(truth)) if k == "n" else _fmt(stats[k]) for k in STATS},
                 }
             )
     return rows
@@ -160,3 +161,47 @@ def preferred(scores: dict[Geometry, float], margin: float = mt.INDISTINGUISHABL
     best = min(scores.values())
     near = [geo for geo, s in scores.items() if s <= best * (1 + margin)]
     return min(near, key=lambda geo: (*geo.size_key(), scores[geo]))
+
+
+ADOPT_GAIN = 0.95  # an option is adopted if it lowers the RMSE at 0 dB by at least 5 %
+ADOPT_LOSS = 1.05  # and does not raise the RMSE at 30 dB by more than 5 %
+ABLATION_BASELINE = "baseline"
+
+
+def variant_ratio(rows: Iterable[Row], variant: str, snr_db: float) -> float:
+    """Geometric mean over the methods of ``variant`` of its RMSE relative to the baseline."""
+    rows = list(rows)
+    base = {
+        r["method"]: float(r["rmse"])
+        for r in stage_rows(rows, "ablation", variant=ABLATION_BASELINE, snr_db=f"{snr_db:.0f}")
+    }
+    logs = [
+        math.log(float(r["rmse"]) / base[r["method"]])
+        for r in stage_rows(rows, "ablation", variant=variant, snr_db=f"{snr_db:.0f}")
+        if r["method"] in base
+    ]
+    if not logs:
+        raise ValueError(f"no ablation rows for {variant!r} at {snr_db:.0f} dB")
+    return math.exp(sum(logs) / len(logs))
+
+
+def adopt(rows: Iterable[Row], variant: str, low_snr: float = 0.0, high_snr: float = 30.0) -> bool:
+    """Whether an ablation variant meets the rule for becoming the default."""
+    rows = list(rows)
+    return (
+        variant_ratio(rows, variant, low_snr) <= ADOPT_GAIN
+        and variant_ratio(rows, variant, high_snr) <= ADOPT_LOSS
+    )
+
+
+def load_selected(path: Path) -> dict:
+    """The geometry chosen after the sweep (``selected.json``) as a dict with a ``geometry``."""
+    path = Path(path)
+    if not path.exists():
+        raise FileNotFoundError(
+            f"{path} missing: pick the geometry from the confirm stage first and write it there"
+        )
+    raw = json.loads(path.read_text())
+    out = dict(raw)
+    out["geometry"] = Geometry(raw["topology"], raw["diameter_mm"] / 1000, raw["height_mm"] / 1000)
+    return out

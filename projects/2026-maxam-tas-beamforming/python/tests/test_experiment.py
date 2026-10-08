@@ -118,3 +118,22 @@ def test_outcomes_feed_the_metrics(trials):
 
 def test_clip_loading_is_cached_by_path_only(trials):
     assert dads.load_clip(trials[0].path).shape[0] >= trials[0].offset + 1600
+
+
+def test_evaluate_matches_single_jobs_and_orders_by_condition(trials):
+    geos = [ex.Geometry("2x8_rot", 0.20, 0.07), ex.Geometry("1x8", 0.20)]
+    conds = [ex.Condition(geo) for geo in geos]
+    ev = ex.evaluate(conds, trials[:3], (30.0,), ("das", "music"), with_crb=True, workers=1)
+    assert len(ev) == 2 and ev[0].est.shape == (3, 1, 2, 3) and ev[0].crb.shape == (3, 1, 3)
+    direct = ex.run_job(ex.Job(trials[1], conds[1], (30.0,), ("das", "music"), True))
+    np.testing.assert_array_equal(ev[1].est[1], direct.est)
+    np.testing.assert_array_equal(ev[1].crb[1], direct.crb)
+    assert not np.array_equal(ev[0].est, ev[1].est)
+    np.testing.assert_array_equal(ex.truth(trials[:3]), np.array([t.u for t in trials[:3]]))
+
+
+def test_evaluate_without_crb_has_none(trials):
+    (ev,) = ex.evaluate(
+        [ex.Condition(ex.Geometry("1x8", 0.2))], trials[:2], (20.0,), ("das",), workers=1
+    )
+    assert ev.crb is None
