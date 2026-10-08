@@ -10,10 +10,10 @@ lokalizovalo dron v úseku 100 ms po triggeru. Slouží k volbě geometrie a met
 ```bash
 task setup           # venv v python/venv, pinované závislosti, pip install -e python/
 task sim:fetch       # 100 dronových klipů z DADS do data/dads (jednou, ~40 s)
-task sim:test        # pytest (135 testů, ~15 s)
+task sim:test        # pytest (198 testů, ~20 s)
 task sim:lint        # ruff + mypy
 task sim:demo        # report/figures/doa_demo.pdf + report/generated/demo.tex
-task sim:validate    # report/generated/validation.tex (~5 min na 4 jádrech)
+task sim:validate    # report/generated/validation.tex, 30/10/0 dB (~9 min na 4 jádrech)
 ```
 
 Z Pythonu (po `task setup`):
@@ -102,7 +102,7 @@ decimace, kterou bude dělat firmware (útlum > 55 dB od 8 kHz, zpoždění `(N�
 | `mvdr` | `mvdr_bins` | `1 / aᴴ (R + ε·tr(R)/M·I)⁻¹ a`, ε = 10⁻² | normalizovaný součet |
 | `srp_phat` | `srp_phat_bins` | součet GCC-PHAT přes 120 dvojic ve zpožděních `τ_mn(Ω)` | součet |
 | `music` | `music_bins` | `1 / aᴴ Eₙ Eₙᴴ a`, `n_src = 1` | normalizovaný součet |
-| `gcc_phat_ls` | `gcc_phat_ls` | bez gridu, viz níže | – |
+| `gcc_phat_ls` | `gcc_phat_ls` | bez gridu, viz níže | bez sčítání |
 
 * `R` je výběrová kovariance přes 5 rámců, má hodnost nejvýš 5. MVDR proto bez loadingu
   nejde invertovat, u MUSIC stačí jedna dominantní složka (`n_src = 1`), šumový podprostor má
@@ -132,20 +132,30 @@ dronové). Čte se 20 rovnoměrně rozložených row groups (~1,6 MB každá), t
 a stahování trvá desítky sekund, ne gigabajty. Klipy mají typicky 0,5 s (8000 vzorků); filtr
 vyřadí klipy kratší než 3648 vzorků (úsek 100 ms plus okraje) a klipy s méně než 20 % energie
 v pásmu 300 až 2000 Hz. Výsledek je v `data/dads/*.wav` a `manifest.json` (mimo git).
-Zvukové bajty se dekódují přes `soundfile`, protože `datasets` 5.x by pro dekódované audio
-chtělo `torchcodec`. `HF_TOKEN` z `.env` je volitelný.
+Parquet se čte přes `HfFileSystem` a `pyarrow`, bajty WAV dekóduje `soundfile`. Stažení je
+atomické: klipy se ukládají do `.dads.tmp` vedle `data/dads` a po dokončení manifestu se
+adresář přejmenuje, takže přerušený nebo neúspěšný fetch nechá původní cache a po změně N
+nezůstanou osiřelé soubory. `task sim:fetch` kontroluje i to, že všechny soubory z manifestu
+existují. `HF_TOKEN` z `.env` je volitelný (zástupnou hodnotu z `env.example` ignoruje).
 
 ## Testy (`task sim:test`)
 
 | Soubor | Co hlídá |
 |---|---|
-| `test_geometry.py` | poloměr, rotace 22,5°, rozteč desek, konvence úhlů, grid 1368 směrů, jemná čepička u zenitu i horizontu, rovnoměrnost náhodných směrů |
-| `test_signals.py` | znaménko steeringu, přesnost frakčního zpoždění, žádný přetok FFT, SNR šumu ±1e-6 dB, 5 rámců a biny 10..64, útlum decimace |
-| `test_dads.py` | podíl energie v pásmu, okraje segmentu, 100 klipů v cache (bez dat test **selže**, nepřeskočí se) |
-| `test_doa.py` | každá metoda: chyba ≤ 2° při SNR 30 dB na 8 směrech mimo uzly gridu (včetně přechodu azimutu 360°, horizontu a zenitu); `1x8` jen azimut; `2x8` bez rotace; nízké SNR; každý binový výkon proti explicitnímu vzorci |
+| `test_geometry.py` | poloměr, rotace 22,5°, rozteč desek, konvence úhlů, grid 1368 směrů a odmítnutí kroku, který nedělí 90° a 360°, symetrická jemná čepička (i pro krok nedělící rozpětí), zenit a horizont, rovnoměrnost náhodných směrů |
+| `test_signals.py` | znaménko steeringu, přesnost frakčního zpoždění, žádný přetok FFT, absolutní výkon šumu a SNR nezávislým měřením, 5 rámců, biny 10..64 a okraje pásma, Hannovo okno (únik), útlum decimace |
+| `test_dads.py` | podíl energie v pásmu, okraje segmentu, klipy v cache podle `manifest.json` (bez dat test **selže**), atomický fetch nad lokálním parquet, bez osiřelých souborů, ignorování zástupného tokenu |
+| `test_doa.py` | každá metoda: chyba ≤ 2° při SNR 30 dB na 8 směrech mimo uzly gridu (včetně přechodu 360°, horizontu a zenitu); `1x8` azimut; `2x8` bez rotace; nízké SNR; invariance k měřítku vstupu; tichý segment; každý binový výkon proti explicitnímu vzorci |
+| `test_gcc.py` | zpoždění dvojic proti přesným hodnotám (i end-fire), fyzikální mez zpoždění, pásmo proti celému spektru, PHAT proti hlasitému koherentnímu rušiteli, řešení směru ze zpoždění (3D, rovinné pole, ořez pod horizont), elevace u `1x8` |
+| `test_search.py` | jemné hledání přebírá normalizační váhy z hrubého gridu, dosáhne rohu hrubé buňky, `power_map` je součet binů podle rovnic, shoda dat binů a frekvencí (čistý tón) |
 | `test_pra_check.py` | vlastní hrubé maximum SRP-PHAT a MUSIC je stejný uzel jako pyroomacoustics SRP a NormMUSIC; všechny pra metody běží |
 
-Naměřené chyby při 30 dB jsou 0,3 až 0,7° (hrubý odhad kvantizace gridu 1°).
+Při SNR 30 dB jsou chyby 0,3 až 0,7°. Bez šumu je medián chyby gridových metod 0,39° (krok jemného
+gridu 1°), takže 30 dB měří hlavně kvantizaci.
+
+Testy se kontrolovaly mutacemi: do kopie balíčku se vnesla chyba (převrácené znaménko steeringu,
+vypnutý PHAT, špatné okno lagů, posun binu o 1, ztracené normalizační váhy, ...) a pytest musel
+selhat. Po opravách po review přežila jen ekvivalentní změna.
 
 ## Kontrola proti pyroomacoustics
 
@@ -167,7 +177,20 @@ kvantizace gridu). TOPS proto v tabulce reportu není a jeho selhání nelze př
 * Rovinná vlna a bílý šum nezávislý mezi kanály; bez odrazů, větru, vlastního šumu rámu
   a difuzního pole. Tabulky ukazují spodní mez chyby, ne chování venku.
 * Jeden zdroj. Počet zdrojů se neodhaduje (`n_src = 1`).
-* Pozice mikrofonů jsou ideální; citlivost MVDR na jejich chybu se nesimuluje.
+* Pozice mikrofonů jsou ideální a rychlost zvuku pevně 343 m/s; citlivost na jejich chybu se
+  nesimuluje.
+* SNR je nominální širokopásmové. Dron má v pásmu 300 až 2000 Hz zhruba 80 % energie, bílý šum
+  21 %, takže SNR uvnitř pásma je o ~6 dB vyšší (`validate.py` vypíše přesnou hodnotu a zapíše
+  `\validBandSnrGain`).
+* **DAS má malý systematický posun elevace** (bez šumu medián chyby 0,58°, průměrná chyba
+  elevace +0,49°; ostatní metody ~0 a 0,39°). Příčinou je únik Hannova okna ze silné složky těsně
+  za okrajem pásma do binů 10 a 64: normované metody ho zprůměrují, výkonově vážený DAS ne.
+  Řešení (ochranné biny, váhy podle SNR v binu) je záležitost M4.
+* Normalizace binů u MVDR a MUSIC dává šumovým binům stejnou váhu jako binům s harmonickou
+  složkou; u čistého tónu v šumu to metody zhoršuje.
+* `localize` škáluje vstup na jednotkové RMS (absolutní prahy v metodách pak nezávisejí na
+  jednotkách, např. int32 ze SAI); tichý segment vyvolá `ValueError`.
 * Kovariance z 5 rámců je silně podurčená (hodnost ≤ 5 ze 16); MVDR ji řeší diagonálním
   loadingem, MUSIC a DAS ne.
-* 1×8 určí elevaci jen slabě (zpoždění závisí na `cosθ`), proto se testuje jen azimut.
+* 1×8 určí elevaci jen slabě (zpoždění závisí na `cosθ`); GCC-PHAT s LS ji dopočítá z `|u| = 1`
+  (v simulaci s chybou do 2° při 30 dB); u mřížkových metod se pro `1x8` testuje jen azimut.

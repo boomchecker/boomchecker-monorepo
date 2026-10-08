@@ -5,12 +5,9 @@ mikrofonního pole 2×8 MEMS mikrofonů (2× ADAU7118, TDM8) připojeného ke
 STM32H563 (`hw/node`, `fw/bom-stm32node`). Hodnocený výstup je report; návrh
 PCB a firmware navazují až po zafixování geometrie simulací.
 
-Postup a rozhodnutí: [PLAN.md](PLAN.md) (milníky M1 až M5).
-
 ## Struktura
 
 ```
-PLAN.md          plán po milnících
 Taskfile.yml     setup (venv v python/venv), sim:*, report:*
 requirements.txt pinované závislosti (==)
 env.example      HF_TOKEN pro stažení DADS (zkopírovat do .env)
@@ -27,15 +24,18 @@ task sim:fetch      # 100 dronových klipů z DADS do data/dads (jednou)
 task sim:test       # pytest nad simulací (závisí na sim:fetch)
 task sim:lint       # ruff a mypy
 task sim:fmt        # ruff format a oprava lintu
-task sim:demo       # mapy výkonu metod -> report/figures/doa_demo.pdf
-task sim:validate   # validační tabulka -> report/generated/validation.tex (~5 min)
+task sim:demo       # mapy výkonu metod -> report/figures/doa_demo.pdf a report/generated/demo.tex
+task sim:validate   # validační tabulka (30, 10, 0 dB) -> report/generated/validation.tex (~9 min)
 task sim:clean      # cache a pomocné výstupy
 task report:build   # report/main.pdf
 task report:clean
 ```
 
 Taskfile projektu je samostatný a není zapojený do kořenového `Taskfile.yml`;
-spouští se z této složky. `task sim:fetch N=10` stáhne jiný počet klipů.
+spouští se z této složky. `task sim:fetch N=10` stáhne jiný počet klipů (testy se řídí
+počtem v `manifest.json`), argumenty skriptů se předávají za `--`, např.
+`task sim:validate --force -- --limit 8 --out /tmp/v.tex` (`--force` obejde kontrolu
+zdrojů u `sim:demo` a `sim:validate`).
 Model, konvence úhlů, metody a testy popisuje [python/README.md](python/README.md).
 
 LaTeX potřebuje `pdflatex` a `bibtex` s českou babel podporou

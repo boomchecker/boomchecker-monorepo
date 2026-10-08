@@ -77,7 +77,7 @@ tasks:
       - '{{.PY}} python/scripts/demo.py {{.CLI_ARGS}}'
 
   sim:validate:
-    desc: Validation table (30, 10, 0 dB) into report/generated/validation.tex, about 13 min on 4 cores
+    desc: Validation table (30, 10, 0 dB) into report/generated/validation.tex, about 9 min on 4 cores
     deps: [sim:fetch]
     sources:
       - python/beamforming/*.py
