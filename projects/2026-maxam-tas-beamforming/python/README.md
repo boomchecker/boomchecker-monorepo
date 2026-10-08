@@ -10,7 +10,7 @@ lokalizovalo dron v úseku 100 ms po triggeru. Slouží k volbě geometrie a met
 ```bash
 task setup           # venv v python/venv, pinované závislosti, pip install -e python/
 task sim:fetch       # 100 dronových klipů z DADS do data/dads (jednou, ~40 s)
-task sim:test        # pytest (134 testů, ~12 s)
+task sim:test        # pytest (135 testů, ~15 s)
 task sim:lint        # ruff + mypy
 task sim:demo        # report/figures/doa_demo.pdf + report/generated/demo.tex
 task sim:validate    # report/generated/validation.tex (~5 min na 4 jádrech)
@@ -22,12 +22,12 @@ Z Pythonu (po `task setup`):
 import numpy as np
 from beamforming import dads, doa, geometry as g, signals as sg
 
-mic = g.make_array("2x8_rot", diameter=0.20, height=0.07)       # (16, 3) metry
+mic = g.make_array("2x8_rot", diameter=0.20, height=0.07)  # (16, 3) metry
 clip = dads.load_clip(dads.list_clips("data/dads")[0])
-u = g.unit_vector(np.deg2rad(120), np.deg2rad(60))               # skutečný směr
-x = sg.observe(clip, mic, u, offset=2000)                        # (16, 1600) signály pole
+u = g.unit_vector(np.deg2rad(120), np.deg2rad(60))  # skutečný směr
+x = sg.observe(clip, mic, u, offset=2000)  # (16, 1600) signály pole
 x = sg.add_noise(x, snr_db=10, rng=np.random.default_rng(0))
-az, el = doa.localize("music", x, mic)                           # radiány
+az, el = doa.localize("music", x, mic)  # radiány
 ```
 
 ## Konvence
