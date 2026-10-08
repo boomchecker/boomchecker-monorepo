@@ -107,6 +107,7 @@ def print_ranking(rows: list[rs.Row], stage: str) -> dict[ex.Geometry, float]:
                 topology=geo.topology,
                 diameter_mm=f"{geo.diameter * 1000:.0f}",
                 height_mm=f"{geo.height * 1000:.0f}",
+                variant="",
                 snr_db="0",
             )
         }

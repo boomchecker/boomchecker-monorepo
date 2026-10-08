@@ -1,0 +1,242 @@
+stage,a,b,method,snr_db,n,ratio,low,high
+ablation,guard1,baseline,all,30,500,0.9846,0.9708,0.9976
+ablation,guard1,baseline,all,10,500,1.0819,1.0566,1.1089
+ablation,guard1,baseline,all,0,500,1.2169,1.1890,1.2453
+ablation,guard1,baseline,das,30,500,0.9476,0.9008,0.9960
+ablation,guard1,baseline,das,10,500,1.1077,1.0582,1.1636
+ablation,guard1,baseline,das,0,500,1.3041,1.2567,1.3522
+ablation,guard1,baseline,music,30,500,0.9950,0.9843,1.0043
+ablation,guard1,baseline,music,10,500,1.1153,1.0672,1.1673
+ablation,guard1,baseline,music,0,500,1.2988,1.2513,1.3492
+ablation,guard1,baseline,mvdr,30,500,0.9957,0.9831,1.0055
+ablation,guard1,baseline,mvdr,10,500,1.0912,1.0604,1.1232
+ablation,guard1,baseline,mvdr,0,500,1.2761,1.2336,1.3195
+ablation,guard1,baseline,srp_phat,30,500,1.0011,0.9923,1.0104
+ablation,guard1,baseline,srp_phat,10,500,1.0162,0.9959,1.0378
+ablation,guard1,baseline,srp_phat,0,500,1.0147,0.9994,1.0303
+ablation,guard2,baseline,all,30,500,0.9041,0.8921,0.9162
+ablation,guard2,baseline,all,10,500,1.0763,1.0454,1.1103
+ablation,guard2,baseline,all,0,500,1.2999,1.2556,1.3439
+ablation,guard2,baseline,das,30,500,0.6700,0.6385,0.7014
+ablation,guard2,baseline,das,10,500,1.0543,0.9952,1.1200
+ablation,guard2,baseline,das,0,500,1.4237,1.3523,1.4977
+ablation,guard2,baseline,music,30,500,0.9962,0.9856,1.0056
+ablation,guard2,baseline,music,10,500,1.1196,1.0688,1.1775
+ablation,guard2,baseline,music,0,500,1.3969,1.3293,1.4704
+ablation,guard2,baseline,mvdr,30,500,0.9969,0.9822,1.0088
+ablation,guard2,baseline,mvdr,10,500,1.0927,1.0556,1.1343
+ablation,guard2,baseline,mvdr,0,500,1.3861,1.3233,1.4508
+ablation,guard2,baseline,srp_phat,30,500,1.0044,0.9909,1.0183
+ablation,guard2,baseline,srp_phat,10,500,1.0404,1.0036,1.0779
+ablation,guard2,baseline,srp_phat,0,500,1.0356,1.0152,1.0559
+ablation,hop128,baseline,all,30,500,0.9963,0.9898,1.0033
+ablation,hop128,baseline,all,10,500,1.0104,0.9910,1.0314
+ablation,hop128,baseline,all,0,500,1.0240,1.0023,1.0446
+ablation,hop128,baseline,das,30,500,0.9979,0.9874,1.0070
+ablation,hop128,baseline,das,10,500,0.9797,0.9498,1.0121
+ablation,hop128,baseline,das,0,500,0.9927,0.9624,1.0231
+ablation,hop128,baseline,music,30,500,1.0106,1.0024,1.0221
+ablation,hop128,baseline,music,10,500,1.0344,1.0045,1.0676
+ablation,hop128,baseline,music,0,500,1.0558,1.0227,1.0888
+ablation,hop128,baseline,mvdr,30,500,0.9974,0.9879,1.0052
+ablation,hop128,baseline,mvdr,10,500,1.0704,1.0276,1.1160
+ablation,hop128,baseline,mvdr,0,500,1.0679,1.0290,1.1096
+ablation,hop128,baseline,srp_phat,30,500,0.9796,0.9593,0.9983
+ablation,hop128,baseline,srp_phat,10,500,0.9610,0.9280,0.9966
+ablation,hop128,baseline,srp_phat,0,500,0.9822,0.9520,1.0137
+ablation,smooth1,baseline,all,30,500,0.9968,0.9892,1.0048
+ablation,smooth1,baseline,all,10,500,1.1020,1.0722,1.1351
+ablation,smooth1,baseline,all,0,500,1.2131,1.1813,1.2466
+ablation,smooth1,baseline,music,30,500,0.9970,0.9847,1.0098
+ablation,smooth1,baseline,music,10,500,1.0441,1.0131,1.0768
+ablation,smooth1,baseline,music,0,500,1.1333,1.1044,1.1626
+ablation,smooth1,baseline,mvdr,30,500,0.9967,0.9868,1.0049
+ablation,smooth1,baseline,mvdr,10,500,1.1632,1.1084,1.2188
+ablation,smooth1,baseline,mvdr,0,500,1.2986,1.2454,1.3584
+ablation,smooth2,baseline,all,30,500,1.0027,0.9918,1.0140
+ablation,smooth2,baseline,all,10,500,1.1774,1.1387,1.2176
+ablation,smooth2,baseline,all,0,500,1.3501,1.3078,1.3951
+ablation,smooth2,baseline,music,30,500,1.0039,0.9907,1.0177
+ablation,smooth2,baseline,music,10,500,1.0881,1.0449,1.1324
+ablation,smooth2,baseline,music,0,500,1.2356,1.1948,1.2777
+ablation,smooth2,baseline,mvdr,30,500,1.0016,0.9886,1.0136
+ablation,smooth2,baseline,mvdr,10,500,1.2742,1.2084,1.3411
+ablation,smooth2,baseline,mvdr,0,500,1.4752,1.4011,1.5534
+ablation,snr,baseline,all,30,500,0.9960,0.9878,1.0046
+ablation,snr,baseline,all,10,500,0.9993,0.9787,1.0208
+ablation,snr,baseline,all,0,500,0.9380,0.9095,0.9668
+ablation,snr,baseline,das,30,500,1.0386,1.0188,1.0598
+ablation,snr,baseline,das,10,500,1.0622,1.0314,1.0960
+ablation,snr,baseline,das,0,500,1.0297,0.9865,1.0729
+ablation,snr,baseline,music,30,500,1.0034,0.9984,1.0101
+ablation,snr,baseline,music,10,500,1.0311,1.0019,1.0640
+ablation,snr,baseline,music,0,500,1.0622,1.0283,1.0984
+ablation,snr,baseline,mvdr,30,500,0.9894,0.9759,0.9996
+ablation,snr,baseline,mvdr,10,500,0.9998,0.9601,1.0399
+ablation,snr,baseline,mvdr,0,500,0.9644,0.9173,1.0125
+ablation,snr,baseline,srp_phat,30,500,0.9545,0.9306,0.9765
+ablation,snr,baseline,srp_phat,10,500,0.9108,0.8688,0.9544
+ablation,snr,baseline,srp_phat,0,500,0.7338,0.6909,0.7808
+ablation,snr+guard1,baseline,all,30,500,0.9925,0.9774,1.0070
+ablation,snr+guard1,baseline,all,10,500,1.0905,1.0578,1.1251
+ablation,snr+guard1,baseline,all,0,500,1.1735,1.1326,1.2164
+ablation,snr+guard1,baseline,das,30,500,1.0138,0.9603,1.0701
+ablation,snr+guard1,baseline,das,10,500,1.1826,1.1280,1.2453
+ablation,snr+guard1,baseline,das,0,500,1.3350,1.2716,1.4002
+ablation,snr+guard1,baseline,music,30,500,0.9991,0.9900,1.0077
+ablation,snr+guard1,baseline,music,10,500,1.1772,1.1198,1.2404
+ablation,snr+guard1,baseline,music,0,500,1.4297,1.3703,1.4892
+ablation,snr+guard1,baseline,mvdr,30,500,0.9909,0.9779,1.0008
+ablation,snr+guard1,baseline,mvdr,10,500,1.1052,1.0580,1.1548
+ablation,snr+guard1,baseline,mvdr,0,500,1.2931,1.2289,1.3601
+ablation,snr+guard1,baseline,srp_phat,30,500,0.9668,0.9432,0.9896
+ablation,snr+guard1,baseline,srp_phat,10,500,0.9190,0.8763,0.9620
+ablation,snr+guard1,baseline,srp_phat,0,500,0.7684,0.7256,0.8152
+confirm,2x8 d250/h100,2x8_rot d250/h100,all,10,500,0.9878,0.9704,1.0072
+confirm,2x8 d250/h100,2x8_rot d250/h100,all,0,500,1.0062,0.9869,1.0258
+confirm,2x8 d250/h100,2x8_rot d250/h100,das,10,500,0.9988,0.9713,1.0272
+confirm,2x8 d250/h100,2x8_rot d250/h100,das,0,500,1.0071,0.9819,1.0347
+confirm,2x8 d250/h100,2x8_rot d250/h100,gcc_phat_ls,10,500,0.9724,0.9312,1.0169
+confirm,2x8 d250/h100,2x8_rot d250/h100,gcc_phat_ls,0,500,0.9892,0.9366,1.0486
+confirm,2x8 d250/h100,2x8_rot d250/h100,music,10,500,0.9802,0.9486,1.0109
+confirm,2x8 d250/h100,2x8_rot d250/h100,music,0,500,0.9976,0.9706,1.0242
+confirm,2x8 d250/h100,2x8_rot d250/h100,mvdr,10,500,0.9815,0.9489,1.0160
+confirm,2x8 d250/h100,2x8_rot d250/h100,mvdr,0,500,1.0255,0.9979,1.0522
+confirm,2x8 d250/h100,2x8_rot d250/h100,srp_phat,10,500,1.0067,0.9606,1.0569
+confirm,2x8 d250/h100,2x8_rot d250/h100,srp_phat,0,500,1.0120,0.9763,1.0506
+confirm,2x8 d250/h100 band1750,2x8 d250/h100,all,10,500,1.0630,1.0449,1.0805
+confirm,2x8 d250/h100 band1750,2x8 d250/h100,all,0,500,1.0010,0.9881,1.0128
+confirm,2x8 d250/h100 band1750,2x8 d250/h100,das,10,500,1.0484,1.0243,1.0749
+confirm,2x8 d250/h100 band1750,2x8 d250/h100,das,0,500,1.0057,0.9921,1.0195
+confirm,2x8 d250/h100 band1750,2x8 d250/h100,gcc_phat_ls,10,500,1.1198,1.0733,1.1667
+confirm,2x8 d250/h100 band1750,2x8 d250/h100,gcc_phat_ls,0,500,0.9830,0.9400,1.0243
+confirm,2x8 d250/h100 band1750,2x8 d250/h100,music,10,500,1.0454,1.0160,1.0764
+confirm,2x8 d250/h100 band1750,2x8 d250/h100,music,0,500,1.0133,0.9984,1.0289
+confirm,2x8 d250/h100 band1750,2x8 d250/h100,mvdr,10,500,1.0320,1.0012,1.0660
+confirm,2x8 d250/h100 band1750,2x8 d250/h100,mvdr,0,500,1.0086,0.9945,1.0227
+confirm,2x8 d250/h100 band1750,2x8 d250/h100,srp_phat,10,500,1.0716,1.0295,1.1164
+confirm,2x8 d250/h100 band1750,2x8 d250/h100,srp_phat,0,500,0.9947,0.9681,1.0214
+confirm,2x8 d250/h100 band1750,2x8_rot d250/h100,all,10,500,1.0501,1.0269,1.0742
+confirm,2x8 d250/h100 band1750,2x8_rot d250/h100,all,0,500,1.0072,0.9853,1.0285
+confirm,2x8 d250/h100 band1750,2x8_rot d250/h100,das,10,500,1.0472,1.0157,1.0818
+confirm,2x8 d250/h100 band1750,2x8_rot d250/h100,das,0,500,1.0128,0.9862,1.0408
+confirm,2x8 d250/h100 band1750,2x8_rot d250/h100,gcc_phat_ls,10,500,1.0889,1.0305,1.1514
+confirm,2x8 d250/h100 band1750,2x8_rot d250/h100,gcc_phat_ls,0,500,0.9724,0.9094,1.0390
+confirm,2x8 d250/h100 band1750,2x8_rot d250/h100,music,10,500,1.0248,0.9932,1.0575
+confirm,2x8 d250/h100 band1750,2x8_rot d250/h100,music,0,500,1.0109,0.9839,1.0373
+confirm,2x8 d250/h100 band1750,2x8_rot d250/h100,mvdr,10,500,1.0129,0.9740,1.0553
+confirm,2x8 d250/h100 band1750,2x8_rot d250/h100,mvdr,0,500,1.0343,1.0070,1.0611
+confirm,2x8 d250/h100 band1750,2x8_rot d250/h100,srp_phat,10,500,1.0787,1.0295,1.1324
+confirm,2x8 d250/h100 band1750,2x8_rot d250/h100,srp_phat,0,500,1.0066,0.9643,1.0493
+confirm,2x8_rot d200/h100,2x8_rot d250/h100,all,10,500,1.0496,1.0300,1.0697
+confirm,2x8_rot d200/h100,2x8_rot d250/h100,all,0,500,1.0929,1.0702,1.1152
+confirm,2x8_rot d200/h100,2x8_rot d250/h100,das,10,500,0.9492,0.9131,0.9866
+confirm,2x8_rot d200/h100,2x8_rot d250/h100,das,0,500,1.0760,1.0435,1.1095
+confirm,2x8_rot d200/h100,2x8_rot d250/h100,gcc_phat_ls,10,500,1.1138,1.0692,1.1571
+confirm,2x8_rot d200/h100,2x8_rot d250/h100,gcc_phat_ls,0,500,1.0710,1.0130,1.1276
+confirm,2x8_rot d200/h100,2x8_rot d250/h100,music,10,500,1.0099,0.9778,1.0438
+confirm,2x8_rot d200/h100,2x8_rot d250/h100,music,0,500,1.0727,1.0426,1.1041
+confirm,2x8_rot d200/h100,2x8_rot d250/h100,mvdr,10,500,1.0535,1.0180,1.0896
+confirm,2x8_rot d200/h100,2x8_rot d250/h100,mvdr,0,500,1.1191,1.0876,1.1506
+confirm,2x8_rot d200/h100,2x8_rot d250/h100,srp_phat,10,500,1.1323,1.0888,1.1793
+confirm,2x8_rot d200/h100,2x8_rot d250/h100,srp_phat,0,500,1.1268,1.0888,1.1661
+confirm,2x8_rot d250/h100 band1750,2x8_rot d250/h100,all,10,500,1.0637,1.0450,1.0825
+confirm,2x8_rot d250/h100 band1750,2x8_rot d250/h100,all,10,500,1.0637,1.0450,1.0825
+confirm,2x8_rot d250/h100 band1750,2x8_rot d250/h100,all,0,500,1.0152,1.0011,1.0293
+confirm,2x8_rot d250/h100 band1750,2x8_rot d250/h100,all,0,500,1.0152,1.0011,1.0293
+confirm,2x8_rot d250/h100 band1750,2x8_rot d250/h100,das,10,500,1.0324,1.0063,1.0612
+confirm,2x8_rot d250/h100 band1750,2x8_rot d250/h100,das,10,500,1.0324,1.0063,1.0612
+confirm,2x8_rot d250/h100 band1750,2x8_rot d250/h100,das,0,500,1.0189,1.0040,1.0353
+confirm,2x8_rot d250/h100 band1750,2x8_rot d250/h100,das,0,500,1.0189,1.0040,1.0353
+confirm,2x8_rot d250/h100 band1750,2x8_rot d250/h100,gcc_phat_ls,10,500,1.1399,1.0949,1.1869
+confirm,2x8_rot d250/h100 band1750,2x8_rot d250/h100,gcc_phat_ls,10,500,1.1399,1.0949,1.1869
+confirm,2x8_rot d250/h100 band1750,2x8_rot d250/h100,gcc_phat_ls,0,500,1.0046,0.9500,1.0609
+confirm,2x8_rot d250/h100 band1750,2x8_rot d250/h100,gcc_phat_ls,0,500,1.0046,0.9500,1.0609
+confirm,2x8_rot d250/h100 band1750,2x8_rot d250/h100,music,10,500,1.0260,1.0019,1.0527
+confirm,2x8_rot d250/h100 band1750,2x8_rot d250/h100,music,10,500,1.0260,1.0019,1.0527
+confirm,2x8_rot d250/h100 band1750,2x8_rot d250/h100,music,0,500,1.0198,1.0099,1.0309
+confirm,2x8_rot d250/h100 band1750,2x8_rot d250/h100,music,0,500,1.0198,1.0099,1.0309
+confirm,2x8_rot d250/h100 band1750,2x8_rot d250/h100,mvdr,10,500,1.0388,1.0079,1.0742
+confirm,2x8_rot d250/h100 band1750,2x8_rot d250/h100,mvdr,10,500,1.0388,1.0079,1.0742
+confirm,2x8_rot d250/h100 band1750,2x8_rot d250/h100,mvdr,0,500,1.0179,1.0056,1.0315
+confirm,2x8_rot d250/h100 band1750,2x8_rot d250/h100,mvdr,0,500,1.0179,1.0056,1.0315
+confirm,2x8_rot d250/h100 band1750,2x8_rot d250/h100,srp_phat,10,500,1.0857,1.0406,1.1337
+confirm,2x8_rot d250/h100 band1750,2x8_rot d250/h100,srp_phat,10,500,1.0857,1.0406,1.1337
+confirm,2x8_rot d250/h100 band1750,2x8_rot d250/h100,srp_phat,0,500,1.0148,0.9873,1.0442
+confirm,2x8_rot d250/h100 band1750,2x8_rot d250/h100,srp_phat,0,500,1.0148,0.9873,1.0442
+snr,gcc_phat_ls,das,gcc_phat_ls,30,500,0.4280,0.3904,0.4699
+snr,gcc_phat_ls,das,gcc_phat_ls,25,500,0.5774,0.5345,0.6252
+snr,gcc_phat_ls,das,gcc_phat_ls,20,500,0.7853,0.7361,0.8409
+snr,gcc_phat_ls,das,gcc_phat_ls,15,500,1.1374,1.0616,1.2173
+snr,gcc_phat_ls,das,gcc_phat_ls,10,500,1.4954,1.3975,1.6106
+snr,gcc_phat_ls,das,gcc_phat_ls,5,500,1.8242,1.7112,1.9392
+snr,gcc_phat_ls,das,gcc_phat_ls,0,500,2.3720,2.2156,2.5320
+snr,gcc_phat_ls,das,gcc_phat_ls,-5,500,3.0964,2.8688,3.3391
+snr,gcc_phat_ls,das,gcc_phat_ls,-10,500,3.6726,3.4277,3.9281
+snr,music,das,music,30,500,0.8962,0.8704,0.9206
+snr,music,das,music,25,500,0.9124,0.8835,0.9400
+snr,music,das,music,20,500,0.9091,0.8784,0.9379
+snr,music,das,music,15,500,0.9240,0.8901,0.9562
+snr,music,das,music,10,500,0.9977,0.9708,1.0258
+snr,music,das,music,5,500,1.0415,1.0121,1.0723
+snr,music,das,music,0,500,1.0331,1.0090,1.0577
+snr,music,das,music,-5,500,1.0497,1.0311,1.0664
+snr,music,das,music,-10,500,1.0503,1.0333,1.0679
+snr,mvdr,das,mvdr,30,500,0.8990,0.8729,0.9243
+snr,mvdr,das,mvdr,25,500,0.9188,0.8873,0.9487
+snr,mvdr,das,mvdr,20,500,0.9640,0.9267,1.0026
+snr,mvdr,das,mvdr,15,500,1.0027,0.9572,1.0544
+snr,mvdr,das,mvdr,10,500,1.0856,1.0346,1.1398
+snr,mvdr,das,mvdr,5,500,1.1355,1.0838,1.1905
+snr,mvdr,das,mvdr,0,500,1.1341,1.0934,1.1779
+snr,mvdr,das,mvdr,-5,500,1.1662,1.1287,1.2095
+snr,mvdr,das,mvdr,-10,500,1.1780,1.1370,1.2218
+snr,srp_phat,das,srp_phat,30,500,0.9180,0.8896,0.9451
+snr,srp_phat,das,srp_phat,25,500,0.9713,0.9349,1.0068
+snr,srp_phat,das,srp_phat,20,500,1.0612,1.0104,1.1128
+snr,srp_phat,das,srp_phat,15,500,1.2616,1.1917,1.3375
+snr,srp_phat,das,srp_phat,10,500,1.4759,1.3911,1.5739
+snr,srp_phat,das,srp_phat,5,500,1.5768,1.4916,1.6624
+snr,srp_phat,das,srp_phat,0,500,1.5150,1.4319,1.5988
+snr,srp_phat,das,srp_phat,-5,500,1.4204,1.3517,1.4908
+snr,srp_phat,das,srp_phat,-10,500,1.4036,1.3376,1.4781
+sensitivity,1x8 d200 c=331,1x8 d200 nominal,das,10,500,1.1531,1.0264,1.3001
+sensitivity,1x8 d200 c=331,1x8 d200 nominal,music,10,500,1.6020,1.4085,1.8322
+sensitivity,1x8 d200 c=331,1x8 d200 nominal,mvdr,10,500,2.0683,1.8544,2.3162
+sensitivity,1x8 d200 c=331,1x8 d200 nominal,srp_phat,10,500,1.9876,1.7829,2.2490
+sensitivity,1x8 d200 c=355,1x8 d200 nominal,das,10,500,2.1655,2.0772,2.2651
+sensitivity,1x8 d200 c=355,1x8 d200 nominal,music,10,500,2.2484,2.1332,2.3997
+sensitivity,1x8 d200 c=355,1x8 d200 nominal,mvdr,10,500,2.3236,2.1584,2.5175
+sensitivity,1x8 d200 c=355,1x8 d200 nominal,srp_phat,10,500,2.0974,1.9476,2.2811
+sensitivity,1x8 d200 pos=0.5mm,1x8 d200 nominal,das,10,500,1.0057,0.9861,1.0250
+sensitivity,1x8 d200 pos=0.5mm,1x8 d200 nominal,music,10,500,1.0188,0.9955,1.0455
+sensitivity,1x8 d200 pos=0.5mm,1x8 d200 nominal,mvdr,10,500,1.0133,0.9709,1.0510
+sensitivity,1x8 d200 pos=0.5mm,1x8 d200 nominal,srp_phat,10,500,1.0188,0.9910,1.0432
+sensitivity,1x8 d200 pos=1mm,1x8 d200 nominal,das,10,500,1.0281,0.9948,1.0611
+sensitivity,1x8 d200 pos=1mm,1x8 d200 nominal,music,10,500,1.0412,1.0014,1.0851
+sensitivity,1x8 d200 pos=1mm,1x8 d200 nominal,mvdr,10,500,1.0512,0.9890,1.1130
+sensitivity,1x8 d200 pos=1mm,1x8 d200 nominal,srp_phat,10,500,1.0553,1.0134,1.0974
+sensitivity,1x8 d200 pos=2mm,1x8 d200 nominal,das,10,500,1.0851,1.0291,1.1445
+sensitivity,1x8 d200 pos=2mm,1x8 d200 nominal,music,10,500,1.1010,1.0304,1.1782
+sensitivity,1x8 d200 pos=2mm,1x8 d200 nominal,mvdr,10,500,1.2064,1.1147,1.3017
+sensitivity,1x8 d200 pos=2mm,1x8 d200 nominal,srp_phat,10,500,1.1778,1.1126,1.2513
+sensitivity,2x8_rot d200/h100 c=331,2x8_rot d200/h100 nominal,das,10,500,1.0185,0.9648,1.0780
+sensitivity,2x8_rot d200/h100 c=331,2x8_rot d200/h100 nominal,music,10,500,1.0455,0.9944,1.1008
+sensitivity,2x8_rot d200/h100 c=331,2x8_rot d200/h100 nominal,mvdr,10,500,1.0824,1.0313,1.1386
+sensitivity,2x8_rot d200/h100 c=331,2x8_rot d200/h100 nominal,srp_phat,10,500,1.0868,1.0426,1.1341
+sensitivity,2x8_rot d200/h100 c=355,2x8_rot d200/h100 nominal,das,10,500,1.5744,1.5044,1.6447
+sensitivity,2x8_rot d200/h100 c=355,2x8_rot d200/h100 nominal,music,10,500,1.4295,1.3649,1.4992
+sensitivity,2x8_rot d200/h100 c=355,2x8_rot d200/h100 nominal,mvdr,10,500,1.3587,1.2989,1.4253
+sensitivity,2x8_rot d200/h100 c=355,2x8_rot d200/h100 nominal,srp_phat,10,500,1.1994,1.1497,1.2506
+sensitivity,2x8_rot d200/h100 pos=0.5mm,2x8_rot d200/h100 nominal,das,10,500,1.0195,0.9911,1.0502
+sensitivity,2x8_rot d200/h100 pos=0.5mm,2x8_rot d200/h100 nominal,music,10,500,1.0207,0.9907,1.0530
+sensitivity,2x8_rot d200/h100 pos=0.5mm,2x8_rot d200/h100 nominal,mvdr,10,500,1.0324,0.9992,1.0696
+sensitivity,2x8_rot d200/h100 pos=0.5mm,2x8_rot d200/h100 nominal,srp_phat,10,500,1.0083,0.9842,1.0330
+sensitivity,2x8_rot d200/h100 pos=1mm,2x8_rot d200/h100 nominal,das,10,500,1.0829,1.0372,1.1326
+sensitivity,2x8_rot d200/h100 pos=1mm,2x8_rot d200/h100 nominal,music,10,500,1.1111,1.0597,1.1644
+sensitivity,2x8_rot d200/h100 pos=1mm,2x8_rot d200/h100 nominal,mvdr,10,500,1.0970,1.0493,1.1479
+sensitivity,2x8_rot d200/h100 pos=1mm,2x8_rot d200/h100 nominal,srp_phat,10,500,1.0489,1.0141,1.0850
+sensitivity,2x8_rot d200/h100 pos=2mm,2x8_rot d200/h100 nominal,das,10,500,1.3706,1.2966,1.4494
+sensitivity,2x8_rot d200/h100 pos=2mm,2x8_rot d200/h100 nominal,music,10,500,1.3656,1.2908,1.4477
+sensitivity,2x8_rot d200/h100 pos=2mm,2x8_rot d200/h100 nominal,mvdr,10,500,1.3289,1.2589,1.3992
+sensitivity,2x8_rot d200/h100 pos=2mm,2x8_rot d200/h100 nominal,srp_phat,10,500,1.1705,1.1217,1.2202
