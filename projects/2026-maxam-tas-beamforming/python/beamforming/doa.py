@@ -175,16 +175,14 @@ def search(
     return float(a), float(e)
 
 
-def gcc_phat_ls(x: NDArray, mic_pos: NDArray, cfg: Config = DEFAULT) -> tuple[float, float]:
-    """GCC-PHAT delays of all pairs, then a least-squares direction (no grid).
+def gcc_delays(x: NDArray, mic_pos: NDArray, cfg: Config = DEFAULT) -> tuple[NDArray, NDArray]:
+    """GCC-PHAT delay ``tau_ij = (r_i - r_j)^T u / c`` of every microphone pair ``i < j``.
 
+    Returns ``(diff, tau)`` with ``diff = r_i - r_j`` of shape (P, 3) and ``tau`` in seconds.
     PHAT is applied inside the localisation band on the whole segment (zero-padded 2x). The
     correlation is sampled ``gcc_upsample`` times finer by a zero-padded inverse FFT, and the
     peak is searched only inside the physically possible lag ``|tau| <= |r_i - r_j| / c``.
-    ``IFFT[X_i X_j^*]`` peaks at ``-tau_ij`` with ``tau_ij = (r_i - r_j)^T u / c``, which gives
-    the linear system ``(r_i - r_j)^T u = c tau_ij`` for the 120 pairs. A planar array has a
-    zero z column, then ``u_z`` follows from ``|u| = 1``. The result is clipped to the upper
-    hemisphere.
+    ``IFFT[X_i X_j^*]`` peaks at ``-tau_ij``.
     """
     x = np.atleast_2d(np.asarray(x, dtype=float))
     M, n = x.shape
@@ -199,14 +197,23 @@ def gcc_phat_ls(x: NDArray, mic_pos: NDArray, cfg: Config = DEFAULT) -> tuple[fl
     cross = np.where(in_band, cross / np.maximum(np.abs(cross), _TINY), 0.0)
     cc = np.fft.irfft(cross, n=nz * up, axis=1)  # lag l at index l mod nz*up, step 1/(fs*up)
 
-    diff = mic_pos[i_idx] - mic_pos[j_idx]
+    diff = np.asarray(mic_pos)[i_idx] - np.asarray(mic_pos)[j_idx]
     max_lag = np.ceil(np.linalg.norm(diff, axis=1) / cfg.c * cfg.fs * up).astype(int) + 1
     lags = np.empty(len(i_idx))
     for p in range(len(i_idx)):
         window = np.arange(-max_lag[p], max_lag[p] + 1)
         lags[p] = window[int(np.argmax(cc[p, window % (nz * up)]))]
-    rhs = -cfg.c * lags / (cfg.fs * up)
+    return diff, -lags / (cfg.fs * up)
 
+
+def direction_from_delays(diff: NDArray, tau: NDArray, c: float = sg.C) -> NDArray:
+    """Least-squares unit direction from ``diff^T u = c tau``, clipped to the upper hemisphere.
+
+    A planar array has a zero z column in ``diff``; then ``u_z`` follows from ``|u| = 1``.
+    A solution below the horizon is projected onto it (``u_z = 0``).
+    """
+    diff = np.asarray(diff, dtype=float)
+    rhs = c * np.asarray(tau, dtype=float)
     if np.linalg.matrix_rank(diff) < 3:  # planar: z column is zero
         uxy, *_ = np.linalg.lstsq(diff[:, :2], rhs, rcond=None)
         uz = np.sqrt(max(0.0, 1.0 - float(uxy @ uxy)))
@@ -215,8 +222,17 @@ def gcc_phat_ls(x: NDArray, mic_pos: NDArray, cfg: Config = DEFAULT) -> tuple[fl
         u, *_ = np.linalg.lstsq(diff, rhs, rcond=None)
     if u[2] < 0:
         u = np.array([u[0], u[1], 0.0])
-    u = u / np.linalg.norm(u)
-    a, e = g.to_angles(u)
+    return u / np.linalg.norm(u)
+
+
+def gcc_phat_ls(x: NDArray, mic_pos: NDArray, cfg: Config = DEFAULT) -> tuple[float, float]:
+    """GCC-PHAT delays of all pairs, then a least-squares direction (no grid).
+
+    See :func:`gcc_delays` and :func:`direction_from_delays`; for 16 microphones the linear
+    system has 120 equations.
+    """
+    diff, tau = gcc_delays(x, mic_pos, cfg)
+    a, e = g.to_angles(direction_from_delays(diff, tau, cfg.c))
     return float(a), float(e)
 
 
