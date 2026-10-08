@@ -6,8 +6,9 @@ not read labels: ``--shard`` must be a drone shard (label 1, verified for 20 and
 is label 0). Clips are drawn from evenly spaced row groups (about 100 rows, 1.6 MB each) so
 that one shard gives a varied selection without downloading it whole (1.3 GB).
 
-The audio is decoded with ``soundfile`` from the raw bytes, which avoids the torchcodec
-dependency that ``datasets`` 5.x needs for decoded ``Audio`` columns.
+Parquet row groups are read with ``HfFileSystem`` and ``pyarrow``; the WAV bytes are decoded
+with ``soundfile``. A fetch builds the cache in a temporary directory and swaps it in at the
+end, so an interrupted or failed fetch leaves the previous cache untouched.
 """
 
 from __future__ import annotations
@@ -15,6 +16,7 @@ from __future__ import annotations
 import io
 import json
 import os
+import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -61,6 +63,12 @@ def _decode(raw: bytes) -> tuple[NDArray[np.float32], int]:
     return data, int(fs)
 
 
+def _hf_token() -> str | None:
+    """``HF_TOKEN`` from the environment; empty and the ``env.example`` placeholder mean unset."""
+    token = os.environ.get("HF_TOKEN", "").strip()
+    return None if not token or token.startswith("hf_your_token") else token
+
+
 def fetch(
     n: int = 100,
     out_dir: Path = DEFAULT_OUT,
@@ -73,13 +81,30 @@ def fetch(
     Candidates come from ``row_groups`` evenly spaced row groups of one shard, a fixed number
     of random rows (seeded) from each; clips shorter than :data:`MIN_SAMPLES`, with another
     sample rate or with too little energy in the localisation band are skipped.
+
+    The clips are written to ``.<out_dir name>.tmp`` next to ``out_dir`` and swapped in only
+    after the manifest is complete, so a failure (network, too few usable clips, Ctrl-C)
+    keeps the old cache, and a changed ``n`` leaves no orphaned files behind.
     """
+    out_dir = Path(out_dir)
+    tmp_dir = out_dir.parent / f".{out_dir.name}.tmp"
+    shutil.rmtree(tmp_dir, ignore_errors=True)
+    tmp_dir.mkdir(parents=True)
+    try:
+        manifest = _download(n, tmp_dir, shard, seed, row_groups)
+    except BaseException:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+        raise
+    shutil.rmtree(out_dir, ignore_errors=True)
+    tmp_dir.rename(out_dir)
+    return manifest
+
+
+def _download(n: int, target: Path, shard: int, seed: int, row_groups: int) -> dict:
     import pyarrow.parquet as pq
     from huggingface_hub import HfFileSystem
 
-    out_dir = Path(out_dir)
-    out_dir.mkdir(parents=True, exist_ok=True)
-    fs = HfFileSystem(token=os.environ.get("HF_TOKEN") or None)
+    fs = HfFileSystem(token=_hf_token())
     path = f"datasets/{REPO}/data/train-{shard:05d}-of-{SHARD_COUNT:05d}.parquet"
     rng = np.random.default_rng(seed)
     per_group = int(np.ceil(1.5 * n / row_groups))  # oversample, some rows are filtered out
@@ -101,7 +126,7 @@ def fetch(
                 if rate != sg.FS or len(x) < MIN_SAMPLES or frac < MIN_BAND_FRACTION:
                     continue
                 name = f"{len(clips):03d}.wav"
-                (out_dir / name).write_bytes(raw)
+                (target / name).write_bytes(raw)
                 clips.append(
                     {
                         "file": name,
@@ -125,7 +150,7 @@ def fetch(
         "min_band_fraction": MIN_BAND_FRACTION,
         "clips": clips,
     }
-    (out_dir / MANIFEST).write_text(json.dumps(manifest, indent=2) + "\n")
+    (target / MANIFEST).write_text(json.dumps(manifest, indent=2) + "\n")
     return manifest
 
 
@@ -140,6 +165,17 @@ def list_clips(data_dir: Path = DEFAULT_OUT) -> list[Clip]:
         Clip(i, data_dir / c["file"], c["n_samples"], c["band_fraction"])
         for i, c in enumerate(manifest["clips"])
     ]
+
+
+def cache_ok(data_dir: Path = DEFAULT_OUT, n: int | None = None) -> bool:
+    """True if the manifest lists ``n`` clips (any number if ``None``) and every file exists."""
+    manifest_path = Path(data_dir) / MANIFEST
+    try:
+        manifest = json.loads(manifest_path.read_text())
+        files = [Path(data_dir) / c["file"] for c in manifest["clips"]]
+    except (OSError, ValueError, KeyError):
+        return False
+    return (n is None or manifest.get("n") == n == len(files)) and all(f.is_file() for f in files)
 
 
 def load_clip(clip: Clip | Path) -> NDArray[np.float64]:

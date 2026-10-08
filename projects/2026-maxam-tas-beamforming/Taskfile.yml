@@ -35,8 +35,7 @@ tasks:
     desc: Download N drone clips from DADS into data/dads (default N=100, runs once per N)
     deps: [setup]
     status:
-      - test -f data/dads/manifest.json
-      - '{{.PY}} -c "import json,sys; sys.exit(json.load(open(''data/dads/manifest.json''))[''n''] != {{.N}})"'
+      - '{{.PY}} python/scripts/fetch_dads.py --check --n {{.N}} --out data/dads'
     cmds:
       - '{{.PY}} python/scripts/fetch_dads.py --n {{.N}} --out data/dads'
 
