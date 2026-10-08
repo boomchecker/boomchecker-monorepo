@@ -53,7 +53,7 @@ tasks:
     cmds:
       - venv/bin/python -m ruff check .
       - venv/bin/python -m ruff format --check .
-      - venv/bin/python -m mypy beamforming
+      - venv/bin/python -m mypy beamforming scripts
 
   sim:fmt:
     desc: Format and auto-fix lint findings
@@ -64,21 +64,34 @@ tasks:
       - venv/bin/python -m ruff check --fix .
 
   sim:demo:
-    desc: Plot DOA power maps of all grid methods into report/figures/doa_demo.pdf
+    desc: Plot DOA power maps into report/figures/doa_demo.pdf and report/generated/demo.tex
     deps: [sim:fetch]
+    sources:
+      - python/beamforming/*.py
+      - python/scripts/demo.py
+      - data/dads/manifest.json
+    generates:
+      - report/figures/doa_demo.pdf
+      - report/generated/demo.tex
     cmds:
-      - '{{.PY}} python/scripts/demo.py --out report/figures/doa_demo.pdf'
+      - '{{.PY}} python/scripts/demo.py {{.CLI_ARGS}}'
 
   sim:validate:
-    desc: Generate the method validation table into report/generated/validation.tex (~12 min)
+    desc: Validation table (30, 10, 0 dB) into report/generated/validation.tex, about 13 min on 4 cores
     deps: [sim:fetch]
+    sources:
+      - python/beamforming/*.py
+      - python/scripts/validate.py
+      - data/dads/manifest.json
+    generates:
+      - report/generated/validation.tex
     cmds:
-      - '{{.PY}} python/scripts/validate.py --out report/generated/validation.tex'
+      - '{{.PY}} python/scripts/validate.py {{.CLI_ARGS}}'
 
   sim:clean:
     desc: Remove simulation caches and scratch outputs
     cmds:
-      - rm -rf python/out python/.pytest_cache python/.mypy_cache python/.ruff_cache
+      - rm -rf python/out python/.pytest_cache python/.mypy_cache python/.ruff_cache python/beamforming.egg-info
       - find python -name __pycache__ -not -path '*/venv/*' -prune -exec rm -rf {} +
 
   report:build:
