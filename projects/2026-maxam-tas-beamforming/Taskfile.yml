@@ -88,6 +88,71 @@ tasks:
     cmds:
       - '{{.PY}} python/scripts/validate.py {{.CLI_ARGS}}'
 
+  sim:ablate:
+    desc: Ablation of band guard, SNR bin gain, smoothing and overlap on the reference geometry (rows into python/results/summary.csv)
+    deps: [sim:fetch]
+    sources:
+      - python/beamforming/*.py
+      - python/scripts/ablate.py
+      - data/dads/manifest.json
+    cmds:
+      - '{{.PY}} python/scripts/ablate.py {{.CLI_ARGS}}'
+
+  sim:sweep:geometry:
+    desc: Geometry sweep, screening of 21 geometries and confirmation of the best 3 (stages screening and confirm)
+    deps: [sim:fetch]
+    sources:
+      - python/beamforming/*.py
+      - python/scripts/sweep.py
+      - data/dads/manifest.json
+    cmds:
+      - '{{.PY}} python/scripts/sweep.py screening {{.CLI_ARGS}}'
+      - '{{.PY}} python/scripts/sweep.py confirm {{.CLI_ARGS}}'
+
+  sim:sweep:snr:
+    desc: SNR sweep with CRB and sensitivity on the geometry in python/results/selected.json
+    deps: [sim:fetch]
+    sources:
+      - python/beamforming/*.py
+      - python/scripts/sweep.py
+      - python/results/selected.json
+      - data/dads/manifest.json
+    cmds:
+      - '{{.PY}} python/scripts/sweep.py snr {{.CLI_ARGS}}'
+      - '{{.PY}} python/scripts/sweep.py sensitivity {{.CLI_ARGS}}'
+
+  sim:sweep:
+    desc: All sweep stages (ablation excluded); needs python/results/selected.json for the second half
+    cmds:
+      - task: sim:sweep:geometry
+      - task: sim:sweep:snr
+
+  sim:figures:
+    desc: Sweep figures and tables for the report from python/results/summary.csv
+    deps: [setup]
+    sources:
+      - python/results/summary.csv
+      - python/beamforming/*.py
+      - python/scripts/figures.py
+    generates:
+      - report/figures/sweep.pdf
+      - report/figures/beampattern.pdf
+      - report/generated/ablation.tex
+      - report/generated/confirm.tex
+      - report/generated/beampattern.tex
+      - report/generated/cost.tex
+    cmds:
+      - '{{.PY}} python/scripts/figures.py {{.CLI_ARGS}}'
+
+  sim:all:
+    desc: Regenerate every figure and table of the report (demo, validation, ablation, sweep, figures)
+    cmds:
+      - task: sim:demo
+      - task: sim:validate
+      - task: sim:ablate
+      - task: sim:sweep
+      - task: sim:figures
+
   sim:clean:
     desc: Remove simulation caches and scratch outputs
     cmds:

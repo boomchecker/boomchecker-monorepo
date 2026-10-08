@@ -26,6 +26,11 @@ task sim:lint       # ruff a mypy
 task sim:fmt        # ruff format a oprava lintu
 task sim:demo       # mapy výkonu metod -> report/figures/doa_demo.pdf a report/generated/demo.tex
 task sim:validate   # validační tabulka (30, 10, 0 dB) -> report/generated/validation.tex (~9 min)
+task sim:ablate     # ablace voleb zpracování na referenční geometrii (~10 min), řádky do python/results/summary.csv
+task sim:sweep:geometry  # screening 21 geometrií a potvrzení nejlepších 3 (stage screening, confirm)
+task sim:sweep:snr  # SNR sweep s CRB a citlivost na geometrii z python/results/selected.json
+task sim:figures    # grafy a tabulky sekce 4 z python/results/summary.csv (rychlé, bez simulace)
+task sim:all        # vše: demo, validate, ablate, sweep, figures
 task sim:clean      # cache a pomocné výstupy
 task report:build   # report/main.pdf
 task report:clean

@@ -14,6 +14,9 @@ task sim:test        # pytest (198 testů, ~20 s)
 task sim:lint        # ruff + mypy
 task sim:demo        # report/figures/doa_demo.pdf + report/generated/demo.tex
 task sim:validate    # report/generated/validation.tex, 30/10/0 dB (~9 min na 4 jádrech)
+task sim:ablate      # ablace voleb zpracování -> python/results/summary.csv
+task sim:sweep       # screening, potvrzení, SNR sweep a citlivost -> python/results/summary.csv
+task sim:figures     # report/figures/{sweep,beampattern}.pdf a report/generated/*.tex ze summary.csv
 ```
 
 Z Pythonu (po `task setup`):
@@ -138,6 +141,36 @@ adresář přejmenuje, takže přerušený nebo neúspěšný fetch nechá půvo
 nezůstanou osiřelé soubory. `task sim:fetch` kontroluje i to, že všechny soubory z manifestu
 existují. `HF_TOKEN` z `.env` je volitelný (zástupnou hodnotu z `env.example` ignoruje).
 
+## Experimenty (M4)
+
+Všechny běhy jsou **párové a deterministické** (`experiment.py`): trial je klip DADS s náhodným
+úsekem 100 ms a náhodným směrem na horní polokouli. Směry `d`-tého běhu mají vlastní generátor
+(`d = 0` je stejný jako v `validate.py`), úsek, šum při daném SNR a perturbace mikrofonů mají
+generátor klíčovaný `(SEED, klip, d, účel)`, takže výsledek nezávisí na počtu procesů, pořadí
+dokončení ani na tom, které SNR a metody se počítají společně. Procesy se spouštějí
+(`spawn`), ne forkují, a skripty nastavují jedno BLAS vlákno na proces.
+
+| Krok | Skript | Co dělá |
+|---|---|---|
+| ablace | `ablate.py` | volby `guard_bins`, `bin_weighting="snr"`, `freq_smooth`, `hop=128` na 2x8_rot Ø200/h70 při 30, 10, 0 dB, 5 směrů na klip; přijme se volba, která při 0 dB sníží RMSE o ≥ 5 % (geometrický průměr přes metody) a při 30 dB ji nezvýší o víc než 5 % |
+| screening | `sweep.py screening` | 21 geometrií × 5 metod, SNR 10 a 0 dB, 1 směr na klip |
+| potvrzení | `sweep.py confirm` | 3 nejlepší geometrie podle geometrického průměru RMSE přes metody při 0 dB, 5 směrů na klip |
+| SNR sweep | `sweep.py snr` | vybraná geometrie (`python/results/selected.json`, zapisuje se ručně po potvrzení), SNR −10 až 30 dB po 5, s CRB |
+| citlivost | `sweep.py sensitivity` | vybraná geometrie a 1x8 stejného Ø: c = 331 a 355 m/s v simulaci (metody počítají s 343), σ polohy 0,5, 1, 2 mm, 10 dB |
+| grafy | `figures.py` | čte `summary.csv`, nic nesimuluje |
+
+`python/results/summary.csv` obsahuje jeden řádek na stage, geometrii, variantu, metodu a SNR
+(`n`, RMSE, medián, RMSE azimutu vážené cos(el) a elevace, podíl nad 5°, RMSE a podíl po třech
+elevačních pásmech stejné plochy); řádky `method == crb` nesou Cramérovu-Raovu mez.
+Každá stage nahradí jen své řádky, soubor je stabilní na bajty. `beampattern.csv` má šířky
+laloku a PSL všech geometrií.
+
+Doplňující moduly: `metrics.py` (chyby, pásma elevace, souhrn), `crb.py` (CRB deterministického
+signálu v tečných souřadnicích, uzavřený tvar přes rozptyl poloh mikrofonů v tečné rovině),
+`beampattern.py` (DAS: šířka −3 dB v řezu azimutem a elevací, PSL), `cost.py` (analytický počet
+MAC metod pro 16 kanálů, 5 rámců, 55 binů; odhad času při 2 cyklech na MAC a 250 MHz je
+předpoklad, ne měření), `results.py` (`summary.csv`, pořadí geometrií).
+
 ## Testy (`task sim:test`)
 
 | Soubor | Co hlídá |
@@ -148,6 +181,9 @@ existují. `HF_TOKEN` z `.env` je volitelný (zástupnou hodnotu z `env.example`
 | `test_doa.py` | každá metoda: chyba ≤ 2° při SNR 30 dB na 8 směrech mimo uzly gridu (včetně přechodu 360°, horizontu a zenitu); `1x8` azimut; `2x8` bez rotace; nízké SNR; invariance k měřítku vstupu; tichý segment; každý binový výkon proti explicitnímu vzorci |
 | `test_gcc.py` | zpoždění dvojic proti přesným hodnotám (i end-fire), fyzikální mez zpoždění, pásmo proti celému spektru, PHAT proti hlasitému koherentnímu rušiteli, řešení směru ze zpoždění (3D, rovinné pole, ořez pod horizont), elevace u `1x8` |
 | `test_search.py` | jemné hledání přebírá normalizační váhy z hrubého gridu, dosáhne rohu hrubé buňky, `power_map` je součet binů podle rovnic, shoda dat binů a frekvencí (čistý tón) |
+| `test_options.py` | volby `Config`: výchozí chování, odmítnutí neplatných hodnot, vyhlazování binů a hodnost kovariance, `snr_gain`, `guard_bins`, každá volba lokalizuje při 30 dB |
+| `test_metrics.py`, `test_crb.py`, `test_beampattern.py`, `test_cost.py` | pásma stejné plochy, vážený azimut, outliery; CRB proti numerickému Fisherovu informačnímu číslu a tvaru pro dva mikrofony; šířka laloku proti uzavřenému tvaru, PSL; počty MAC na ručně spočítaném případu |
+| `test_experiment.py`, `test_results.py`, `test_sweep_smoke.py` | determinismus a vnořenost trialů, nezávislost šumu na ostatních SNR a metodách, `evaluate`, `summary.csv`, pravidlo přijetí volby, smoke test skriptů na třech klipech |
 | `test_pra_check.py` | vlastní hrubé maximum SRP-PHAT a MUSIC je stejný uzel jako pyroomacoustics SRP a NormMUSIC; všechny pra metody běží |
 
 Při SNR 30 dB jsou chyby 0,3 až 0,7°. Bez šumu je medián chyby gridových metod 0,39° (krok jemného
