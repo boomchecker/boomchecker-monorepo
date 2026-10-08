@@ -6,6 +6,7 @@
 \usepackage{cite}
 \usepackage{amsmath,amssymb,amsfonts}
 \usepackage{booktabs}
+\usepackage{multirow}
 \usepackage{tabularx}
 \usepackage{graphicx}
 \usepackage{textcomp}
@@ -24,6 +25,10 @@
 
 \input{generated/demo.tex}
 \input{generated/validation.tex}
+\input{generated/ablation.tex}
+\input{generated/confirm.tex}
+\input{generated/beampattern.tex}
+\input{generated/cost.tex}
 
 \begin{document}
 
@@ -63,7 +68,7 @@ kde $\mathbf{a}$ je steering vektor, $s$ spektrum zdroje a~$\mathbf{n}$ šum. Ko
 Fáze steering vektoru je jednoznačná, jen pokud jsou sousední mikrofony blíž než $\lambda/2$. Nad touto mezí vznikají falešné laloky (prostorový aliasing); meze pro uvažované kruhy jsou v~tab.~\ref{tab:alias}. Dolní mez pásma naopak určuje apertura $L_a$: šířka hlavního laloku roste přibližně jako $\lambda/L_a$, takže pole o~průměru 160 až 250\,mm má pod 1\,kHz velmi široký lalok.
 
 \subsection{Beamforming}
-Konvenční beamformer (delay-and-sum, DAS) srovná fáze kanálů podle kandidátního směru a~sečte je. V~jednom binu je jeho výstupní výkon $\mathbf{a}^H\hat{\mathbf{R}}\mathbf{a}$ \cite{vanveen1988beamforming}, širokopásmový výkon řízené odezvy (SRP) je součet přes biny pásma
+Do všech součtů přes biny vstupuje v~implementaci ještě váha $g_k$ podle poměru signál-šum v~binu (sekce~\ref{sec:geometrie}); ve vzorcích ji pro přehlednost vynecháváme. Konvenční beamformer (delay-and-sum, DAS) srovná fáze kanálů podle kandidátního směru a~sečte je. V~jednom binu je jeho výstupní výkon $\mathbf{a}^H\hat{\mathbf{R}}\mathbf{a}$ \cite{vanveen1988beamforming}, širokopásmový výkon řízené odezvy (SRP) je součet přes biny pásma
 \begin{equation}
   P_{\mathrm{DAS}}(\Omega) = \sum_k \mathbf{a}^H(k,\Omega)\,\hat{\mathbf{R}}(k)\,\mathbf{a}(k,\Omega).
   \label{eq:das}
@@ -111,19 +116,20 @@ Současné práce lokalizují dron většinou konvenčním frekvenčním beamfor
 
 \begin{table}[t]
 \centering
-\caption{Srovnání metod DOA. Cena je vlastní řádový odhad pro $M$ mikrofonů, $P=M(M-1)/2$ dvojic, $K$ binů a~$D$ zdrojů.}
+\caption{Srovnání metod DOA. Cena je vlastní řádový odhad pro $M$ mikrofonů, $P=M(M-1)/2$ dvojic, $K$ binů a~$D$ zdrojů. MMAC je analytický počet milionů násobení se sčítáním pro jeden úsek (16 mikrofonů, 5 rámců, 55 binů, \macDirections{} směrů, GCC-PHAT s~16násobnou interpolací).}
 \label{tab:metody}
-\small
-\begin{tabularx}{\columnwidth}{@{}lYYl@{}}
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\begin{tabularx}{\columnwidth}{@{}lYYlr@{}}
 \toprule
-Metoda & Potřebuje & Cena na bin a~směr & Zdroj \\
+Metoda & Potřebuje & Cena na bin a~směr & Zdroj & MMAC \\
 \midrule
-DAS/SRP & $\hat{\mathbf{R}}$ & $O(M^2)$ & \cite{vanveen1988beamforming} \\
-MVDR & $(\hat{\mathbf{R}}+\varepsilon\mathbf{I})^{-1}$ & $O(M^3)$ na bin + $O(M^2)$ & \cite{capon1969mvdr} \\
-GCC-PHAT+LS & IFFT na dvojici & bez gridu, $P$ IFFT & \cite{knapp1976gcc} \\
-SRP-PHAT & GCC-PHAT & $O(P)$, s~identitou $O(M)$ & \cite{dibiase2001srpphat} \\
-MUSIC & EVD $\hat{\mathbf{R}}$ & $O(M^3)$ na bin + $O(MD)$ & \cite{schmidt1986music} \\
-TOPS & EVD + SVD & $O(M^3)$ na bin + $O(KDM^2)$ & \cite{yoon2006tops} \\
+DAS/SRP & $\hat{\mathbf{R}}$ & $O(M^2)$ & \cite{vanveen1988beamforming} & \macDAS \\
+MVDR & $(\hat{\mathbf{R}}+\varepsilon\mathbf{I})^{-1}$ & $O(M^3)$ na bin + $O(M^2)$ & \cite{capon1969mvdr} & \macMVDR \\
+GCC-PHAT+LS & IFFT na dvojici & bez gridu, $P$ IFFT & \cite{knapp1976gcc} & \macGCC \\
+SRP-PHAT & GCC-PHAT & $O(P)$, s~identitou $O(M)$ & \cite{dibiase2001srpphat} & \macSRP \\
+MUSIC & EVD $\hat{\mathbf{R}}$ & $O(M^3)$ na bin + $O(MD)$ & \cite{schmidt1986music} & \macMUSIC \\
+TOPS & EVD + SVD & $O(M^3)$ na bin + $O(KDM^2)$ & \cite{yoon2006tops} & -- \\
 \bottomrule
 \end{tabularx}
 \end{table}
@@ -147,15 +153,11 @@ Pro lokalizaci z~toho plyne, že většina energie dronu, a~tedy i~využitelné 
 
 \section{Geometrie mikrofonního pole}
 \label{sec:geometrie}
-% TODO M4: vysledky sweepu, doporucena geometrie pro PCB a doporucena metoda.
-% Topologie: 1x8 kruh, 2x8 kruhy nad sebou, 2x8 kruhy pootocene o 22,5 st.
-% Prumer 160/200/250 mm, rozteč kruhu h 40/70/100 mm.
-% Metriky: RMSE azimutu a elevace vs SNR, sirka hlavniho laloku, vypocetni cena.
 
 \subsection{Simulační model}
 Simulace je napsaná v~Pythonu (NumPy) a~vyrábí signál pole ze záznamů dronu z~datasetu DADS (sekce~\ref{sec:spektrum}). Klip s~délkou obvykle 0{,}5\,s je zdrojem rovinné vlny ze zvoleného směru $\mathbf{u}$ a~do $M=16$ mikrofonů se přivede se zpožděním $\tau_m$ podle~\eqref{eq:model}. Zpoždění je zlomek vzorku, proto se zavádí násobením spektra faktorem $e^{j2\pi f\tau_m}$ na úseku s~okrajem, který se po posunu odřízne, aby do výsledku nezasáhl kruhový přesah FFT. Z~něj se vezme úsek 100\,ms (1600 vzorků) na náhodné pozici klipu a~přidá se nezávislý bílý šum s~odstupem SNR, tedy poměrem středního výkonu signálu v~poli k~výkonu šumu přes celé pásmo 0 až 8\,kHz. Dron má v~pásmu 300\,Hz až 2\,kHz většinu energie, bílý šum jen zlomek, takže SNR uvnitř pásma je o~\validBandSnrGain\,dB vyšší než nominální. Stejný steering vektor generuje signály i~prohledává grid, takže znaménko zpoždění nemůže být v~simulaci a~v~metodách odlišné.
 
-Kruh o~průměru $\varnothing$ je kružnice, na které leží osm mikrofonů s~úhlovou roztečí 45$^\circ$. U~topologie 2$\times$8 s~pootočením je horní kruh otočen o~22{,}5$^\circ$, takže mikrofony obou kruhů leží ve~svislé projekci mezi sebou. Úsek zpracuje STFT ze sekce~\ref{sec:vypocty} (5 rámců, biny 10 až 64). Směr se hledá na hrubém gridu 5$^\circ$ o~1368 směrech a~poté na čepičce $11\times11$ bodů s~krokem 1$^\circ$ kolem jeho maxima. Konstanty normování binů u~MVDR a~MUSIC se počítají na hrubém gridu a~jemné hledání je přebírá, jinak by obě fáze vážily biny různě. Diagonální loading MVDR je $\varepsilon=10^{-2}$ a~MUSIC uvažuje jeden zdroj, takže šumový podprostor má 15 dimenzí. GCC-PHAT s~LS pracuje s~celým úsekem najednou (SRP-PHAT naopak průměruje GCC-PHAT přes rámce STFT), filtruje PHAT na pásmo 300\,Hz až 2\,kHz a~zpoždění dvojic odhaduje na šestnáctinásobně jemnější mřížce než vzorkovací perioda, protože při 16\,kHz odpovídá jeden vzorek 21\,mm dráhy a~pole má průměr jen 200\,mm. Mapy výkonu pro jeden klip ukazuje obr.~\ref{fig:doa_demo}. Simulace předpokládá rovinnou vlnu, jediný zdroj, ideální polohy mikrofonů, pevnou rychlost zvuku 343\,m/s a~šum nezávislý mezi kanály; chybí odraz od země, vítr a~koherentní pozadí, takže ukazuje spíše spodní mez chyby než chování venku.
+Kruh o~průměru $\varnothing$ je kružnice, na které leží osm mikrofonů s~úhlovou roztečí 45$^\circ$. U~topologie 2$\times$8 s~pootočením je horní kruh otočen o~22{,}5$^\circ$, takže mikrofony obou kruhů leží ve~svislé projekci mezi sebou. Úsek zpracuje STFT ze sekce~\ref{sec:vypocty} (5 rámců, biny 10 až 64). Směr se hledá na hrubém gridu 5$^\circ$ o~1368 směrech a~poté na čepičce $11\times11$ bodů s~krokem 1$^\circ$ kolem jeho maxima. Konstanty normování binů u~MVDR a~MUSIC se počítají na hrubém gridu a~jemné hledání je přebírá, jinak by obě fáze vážily biny různě. Diagonální loading MVDR je $\varepsilon=10^{-2}$ a~MUSIC uvažuje jeden zdroj, takže šumový podprostor má 15 dimenzí. Každý bin se navíc váží $g_k=\max(0,\,1-N/P_k)$, kde $P_k$ je střední výkon binu přes kanály a~rámce a~$N$ medián výkonu binů nad 3\,kHz, kde se spektrum dronu podle sekce~\ref{sec:spektrum} blíží pozadí a~šum je přibližně bílý. Váha je 0 pro bin bez signálu a~roste k~1 pro silný bin; vybrali jsme ji v~podsekci~\ref{sec:ablace}. GCC-PHAT s~LS pracuje s~celým úsekem najednou (SRP-PHAT naopak průměruje GCC-PHAT přes rámce STFT), filtruje PHAT na pásmo 300\,Hz až 2\,kHz a~zpoždění dvojic odhaduje na šestnáctinásobně jemnější mřížce než vzorkovací perioda, protože při 16\,kHz odpovídá jeden vzorek 21\,mm dráhy a~pole má průměr jen 200\,mm. Mapy výkonu pro jeden klip ukazuje obr.~\ref{fig:doa_demo}. Simulace předpokládá rovinnou vlnu, jediný zdroj, ideální polohy mikrofonů, pevnou rychlost zvuku 343\,m/s a~šum nezávislý mezi kanály; chybí odraz od země, vítr a~koherentní pozadí, takže ukazuje spíše spodní mez chyby než chování venku.
 
 \begin{figure*}[t]
   \centering
@@ -165,11 +167,11 @@ Kruh o~průměru $\varnothing$ je kružnice, na které leží osm mikrofonů s~�
 \end{figure*}
 
 \subsection{Validace implementace}
-Správnost implementace jsme ověřili na \validN{} klipech DADS. Každý klip dostal náhodný směr rovnoměrně rozložený na horní polokouli a~náhodný úsek 100\,ms, shodné pro všechny metody a~všechna SNR. Pole je 2$\times$8 pootočené s~$\varnothing$\,\demoDiameter\,mm a~$h=\demoHeight$\,mm. Tab.~\ref{tab:validace} uvádí medián a~RMSE úhlové chyby po velké kružnici. Kontrolní metody z~pyroomacoustics nemají jemné dohledání, proto jsou v~druhé skupině i~vlastní SRP-PHAT a~MUSIC jen na hrubém gridu a~porovnáváme stejné věci.
+Správnost implementace jsme ověřili na \validN{} klipech DADS. Každý klip dostal náhodný směr rovnoměrně rozložený na horní polokouli a~náhodný úsek 100\,ms, shodné pro všechny metody a~všechna SNR. Pole je 2$\times$8 pootočené s~$\varnothing$\,\demoDiameter\,mm a~$h=\demoHeight$\,mm. Tab.~\ref{tab:validace} uvádí medián a~RMSE úhlové chyby po velké kružnici. Kontrolní metody z~pyroomacoustics nemají jemné dohledání, proto jsou v~druhé skupině i~vlastní SRP-PHAT a~MUSIC jen na hrubém gridu a~bez váhy $g_k$, kterou pyroomacoustics nemá, a~porovnáváme stejné věci.
 
 \begin{table*}[t]
 \centering
-\caption{Úhlová chyba odhadu směru ve stupních. První skupina: vlastní metody s~jemným hledáním. Druhá skupina: jen hrubý grid 5$^\circ$, vlastní metody a~pyroomacoustics (pra).}
+\caption{Úhlová chyba odhadu směru ve stupních. První skupina: vlastní metody s~jemným hledáním. Druhá skupina: jen hrubý grid 5$^\circ$ bez váhy $g_k$, vlastní metody a~pyroomacoustics (pra).}
 \label{tab:validace}
 \small
 \shorthandoff{-}% babel czech: \cmidrule needs a plain hyphen
@@ -184,11 +186,95 @@ Metoda & medián & RMSE & medián & RMSE & medián & RMSE \\
 \end{tabular}
 \end{table*}
 
-Při SNR \validSnrHigh\,dB je chyba dána hlavně krokem gridu, hrubý grid dává víc než trojnásobek chyby jemného. Tyto řádky tedy dokládají správnost implementace, ne kvalitu metod. Rozdíly mezi vlastními metodami se projeví až při nižším SNR: při \validSnrLow\,dB mají nejmenší chybu MUSIC a~DAS, o~něco větší MVDR a~zhruba dvojnásobnou SRP-PHAT a~GCC-PHAT s~LS. Vlastní SRP-PHAT a~MUSIC na hrubém gridu dávají stejná čísla jako SRP a~NormMUSIC z~pyroomacoustics, shodují se tedy na stejný uzel gridu. Porovnáváme s~NormMUSIC, protože pyroomacoustics MUSIC standardně biny nenormuje. CSSM a~WAVES v~implementaci pyroomacoustics nepřinášejí oproti nekoherentnímu součtu zlepšení a~CSSM při nejnižším SNR selhává.
+Při SNR \validSnrHigh\,dB je chyba dána hlavně krokem gridu, hrubý grid dává víc než trojnásobek chyby jemného. Tyto řádky tedy dokládají správnost implementace, ne kvalitu metod. Rozdíly mezi vlastními metodami se projeví až při nižším SNR: při \validSnrLow\,dB mají nejmenší chybu DAS a~MUSIC, o~něco větší MVDR, přibližně o~polovinu větší SRP-PHAT a~víc než dvojnásobnou GCC-PHAT s~LS. Vlastní SRP-PHAT a~MUSIC na hrubém gridu dávají stejná čísla jako SRP a~NormMUSIC z~pyroomacoustics, shodují se tedy na stejný uzel gridu. Porovnáváme s~NormMUSIC, protože pyroomacoustics MUSIC standardně biny nenormuje. CSSM a~WAVES v~implementaci pyroomacoustics nepřinášejí oproti nekoherentnímu součtu zlepšení a~CSSM při nejnižším SNR selhává.
 
-DAS má i~bez šumu malý systematický posun elevace (řádu 0{,}5$^\circ$): Hannovo okno přenáší únik silné složky těsně za hranou pásma do jeho okrajových binů a~výkonově vážený součet ho nezprůměruje, kdežto normované metody jím trpí méně. Důsledek pro volbu metody prověří další simulace.
+DAS má i~bez šumu malý systematický posun elevace (řádu 0{,}5$^\circ$): Hannovo okno přenáší únik silné složky těsně za hranou pásma do jeho okrajových binů a~výkonově vážený součet ho nezprůměruje, kdežto normované metody jím trpí méně. Ochranné biny na okraji pásma ho při vysokém SNR odstraní, při nízkém ale chybu zvětší (podsekce~\ref{sec:ablace}).
 
 TOPS v~tabulce chybí, protože pyroomacoustics 0.10.1 jej počítá chybně pro pásmo, které nezačíná u~binu 0: transformační matice staví podle absolutních čísel binů, ale čte je podle pořadí v~seznamu použitých binů. Na pěti směrech při 30\,dB chyba s~opravenou indexací klesla z~5{,}5 až 11{,}9$^\circ$ na 0{,}6 až 3{,}1$^\circ$, tedy na kvantizaci hrubého gridu. Yoon odvozuje TOPS pro lineární a~rovinná pole \cite{yoon2006tops}, takže pro 3D pole to platí jen empiricky; selhání pyroomacoustics TOPS nelze vykládat jako vlastnost metody.
+
+\subsection{Ablace volby zpracování}
+\label{sec:ablace}
+Úpravy zpracování jsme porovnali na referenční geometrii (2$\times$8 pootočené, $\varnothing$\,200\,mm, $h=70$\,mm) na \ablN{} trialech (100 klipů, 5 směrů na klip): ochranné biny na okraji pásma, váhu $g_k$, vyhlazení kovariance přes sousední biny (jen MVDR a~MUSIC) a~překryv rámců 75\,\% (9 rámců místo 5). Úpravu jsme předem přijímali jen tehdy, když snížila RMSE při 0\,dB aspoň o~5\,\% a~při 30\,dB ji nezvýšila o~víc než 5\,\% (geometrický průměr přes ovlivněné metody). Tab.~\ref{tab:ablace} ukazuje, že to splnila jen váha $g_k$. Její přínos nese hlavně SRP-PHAT (3{,}61 na 2{,}65$^\circ$ při 0\,dB), MVDR se zlepšil o~3\,\%, kdežto DAS a~MUSIC se zhoršily o~3 a~6\,\%, což je na hranici šumu 500 trialů. Ochranné biny odstraní posun DAS při 30\,dB (0{,}61 na 0{,}41$^\circ$ při dvou binech), při 0\,dB ale zvětší chybu o~22 až 30\,\%. Vyhlazení kovariance a~překryv 75\,\% MVDR ani MUSIC nepomohly.
+
+\begin{table}[t]
+\centering
+\caption{Ablace zpracování. RMSE [$^\circ$] při 0\,dB a~poměr RMSE k~variantě bez úprav při 0 a~30\,dB (geometrický průměr přes metody; pravidlo přijetí: $\le0{,}95$ a~$\le1{,}05$).}
+\label{tab:ablace}
+\scriptsize
+\setlength{\tabcolsep}{3pt}
+\shorthandoff{-}%
+\begin{tabular}{@{}lrrrrrr@{}}
+\toprule
+ & DAS & MVDR & SRP-PHAT & MUSIC & 0\,dB & 30\,dB \\
+\midrule
+\ablrows
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Srovnání geometrií}
+\label{sec:sweep}
+Screening 21 konfigurací (1$\times$8, 2$\times$8 a~2$\times$8 pootočené, $\varnothing$ 160, 200 a~250\,mm, $h$ 40, 70 a~100\,mm) proběhl na 100 trialech při 10 a~0\,dB, tři nejlepší konfigurace jsme potvrdili na \confN{} trialech. Konfigurace se řadí podle skóre, tedy geometrického průměru RMSE pěti metod při 0\,dB, aby se hodnotila geometrie, ne metoda, která na ní vyhrála. Obr.~\ref{fig:sweep}c ukazuje, že skóre monotónně klesá s~větším průměrem i~větší roztečí kruhů: 1$\times$8 má 5{,}9 až 7{,}6$^\circ$, 2$\times$8 s~$h=40$\,mm 3{,}8 až 4{,}1$^\circ$, s~$h=70$\,mm 2{,}6 až 3{,}0$^\circ$ a~s~$h=100$\,mm 2{,}1 až 2{,}5$^\circ$. Druhý kruh tedy snižuje chybu na třetinu až dvě třetiny podle $h$, a~to i~pro $h=100$\,mm, kde je mez aliasingu mezi kruhy $c/(2h)=1{,}7$\,kHz nižší než horní hrana pásma (tab.~\ref{tab:alias}). Pootočení horního kruhu o~22{,}5$^\circ$ nemá rozlišitelný vliv (1{,}87 a~1{,}88$^\circ$ pro $\varnothing$\,250\,mm, $h=100$\,mm). Nejlepší $h=100$\,mm je okraj sweepu, takže z~výsledku nevyplývá, že by větší rozteč nepomohla. Tab.~\ref{tab:potvrzeni} shrnuje potvrzení.
+
+\begin{table}[t]
+\centering
+\caption{Potvrzení tří nejlepších geometrií: RMSE [$^\circ$] při 0\,dB, \confN{} trialů. Geometrie je typ, $\varnothing$/$h$ v~mm; skóre je geometrický průměr pěti metod.}
+\label{tab:potvrzeni}
+\scriptsize
+\setlength{\tabcolsep}{2.5pt}
+\shorthandoff{-}%
+\begin{tabular}{@{}lrrrrrr@{}}
+\toprule
+Geometrie & DAS & MVDR & SRP & MUSIC & GCC & skóre \\
+\midrule
+\confrows
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure*}[t]
+  \centering
+  \includegraphics[width=\textwidth]{figures/sweep.pdf}
+  \caption{(a), (b) RMSE azimutu (vážené $\cos\theta$) a~elevace v~závislosti na SNR pro vybranou geometrii (2$\times$8 pootočené, $\varnothing$\,200\,mm, $h=100$\,mm), 500 trialů, s~mezí CRB. (c) Skóre při 0\,dB pro všech 21 geometrií ze screeningu (100 trialů). (d) RMSE při 0\,dB ve třech elevačních pásmech stejné plochy pro vybranou geometrii.}
+  \label{fig:sweep}
+\end{figure*}
+
+Pro vybranou geometrii (sekce~\ref{sec:doporuceni}) ukazuje obr.~\ref{fig:sweep}a,b chybu v~závislosti na SNR. Při SNR od 20\,dB mají mřížkové metody chybu 0{,}4 až 0{,}5$^\circ$, což je kvantizace jemného gridu s~krokem 1$^\circ$ ($1/\sqrt{12}$ na osu), a~CRB leží výrazně níže (0{,}03$^\circ$ při 30\,dB). Pod 10\,dB chyba roste a~u 0\,dB je u~DAS 1{,}5$^\circ$, MUSIC 1{,}6$^\circ$, MVDR 1{,}7$^\circ$, SRP-PHAT 2{,}3$^\circ$ a~GCC-PHAT s~LS 3{,}6$^\circ$, tedy 1{,}5 až 3{,}7krát nad CRB. Rozdíl mezi DAS a~MUSIC je při všech SNR od $-10$ do 30\,dB pod 15\,\%, takže se přesností nerozliší. GCC-PHAT s~LS nemá grid, a~proto je při 20\,dB a~víc nejpřesnější (0{,}4$^\circ$ při 20\,dB, 0{,}2$^\circ$ při 30\,dB), ale při 0\,dB má 15\,\% odhadů nad 5$^\circ$, kdežto ostatní metody nejvýš 2\,\%. Chyba se mezi elevačními pásmy (obr.~\ref{fig:sweep}d) mění jen málo, u~horizontu ji tedy dva kruhy nezhoršují. Jediný kruh 1$\times$8 ($\varnothing$\,200\,mm) má při 0\,dB v~pásmu 0 až 19$^\circ$ chybu 6{,}6$^\circ$ (DAS) proti 2{,}5$^\circ$ u~zenitu, což odpovídá poklesu apertury u~nízkých elevací \cite{altena2026joint}.
+
+\subsection{Beampattern}
+Beampattern DAS s~rovnoměrnými vahami nezávisí na signálu, proto srovnává geometrii bez vlivu metody. Tab.~\ref{tab:beampattern} uvádí šířku hlavního laloku v~$-3$\,dB v~řezu azimutem ($\Delta\phi$) a~elevací ($\Delta\theta$) při navádění na elevaci 45$^\circ$ a~nejvyšší postranní lalok (PSL) na horní polokouli. Na 300\,Hz je pole všesměrové a~na 500\,Hz je lalok široký 164 až 192$^\circ$. Azimutová šířka je u~všech topologií stejná, svislou aperturu přidává až druhý kruh: na 1\,kHz se $\Delta\theta$ zmenší ze 169 na 87$^\circ$ a~na 2\,kHz ze 133 na 42$^\circ$. PSL roste z~$-12$ až $-10$\,dB na 1\,kHz přes $-8$\,dB na 2\,kHz na $-4$\,dB na 3\,kHz ($-2$\,dB u~1$\times$8), tedy k~aliasingu nad mezí z~tab.~\ref{tab:alias}, což podporuje horní mez pásma 2\,kHz. Obr.~\ref{fig:beampattern} ukazuje řezy na 1\,kHz.
+
+\begin{table}[t]
+\centering
+\caption{DAS beampattern při navádění na elevaci 45$^\circ$ ($\varnothing$\,200\,mm, $h=100$\,mm): šířka laloku v~$-3$\,dB [$^\circ$] a~PSL [dB]. Pomlčka u~šířky znamená lalok přes celý kruh, u~PSL žádný postranní lalok. Šířka je medián a~PSL nejhorší hodnota přes 24 azimutů navádění.}
+\label{tab:beampattern}
+\small
+\setlength{\tabcolsep}{4pt}
+\shorthandoff{-}%
+\begin{tabular}{@{}llrrrrr@{}}
+\toprule
+ & & 300\,Hz & 500\,Hz & 1\,kHz & 2\,kHz & 3\,kHz \\
+\midrule
+\bprows
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\columnwidth]{figures/beampattern.pdf}
+  \caption{Řezy beampatternu DAS na 1\,kHz po velké kružnici kolem směru navádění (elevace 45$^\circ$): ve směru azimutu a~elevace. Pod horizontem planární pole 1$\times$8 zrcadlí hlavní lalok.}
+  \label{fig:beampattern}
+\end{figure}
+
+\subsection{Citlivost na rychlost zvuku a polohy mikrofonů}
+Simulace předpokládá $c=343$\,m/s a~ideální polohy. Rychlost zvuku 331 až 355\,m/s odpovídá teplotě přibližně 0 až 40\,$^\circ$C. Pro vybranou geometrii při 10\,dB zvětší rychlost 331\,m/s RMSE o~2 až 9\,\% a~355\,m/s o~20 až 57\,\% (nejvíc DAS, 0{,}66 na 1{,}05$^\circ$), vliv tedy není symetrický. U~1$\times$8 chyba vzroste na 3{,}8 až 7{,}2$^\circ$, u~většiny metod zhruba dvakrát. Náhodná chyba polohy mikrofonů se směrodatnou odchylkou 0{,}5\,mm zvětší RMSE o~1 až 3\,\%, 1\,mm o~5 až 11\,\% a~2\,mm o~17 až 37\,\%. Chybu od rychlosti zvuku lze odstranit kompenzací podle teploty, tolerance poloh určuje přesnost montáže desek.
+
+\subsection{Doporučení}
+\label{sec:doporuceni}
+\textbf{Geometrie.} Podle dohodnutého pravidla (nejmenší konfigurace do 15\,\% od nejlepší) doporučujeme dvě desky o~$\varnothing$\,200\,mm s~rozestupem $h=100$\,mm, pootočené o~22{,}5$^\circ$. Její skóre 2{,}04$^\circ$ je o~9\,\% horší než nejlepší (250/100, 1{,}87$^\circ$), což je nerozlišitelné. Pootočení simulace nepodporuje ani nevyvrací (nepootočená varianta vyšla ve screeningu stejně, 2{,}23 a~2{,}22$^\circ$), takže jednodušší nepootočená montáž nic neztratí. Rozteč 100\,mm je okraj sweepu a~mez aliasingu mezi kruhy $c/(2h)=1{,}7$\,kHz je pod horní mezí pásma.
+
+\textbf{Metoda.} DAS a~MUSIC se přesností neliší, MVDR je mírně horší a~SRP-PHAT a~GCC-PHAT s~LS výrazně horší při nízkém SNR. Analytický odhad pro jeden úsek (16 kanálů, \macDirections{} směrů hrubého a~jemného gridu) je \macMUSIC\,MMAC pro MUSIC, \macDAS\,MMAC pro DAS, \macMVDR\,MMAC pro MVDR a~\macGCC\,MMAC pro GCC-PHAT s~LS, tedy při \costCyclesPerMac{} cyklech na MAC a~250\,MHz po řadě \timeMUSIC, \timeDAS, \timeMVDR{} a~\timeGCC\,s. Všechny se vejdou do limitu 1\,s po triggeru. Doporučujeme MUSIC, nejlevnější z~metod s~nejlepší přesností; DAS je jednodušší záloha bez vlastního rozkladu matice. Přesný rozpočet doplní sekce~\ref{sec:vypocty}.
 
 \section{Hardware}
 \label{sec:hw}
