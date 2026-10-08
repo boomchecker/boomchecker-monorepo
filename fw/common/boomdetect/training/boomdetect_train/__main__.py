@@ -57,6 +57,18 @@ def cmd_features(args: argparse.Namespace) -> int:
     cache = FrameCache()
     frontend = Frontend()
     sources = args.sources or sorted(df["source"].unique())
+    if args.spec:
+        from boomdetect_train.datasets.cache import build_spec_cache
+        from boomdetect_train.dsp.spectro import SPEC_FE_NAMES
+
+        names = SPEC_FE_NAMES if args.spec == ["all"] else args.spec
+        for src in sources:
+            if all(cache.spec_path(n, src).exists() for n in names) and not args.force:
+                print(f"{src}: spectrograms cached, skipping (use --force to rebuild)")
+                continue
+            for out in build_spec_cache(df, src, names, workers=args.workers):
+                print(f"{src}: wrote {out}")
+        return 0
     for src in sources:
         if cache.has(src) and not args.force:
             print(f"{src}: cached, skipping (use --force to rebuild)")
@@ -106,6 +118,8 @@ def cmd_train(args: argparse.Namespace) -> int:
         folds=args.folds,
         augment=args.augment,
         augment_profile=args.augment_profile,
+        seed=args.seed,
+        aug_seed=args.aug_seed,
     )
     print(f"run written to {run_dir}")
     return 0
@@ -198,6 +212,14 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("features", help="fill the frame cache")
     p.add_argument("sources", nargs="*", help="sources to (re)build; default all")
     p.add_argument("--force", action="store_true")
+    p.add_argument(
+        "--spec",
+        nargs="+",
+        default=None,
+        metavar="FRONTEND",
+        help="build the band-spectrogram cache instead (dsp/spectro.py): names or 'all'",
+    )
+    p.add_argument("--workers", type=int, default=1, help="processes for --spec")
     p.set_defaults(fn=cmd_features)
 
     p = sub.add_parser("baseline", help="score the shipped models")
@@ -248,6 +270,12 @@ def main(argv: list[str] | None = None) -> int:
         default="near",
         choices=["near", "far"],
         help="distances the variants draw from: near = 20-250 m, far = 50-500 m, quieter, windier",
+    )
+    p.add_argument(
+        "--seed", type=int, default=42, help="model seed (initial weights, early-stopping split)"
+    )
+    p.add_argument(
+        "--aug-seed", type=int, default=0, help="seed of the augmented variants (0 = the old runs')"
     )
     p.set_defaults(fn=cmd_train)
 

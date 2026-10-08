@@ -46,13 +46,27 @@ from boomdetect_train.datasets.field import assign_folds, load_field_audio
 from boomdetect_train.datasets.manifest import ROLE_FIELD, summarize
 from boomdetect_train.dsp.audio import to_16k
 from boomdetect_train.dsp.mfcc import Frontend
+from boomdetect_train.dsp.spectro import spec_frames
 from boomdetect_train.dsp.windows import DEFAULT_SQUELCH
 from boomdetect_train.evaluate import clip_windows, score_clips, select_suite, threshold_for_fa_rate
-from boomdetect_train.features import LAYOUT_LOGMEL, LAYOUT_STATS, LAYOUT_STATS_SPECTRAL
+from boomdetect_train.features import (
+    LAYOUT_LOGMEL,
+    LAYOUT_STATS,
+    LAYOUT_STATS_SPECTRAL,
+    spec_layout,
+)
 from boomdetect_train.models.cnn import ARCHS, CnnModel, load_cnn, save_cnn, train_cnn
 from boomdetect_train.models.headers import shipped_models
+from boomdetect_train.models.torchnets import (
+    TORCH_ARCHS,
+    TorchNetModel,
+    load_torchnet,
+    save_torchnet,
+    train_torchnet,
+)
 from boomdetect_train.paths import MODELS_DIR, VECTORS_DIR, runs_dir
 from boomdetect_train.train import (
+    SEED,
     ScaledModel,
     WindowSet,
     build_window_set,
@@ -64,17 +78,21 @@ from boomdetect_train.train import (
     train_svm,
 )
 
+# Every family takes (window set, seed); the seed is the model's (initial weights,
+# the early-stopping split), SEED unless a run asks for another.
 SKLEARN_FAMILIES = {
-    "mlp": train_mlp,
-    "svm": train_svm,
-    "gbt": train_gbt,
+    "mlp": lambda ws, seed=SEED: train_mlp(ws, seed=seed),
+    "svm": lambda ws, seed=SEED: train_svm(ws, seed=seed),
+    "gbt": lambda ws, seed=SEED: train_gbt(ws, seed=seed),
     # Regularised variants: the first run showed the plain MLP and forest fitting
     # the training sources and losing on the unseen ones.
-    "mlp_reg": lambda ws: train_mlp(ws, hidden=(16,), alpha=1e-2),
-    "gbt_reg": lambda ws: train_gbt(ws, max_iter=120, max_leaf_nodes=7, learning_rate=0.05),
+    "mlp_reg": lambda ws, seed=SEED: train_mlp(ws, hidden=(16,), alpha=1e-2, seed=seed),
+    "gbt_reg": lambda ws, seed=SEED: train_gbt(
+        ws, max_iter=120, max_leaf_nodes=7, learning_rate=0.05, seed=seed
+    ),
     # Two hidden layers, regularised like mlp_reg: a candidate only, the C export
     # (export.py, export_c.py) still writes one hidden layer.
-    "mlp2": lambda ws: train_mlp(ws, hidden=(32, 16), alpha=1e-2),
+    "mlp2": lambda ws, seed=SEED: train_mlp(ws, hidden=(32, 16), alpha=1e-2, seed=seed),
 }
 DEFAULT_FAMILIES = ["mlp", "svm", "gbt", "mlp_reg", "gbt_reg", *sorted(ARCHS)]
 DEFAULT_LAYOUTS = [LAYOUT_STATS, LAYOUT_STATS_SPECTRAL, LAYOUT_LOGMEL]
@@ -110,16 +128,46 @@ def _fit_families(
     base_meta: dict,
     cnn_epochs: int,
     log,
+    seed: int = SEED,
 ) -> dict[str, dict]:
     """Train every requested family of one layout on `ws`, save them under out_dir."""
     (out_dir / "models").mkdir(parents=True, exist_ok=True)
     metas: dict[str, dict] = {}
+    spec = spec_layout(layout)
+    if spec is not None and (spec[0] == "patch" or spec[0].startswith("hybrid")):
+        # The band-spectrogram networks (offline only): named <arch>_l<layout>,
+        # since one arch runs on several front-ends.
+        for arch in families:
+            if arch not in TORCH_ARCHS:
+                continue
+            model = train_torchnet(
+                arch, layout, ws.x, ws.y, sample_weight=ws.w, epochs=cnn_epochs, seed=seed, log=log
+            )
+            name = f"{arch}_l{layout}"
+            save_torchnet(model, out_dir / "models" / name)
+            meta = {
+                "kind": "torch",
+                "layout": layout,
+                "offset": 0,
+                "n_features": model.n_features,
+                "seconds": model.meta["train_seconds"],
+                **base_meta,
+                **model.meta,
+            }
+            _save_meta(out_dir, name, meta)
+            metas[name] = meta
+            log(
+                f"  {name}: trained in {meta['seconds']} s, "
+                f"{meta['macs']} MACs, {meta['params']} params"
+            )
     if layout == LAYOUT_LOGMEL:
         for arch in families:
             if arch not in ARCHS:
                 continue
             t0 = time.time()
-            model = train_cnn(arch, ws.x, ws.y, sample_weight=ws.w, epochs=cnn_epochs, log=log)
+            model = train_cnn(
+                arch, ws.x, ws.y, sample_weight=ws.w, epochs=cnn_epochs, seed=seed, log=log
+            )
             save_cnn(model, out_dir / "models" / arch)
             meta = {
                 "kind": "cnn",
@@ -141,7 +189,7 @@ def _fit_families(
         if fam not in SKLEARN_FAMILIES:
             continue
         t0 = time.time()
-        model: ScaledModel = SKLEARN_FAMILIES[fam](ws)
+        model: ScaledModel = SKLEARN_FAMILIES[fam](ws, seed)
         name = f"{fam}_l{layout}"
         joblib.dump(model, out_dir / "models" / f"{name}.joblib")
         meta = {
@@ -168,15 +216,30 @@ def _weighted(ws: WindowSet, shares: dict[str, float] | None) -> WindowSet:
 AUG_SOURCE = "field_aug"
 
 
-def _augmented_frames(field_rows: pd.DataFrame, count: int, profile: str, log) -> list[tuple]:
-    """(variant id, group, label, CachedFrames) for `count` variants of every field clip."""
+def _augmented_frames(
+    field_rows: pd.DataFrame,
+    count: int,
+    profile: str,
+    log,
+    seed: int = 0,
+    spec_names: list[str] | None = None,
+) -> list[tuple]:
+    """(variant id, group, label, CachedFrames) for `count` variants of every field clip.
+
+    `spec_names`: the band spectrograms (dsp/spectro.py) the run's layouts read,
+    computed alongside the frame rows.
+    """
     fe = Frontend()
     out = []
     t0 = time.time()
     for rec in field_rows.itertuples(index=False):
         x, sr = load_field_audio(rec.path)
-        for vid, y, _ in variants_of(rec.id, x, sr, int(rec.label), count, profile=profile):
-            cf = CachedFrames(frame_rows(fe.process(to_16k(y, sr))))
+        for vid, y, _ in variants_of(
+            rec.id, x, sr, int(rec.label), count, seed=seed, profile=profile
+        ):
+            y16 = to_16k(y, sr)
+            specs = spec_frames(y16, spec_names) if spec_names else None
+            cf = CachedFrames(frame_rows(fe.process(y16)), specs=specs)
             out.append((vid, rec.group, int(rec.label), cf))
     log(f"{len(out)} augmented field clips ({profile}) in {time.time() - t0:.0f} s")
     return out
@@ -197,6 +260,8 @@ def train_all(
     folds: int = 0,
     augment: int = 0,
     augment_profile: str = "near",
+    seed: int = SEED,
+    aug_seed: int = 0,
     log=print,
 ) -> Path:
     families = families or DEFAULT_FAMILIES
@@ -234,7 +299,9 @@ def train_all(
         "folds": folds,
         "augment": augment,
         "augment_profile": augment_profile,
+        "aug_seed": aug_seed,
     }
+    info["seed"] = seed
     info["shares"] = dict(shares or {})
 
     field_rows = _field_manifest(manifest, field_exclude) if field else manifest.iloc[:0]
@@ -246,7 +313,12 @@ def train_all(
     group_of_clip = dict(zip(field_rows["id"], field_rows["group"], strict=True))
     # Variants carry the group of the recording they came from, so a fold that
     # holds a recording out holds its variants out too.
-    augmented = _augmented_frames(field_rows, augment, augment_profile, log) if augment else []
+    spec_names = sorted({s[1] for s in map(spec_layout, layouts) if s is not None})
+    augmented = (
+        _augmented_frames(field_rows, augment, augment_profile, log, aug_seed, spec_names)
+        if augment
+        else []
+    )
     group_of_clip |= {vid: group for vid, group, _, _ in augmented}
 
     for layout in layouts:
@@ -280,9 +352,12 @@ def train_all(
             "augment": augment,
             "augment_profile": augment_profile,
             "shares": dict(shares or {}),
+            "seed": seed,
+            "aug_seed": aug_seed,
         }
+        cache.drop_loaded()  # the windows hold what they need; free the frames
         info["models"].update(
-            _fit_families(ws, layout, families, run_dir, base_meta, cnn_epochs, log)
+            _fit_families(ws, layout, families, run_dir, base_meta, cnn_epochs, log, seed)
         )
 
         for k in range(folds):
@@ -293,18 +368,21 @@ def train_all(
             log(f"layout {layout}, fold {k}: {int(held.sum())} field windows held out")
             meta_k = {**base_meta, "fold": k, "train_windows": int(ws_k.n)}
             _fit_families(
-                ws_k, layout, families, run_dir / "folds" / str(k), meta_k, cnn_epochs, log
+                ws_k, layout, families, run_dir / "folds" / str(k), meta_k, cnn_epochs, log, seed
             )
+            del ws_k
     run_json.write_text(json.dumps(info, indent=2, default=str))
     return run_dir
 
 
-def load_run_models(run_dir: Path) -> dict[str, ScaledModel | CnnModel]:
-    out: dict[str, ScaledModel | CnnModel] = {}
+def load_run_models(run_dir: Path) -> dict[str, ScaledModel | CnnModel | TorchNetModel]:
+    out: dict[str, ScaledModel | CnnModel | TorchNetModel] = {}
     for p in sorted((run_dir / "models").glob("*.joblib")):
         out[p.stem] = joblib.load(p)
     for p in sorted((run_dir / "models").glob("*.npz")):
         out[p.stem] = load_cnn(p)
+    for p in sorted((run_dir / "models").glob("*.pt")):
+        out[p.stem] = load_torchnet(p)
     return out
 
 

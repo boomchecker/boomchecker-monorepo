@@ -38,12 +38,24 @@ from boomdetect_train.datasets.manifest import (
 from boomdetect_train.decision import Rule, clip_alarmed
 from boomdetect_train.dsp.windows import DEFAULT_SQUELCH, Gate, window_seconds, windows
 from boomdetect_train.features import (
+    HYBRID_AUX_LAYOUT,
     LAYOUT_LOGMEL,
     LAYOUT_STATS,
     LAYOUT_STATS_SPECTRAL,
     LAYOUT_STATS_SPECTRAL_MOD,
+    LAYOUT_STATS_SPECTRAL_MOD2S4S,
+    LAYOUT_STATS_SPECTRAL_MOD2S8S,
+    LAYOUT_STATS_SPECTRAL_MOD4S,
+    LAYOUT_STATS_SPECTRAL_MODSPEC,
+    MOD_FRAMES_8S,
+    MOD_FRAMES_LONG,
+    band_stats,
     logmel_patch,
+    min_start_frame,
+    modulation_prominence,
     modulation_stats,
+    spec_layout,
+    spec_patch,
     stats52,
     stats_spectral_from_scalars,
 )
@@ -62,6 +74,36 @@ def window_features(layout: int, cf: CachedFrames, idx: np.ndarray) -> np.ndarra
     if layout == LAYOUT_STATS_SPECTRAL_MOD:
         base = stats_spectral_from_scalars(cf.mfcc[idx], cf.scalars[idx], cf.logmel[idx])
         return np.concatenate([base, modulation_stats(cf.env, idx)]).astype(np.float32)
+    if layout in (
+        LAYOUT_STATS_SPECTRAL_MOD4S,
+        LAYOUT_STATS_SPECTRAL_MOD2S4S,
+        LAYOUT_STATS_SPECTRAL_MOD2S8S,
+        LAYOUT_STATS_SPECTRAL_MODSPEC,
+    ):
+        base = stats_spectral_from_scalars(cf.mfcc[idx], cf.scalars[idx], cf.logmel[idx])
+        parts = [base]
+        if layout != LAYOUT_STATS_SPECTRAL_MOD4S:
+            parts.append(modulation_stats(cf.env, idx))
+        if layout in (LAYOUT_STATS_SPECTRAL_MOD4S, LAYOUT_STATS_SPECTRAL_MOD2S4S):
+            parts.append(modulation_stats(cf.env, idx, MOD_FRAMES_LONG))
+        elif layout == LAYOUT_STATS_SPECTRAL_MOD2S8S:
+            parts.append(modulation_stats(cf.env, idx, MOD_FRAMES_8S))
+        else:
+            parts.append(modulation_prominence(cf.env, idx))
+        return np.concatenate(parts).astype(np.float32)
+    spec = spec_layout(layout)
+    if spec is not None:
+        kind, fe, t = spec
+        s = cf.spec(fe)
+        if kind == "patch":
+            return spec_patch(s, idx, t)
+        if kind == "bstat":
+            return band_stats(s[idx])
+        if kind == "modbstat":
+            l4 = window_features(LAYOUT_STATS_SPECTRAL_MOD, cf, idx)
+            return np.concatenate([l4, band_stats(s[idx])]).astype(np.float32)
+        aux = window_features(HYBRID_AUX_LAYOUT[kind], cf, idx)  # hybrid*
+        return np.concatenate([spec_patch(s, idx, t), aux]).astype(np.float32)
     raise ValueError(f"unknown layout {layout}")
 
 
@@ -74,6 +116,9 @@ def clip_windows(
 ) -> tuple[np.ndarray, np.ndarray]:
     """(features, end_frames) for every window of one clip under `gate`."""
     wins = windows(cf.rms, gate, squelch, hop=hop)
+    first = min_start_frame(layout)
+    if first:
+        wins = [w for w in wins if w.start >= first]
     if not wins:
         return np.empty((0, 0), dtype=np.float32), np.empty((0,), dtype=np.int64)
     feats = np.stack([window_features(layout, cf, w.frames) for w in wins]).astype(np.float32)

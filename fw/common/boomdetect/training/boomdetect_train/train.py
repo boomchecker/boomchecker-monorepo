@@ -38,7 +38,7 @@ from boomdetect_train.datasets.cache import FrameCache
 from boomdetect_train.datasets.manifest import ROLE_TRAIN
 from boomdetect_train.dsp.windows import Gate
 from boomdetect_train.evaluate import clip_windows
-from boomdetect_train.features import LAYOUT_LOGMEL, LAYOUTS
+from boomdetect_train.features import LAYOUT_LOGMEL, LAYOUTS, spec_layout
 
 POS_WIN_MIN_RMS = 0.002
 TRAIN_HOP = 7
@@ -46,7 +46,14 @@ SEED = 42
 
 
 def feature_offset(layout: int) -> int:
-    """First feature a new model reads: layouts 1 and 2 skip the level-carrying mean-c0."""
+    """First feature a new model reads: layouts 1, 2, 4 skip the level-carrying mean-c0.
+
+    Of the band-spectrogram layouts only 3xx starts with layout 4 (and skips its
+    mean-c0 the same way); a hybrid network drops it itself (models/torchnets.py).
+    """
+    spec = spec_layout(layout)
+    if spec is not None:
+        return 1 if spec[0] == "modbstat" else 0
     return 0 if layout == LAYOUT_LOGMEL else 1
 
 

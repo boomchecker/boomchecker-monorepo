@@ -96,6 +96,12 @@ bdtrain train --name f1 --field --augment 4 [--augment-profile far] ...
                               # near = 20-250 m, far = 50-500 m, quieter, windier floor)
 bdtrain train --name f1_nr --field --field-exclude runner250 ...
                               # the same without one drone (or one negative category)
+bdtrain train ... --seed 1 --aug-seed 1
+                              # another draw of the same recipe (weights, early-stopping
+                              # split, augmentation); 42 / 0 = the old runs
+bdtrain features --spec all [SOURCE..] [--workers 12]
+                              # the band spectrograms (dsp/spectro.py) for layouts 1xx-9xx,
+                              # cache/spec/<front-end>/<source>.npz, float16
 bdtrain compare r1            # the comparison report -> runs/r1/report.md
 bdtrain compare r1 --rule mean4      # judged under another alarm rule (2of4 default, 1of4, mean8 ...)
 bdtrain export r1 [--models m ...]   # headers + translation units + parity vectors
@@ -150,6 +156,22 @@ at the same time.
 | 2 | `stats_spectral` | 69 | the same six |
 | 3 | `logmel` | 280 | `cnn_small`, `cnn_ds`, `cnn_1d`, `cnn_wide`, and the same six on the patch as a flat vector (`gbt_l3` ...) |
 | 4 | `stats_spectral_mod` | 79 | the same six; layout 2 plus ten modulation features of the 1-4 kHz envelope over the last 2 s (`features.modulation_stats`) - the family behind `gbt_m1` / `mlp_m1` |
+| 7 | `stats_spectral_mod4s` | 79 | the same six; layout 2 + the modulation features over a 4 s ring (offline only) |
+| 8 | `stats_spectral_mod2s4s` | 89 | the same six; layout 2 + the 2 s and the 4 s sets (offline only) |
+| 9 | `stats_spectral_mod2s8s` | 89 | the same six; layout 2 + the 2 s and an 8 s set (offline only) |
+| 10 | `stats_spectral_modspec` | 329 | the same six; layout 4 + the modulation prominence spectrum 10-500 Hz (offline only) |
+
+The band-spectrogram layouts (offline only, no C side; `features.spec_layout`) are
+`base + k`, k the front-end in `dsp/spectro.SPEC_FE_NAMES` (mfe1k mfe2k mfe4k gs1k gs2k
+gs4k = mel or gammatone, 64 bands, FFT 1024/2048/4096): 100 patch 14 x 64, 400 patch
+31 x 64 (~1 s), 200 per-band stats, 300 layout 4 + per-band stats, 500 / 600 patch 14 /
+31 + layout 4 (hybrid), 700 / 900 patch 14 / 31 + layout 8, 800 patch 14 + layout 10.
+The patch and hybrid layouts take the `models/torchnets.py` families `cnn_m`, `crnn1d`,
+`crnn2d`, `lstm20` (the TalTech BEC 2026 architectures), trained on the GPU when one is
+there. A window whose FFT or patch would reach before the start of its clip is dropped
+(`features.min_start_frame`): mirrored history was a class fingerprint on the 0.5 s
+HuggingFace drone clips. The 2026-10-08 comparison of all of them is
+`reports/2026-10-08-gs-cnn.md`.
 
 `mlp` is 32 hidden units, `mlp_reg` 16 with alpha 1e-2, `mlp2` two hidden layers
 (32, 16) with the same alpha - the family behind `mlp_f2`. The C side takes an

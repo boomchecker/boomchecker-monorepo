@@ -24,6 +24,7 @@ import pandas as pd
 from boomdetect_train.datasets.cache import CachedFrames, frame_rows
 from boomdetect_train.dsp.audio import read_audio, to_16k
 from boomdetect_train.dsp.mfcc import HOP, SAMPLE_RATE_HZ, Frontend
+from boomdetect_train.dsp.spectro import spec_frames
 from boomdetect_train.dsp.windows import DEFAULT_SQUELCH, Gate, windows
 from boomdetect_train.evaluate import window_features
 from boomdetect_train.features import LAYOUT_STATS, SCALAR_NAMES
@@ -82,7 +83,7 @@ def score_recording(
     """One row per firmware window: time, level, the scalars, a column per model."""
     x, sr = read_audio(wav)
     x16 = to_16k(x, sr)
-    cf = CachedFrames(frame_rows(Frontend().process(x16)))
+    cf = CachedFrames(frame_rows(Frontend().process(x16)), specs=spec_frames(x16))
     wins = windows(cf.rms, Gate.PER_FRAME, squelch)
 
     rows = []

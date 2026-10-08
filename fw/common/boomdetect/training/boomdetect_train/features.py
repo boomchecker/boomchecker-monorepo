@@ -35,12 +35,26 @@ from boomdetect_train.dsp.mfcc import (
     SAMPLE_RATE_HZ,
     WINDOW_SIZE,
 )
+from boomdetect_train.dsp.spectro import SPEC_BY_NAME, SPEC_FE_NAMES, SPEC_N_BANDS
 from boomdetect_train.dsp.windows import ACCUM_FRAMES
 
 LAYOUT_STATS = 1
 LAYOUT_STATS_SPECTRAL = 2
 LAYOUT_LOGMEL = 3
 LAYOUT_STATS_SPECTRAL_MOD = 4
+# Offline only (2026-10-07, the far-range question): the modulation spectrum over a
+# 4 s ring instead of 2 s - more segments averaged, so a hovering drone's steady
+# blade-pass line rises further over the background. 7 = layout 2 + the ten
+# modulation numbers over 4 s; 8 = layout 2 + both the 2 s and the 4 s sets.
+LAYOUT_STATS_SPECTRAL_MOD4S = 7
+LAYOUT_STATS_SPECTRAL_MOD2S4S = 8
+MOD_FRAMES_LONG = 125  # 125 x 32 = 4000 samples, 4.0 s
+# 9 = layout 2 + the 2 s set + the same over an 8 s ring (more averaging still);
+# 10 = layout 4 + the modulation prominence spectrum itself, every bin from 10 to
+# 500 Hz (dB / 20): the model sees the lines, not ten numbers about them.
+LAYOUT_STATS_SPECTRAL_MOD2S8S = 9
+LAYOUT_STATS_SPECTRAL_MODSPEC = 10
+MOD_FRAMES_8S = 250  # 250 x 32 = 8000 samples, 8.0 s
 
 N_STATS = 4 * N_MFCC  # 52
 N_SCALARS = 8
@@ -72,6 +86,13 @@ MOD_MAIN_HZ = (50.0, 400.0)
 MOD_BANDS_HZ = ((50.0, 150.0), (150.0, 250.0), (250.0, 400.0), (400.0, 800.0))
 MOD_SHARE_HZ = (100.0, 250.0)
 MOD_TOTAL_HZ = (10.0, 500.0)
+MOD_SPEC_HZ = (10.0, 500.0)
+N_MOD_SPEC = int(
+    (
+        (np.arange(MOD_NFFT // 2 + 1) * MOD_BIN_HZ >= MOD_SPEC_HZ[0])
+        & (np.arange(MOD_NFFT // 2 + 1) * MOD_BIN_HZ < MOD_SPEC_HZ[1])
+    ).sum()
+)  # 250 bins
 MOD_NAMES = (
     "mod_prom_max",  # strongest line in 50-400 Hz, dB / 20
     "mod_lines",  # share of 50-400 Hz bins above MOD_LINE_DB
@@ -307,7 +328,7 @@ def modulation_spectrum(env: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     return p, logp - base
 
 
-def modulation_stats(env_rows: np.ndarray, idx: np.ndarray) -> np.ndarray:
+def modulation_stats(env_rows: np.ndarray, idx: np.ndarray, frames: int = MOD_FRAMES) -> np.ndarray:
     """The N_MOD layout-4 additions for the window whose frames are `idx`.
 
     Reads the envelope of the MOD_FRAMES frames that end with the window's last
@@ -315,9 +336,9 @@ def modulation_stats(env_rows: np.ndarray, idx: np.ndarray) -> np.ndarray:
     full (the first two seconds of a clip), see train._impute_missing.
     """
     end = int(np.asarray(idx)[-1])
-    start = max(0, end - MOD_FRAMES + 1)
+    start = max(0, end - frames + 1)
     e = np.asarray(env_rows[start : end + 1], dtype=np.float32).reshape(-1)
-    if e.shape[0] < MOD_SAMPLES:
+    if e.shape[0] < frames * ENV_PER_FRAME:
         return np.full(N_MOD, np.nan, dtype=np.float32)
     out = np.zeros(N_MOD, dtype=np.float32)
     p, prom = modulation_spectrum(e)
@@ -339,6 +360,22 @@ def modulation_stats(env_rows: np.ndarray, idx: np.ndarray) -> np.ndarray:
     return out.astype(np.float32)
 
 
+def modulation_prominence(
+    env_rows: np.ndarray, idx: np.ndarray, frames: int = MOD_FRAMES
+) -> np.ndarray:
+    """Layout 10's block: the prominence (dB / 20) of every modulation bin in MOD_SPEC_HZ.
+
+    The same ring and Welch estimate as modulation_stats; NaN until the ring is full.
+    """
+    end = int(np.asarray(idx)[-1])
+    start = max(0, end - frames + 1)
+    e = np.asarray(env_rows[start : end + 1], dtype=np.float32).reshape(-1)
+    if e.shape[0] < frames * ENV_PER_FRAME:
+        return np.full(N_MOD_SPEC, np.nan, dtype=np.float32)
+    _, prom = modulation_spectrum(e)
+    return (prom[_band(*MOD_SPEC_HZ)] / 20.0).astype(np.float32)
+
+
 @dataclass(frozen=True)
 class Layout:
     id: int
@@ -353,7 +390,140 @@ LAYOUTS = {
     LAYOUT_STATS_SPECTRAL_MOD: Layout(
         LAYOUT_STATS_SPECTRAL_MOD, "stats_spectral_mod", N_STATS_SPECTRAL_MOD
     ),
+    LAYOUT_STATS_SPECTRAL_MOD4S: Layout(
+        LAYOUT_STATS_SPECTRAL_MOD4S, "stats_spectral_mod4s", N_STATS_SPECTRAL_MOD
+    ),
+    LAYOUT_STATS_SPECTRAL_MOD2S4S: Layout(
+        LAYOUT_STATS_SPECTRAL_MOD2S4S, "stats_spectral_mod2s4s", N_STATS_SPECTRAL_MOD + N_MOD
+    ),
+    LAYOUT_STATS_SPECTRAL_MOD2S8S: Layout(
+        LAYOUT_STATS_SPECTRAL_MOD2S8S, "stats_spectral_mod2s8s", N_STATS_SPECTRAL_MOD + N_MOD
+    ),
+    LAYOUT_STATS_SPECTRAL_MODSPEC: Layout(
+        LAYOUT_STATS_SPECTRAL_MODSPEC, "stats_spectral_modspec", N_STATS_SPECTRAL_MOD + N_MOD_SPEC
+    ),
 }
+
+
+# --- band-spectrogram layouts (offline only, the 2026-10-07 comparison) ---------
+#
+# Layout id = base + k, k the index of the front-end in dsp.spectro.SPEC_FE_NAMES
+# (mfe1k mfe2k mfe4k gs1k gs2k gs4k). None of them has a C extractor.
+#
+#   100 + k  spec patch      T x 64 log band power minus its mean, T = 14 (the window)
+#   400 + k  spec patch long the same over T = 31 frames (~1 s) ending with the window
+#   200 + k  band stats      per band: mean relative to the window mean, std, mean
+#                            absolute frame-to-frame change - 192 numbers ("GS instead of
+#                            layout 4" for the tree models)
+#   300 + k  layout 4 + band stats (79 + 192: "GS added to layout 4")
+#   500 + k  hybrid          spec patch (T = 14), then the 79 of layout 4: a network reads
+#                            the patch with convolutions and layout 4 beside it
+#   600 + k  hybrid long     the same with T = 31
+#
+# Like layout 3 every patch has its mean removed (level invariance); the band
+# means of the stats are relative for the same reason. A long patch reaches back
+# past the window into contiguous history, the way the modulation ring does; a
+# clip too short for it (the public 0.5 s and 1 s clips) is mirrored in time.
+
+SPEC_LONG_FRAMES = 31
+N_BAND_STATS = 3 * SPEC_N_BANDS  # 192
+SPEC_KINDS = {
+    100: ("patch", ACCUM_FRAMES),
+    200: ("bstat", ACCUM_FRAMES),
+    300: ("modbstat", ACCUM_FRAMES),
+    400: ("patch", SPEC_LONG_FRAMES),
+    500: ("hybrid", ACCUM_FRAMES),
+    600: ("hybrid", SPEC_LONG_FRAMES),
+    # the network's aux input is layout 8 (2 s + 4 s modulation) or 10 (the modulation
+    # prominence spectrum) instead of layout 4
+    700: ("hybrid8", ACCUM_FRAMES),
+    800: ("hybrid10", ACCUM_FRAMES),
+    900: ("hybrid8", SPEC_LONG_FRAMES),  # the 1 s patch with the layout-8 aux: both winners in one
+}
+# what a hybrid kind reads beside the patch
+HYBRID_AUX_LAYOUT = {
+    "hybrid": LAYOUT_STATS_SPECTRAL_MOD,
+    "hybrid8": LAYOUT_STATS_SPECTRAL_MOD2S4S,
+    "hybrid10": LAYOUT_STATS_SPECTRAL_MODSPEC,
+}
+
+
+def spec_layout(layout: int) -> tuple[str, str, int] | None:
+    """(kind, front-end name, patch frames) of a band-spectrogram layout, else None."""
+    base, k = (layout // 100) * 100, layout % 100
+    if base not in SPEC_KINDS or k >= len(SPEC_FE_NAMES):
+        return None
+    kind, t = SPEC_KINDS[base]
+    return kind, SPEC_FE_NAMES[k], t
+
+
+def min_start_frame(layout: int) -> int:
+    """First frame a window of `layout` may start at so that everything it reads is real audio.
+
+    A frame of an N-sample FFT reaches (N - 1024) / 512 frames back, a 31-frame patch
+    17 frames before the window. The board always has that history; a clip may not,
+    and the public sets make it a class fingerprint: 99 % of the HuggingFace drone
+    clips are 0.5 s (one window, all of it at the clip start) while its negatives
+    are long - a model on mirrored history learned "mirror = drone" (test AUC 1.000,
+    2026-10-07). Windows without real history are therefore dropped, in training and
+    in scoring alike.
+    """
+    spec = spec_layout(layout)
+    if spec is None:
+        return 0
+    kind, fe, t = spec
+    hist = (SPEC_BY_NAME[fe].n_fft - WINDOW_SIZE) // HOP
+    return hist + (t - ACCUM_FRAMES if kind == "patch" or kind in HYBRID_AUX_LAYOUT else 0)
+
+
+def spec_layout_id(kind_base: int, fe_name: str) -> int:
+    return kind_base + SPEC_FE_NAMES.index(fe_name)
+
+
+def _spec_width(kind: str, t: int) -> int:
+    if kind == "patch":
+        return t * SPEC_N_BANDS
+    if kind == "bstat":
+        return N_BAND_STATS
+    if kind == "modbstat":
+        return N_STATS_SPECTRAL_MOD + N_BAND_STATS
+    return t * SPEC_N_BANDS + LAYOUTS[HYBRID_AUX_LAYOUT[kind]].n_features  # hybrid*
+
+
+for _base, (_kind, _t) in SPEC_KINDS.items():
+    for _k, _fe in enumerate(SPEC_FE_NAMES):
+        _id = _base + _k
+        LAYOUTS[_id] = Layout(
+            _id, f"{_kind}{'' if _t == ACCUM_FRAMES else _t}_{_fe}", _spec_width(_kind, _t)
+        )
+
+
+def spec_patch(spec_rows: np.ndarray, idx: np.ndarray, t: int = ACCUM_FRAMES) -> np.ndarray:
+    """T x 64 patch minus its scalar mean, frame-major: the window's frames, or the
+    T contiguous frames ending with its last one when T is longer than the window."""
+    idx = np.asarray(idx)
+    if t == idx.shape[0]:
+        s = np.asarray(spec_rows[idx], dtype=np.float32)
+    else:
+        end = int(idx[-1])
+        start = end - t + 1
+        if start >= 0:
+            s = np.asarray(spec_rows[start : end + 1], dtype=np.float32)
+        else:
+            s = np.pad(
+                np.asarray(spec_rows[: end + 1], dtype=np.float32),
+                ((-start, 0), (0, 0)),
+                "symmetric",
+            )
+    return (s - s.mean(dtype=np.float32)).reshape(-1).astype(np.float32)
+
+
+def band_stats(spec_win: np.ndarray) -> np.ndarray:
+    """Layout 2xx: per band mean (minus the window mean), std, mean |delta|; band-major blocks."""
+    s = np.asarray(spec_win, dtype=np.float32)
+    m = s.mean(axis=0)
+    d = np.abs(np.diff(s, axis=0)).mean(axis=0) if s.shape[0] > 1 else np.zeros_like(m)
+    return np.concatenate([m - m.mean(), s.std(axis=0), d]).astype(np.float32)
 
 
 def extract(layout: int, frames, idx: np.ndarray) -> np.ndarray:
@@ -367,6 +537,10 @@ def extract(layout: int, frames, idx: np.ndarray) -> np.ndarray:
     if layout == LAYOUT_STATS_SPECTRAL_MOD:
         base = stats_spectral(frames.mfcc[idx], frames.mag[idx], frames.logmel[idx])
         return np.concatenate([base, modulation_stats(frames.env, idx)]).astype(np.float32)
+    if spec_layout(layout) is not None:
+        raise ValueError(
+            f"layout {layout} reads the band-spectrogram cache: evaluate.window_features"
+        )
     raise ValueError(f"unknown layout {layout}")
 
 
