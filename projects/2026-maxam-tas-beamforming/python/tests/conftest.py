@@ -18,3 +18,9 @@ def drone_clips() -> list[np.ndarray]:
 @pytest.fixture
 def rng() -> np.random.Generator:
     return np.random.default_rng(12345)
+
+
+@pytest.fixture(scope="session")
+def clip_meta() -> list[dads.Clip]:
+    """Manifest entries of the cached DADS clips (no audio decoded)."""
+    return dads.list_clips(DATA_DIR)
