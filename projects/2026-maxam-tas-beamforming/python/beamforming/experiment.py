@@ -16,6 +16,7 @@ estimated unit vectors; the caller turns them into errors with :mod:`beamforming
 
 from __future__ import annotations
 
+import multiprocessing
 import os
 from collections.abc import Callable, Sequence
 from concurrent.futures import ProcessPoolExecutor
@@ -150,11 +151,16 @@ def run_job(job: Job) -> Outcome:
 def run_parallel[T, R](
     fn: Callable[[T], R], tasks: Sequence[T], workers: int | None = None
 ) -> list[R]:
-    """``fn`` over ``tasks`` in order; in-process for one worker (debugging, tests)."""
+    """``fn`` over ``tasks`` in order; in-process for one worker (debugging, tests).
+
+    Workers are spawned, not forked: a forked child inherits the parent's BLAS thread pool and
+    can deadlock, while a fresh interpreter honours ``OMP_NUM_THREADS`` set by the scripts.
+    """
     workers = workers or os.cpu_count() or 1
     if workers == 1 or len(tasks) <= 1:
         return [fn(t) for t in tasks]
-    with ProcessPoolExecutor(max_workers=workers) as pool:
+    context = multiprocessing.get_context("spawn")
+    with ProcessPoolExecutor(max_workers=workers, mp_context=context) as pool:
         return list(pool.map(fn, tasks, chunksize=max(1, len(tasks) // (workers * 8))))
 
 
