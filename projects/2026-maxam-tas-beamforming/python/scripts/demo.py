@@ -54,6 +54,7 @@ def main() -> None:
     X = sg.stft(x, cfg.nfft, cfg.hop)
     bins = sg.band_bins(cfg.fs, cfg.nfft, cfg.band)
     freqs = sg.bin_freqs(bins, cfg.fs, cfg.nfft)
+    gain = doa.snr_gain(X, bins, cfg) if cfg.bin_weighting == "snr" else None
 
     cmap = matplotlib.colors.LinearSegmentedColormap.from_list("blue_seq", BLUES)
     fig, axes = plt.subplots(
@@ -70,7 +71,7 @@ def main() -> None:
     errors: dict[str, float] = {}
     mesh = None
     for ax, method in zip(axes, TITLES, strict=True):
-        P = doa.power_map(method, X[:, bins], mic, freqs, cfg)
+        P = doa.power_map(method, X[:, bins], mic, freqs, cfg, gain=gain)
         db = np.maximum(10 * np.log10(P / P.max()), DB_FLOOR)
         mesh = ax.pcolormesh(
             np.append(az_nodes - step / 2, 360 - step / 2),
