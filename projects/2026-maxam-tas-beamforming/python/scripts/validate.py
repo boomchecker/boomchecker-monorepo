@@ -127,9 +127,8 @@ def main() -> None:
         print(f"SNR {snr:.0f} dB")
         for m, (label, kind, _) in enumerate(METHODS):
             e = errors[:, s, m]
-            print(
-                f"  {label:18s} {kind:6s} median {np.median(e):5.2f}  rmse {np.sqrt(np.mean(e**2)):5.2f}"
-            )
+            rmse = np.sqrt(np.mean(e**2))
+            print(f"  {label:18s} {kind:6s} median {np.median(e):5.2f}  rmse {rmse:5.2f}")
     print(f"wrote {args.out}")
 
 
