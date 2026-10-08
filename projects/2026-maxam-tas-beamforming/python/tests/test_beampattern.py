@@ -26,15 +26,29 @@ def test_two_microphone_lobe_width_has_the_closed_form():
     assert bp.lobe_width_deg(mic, f, zenith, "north") == pytest.approx(360.0)  # no y aperture
 
 
-def test_width_shrinks_with_frequency_and_the_second_ring_narrows_the_elevation_cut():
-    one = g.make_array("1x8", 0.20)
+def test_width_shrinks_with_frequency():
     widths = [bp.evaluate(MIC, f, azimuths_deg=(0.0, 20.0)) for f in bp.FREQS_HZ[1:]]
-    assert all(a.width_az > b.width_az for a, b in zip(widths, widths[1:], strict=False))
-    assert all(a.width_el > b.width_el for a, b in zip(widths, widths[1:], strict=False))
-    r1 = bp.evaluate(one, 1000.0, azimuths_deg=(0.0,))
-    r2 = bp.evaluate(MIC, 1000.0, azimuths_deg=(0.0,))
-    assert r2.width_el < 0.8 * r1.width_el
-    assert r2.width_az == pytest.approx(r1.width_az, rel=0.05)
+    for a, b in zip(widths, widths[1:], strict=False):
+        assert a.width_az > b.width_az and a.width_up > b.width_up and a.width_down > b.width_down
+
+
+def test_planar_array_has_the_mirror_lobe_below_the_horizon_and_the_second_ring_removes_it():
+    # steered to 45 deg, the horizon is 45 deg below; a planar array is symmetric in z, so the
+    # downward side runs into the mirror main lobe at -45 deg and stays above -3 dB long after
+    one = bp.evaluate(g.make_array("1x8", 0.20), 1000.0, azimuths_deg=(0.0,))
+    two = bp.evaluate(g.make_array("2x8_rot", 0.20, 0.10), 1000.0, azimuths_deg=(0.0,))
+    assert one.width_down > 90.0
+    assert two.width_down < 60.0
+    assert two.width_up == pytest.approx(one.width_up, rel=0.1)  # above the horizon: alike
+    assert two.width_az == pytest.approx(one.width_az, rel=0.05)
+
+
+def test_half_widths_are_symmetric_at_the_zenith():
+    up, down = bp.half_widths_deg(MIC, 1500.0, np.array([0.0, 0.0, 1.0]), "east")
+    assert up == pytest.approx(down, abs=0.2)
+    assert bp.lobe_width_deg(MIC, 1500.0, np.array([0.0, 0.0, 1.0]), "east") == pytest.approx(
+        up + down
+    )
 
 
 def test_low_frequency_is_omnidirectional_without_sidelobes():

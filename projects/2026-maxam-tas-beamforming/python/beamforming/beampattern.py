@@ -4,7 +4,9 @@
 the geometry, not on the signal, which makes it the fair way to compare arrays; MVDR and
 MUSIC maps depend on the data. The main lobe width is measured on two great circles through
 ``u0`` (along the east and north tangent directions, see :func:`geometry.tangent_basis`) as
-the angle between the two -3 dB points, so it is comparable to an angular error. The peak
+angles to the -3 dB points, so it is comparable to an angular error. Along the elevation the
+two sides are kept apart: downwards the circle leaves the upper hemisphere, where a planar
+array has the mirror image of its main lobe. The peak
 sidelobe level is the highest local maximum of ``B`` on the upper hemisphere other than the
 main lobe; it is NaN when the pattern has no sidelobe, and close to 0 dB when a grating
 lobe from spatial aliasing appears.
@@ -39,17 +41,21 @@ def _power(A: NDArray, mic_pos: NDArray, freq: float, u0: NDArray, c: float) -> 
     return np.abs(a0.conj() @ A) ** 2 / len(mic_pos) ** 2
 
 
-def lobe_width_deg(mic_pos: NDArray, freq: float, u0: NDArray, axis: str, c: float = sg.C) -> float:
-    """Angle between the -3 dB points around ``u0`` on the great circle along ``axis``.
+def half_widths_deg(
+    mic_pos: NDArray, freq: float, u0: NDArray, axis: str, c: float = sg.C
+) -> tuple[float, float]:
+    """Angles from ``u0`` to the -3 dB point on both sides of the great circle along ``axis``.
 
-    ``axis`` is ``"east"`` (the azimuth direction) or ``"north"`` (the elevation direction).
-    A side that stays above -3 dB over the whole half circle counts as 180 deg.
+    ``axis`` is ``"east"`` (the azimuth direction) or ``"north"`` (the elevation direction;
+    the first value is towards the zenith, the second downwards through the horizon). A side
+    that stays above -3 dB over the whole half circle counts as 180 deg. Below the horizon a
+    planar array repeats the main lobe as its mirror image, so its downward value is large.
     """
     east, north = g.tangent_basis(u0)
     t = {"east": east, "north": north}[axis]
     phi = np.deg2rad(np.arange(0.0, 180.0 + CUT_STEP_DEG / 2, CUT_STEP_DEG))
     u0 = np.asarray(u0, dtype=float)
-    total = 0.0
+    out = []
     for sign in (1.0, -1.0):
         dirs = np.cos(phi)[:, None] * u0[None, :] + sign * np.sin(phi)[:, None] * t[None, :]
         b = power(mic_pos, freq, u0, dirs, c)
@@ -57,10 +63,15 @@ def lobe_width_deg(mic_pos: NDArray, freq: float, u0: NDArray, axis: str, c: flo
         k = int(np.argmax(below)) if below.any() else len(phi) - 1
         if below.any() and k > 0:  # linear interpolation between the samples around the crossing
             frac = (b[k - 1] - HALF_POWER) / (b[k - 1] - b[k])
-            total += float(np.rad2deg(phi[k - 1] + frac * (phi[k] - phi[k - 1])))
+            out.append(float(np.rad2deg(phi[k - 1] + frac * (phi[k] - phi[k - 1]))))
         else:
-            total += float(np.rad2deg(phi[k]))
-    return total
+            out.append(float(np.rad2deg(phi[k])))
+    return out[0], out[1]
+
+
+def lobe_width_deg(mic_pos: NDArray, freq: float, u0: NDArray, axis: str, c: float = sg.C) -> float:
+    """Angle between the -3 dB points around ``u0`` on the great circle along ``axis``."""
+    return sum(half_widths_deg(mic_pos, freq, u0, axis, c))
 
 
 def hemisphere_grid(step_deg: float = GRID_STEP_DEG) -> tuple[NDArray, tuple[int, int]]:
@@ -120,8 +131,9 @@ def _same_lobe(b_map: NDArray, peak: tuple[int, int], main: tuple[int, int]) -> 
 class Result:
     """Beampattern figures of one array at one frequency."""
 
-    width_az: float  # deg, median over the steering azimuths
-    width_el: float  # deg, median over the steering azimuths
+    width_az: float  # deg, full -3 dB width along the azimuth direction
+    width_up: float  # deg, -3 dB half width towards the zenith
+    width_down: float  # deg, -3 dB half width downwards, through the horizon
     psl_db: float  # dB, the worst (highest) sidelobe over the steering azimuths; NaN if none
 
 
@@ -132,18 +144,23 @@ def evaluate(
     azimuths_deg: tuple[float, ...] = AZIMUTHS_DEG,
     c: float = sg.C,
 ) -> Result:
-    """Widths and peak sidelobe level steering to elevation ``el0_deg`` at several azimuths."""
+    """Widths (medians) and peak sidelobe level (worst) over several steering azimuths."""
     dirs, (n_az, n_el) = hemisphere_grid()
     A = sg.steering(mic_pos, np.array([freq]), dirs, c)[:, 0, :]
-    w_az, w_el, psl = [], [], []
+    w_az, w_up, w_down, psl = [], [], [], []
     for az in azimuths_deg:
         u0 = g.unit_vector(np.deg2rad(az), np.deg2rad(el0_deg))
         w_az.append(lobe_width_deg(mic_pos, freq, u0, "east", c))
-        w_el.append(lobe_width_deg(mic_pos, freq, u0, "north", c))
+        up, down = half_widths_deg(mic_pos, freq, u0, "north", c)
+        w_up.append(up)
+        w_down.append(down)
         b_map = _power(A, mic_pos, freq, u0, c).reshape(n_az, n_el)
         main = (int(round(az / GRID_STEP_DEG)) % n_az, int(round(el0_deg / GRID_STEP_DEG)))
         psl.append(peak_sidelobe_db(b_map, main))
     finite = [p for p in psl if np.isfinite(p)]
     return Result(
-        float(np.median(w_az)), float(np.median(w_el)), max(finite) if finite else float("nan")
+        float(np.median(w_az)),
+        float(np.median(w_up)),
+        float(np.median(w_down)),
+        max(finite) if finite else float("nan"),
     )

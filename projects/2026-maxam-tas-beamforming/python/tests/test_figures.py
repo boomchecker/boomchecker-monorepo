@@ -58,7 +58,7 @@ def test_main_writes_every_figure_and_table(figures, summary, tmp_path, monkeypa
         figures, "beampattern_figure", lambda out, freq=1000.0: out.write_bytes(b"x")
     )
     monkeypatch.setattr(
-        figures.bp, "evaluate", lambda mic, f, **k: bp.Result(40.0 + f / 100, 90.0, -8.4)
+        figures.bp, "evaluate", lambda mic, f, **k: bp.Result(40.0 + f / 100, 30.0, 200.0, -8.4)
     )
     monkeypatch.setattr(
         "sys.argv",
@@ -109,6 +109,7 @@ def test_missing_stage_is_a_clear_error(figures, tmp_path):
 
 def test_width_cell_marks_an_omnidirectional_pattern(figures):
     assert figures.width_cell(360.0) == "--" and figures.width_cell(73.5) == "74"
+    assert figures.width_cell(180.0, 180.0) == "--" and figures.width_cell(179.0, 180.0) == "179"
 
 
 def test_cost_macros_match_the_cost_module(figures, tmp_path):
