@@ -36,8 +36,8 @@ GROUPS: list[list[tuple[str, str, str]]] = [
         ("MUSIC", "own", "music"),
     ],
     [
-        ("SRP-PHAT", "coarse", "srp_phat"),
-        ("MUSIC", "coarse", "music"),
+        ("SRP-PHAT (hrubý grid)", "coarse", "srp_phat"),
+        ("MUSIC (hrubý grid)", "coarse", "music"),
         ("SRP (pra)", "pra", "SRP"),
         ("NormMUSIC (pra)", "pra", "NormMUSIC"),
         ("CSSM (pra)", "pra", "CSSM"),

@@ -22,6 +22,9 @@
   }%
 }
 
+\input{generated/demo.tex}
+\input{generated/validation.tex}
+
 \begin{document}
 
 \title{Akustická lokalizace dronu mikrofonním polem 2$\times$8 na mikrokontroléru STM32H563}
@@ -65,12 +68,15 @@ Konvenční beamformer (delay-and-sum, DAS) srovná fáze kanálů podle kandid�
   P_{\mathrm{DAS}}(\Omega) = \sum_k \mathbf{a}^H(k,\Omega)\,\hat{\mathbf{R}}(k)\,\mathbf{a}(k,\Omega).
   \label{eq:das}
 \end{equation}
-Rozlišení DAS je dané aperturou pole měřenou ve vlnových délkách. Jeho váhy nezávisí na datech, takže na rozdíl od statisticky optimálních beamformerů nepotlačí žádaný signál při nepřesné znalosti jeho směru \cite{vanveen1988beamforming}. Beamformer MVDR (Capon) propustí rovinnou vlnu ze směru $\Omega$ s~jednotkovým ziskem a~minimalizuje výkon ostatních složek \cite{capon1969mvdr}. Jeho spektra v~jednotlivých binech sčítáme nekoherentně:
+Rozlišení DAS je dané aperturou pole měřenou ve vlnových délkách. Jeho váhy nezávisí na datech, takže na rozdíl od statisticky optimálních beamformerů nepotlačí žádaný signál při nepřesné znalosti jeho směru \cite{vanveen1988beamforming}. Beamformer MVDR (Capon) propustí rovinnou vlnu ze směru $\Omega$ s~jednotkovým ziskem a~minimalizuje výkon ostatních složek \cite{capon1969mvdr}. Jeho spektra v~jednotlivých binech normujeme maximem přes grid, aby několik silných harmonických nepřehlušilo ostatní biny, a~sčítáme nekoherentně:
 \begin{equation}
-  P_{\mathrm{MVDR}}(\Omega) = \sum_k \frac{1}{\mathbf{a}^H(k,\Omega)\,\big(\hat{\mathbf{R}}(k)+\varepsilon\mathbf{I}\big)^{-1}\mathbf{a}(k,\Omega)},
+  \begin{split}
+    P_{\mathrm{MVDR}}(\Omega) &= \sum_k \frac{P_k(\Omega)}{\max_{\Omega'} P_k(\Omega')}, \\
+    P_k(\Omega) &= \frac{1}{\mathbf{a}^H\,\big(\hat{\mathbf{R}}+\varepsilon\,\frac{\mathrm{tr}\,\hat{\mathbf{R}}}{M}\mathbf{I}\big)^{-1}\mathbf{a}},
+  \end{split}
   \label{eq:mvdr}
 \end{equation}
-kde $\varepsilon\mathbf{I}$ je diagonální loading, u~Capona přidání malého nekoherentního šumu \cite{capon1969mvdr}. Při malém podílu nekoherentního šumu má MVDR užší lalok než DAS \cite{capon1969mvdr}, ale potřebuje inverzi matice $M\times M$ v~každém binu a~je citlivé na chyby polohy mikrofonů. Itare et~al. adaptivní beamforming pro dron právě z~těchto důvodů zamítli \cite{itare2022frequency}.
+kde $\mathbf{a}=\mathbf{a}(k,\Omega)$, $\hat{\mathbf{R}}=\hat{\mathbf{R}}(k)$ a~$\varepsilon\,\mathrm{tr}\,\hat{\mathbf{R}}/M\cdot\mathbf{I}$ je diagonální loading úměrný střednímu výkonu kanálu, u~Capona přidání malého nekoherentního šumu \cite{capon1969mvdr}. Při malém podílu nekoherentního šumu má MVDR užší lalok než DAS \cite{capon1969mvdr}, ale potřebuje inverzi matice $M\times M$ v~každém binu a~je citlivé na chyby polohy mikrofonů. Itare et~al. adaptivní beamforming pro dron právě z~těchto důvodů zamítli \cite{itare2022frequency}.
 
 \subsection{Korelační metody}
 Zobecněná křížová korelace (GCC) dvojice mikrofonů váží křížové spektrum frekvenční vahou a~poloha maxima zpětné transformace odhaduje zpoždění \cite{knapp1976gcc}. S~vahou PHAT zůstane jen fáze:
@@ -86,9 +92,12 @@ PHAT zplošťuje spektrum, takže zostří korelační pík, ale chyby zesiluje 
 Pro dron však celopásmový SRP-PHAT nestačí. Uluskan uvádí, že běžný SRP-PHAT dron nelokalizoval při žádné úrovni šumu, kdežto varianta počítaná jen v~okolí harmonických základní frekvence vrtule uspěla \cite{uluskan2024srpphat}.
 
 \subsection{Podprostorové a širokopásmové metody}
-MUSIC rozloží kovarianční matici na signálový a~šumový podprostor $\mathbf{E}_n$ a~využije, že steering vektor skutečného směru je na šumový podprostor kolmý. Počet zdrojů Schmidt odhaduje z~násobnosti nejmenšího vlastního čísla \cite{schmidt1986music}. Úzkopásmová pseudospektra binů sčítáme nekoherentně:
+MUSIC rozloží kovarianční matici na signálový a~šumový podprostor $\mathbf{E}_n$ a~využije, že steering vektor skutečného směru je na šumový podprostor kolmý. Počet zdrojů Schmidt odhaduje z~násobnosti nejmenšího vlastního čísla \cite{schmidt1986music}. Úzkopásmová pseudospektra binů normujeme stejně jako u~MVDR a~sčítáme nekoherentně:
 \begin{equation}
-  P_{\mathrm{MU}}(\Omega) = \sum_k \frac{1}{\mathbf{a}^H(k,\Omega)\,\mathbf{E}_n(k)\mathbf{E}_n^H(k)\,\mathbf{a}(k,\Omega)}.
+  \begin{split}
+    P_{\mathrm{MU}}(\Omega) &= \sum_k \frac{P_k(\Omega)}{\max_{\Omega'} P_k(\Omega')}, \\
+    P_k(\Omega) &= \frac{1}{\mathbf{a}^H\,\mathbf{E}_n\mathbf{E}_n^H\,\mathbf{a}},
+  \end{split}
   \label{eq:music}
 \end{equation}
 MUSIC dává ostré maximum, ale vyžaduje vlastní rozklad v~každém binu. Koherentní metody místo nekoherentního součtu převedou kovariance všech binů fokusačními maticemi na jednu referenční frekvenci (CSSM \cite{wang1985cssm}), případně fokusují a~váženě průměrují signálové podprostory jednotlivých binů (WAVES \cite{diclaudio2001waves}). TOPS převádí signálový podprostor referenčního binu pro každý hypotetický směr do ostatních binů a~testuje jeho ortogonalitu na jejich šumové podprostory, takže počáteční odhad směru nepotřebuje. Výkonem leží mezi koherentními metodami a~nekoherentním MUSIC a~odvozen je pro lineární a~rovinná pole \cite{yoon2006tops}.
@@ -141,9 +150,43 @@ Pro lokalizaci z~toho plyne, že většina energie dronu, a~tedy i~využitelné 
 % TODO M4: vysledky sweepu, doporucena geometrie pro PCB a doporucena metoda.
 % Topologie: 1x8 kruh, 2x8 kruhy nad sebou, 2x8 kruhy pootocene o 22,5 st.
 % Prumer 160/200/250 mm, rozteč kruhu h 40/70/100 mm.
-% Signal: DADS, free-field zpozdeni do 16 mikrofonu, aditivni sum, sweep SNR.
 % Metriky: RMSE azimutu a elevace vs SNR, sirka hlavniho laloku, vypocetni cena.
-\placeholder{Simulace a~volbu geometrie doplnit v~milníku M4.}
+
+\subsection{Simulační model}
+Simulace je napsaná v~Pythonu (NumPy) a~vyrábí signál pole ze záznamů dronu z~datasetu DADS (sekce~\ref{sec:spektrum}). Klip s~délkou obvykle 0{,}5\,s je zdrojem rovinné vlny ze zvoleného směru $\mathbf{u}$ a~do $M=16$ mikrofonů se přivede se zpožděním $\tau_m$ podle~\eqref{eq:model}. Zpoždění je zlomek vzorku, proto se zavádí násobením spektra faktorem $e^{j2\pi f\tau_m}$ na úseku s~okrajem, který se po posunu odřízne, aby do výsledku nezasáhl kruhový přesah FFT. Z~něj se vezme úsek 100\,ms (1600 vzorků) na náhodné pozici klipu a~přidá se nezávislý bílý šum s~odstupem SNR, tedy poměrem středního výkonu signálu v~poli k~výkonu šumu přes celé pásmo 0 až 8\,kHz. Stejný steering vektor generuje signály i~prohledává grid, takže znaménko zpoždění nemůže být v~simulaci a~v~metodách odlišné.
+
+Kruh o~průměru $\varnothing$ je kružnice, na které leží osm mikrofonů s~úhlovou roztečí 45$^\circ$. U~topologie 2$\times$8 s~pootočením je horní kruh otočen o~22{,}5$^\circ$, takže mikrofony obou kruhů leží ve~svislé projekci mezi sebou. Úsek zpracuje STFT ze sekce~\ref{sec:vypocty} (5 rámců, biny 10 až 64). Směr se hledá na hrubém gridu 5$^\circ$ o~1368 směrech a~poté na čepičce $11\times11$ bodů s~krokem 1$^\circ$ kolem jeho maxima. Konstanty normování binů u~MVDR a~MUSIC se počítají na hrubém gridu a~jemné hledání je přebírá, jinak by obě fáze vážily biny různě. Diagonální loading MVDR je $\varepsilon=10^{-2}$ a~MUSIC uvažuje jeden zdroj, takže šumový podprostor má 15 dimenzí. GCC-PHAT s~LS pracuje s~celým úsekem, filtruje PHAT na pásmo 300\,Hz až 2\,kHz a~zpoždění dvojic odhaduje na šestnáctinásobně jemnější mřížce než vzorkovací perioda, protože při 16\,kHz odpovídá jeden vzorek 21\,mm dráhy a~pole má průměr jen 200\,mm. Simulace předpokládá rovinnou vlnu, jediný zdroj, ideální polohy mikrofonů a~šum nezávislý mezi kanály, takže ukazuje spíše spodní mez chyby než chování venku.
+
+\begin{figure*}[t]
+  \centering
+  \includegraphics[width=\textwidth]{figures/doa_demo.pdf}
+  \caption{Mapy výkonu v~pásmu 300\,Hz až 2\,kHz pro jeden klip DADS, pole 2$\times$8 pootočené ($\varnothing$\,\demoDiameter\,mm, $h=\demoHeight$\,mm), SNR \demoSnr\,dB a~směr $\phi=\demoAz^\circ$, $\theta=\demoEl^\circ$. Každá mapa je normovaná na své maximum. Chyba odhadu po jemném hledání je pro DAS \demoErrDAS$^\circ$, MVDR \demoErrMVDR$^\circ$, SRP-PHAT \demoErrSRP$^\circ$, MUSIC \demoErrMUSIC$^\circ$ a~GCC-PHAT s~LS \demoErrGCC$^\circ$. DAS má v~tomto pásmu lalok přes celou polokouli, MVDR a~MUSIC jej zužují.}
+  \label{fig:doa_demo}
+\end{figure*}
+
+\subsection{Validace implementace}
+Správnost implementace jsme ověřili na \validN{} klipech DADS. Každý klip dostal náhodný směr rovnoměrně rozložený na horní polokouli a~náhodný úsek 100\,ms, shodné pro všechny metody a~oba SNR. Pole je 2$\times$8 pootočené s~$\varnothing$\,\demoDiameter\,mm a~$h=\demoHeight$\,mm. Tab.~\ref{tab:validace} uvádí medián a~RMSE úhlové chyby po velké kružnici. Kontrolní metody z~pyroomacoustics nemají jemné dohledání, proto jsou v~druhé skupině i~vlastní SRP-PHAT a~MUSIC jen na hrubém gridu a~porovnáváme stejné věci.
+
+\begin{table}[t]
+\centering
+\caption{Úhlová chyba odhadu směru ve stupních. První skupina: vlastní metody s~jemným hledáním. Druhá skupina: jen hrubý grid 5$^\circ$, vlastní metody a~pyroomacoustics (pra).}
+\label{tab:validace}
+\small
+\shorthandoff{-}% babel czech: \cmidrule needs a plain hyphen
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+ & \multicolumn{2}{c}{SNR \validSnrHigh\,dB} & \multicolumn{2}{c}{SNR \validSnrLow\,dB} \\
+\cmidrule(lr){2-3}\cmidrule(l){4-5}
+Metoda & medián & RMSE & medián & RMSE \\
+\midrule
+\validrows
+\bottomrule
+\end{tabular}
+\end{table}
+
+Vlastní metody mají při obou SNR medián i~RMSE pod 2$^\circ$ a~rozdíly mezi nimi jsou malé; jejich citlivost na šum proto porovnáme na nižších SNR. Jemné dohledání výrazně snižuje chybu zaviněnou kvantizací gridu: hrubý grid dává chybu danou krokem 5$^\circ$, jemný několikanásobně nižší. Vlastní SRP-PHAT a~MUSIC na hrubém gridu dávají stejná čísla jako SRP a~NormMUSIC z~pyroomacoustics, shodují se tedy na stejný uzel gridu. Porovnáváme s~NormMUSIC, protože pyroomacoustics MUSIC standardně biny nenormuje. CSSM a~WAVES nepřinášejí oproti nekoherentnímu součtu zlepšení.
+
+TOPS v~tabulce chybí, protože pyroomacoustics 0.10.1 jej počítá chybně pro pásmo, které nezačíná u~binu 0: fokusační matice staví podle absolutních čísel binů, ale čte je podle pořadí v~seznamu použitých binů. Na pěti směrech při 30\,dB chyba s~opravenou indexací klesla z~5{,}5 až 11{,}9$^\circ$ na 0{,}6 až 3{,}1$^\circ$. Selhání TOPS tedy nelze vykládat jako vlastnost metody na 3D poli.
 
 \section{Hardware}
 \label{sec:hw}
