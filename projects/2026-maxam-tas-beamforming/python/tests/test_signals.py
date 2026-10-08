@@ -102,10 +102,45 @@ def test_decimation_passband_and_stopband():
 
 
 def test_band_bins_never_leave_the_band():
-    # 1024 point FFT at 16 kHz: df = 15.625 Hz, so 290 Hz lies between bins 18 and 19
-    bins = sg.band_bins(nfft=1024, band=(290.0, 2000.0))
+    # 1024 point FFT at 16 kHz: df = 15.625 Hz; 285 Hz is 18.24 bins and 1995 Hz is 127.68 bins,
+    # so rounding to the nearest bin would use 281 Hz and 2000 Hz, outside the band
+    bins = sg.band_bins(nfft=1024, band=(285.0, 1995.0))
     freqs = sg.bin_freqs(bins, nfft=1024)
-    assert freqs.min() >= 290.0 and freqs.max() <= 2000.0
-    assert bins[0] == 19 and bins[-1] == 128
+    assert freqs.min() >= 285.0 and freqs.max() <= 1995.0
+    assert bins[0] == 19 and bins[-1] == 127
     # an edge exactly on a bin is included
     np.testing.assert_array_equal(sg.band_bins(), np.arange(10, 65))
+
+
+def test_stft_window_leakage_is_hann_like():
+    # a tone between bins 20 and 21: a Hann window leaves far bins below -45 dB (a rectangular
+    # window only reaches about -30 dB at ten bins)
+    f = 20.5 * sg.FS / sg.NFFT
+    x = np.sin(2 * np.pi * f * np.arange(sg.SEGMENT) / sg.FS)[None, :]
+    mag = np.abs(sg.stft(x))[0].mean(axis=1)
+    far = np.abs(np.arange(len(mag)) - 20.5) >= 8
+    assert 20 * np.log10(mag[far].max() / mag.max()) < -45
+
+
+@pytest.mark.parametrize("sigma", [0.5, 3.0])
+def test_band_power_has_the_expected_absolute_value(sigma):
+    x = np.random.default_rng(0).normal(0.0, sigma, (16, 16_000))
+    assert sg.band_power(x) == pytest.approx(sigma**2, rel=0.01)
+    # white noise spreads evenly over 0 to 8 kHz, so 300 to 2000 Hz holds 1700 / 8000 of it
+    assert sg.band_power(x, sg.FS, sg.BAND_HZ) == pytest.approx(sigma**2 * 1700 / 8000, rel=0.03)
+
+
+@pytest.mark.parametrize("band", [None, sg.BAND_HZ])
+def test_add_noise_snr_is_correct_by_an_independent_measure(band):
+    rng = np.random.default_rng(4)
+    x = rng.standard_normal((16, 1600)) * np.linspace(0.5, 2.0, 1600)  # non-white, non-flat
+    noise = sg.add_noise(x, 6.0, np.random.default_rng(5), snr_band=band) - x
+
+    def power(sig):  # mask in the frequency domain, back to time, mean square
+        spec = np.fft.rfft(sig, axis=-1)
+        if band is not None:
+            f = np.fft.rfftfreq(sig.shape[-1], 1 / sg.FS)
+            spec = spec * ((f >= band[0]) & (f <= band[1]))
+        return np.mean(np.fft.irfft(spec, n=sig.shape[-1], axis=-1) ** 2)
+
+    assert 10 * np.log10(power(x) / power(noise)) == pytest.approx(6.0, abs=1e-6)

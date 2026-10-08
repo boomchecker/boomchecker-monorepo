@@ -5,7 +5,7 @@ from beamforming import doa, pra_check
 from beamforming import geometry as g
 from beamforming import signals as sg
 
-from .test_doa import DIRECTIONS, simulate
+from .helpers import DIRECTIONS, simulate
 
 # own method and the pra algorithm that implements the same estimator
 PAIRS = [("srp_phat", "SRP"), ("music", "NormMUSIC")]

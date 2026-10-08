@@ -2,33 +2,11 @@ import numpy as np
 import pytest
 from scipy import signal as sps
 
-from beamforming import dads, doa
+from beamforming import doa
 from beamforming import geometry as g
 from beamforming import signals as sg
 
-# off-grid directions (azimuth, elevation in degrees): wrap near 360, near horizon, near zenith
-DIRECTIONS = [
-    (37.3, 22.7),
-    (121.4, 63.1),
-    (203.8, 41.9),
-    (287.2, 11.4),
-    (357.6, 33.3),
-    (73.9, 4.2),
-    (160.2, 87.0),
-    (245.5, 55.5),
-]
-TOL_DEG = 2.0
-
-
-def simulate(clip, mic_pos, az_deg, el_deg, snr_db, rng):
-    u = g.unit_vector(np.deg2rad(az_deg), np.deg2rad(el_deg))
-    x = sg.observe(clip, mic_pos, u, dads.random_offset(len(clip), rng))
-    return sg.add_noise(x, snr_db, rng), u
-
-
-def estimate_error(method, x, mic_pos, u_true):
-    az, el = doa.localize(method, x, mic_pos)
-    return float(g.angular_error_deg(g.unit_vector(az, el), u_true))
+from .helpers import DIRECTIONS, TOL_DEG, estimate_error, simulate
 
 
 @pytest.mark.parametrize("method", doa.METHODS)
@@ -140,7 +118,7 @@ def test_music_bins_matches_noise_subspace_form(rng):
             assert bins[k, d] == pytest.approx(1 / np.real(v.conj() @ v))
 
 
-def test_normalised_methods_use_coarse_weights_in_fine_stage():
+def test_bin_weights_normalise_by_the_coarse_maximum():
     m = doa.GRID_METHODS["music"]
     bins = np.array([[1.0, 4.0], [10.0, 5.0]])
     w = doa.bin_weights(m, bins)
