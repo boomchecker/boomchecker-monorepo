@@ -2,5 +2,10 @@ python/venv/
 python/out/
 __pycache__/
 .pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
 data/
 .env
+PLAN.md
+.task/

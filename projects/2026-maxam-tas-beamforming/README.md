@@ -11,8 +11,8 @@ Postup a rozhodnutí: [PLAN.md](PLAN.md) (milníky M1 až M5).
 
 ```
 PLAN.md          plán po milnících
-Taskfile.yml     setup, report:build, report:clean
-setup.sh         venv v python/venv + requirements.txt
+Taskfile.yml     setup (venv v python/venv), sim:*, report:*
+requirements.txt pinované závislosti
 env.example      HF_TOKEN pro stažení DADS (zkopírovat do .env)
 python/          simulace DOA (od M3)
 report/          LaTeX report (IEEEtran, čeština)

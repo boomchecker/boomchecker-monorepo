@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "beamforming"
+version = "0.1.0"
+description = "DOA simulation for the 2x8 MEMS microphone array (TAS report)"
+requires-python = ">=3.12"
+
+[tool.setuptools]
+packages = ["beamforming"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "NPY"]
+
+[tool.mypy]
+python_version = "3.12"
+warn_unused_ignores = true
+warn_redundant_casts = true
+check_untyped_defs = true
+
+[[tool.mypy.overrides]]
+module = ["pyroomacoustics.*", "datasets.*", "soundfile.*", "huggingface_hub.*"]
+ignore_missing_imports = true
