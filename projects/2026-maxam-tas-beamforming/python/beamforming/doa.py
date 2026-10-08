@@ -24,6 +24,7 @@ from . import geometry as g
 from . import signals as sg
 
 _TINY = 1e-12
+BIN_WEIGHTINGS = ("max", "snr")
 
 
 @dataclass(frozen=True)
@@ -41,6 +42,18 @@ class Config:
     loading: float = 1e-2  # MVDR: relative diagonal loading eps in eps * tr(R) / M * I
     n_src: int = 1  # MUSIC: signal subspace dimension
     gcc_upsample: int = 16  # GCC-PHAT: zero-padded IFFT factor for sub-sample delays
+    guard_bins: int = 0  # bins dropped at both band edges (Hann leakage from outside the band)
+    bin_weighting: str = "max"  # "max": report weights; "snr": also scale each bin by 1 - N/P_k
+    freq_smooth: int = 0  # MVDR, MUSIC: covariance averaged over +-freq_smooth neighbour bins
+    noise_floor_hz: float = 3000.0  # "snr": noise floor is the median bin power above this
+
+    def __post_init__(self) -> None:
+        if self.bin_weighting not in BIN_WEIGHTINGS:
+            raise ValueError(f"bin_weighting {self.bin_weighting!r} not in {BIN_WEIGHTINGS}")
+        if self.guard_bins < 0 or self.freq_smooth < 0:
+            raise ValueError("guard_bins and freq_smooth must not be negative")
+        if self.bin_weighting == "snr" and not self.band[1] < self.noise_floor_hz < self.fs / 2:
+            raise ValueError("noise_floor_hz must lie between the band and the Nyquist frequency")
 
 
 DEFAULT = Config()
@@ -53,9 +66,26 @@ def _steer(mic_pos: NDArray, freqs: NDArray, dirs: NDArray, cfg: Config) -> NDAr
     return sg.steering(mic_pos, freqs, dirs, cfg.c).transpose(1, 0, 2)
 
 
-def _covariance(X: NDArray) -> NDArray:
-    """Per-bin sample covariance (K, M, M) averaged over the T frames."""
-    return np.einsum("mkt,nkt->kmn", X, X.conj()) / X.shape[2]
+def _smooth_bins(R: NDArray, n: int) -> NDArray:
+    """Moving average of ``R`` (K, ...) over ``+-n`` neighbouring bins, shorter at the edges."""
+    if n <= 0:
+        return R
+    K = R.shape[0]
+    csum = np.concatenate([np.zeros((1, *R.shape[1:]), dtype=R.dtype), np.cumsum(R, axis=0)])
+    k = np.arange(K)
+    lo, hi = np.clip(k - n, 0, K), np.clip(k + n + 1, 0, K)
+    return (csum[hi] - csum[lo]) / (hi - lo).reshape(-1, *([1] * (R.ndim - 1)))
+
+
+def _covariance(X: NDArray, smooth: int = 0) -> NDArray:
+    """Per-bin sample covariance (K, M, M) averaged over the T frames and ``+-smooth`` bins.
+
+    Averaging neighbouring bins raises the rank above the T frames (5 for 100 ms). It treats
+    the steering vector as constant over ``2 * smooth + 1`` bins (``smooth * df = 31 Hz`` per
+    step), which is a small phase error for a 0.2 m array but not an exact focusing.
+    """
+    R = np.einsum("mkt,nkt->kmn", X, X.conj()) / X.shape[2]
+    return _smooth_bins(R, smooth)
 
 
 def das_bins(X: NDArray, mic_pos: NDArray, freqs: NDArray, dirs: NDArray, cfg: Config) -> NDArray:
@@ -86,7 +116,7 @@ def mvdr_bins(X: NDArray, mic_pos: NDArray, freqs: NDArray, dirs: NDArray, cfg: 
     if cfg.loading <= 0:
         raise ValueError(f"MVDR needs diagonal loading > 0, got {cfg.loading}")
     M = X.shape[0]
-    R = _covariance(X)
+    R = _covariance(X, cfg.freq_smooth)
     trace = np.trace(R, axis1=1, axis2=2).real
     R = R + (cfg.loading * trace / M)[:, None, None] * np.eye(M)
     A = _steer(mic_pos, freqs, dirs, cfg)
@@ -101,7 +131,7 @@ def music_bins(X: NDArray, mic_pos: NDArray, freqs: NDArray, dirs: NDArray, cfg:
     ``n_src`` dominant eigenvectors are needed.
     """
     M = X.shape[0]
-    _, vecs = np.linalg.eigh(_covariance(X))
+    _, vecs = np.linalg.eigh(_covariance(X, cfg.freq_smooth))
     Es = vecs[:, :, -cfg.n_src :]
     A = _steer(mic_pos, freqs, dirs, cfg)
     proj = np.sum(np.abs(np.einsum("kms,kmd->ksd", Es.conj(), A)) ** 2, axis=1)
@@ -139,6 +169,28 @@ def bin_weights(method: GridMethod, coarse_bins: NDArray) -> NDArray | None:
     return 1.0 / np.maximum(coarse_bins.max(axis=1), _TINY)
 
 
+def snr_gain(X_full: NDArray, bins: NDArray, cfg: Config = DEFAULT) -> NDArray:
+    """Per-bin gain ``max(0, 1 - N / P_k)`` for ``cfg.bin_weighting == "snr"``.
+
+    ``P_k`` is the mean power of bin ``k`` over channels and frames and ``N`` the median bin
+    power above ``cfg.noise_floor_hz``, where the drone has little energy and the noise is
+    white. The gain is 0 for a noise-only bin and tends to 1 for a strong one. ``X_full`` is
+    the whole STFT ``(M, F, T)``; ``bins`` are the indices of the localisation band.
+    """
+    power = np.mean(np.abs(X_full) ** 2, axis=(0, 2))
+    freqs = sg.bin_freqs(np.arange(len(power)), cfg.fs, cfg.nfft)
+    noise = float(np.median(power[freqs >= cfg.noise_floor_hz]))
+    return np.maximum(0.0, 1.0 - noise / np.maximum(power[bins], _TINY))
+
+
+def _bin_gain(method: GridMethod, coarse: NDArray, gain: NDArray | None) -> NDArray | None:
+    """Bin weights of a method, times the optional per-bin ``gain``."""
+    weights = bin_weights(method, coarse)
+    if gain is None:
+        return weights
+    return gain if weights is None else weights * gain
+
+
 def power_map(
     method: str,
     X: NDArray,
@@ -146,13 +198,14 @@ def power_map(
     freqs: NDArray,
     cfg: Config = DEFAULT,
     step: float | None = None,
+    gain: NDArray | None = None,
 ) -> NDArray:
     """Combined power over the coarse hemisphere grid, shape ``(n_az, n_el)``."""
     m = GRID_METHODS[method]
     step = cfg.coarse_step if step is None else step
     az, el = g.coarse_grid(step)
     bins = m.bins(X, mic_pos, freqs, g.unit_vector(az, el), cfg)
-    return combine(bins, bin_weights(m, bins)).reshape(g.grid_shape(step))
+    return combine(bins, _bin_gain(m, bins, gain)).reshape(g.grid_shape(step))
 
 
 def search(
@@ -161,13 +214,17 @@ def search(
     mic_pos: NDArray,
     freqs: NDArray,
     cfg: Config = DEFAULT,
+    gain: NDArray | None = None,
 ) -> tuple[float, float]:
-    """Coarse grid maximum, then a fine cap around it; returns ``(azimuth, elevation)`` in rad."""
+    """Coarse grid maximum, then a fine cap around it; returns ``(azimuth, elevation)`` in rad.
+
+    ``gain`` (K,) is an optional extra weight per bin (see :func:`snr_gain`).
+    """
     m = GRID_METHODS[method]
     az, el = g.coarse_grid(cfg.coarse_step)
     dirs = g.unit_vector(az, el)
     coarse = m.bins(X, mic_pos, freqs, dirs, cfg)
-    weights = bin_weights(m, coarse)
+    weights = _bin_gain(m, coarse, gain)
     u0 = dirs[int(np.argmax(combine(coarse, weights)))]
     cap = g.fine_cap(u0, cfg.fine_span, cfg.fine_step)
     fine = combine(m.bins(X, mic_pos, freqs, cap, cfg), weights)
@@ -262,4 +319,9 @@ def localize(
         return gcc_phat_ls(x, mic_pos, cfg)
     X = sg.stft(x, cfg.nfft, cfg.hop)
     bins = sg.band_bins(cfg.fs, cfg.nfft, cfg.band)
-    return search(method, X[:, bins], mic_pos, sg.bin_freqs(bins, cfg.fs, cfg.nfft), cfg)
+    if cfg.guard_bins:
+        bins = bins[cfg.guard_bins : len(bins) - cfg.guard_bins]
+        if len(bins) == 0:
+            raise ValueError(f"guard_bins={cfg.guard_bins} leaves no bin in the band")
+    gain = snr_gain(X, bins, cfg) if cfg.bin_weighting == "snr" else None
+    return search(method, X[:, bins], mic_pos, sg.bin_freqs(bins, cfg.fs, cfg.nfft), cfg, gain)
