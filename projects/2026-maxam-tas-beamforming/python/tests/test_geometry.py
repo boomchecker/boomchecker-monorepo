@@ -78,3 +78,13 @@ def test_fine_cap_spacing_and_hemisphere(az_deg, el_deg):
         if v[2] < 0:
             continue
         assert g.angular_error_deg(cap, v).min() < 1.0
+
+
+def test_random_directions_uniform_on_hemisphere():
+    u = g.random_directions(20000, np.random.default_rng(0))
+    np.testing.assert_allclose(np.linalg.norm(u, axis=1), 1.0)
+    assert np.all(u[:, 2] >= 0)
+    # uniform in area: z is uniform on [0, 1], the horizontal components are zero-mean
+    assert np.mean(u[:, 2]) == pytest.approx(0.5, abs=0.01)
+    assert np.mean(u[:, 0]) == pytest.approx(0.0, abs=0.02)
+    assert np.mean(u[:, 1]) == pytest.approx(0.0, abs=0.02)

@@ -128,3 +128,14 @@ def fine_cap(
     )
     v /= np.linalg.norm(v, axis=1, keepdims=True)
     return v[v[:, 2] >= 0.0]
+
+
+def random_directions(n: int, rng: np.random.Generator) -> NDArray[np.float64]:
+    """``n`` unit vectors (n, 3) uniformly distributed over the upper hemisphere.
+
+    The area element gives ``sin(el)`` uniform on [0, 1] and a uniform azimuth, so low
+    elevations are as likely per solid angle as high ones (and rarer per elevation degree).
+    """
+    az = rng.uniform(0.0, 2 * np.pi, n)
+    el = np.arcsin(rng.uniform(0.0, 1.0, n))
+    return unit_vector(az, el)
