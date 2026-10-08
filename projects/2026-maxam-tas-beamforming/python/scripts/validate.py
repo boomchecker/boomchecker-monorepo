@@ -57,7 +57,8 @@ def run_method(kind: str, name: str, x: np.ndarray, X: np.ndarray, mic: np.ndarr
     if kind == "own":
         a, e = doa.localize(name, x, mic, cfg)
     elif kind == "coarse":
-        a, e = doa.localize(name, x, mic, replace(cfg, fine_span=0.0))
+        # without the SNR bin gain, which pyroomacoustics does not have either
+        a, e = doa.localize(name, x, mic, replace(cfg, fine_span=0.0, bin_weighting="max"))
     else:
         a, e = pra_check.locate(name, X, mic, cfg)
     return g.unit_vector(a, e)

@@ -28,9 +28,10 @@ def test_fft_cost_is_n_log2_n():
 def test_das_count_on_a_tiny_case_by_hand():
     parts = cost.cost("das", TINY).parts
     assert parts["stft"] == 2 * 1 * (8 * 3 + 8)  # M T (N log2 N + window)
+    assert parts["bin gain"] == 2 * (8 // 2 + 1) * 1 * 2 + 8 // 2 * 10
     assert parts["steering"] == 3 * 2 * 1 + 2 * 2 * 1 * 40 + 2 * 1 * 1 * 4
     assert parts["beamform"] == 1 * 1 * 1 * (4 * 2 + 2) + 1 * 1
-    assert cost.cost("das", TINY).mac == 64 + 174 + 11
+    assert cost.cost("das", TINY).mac == 64 + 60 + 174 + 11
 
 
 def test_mvdr_and_music_count_on_a_tiny_case_by_hand():

@@ -1,11 +1,12 @@
 """Ablation of the optional processing choices on the reference geometry.
 
 Each variant changes one option of ``doa.Config`` (band guard, SNR bin gain, frequency
-smoothing of the covariance, 75 % STFT overlap) against the report defaults, on the same
+smoothing of the covariance, 75 % STFT overlap) against the processing of M3, on the same
 paired trials at 30, 10 and 0 dB. The rule fixed for M4 decides whether an option becomes the
 default: it must lower the RMSE at 0 dB by at least 5 % (geometric mean over the methods it
 affects) and not raise it at 30 dB by more than 5 %. The script only reports the decision; the
-defaults in ``doa.Config`` are changed by hand. Rows go to ``summary.csv`` (stage ``ablation``).
+defaults in ``doa.Config`` are changed by hand (the SNR gain was adopted). Rows go to
+``summary.csv`` (stage ``ablation``).
 """
 
 from __future__ import annotations
@@ -29,15 +30,18 @@ SNRS = (30.0, 10.0, 0.0)
 GRID = ("das", "mvdr", "srp_phat", "music")
 COVARIANCE = ("mvdr", "music")  # the covariance is the only place where smoothing acts
 
+# the processing of M3 (``bin_weighting="max"``) is pinned, so the baseline stays the same after
+# the SNR gain became the default; variants change one option of it
+M3 = {"bin_weighting": "max"}
 # name: (Config overrides, methods that the option can change)
 VARIANTS: dict[str, tuple[dict, tuple[str, ...]]] = {
-    rs.ABLATION_BASELINE: ({}, GRID),
-    "guard1": ({"guard_bins": 1}, GRID),
-    "guard2": ({"guard_bins": 2}, GRID),
+    rs.ABLATION_BASELINE: (M3, GRID),
+    "guard1": (M3 | {"guard_bins": 1}, GRID),
+    "guard2": (M3 | {"guard_bins": 2}, GRID),
     "snr": ({"bin_weighting": "snr"}, GRID),
-    "smooth1": ({"freq_smooth": 1}, COVARIANCE),
-    "smooth2": ({"freq_smooth": 2}, COVARIANCE),
-    "hop128": ({"hop": 128}, GRID),
+    "smooth1": (M3 | {"freq_smooth": 1}, COVARIANCE),
+    "smooth2": (M3 | {"freq_smooth": 2}, COVARIANCE),
+    "hop128": (M3 | {"hop": 128}, GRID),
     "snr+guard1": ({"bin_weighting": "snr", "guard_bins": 1}, GRID),
 }
 

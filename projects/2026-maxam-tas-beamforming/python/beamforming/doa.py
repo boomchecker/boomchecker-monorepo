@@ -43,7 +43,7 @@ class Config:
     n_src: int = 1  # MUSIC: signal subspace dimension
     gcc_upsample: int = 16  # GCC-PHAT: zero-padded IFFT factor for sub-sample delays
     guard_bins: int = 0  # bins dropped at both band edges (Hann leakage from outside the band)
-    bin_weighting: str = "max"  # "max": report weights; "snr": also scale each bin by 1 - N/P_k
+    bin_weighting: str = "snr"  # "snr": scale each bin by 1 - N/P_k; "max": only the method weights
     freq_smooth: int = 0  # MVDR, MUSIC: covariance averaged over +-freq_smooth neighbour bins
     noise_floor_hz: float = 3000.0  # "snr": noise floor is the median bin power above this
 
@@ -52,8 +52,6 @@ class Config:
             raise ValueError(f"bin_weighting {self.bin_weighting!r} not in {BIN_WEIGHTINGS}")
         if self.guard_bins < 0 or self.freq_smooth < 0:
             raise ValueError("guard_bins and freq_smooth must not be negative")
-        if self.bin_weighting == "snr" and not self.band[1] < self.noise_floor_hz < self.fs / 2:
-            raise ValueError("noise_floor_hz must lie between the band and the Nyquist frequency")
 
 
 DEFAULT = Config()
@@ -179,7 +177,10 @@ def snr_gain(X_full: NDArray, bins: NDArray, cfg: Config = DEFAULT) -> NDArray:
     """
     power = np.mean(np.abs(X_full) ** 2, axis=(0, 2))
     freqs = sg.bin_freqs(np.arange(len(power)), cfg.fs, cfg.nfft)
-    noise = float(np.median(power[freqs >= cfg.noise_floor_hz]))
+    floor = power[freqs >= max(cfg.noise_floor_hz, cfg.band[1])]
+    if floor.size == 0:
+        raise ValueError(f"no bin above noise_floor_hz={cfg.noise_floor_hz} and the band")
+    noise = float(np.median(floor))
     return np.maximum(0.0, 1.0 - noise / np.maximum(power[bins], _TINY))
 
 

@@ -14,9 +14,17 @@ from .helpers import simulate
 MIC = g.make_array("2x8_rot", 0.20, 0.07)
 
 
-def test_defaults_keep_the_report_processing():
+def test_defaults_follow_the_ablation():
     cfg = doa.DEFAULT
-    assert (cfg.guard_bins, cfg.bin_weighting, cfg.freq_smooth) == (0, "max", 0)
+    assert (cfg.guard_bins, cfg.bin_weighting, cfg.freq_smooth) == (0, "snr", 0)
+
+
+def test_snr_gain_needs_bins_above_the_noise_floor():
+    X = np.ones((4, 257, 3), dtype=complex)
+    with pytest.raises(ValueError, match="no bin above"):
+        doa.snr_gain(X, sg.band_bins(), replace(doa.DEFAULT, noise_floor_hz=8100.0))
+    low = replace(doa.DEFAULT, noise_floor_hz=1500.0)  # below the band: the band edge is used
+    np.testing.assert_allclose(doa.snr_gain(X, sg.band_bins(), low), 0.0, atol=1e-12)
 
 
 @pytest.mark.parametrize(
@@ -25,8 +33,6 @@ def test_defaults_keep_the_report_processing():
         {"bin_weighting": "wiener"},
         {"guard_bins": -1},
         {"freq_smooth": -1},
-        {"bin_weighting": "snr", "noise_floor_hz": 1500.0},
-        {"bin_weighting": "snr", "noise_floor_hz": 8000.0},
     ],
 )
 def test_config_rejects_invalid_options(kwargs):
