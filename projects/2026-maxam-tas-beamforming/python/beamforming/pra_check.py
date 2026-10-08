@@ -4,14 +4,17 @@ pra works with colatitude (0 = zenith) on a grid it builds as the Cartesian prod
 given azimuths and colatitudes; this wrapper converts from the elevation convention of
 :mod:`beamforming.geometry` and back, feeds pra the same STFT bins and the same coarse grid as
 the own methods, and returns the grid maximum (no fine search, pra has none). The maximum is
-taken from ``grid.values`` instead of pra's peak finder, whose neighbour search on a grid with
-repeated zenith points is not reliable.
+taken from ``grid.values`` instead of pra's peak finder, which builds a convex-hull neighbour
+graph first and would have to cope with the repeated zenith points of this grid.
 
-Known pra issue: ``TOPS`` indexes its focusing matrices ``Phi[k]`` by position in the bin list
-but builds them from absolute bin numbers (``pyroomacoustics/doa/tops.py``: ``Phi`` is sized
-``nfft // 2 + 1`` and filled for all bins, then read with ``Phi[k]`` for ``k`` in
-``range(num_freq - 1)``). With a band that does not start at bin 0 it therefore uses the
-wrong frequencies, so its errors in the report table say nothing about TOPS on a 3D array.
+Known pra issue: ``TOPS`` builds its transformation matrices ``Phi`` for the absolute bin
+numbers (``pyroomacoustics/doa/tops.py``: ``Phi`` is sized ``nfft // 2 + 1``) but reads
+``Phi[k]`` for ``k`` in ``range(num_freq - 1)``, a position in the list of used bins, while the
+noise subspace ``W[k]`` belongs to bin ``freq_bins[k]``. With a band that does not start at
+bin 0 it therefore uses the wrong frequencies. With the indexing fixed, the error on five
+directions at 30 dB dropped from 5.5 to 11.9 deg to 0.6 to 3.1 deg (coarse grid
+quantisation), so the failure says nothing about TOPS on a 3D array. TOPS is left out of the
+report table for that reason.
 """
 
 from __future__ import annotations
