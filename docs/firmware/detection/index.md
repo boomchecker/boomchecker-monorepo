@@ -13,8 +13,8 @@ mic (PDM)  →  pdm_pcm  →  48 kHz PCM  →  ÷3  →  16 kHz
                                                   │  RMS gate per frame
                                      MFCC (13 coefficients per frame)
                                                   │
-                      14 accepted frames → 52 features
-                        [mean, std, dmean, cmax] × 13
+                      14 accepted frames → feature vector
+                     (layout 1: [mean, std, dmean, cmax] × 13)
                                                   │
                                             classifier → decision
                                                   │
@@ -38,7 +38,7 @@ absolute loudness — the MLP models skip it deliberately, to stay gain-invarian
 | `fw/common/boomdetect/src/boomdetect.c` | decimation, FIFO, framing, gate, windowing, the per-frame descriptor |
 | `fw/common/boomdetect/src/boomdetect_mfcc_f32.c` | MFCC, with one deviation from CMSIS-DSP (below) |
 | `fw/common/boomdetect/src/frame_scalars.c` | eight spectral scalars per frame from the magnitude spectrum |
-| `fw/common/boomdetect/src/extractor_*.c` | the three feature layouts (below) and their registry |
+| `fw/common/boomdetect/src/extractor_*.c` | the feature layouts (below) and their registry |
 | `fw/common/boomdetect/src/nn_infer.c` | float32 interpreter for the small CNNs |
 | `fw/common/boomdetect/src/boomdetect_alarm.c` | K-of-N alarm with hysteresis over window verdicts |
 | `fw/common/boomdetect/models/` | one translation unit per model, each exporting a `classifier_t` |
@@ -62,7 +62,7 @@ alarm in the field, see [field-manual.md](field-manual.md) (Czech).
 
 | command | what it does |
 |---|---|
-| `detect <sec> [squelch_milli] [thr_milli] [dbg]` | run for `<sec>` seconds (1..86400; `0` runs until any byte arrives on the console), stream `LVL`/`DET` lines and `ALM` on alarm transitions, end with `DETEND` |
+| `detect <sec> [squelch_milli] [thr_milli] [dbg] [rule]` | run for `<sec>` seconds (1..86400; `0` runs until any byte arrives on the console) under the alarm rule `rule` (`2of4` by default, or `mean<n>`), stream `LVL`/`DET` lines and `ALM` on alarm transitions, end with `DETEND` |
 | `model [name]` | list the classifiers in this image, or select one |
 | `micslot [a\|b]` | which microphone of the PDM pair is decoded |
 | `micdiag` | probe the PDM data pins |
@@ -97,8 +97,6 @@ coefficients, the 20 log-mel energies the DCT was computed from, and eight
 spectral scalars from the magnitude spectrum the MFCC destroys its input into
 (power above 4 kHz, power 1–4 kHz, centroid, flatness, 85 % roll-off, crest, the
 strength of the best harmonic comb between 60 and 400 Hz and its fundamental).
-The MFCC block comes first, so the deployed layout and every checked-in fixture
-are unchanged bit for bit.
 
 | id | extractor | width | what |
 |---|---|---|---|
@@ -138,29 +136,12 @@ same samples; `extractor_test` holds the envelope and the ten features to it.
 ## Training package
 
 `fw/common/boomdetect/training` is the other half of the detector: the Python
-that produces the weight tables the C ships and judges them. It reads the
-firmware's own `mfcc_tables.h`, so it cannot disagree with the board about a
-filter edge, and its own tests hold it to the `detselftest` fixture stage by
-stage.
-
-```sh
-cd fw/common/boomdetect/training
-python -m venv .venv && .venv/bin/pip install -e .[dev,torch]
-bdtrain manifest            # enumerate the datasets present -> manifest.parquet
-bdtrain features            # run the front end once, cache per-frame descriptors
-bdtrain baseline            # score mlp_v6 / svm_v3 on every suite
-bdtrain train --name r1     # MLP, SVM, gradient-boosted trees, CNNs
-bdtrain compare r1          # the comparison report
-bdtrain export r1           # headers, translation units, parity vectors
-```
-
-Data lives outside the repository (`~/Documents/boomdetect-data`, or
-`BOOMDETECT_DATA`). Suites: `val` (held-out clips of the training sources),
-`halmstad` and `salford` (public, never trained on), `real_mic` (the node's own
-recordings), `stress` (synthetic hums and whistles). The threshold a model is
-compared and exported with is the lowest one that keeps false-alarm windows
-under a budget per hour on the `val` negatives; it is then applied unchanged to
-the unseen suites. `README.md` in that directory has the details.
+that trains, judges and exports the models the C ships. It reads the firmware's
+own `mfcc_tables.h`, so it cannot disagree with the board about a filter edge,
+and its tests hold it to the `detselftest` fixture stage by stage. The data
+lives outside the repository (`~/Documents/boomdetect-data`, or
+`BOOMDETECT_DATA`); `training/README.md` has the commands, the suites and how a
+model is judged.
 
 ## Swapping the classifier
 
@@ -182,12 +163,13 @@ export` generates the file and its weight header; the registry lines stay a
 hand edit, and `model_parity_test` fails for any exported model the registry
 does not list.
 
-`models/models.h` lists what the image carries, with each model's provenance;
-the field manual ([field-manual.md](field-manual.md)) has the numbers. The
-default is `gbt_m1` on layout 4 (since 2026-10-09), with `mlp_m1` beside it on
-the same layout and `mlp_f2` on layout 2 as the previous default; `mlp_v6` and
-`svm_v3` are the public-data models the selftest is anchored to. Every model
-ships at the threshold that kept its false-alarm windows under 5 per hour on
+`models/models.h` lists what the image carries; each generated `model_*.c`
+records its run, layout and threshold, and the field manual
+([field-manual.md](field-manual.md)) has the numbers. The
+default is `gbt_m1` on layout 4, with `mlp_m1` beside it on the same layout and
+`mlp_f2` on layout 2 as the previous default; `mlp_v6` and `svm_v3` are the
+public-data models the selftest is anchored to. The three field-trained models
+ship at the threshold that kept their false-alarm windows under 5 per hour on
 the validation negatives, and `model <name>` switches between them.
 
 A model needing a different feature *representation* — raw frames for a CNN, say
@@ -199,12 +181,11 @@ constant. So a new representation is one file under `src/`, a new id, a line in
 the extractor registry, and a model that declares the same id; nothing in
 `boomdetect.c` changes.
 
-The image carries the three extractors of the table above, `stats` being the
+The image carries the four extractors of the table above, `stats` being the
 default. A consumer must hand `boomdetect_init()` the extractor that produces the
 model's layout — `boomdetect_extractor_for_layout(model->layout_id)`, which is
 what the host tests and `App/detect/detect_service.c` do; a config with the field
-left NULL gets `stats`, and every layout-2/3 model is then refused at init. That
-refusal was seen on the board before the firmware resolved the extractor this way.
+left NULL gets `stats`, and a model of any other layout is then refused at init.
 `registry_test` drives a fake extractor with a foreign layout end to end, and
 checks that a mismatched pair in either direction is refused — which is what a
 feature *count* cannot catch, since reordering the statistics keeps the width.
@@ -223,9 +204,9 @@ carrying assumptions that looked like facts.
 | `-O2` does not move any number | **measured**, the `Shipped` preset builds without sanitizers at `-O2` and CI diffs its fixture output against the `Debug` build's |
 | Host and target agree bit for bit | **measured, and they do NOT** — same C, same input, but MFCC coefficients differ by up to 1.8e-4 relative and decisions by 1.1e-6 (below) |
 | Train/deploy skew | **expressible but still not measured**: the window policy is now configuration rather than compile-time constants, so both sides can be run; nobody has run them |
-| C matches the Python it is trained with | **measured on the host**: the Python front end reproduces the `detselftest` MFCC and features to 1e-4 relative and the `mlp_v6` decisions to 1e-5 (`training/tests/test_parity_selftest.py`); the C extractors reproduce the Python layouts 2 and 3 (`extractor_test`); every registered model's C forward pass reproduces its Python one (`model_parity_test`) |
-| New models generalise to unseen recordings | **measured, and they do not yet**: every family trained on the public sets scores ~0.99 window AUC on held-out clips of those sets and 0.7–0.94 on Halmstad; the shipped `mlp_v6` and a plain linear SVM sit at the top of that range. Same-microphone field recordings are the missing data, not another architecture |
-| Detection of an actual drone on this hardware | **never tested** |
+| C matches the Python it is trained with | **measured on the host**: the Python front end reproduces the `detselftest` MFCC and features to 1e-4 relative and the `mlp_v6` decisions to 1e-5 (`training/tests/test_parity_selftest.py`); the C extractors reproduce the Python layouts 2–4 (`extractor_test`); every registered model's C forward pass reproduces its Python one (`model_parity_test`) |
+| New models generalise to unseen recordings | **measured**: trained on the public sets alone, every family scores ~0.99 window AUC on held-out clips of those sets and 0.7–0.94 on Halmstad; the node's own field recordings in training are what made the models work outdoors |
+| Detection of an actual drone on this hardware | **measured outdoors**, a DJI Phantom 4 hovering at 20–100 m (the field manual has the numbers) |
 
 ### Train/deploy skew
 
@@ -235,7 +216,7 @@ The training pipeline and the firmware do not window audio the same way:
 |---|---|---|
 | windows | sliding, hop 7 frames | disjoint runs of 14 |
 | continuity | 14 contiguous frames | the gate resets accumulation, so a window can span silence |
-| gate | median RMS of the window ≥ 0.002 | each frame ≥ 0.010, five times stricter |
+| gate | median RMS of the window ≥ 0.002 | each frame ≥ 0.003 by default, 1.5 times stricter |
 | 48 → 16 kHz | no counterpart | decimate by 3 |
 
 None of that is wrong on its face; it is simply undescribed by whatever the
@@ -248,9 +229,7 @@ frame is rejected, and the window is kept or dropped as a whole on the median of
 its frames' RMS. Leaving all three at 0 gives the firmware's behaviour, which is
 what every checked-in fixture still reproduces.
 
-So the gap can now be run from both ends on a host. It has not been: quantifying
-it against the numbers the model was actually fitted to still needs the Python
-reference, which is the next piece of work.
+So the gap can now be run from both ends on a host.
 
 ### Host and target are not bit-identical
 
@@ -323,7 +302,7 @@ cd fw/common/boomdetect && task test
 
 ASan and UBSan are on by default in the preset. The suite covers the MFCC front
 end, the registry, the pipeline's edge cases, every model's trained weights, the
-fixture, the three extractors against the Python specification, the alarm, the
+fixture, the extractors against the Python specification, the alarm, the
 CNN interpreter, and — through a stub registry linked in place of the real one
 — that the model table really is replaceable. The harness itself is checked able
 to fail, because a test framework that silently returns 0 is the failure mode
