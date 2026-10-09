@@ -31,14 +31,14 @@ STREAM_MAX_SECONDS = 60
 # is the detector's (0.003 since 2026-09-26: at 0.010 most of a drone at 20 m and
 # beyond never made a window in the field recordings); the threshold belongs to
 # the model `model` last selected, and the image boots with the first registry
-# entry, mlp_f1 (a raw logit, chosen at 5 false-alarm windows per hour on the
-# public val negatives). tests/test_firmware_defaults.py checks all of these
-# against the firmware.
+# entry, gbt_m1 (a raw log-odds score, chosen at 5 false-alarm windows per hour
+# on the public val negatives). tests/test_firmware_defaults.py checks all of
+# these against the firmware.
 DETECT_MAX_SECONDS = 86400  # DETECT_MAX_SECONDS in detect_service.h; 0 = until any key
 DETECT_DEFAULT_SQUELCH_MILLI = 3
 DETECT_SQUELCH_MILLI_MAX = 1000
-DETECT_DEFAULT_MODEL = "mlp_f2"  # first entry of classifier_registry.c
-DETECT_DEFAULT_MODEL_THR_MILLI = 7656  # default_thr_milli of model_mlp_f2.c
+DETECT_DEFAULT_MODEL = "gbt_m1"  # first entry of classifier_registry.c
+DETECT_DEFAULT_MODEL_THR_MILLI = 3211  # default_thr_milli of model_gbt_m1.c
 DETECT_MLP_V6_DEFAULT_THR_MILLI = 3000  # default_thr_milli of model_mlp_v6.c
 DETECT_THR_MILLI_LIMIT = 20000  # accepted thr_milli range is -LIMIT..+LIMIT
 # The K-of-N alarm above the classifier (App/detect/detect_service.h): ON when at
@@ -146,20 +146,22 @@ COMMANDS: tuple[CommandSpec, ...] = (
             "decimated to 16 kHz, MFCC features are extracted (1024-sample frames, hop 512), "
             "every run of 14 frames above the RMS squelch is aggregated to a feature vector "
             "(the layout the selected model reads) and classified by the model `model` last "
-            "selected. The image boots with mlp_f2, a small two-layer MLP trained with the "
-            "node's own field recordings, whose decision value is a raw logit, not a "
-            "probability. Optional overrides in units of 1/1000: squelch_milli (default "
+            "selected. The image boots with gbt_m1, a gradient-boosted forest trained with the "
+            "node's own field recordings that also reads the modulation spectrum of the "
+            "1-4 kHz envelope; its decision value is a raw log-odds score, not a probability, "
+            "and its first decision comes about 2 s into a run, once the envelope ring is "
+            "full. Optional overrides in units of 1/1000: squelch_milli (default "
             f"{DETECT_DEFAULT_SQUELCH_MILLI} = RMS 0.003, 0 disables the gate, 0..1000) and "
             "thr_milli (defaults to the selected model's own operating point, "
-            f"{DETECT_DEFAULT_MODEL_THR_MILLI} = logit 7.656 for mlp_f2 and "
+            f"{DETECT_DEFAULT_MODEL_THR_MILLI} = 3.211 for gbt_m1 and "
             f"{DETECT_MLP_V6_DEFAULT_THR_MILLI} for mlp_v6, may be negative, -20000..20000 - "
-            "a value outside that range is rejected, not clamped; mlp_f2's default is the "
+            "a value outside that range is rejected, not clamped; gbt_m1's default is the "
             "threshold with 5 false-alarm windows per hour on the public validation "
-            "negatives, at which it alarmed on the DJI straight overhead at every height "
-            "from 20 to 90 m and on 13 of 16 earlier outdoor takes, with no alarm on 37 "
-            "minutes of outdoor background and traffic it had not heard; 15855 is its "
-            "stricter 1-per-hour point, 9000 with rule mean4 the point with no false alarm "
-            "on any recording so far). A non-zero dbg adds one debug line per frame. "
+            "negatives, at which, judged on recordings it had not heard, it alarmed on all "
+            "21 DJI takes and on 1 of 27 own negatives; at its stricter 1-per-hour point "
+            "(about 4060) on the DJI straight overhead at every height from 20 to 90 m with "
+            "no negative and no alarm in 30 minutes of traffic). A non-zero dbg adds one "
+            "debug line per frame. "
             f"rule picks the alarm rule for this run (default {DETECT_ALARM_RULE_DEFAULT}): "
             "`<k>of<n>` is the vote - ON at k of the last n DRONE windows, OFF below k-1 (at "
             "least 1) - and `mean<n>` the mean of the last n decisions relative to thr_milli, "

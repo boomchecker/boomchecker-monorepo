@@ -184,10 +184,11 @@ does not list.
 
 `models/models.h` lists what the image carries, with each model's provenance;
 the field manual ([field-manual.md](field-manual.md)) has the numbers. The
-default is `mlp_f2` on layout 2; `gbt_m1` and `mlp_m1` (2026-10-03) are the
-first on layout 4. Every model ships at the threshold that kept its
-false-alarm windows under 5 per hour on the validation negatives, and
-`model <name>` switches between them.
+default is `gbt_m1` on layout 4 (since 2026-10-09), with `mlp_m1` beside it on
+the same layout and `mlp_f2` on layout 2 as the previous default; `mlp_v6` and
+`svm_v3` are the public-data models the selftest is anchored to. Every model
+ships at the threshold that kept its false-alarm windows under 5 per hour on
+the validation negatives, and `model <name>` switches between them.
 
 A model needing a different feature *representation* — raw frames for a CNN, say
 — adds a **feature extractor** rather than an edit to the pipeline.

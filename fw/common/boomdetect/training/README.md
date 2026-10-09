@@ -105,9 +105,11 @@ bdtrain features --spec all [SOURCE..] [--workers 12]
 bdtrain compare r1            # the comparison report -> runs/r1/report.md
 bdtrain compare r1 --rule mean4      # judged under another alarm rule (2of4 default, 1of4, mean8 ...)
 bdtrain export r1 [--models m ...]   # headers + translation units + parity vectors
-bdtrain export f1 --models mlp_l2=mlp_f1_l2 --keep full:gbt_l2 fw_aug:mlp_reg_l2=mlp_f1 ...
+bdtrain export fw4_modb --models gbt_l4=gbt_m1 mlp2_l4=mlp_m1 --keep fw2_mlp2:mlp2_l2=mlp_f2
                               # export under a new C name; parity for registry models of
                               # older runs, under the name the registry knows them by
+                              # (with --fa-per-hour 5 --squelch 0.003 this is the export
+                              # behind today's registry)
 bdtrain fixtures              # regenerate tests/vectors/extractor_expected.h,
                               # extractor_mod_expected.h and src/envelope_coefs.h
 ```

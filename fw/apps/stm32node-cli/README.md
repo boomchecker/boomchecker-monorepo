@@ -39,17 +39,17 @@ Or directly: `stm32node-cli tui`, `stm32node-cli record 5 --port /dev/ttyACM0`,
 
 ```
 stm32node-cli model              # list the classifiers in the image, * = active
-stm32node-cli model gbt_f1       # select one for later detect runs
+stm32node-cli model mlp_f2       # select one for later detect runs
 stm32node-cli micslot            # show which PDM mic of the pair is decoded
 stm32node-cli micslot a          # select slot A (the live mic on this build)
 ```
 
 Both selections mirror the firmware `model`/`micslot` console commands. Neither
-is persisted on the board — a reset returns to the deployed default (`mlp_f2`,
+is persisted on the board — a reset returns to the deployed default (`gbt_m1`,
 and the firmware's default slot). They **do** survive across separate CLI calls,
 though: opening the USB serial port does not reset the board, so
-`stm32node-cli model gbt_f1` followed by a separate `stm32node-cli detect 30`
-runs `gbt_f1`. The same commands work in the TUI console.
+`stm32node-cli model mlp_f2` followed by a separate `stm32node-cli detect 30`
+runs `mlp_f2`. The same commands work in the TUI console.
 
 ### Stopping detect
 

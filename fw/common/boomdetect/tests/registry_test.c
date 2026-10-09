@@ -29,29 +29,21 @@ static void scenario_lookup(void)
 
     const classifier_t *def = classifier_default();
     REQUIRE(def != NULL, "classifier_default() returned NULL");
-    CHECK(strcmp(def->name, "mlp_f2") == 0,
+    CHECK(strcmp(def->name, "gbt_m1") == 0,
           "the deployed model should be the default, got '%s'", def->name);
 
-    CHECK(classifier_by_name("mlp_f2") == def,
-          "by_name(\"mlp_f2\") did not return the same entry as default()");
-    CHECK(classifier_by_name("gbt_f3") != NULL,
-          "gbt_f3 is missing - the forest retrained with the 2026-10-02 recordings");
-    const classifier_t *gm = classifier_by_name("gbt_m1");
+    CHECK(classifier_by_name("gbt_m1") == def,
+          "by_name(\"gbt_m1\") did not return the same entry as default()");
     const classifier_t *mm = classifier_by_name("mlp_m1");
-    CHECK(gm != NULL && mm != NULL,
-          "gbt_m1 / mlp_m1 are missing - the layout-4 models with the modulation features");
-    CHECK(gm == NULL || gm->layout_id == BOOMDETECT_LAYOUT_STATS_SPECTRAL_MOD,
-          "gbt_m1 declares layout %u, not the modulation layout", gm ? gm->layout_id : 0u);
+    CHECK(mm != NULL, "mlp_m1 is missing - the layout-4 MLP with the modulation features");
+    CHECK(def->layout_id == BOOMDETECT_LAYOUT_STATS_SPECTRAL_MOD,
+          "gbt_m1 declares layout %u, not the modulation layout", def->layout_id);
     CHECK(mm == NULL || mm->layout_id == BOOMDETECT_LAYOUT_STATS_SPECTRAL_MOD,
           "mlp_m1 declares layout %u, not the modulation layout", mm ? mm->layout_id : 0u);
-    CHECK(classifier_by_name("gbt_f2") != NULL,
-          "gbt_f2 is missing - the second opinion trained on the same data");
-    CHECK(classifier_by_name("mlp_f1") != NULL,
-          "mlp_f1 is missing - the previous default must stay in the image for rollback");
+    CHECK(classifier_by_name("mlp_f2") != NULL,
+          "mlp_f2 is missing - the previous default must stay in the image for rollback");
     CHECK(classifier_by_name("mlp_v6") != NULL,
           "mlp_v6 is missing - the public-data default must stay in the image for comparison");
-    CHECK(classifier_by_name("mlp_l2") != NULL,
-          "mlp_l2 is missing - the run-full candidate must stay scorable on the board");
     CHECK(classifier_by_name("svm_v3") != NULL, "svm_v3 is missing from the registry");
     CHECK(classifier_by_name("nope") == NULL, "an unknown name resolved to something");
     CHECK(classifier_by_name(NULL) == NULL, "a NULL name did not resolve to NULL");
@@ -400,5 +392,5 @@ int main(void)
     scenario_two_families_differ();
     scenario_init_rejects_bad_models();
     scenario_real_models_actually_run();
-    BD_TEST_REPORT("registry_test", 132); /* exact count from running the compiled binary */
+    BD_TEST_REPORT("registry_test", 89); /* exact count from running the compiled binary */
 }

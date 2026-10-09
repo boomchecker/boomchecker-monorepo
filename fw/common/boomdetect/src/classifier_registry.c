@@ -20,47 +20,23 @@
 
 /* First entry is the default. */
 static const classifier_t *const s_models[] = {
-    /* mlp_f2 and gbt_f2 (2026-10-01) add the second outdoor session - DJI at
-       10-70 m, Runner 250 at 20-40 m, wind on the microphone - and a day of
-       office confusers to the training set. On those 30.9 recordings mlp_f1
-       alarmed on 2 of 16 (nothing beyond 10 m); mlp_f2, judged out of fold at
-       its shipped threshold (1 false-alarm window per hour on public val),
-       alarms on 10 of 16 and on 25 of all 33 drone recordings, with one false
-       alarm in 22 own negatives (mouth buzz) and none per hour on 11.6 h of
-       held-out public negatives. gbt_f2 is the second opinion from another
-       family (23 of 33, 0 of 22, 1.9 public alarms per hour). Everything
-       older stays in the image for `model`; moving mlp_f1 back to the front
-       is the whole rollback.
-
-       2026-10-02: the DJI straight overhead at 20-90 m and 30 min of traffic
-       showed mlp_f2's raw logit positive out to 90 m while the 1 FA/h
-       threshold cut everything past 30 m, so it ships at the usual 5 FA/h
-       point (7.656) like every other model: all 7 heights, 13 of 16 of the
-       30.9 takes, no alarm on 37 min of outdoor background and traffic,
-       three office confusers. gbt_f3 is the forest retrained with those
-       recordings: all 7 heights, none of 27 negatives. Not yet checked on
-       the board.
-
-       2026-10-03: gbt_m1 and mlp_m1 are the first layout-4 models - the
-       modulation spectrum of the 1-4 kHz envelope added to layout 2 (see
-       models.h). Out of fold they keep the DJI at 60-90 m overhead at 70-87 %
-       of windows where the layout-2 models fall to 5-44 %, with no alarm on
-       the traffic and outdoor backgrounds. They stay behind mlp_f2 as the
-       default until the board has run them: the extractor is new C, and the
-       first two seconds of a run produce no decision while its ring fills. */
-    &classifier_mlp_f2,
+    /* gbt_m1 (layout 4, the modulation spectrum of the 1-4 kHz envelope added
+       to layout 2; see models.h) is the default since 2026-10-09. It ran on the
+       board from 2026-10-04 and outdoors on 2026-10-05 kept the DJI hovering at
+       60-100 m where mlp_f2 faded, with no alarm on the background; across five
+       training seeds its operating point barely moves, where mlp_m1's does.
+       The first two seconds of a run produce no decision while the envelope
+       ring fills. mlp_f2 (layout 2) was the default before and stays for
+       rollback - moving it back to the front is the whole change. mlp_v6 and
+       svm_v3 are the public-data models the selftest and the parity harness
+       are anchored to. The other field-trained models of 2026-09/10 (gbt_f1-3,
+       mlp_f1, the public-only mlp_l2/gbt_l2/gbt_reg_l2 and cnn_small) left the
+       image on 2026-10-09: none was ahead of these on the field recordings. */
     &classifier_gbt_m1,
+    &classifier_mlp_f2,
     &classifier_mlp_m1,
-    &classifier_gbt_f3,
-    &classifier_gbt_f2,
-    &classifier_mlp_f1,
-    &classifier_gbt_f1,
     &classifier_mlp_v6,
     &classifier_svm_v3,
-    &classifier_mlp_l2,
-    &classifier_gbt_l2,
-    &classifier_gbt_reg_l2,
-    &classifier_cnn_small,
 };
 
 size_t classifier_count(void)
