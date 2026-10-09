@@ -47,7 +47,7 @@ void pdm_pcm_init(pdm_pcm_t *st, uint16_t slot_mask)
 
 /* One ring half (8192 halfwords = 131072 PDM bits) -> PCM_SAMPLES_PER_HALF samples.
    CIC5 D=64 (gain 64^5 = 2^30, after >>12 same scale as the earlier CIC3)
-   -> DC blocker (tau ~43 ms) -> FIR 8 kHz low-pass (q15) -> gain with saturation.
+   -> DC blocker (tau ~43 ms) -> gain with saturation -> FIR 8 kHz low-pass (q15).
    Halfword bits MSB-first = order of reception. */
 void pdm_pcm_process_half(pdm_pcm_t *st, const uint16_t *src, int16_t *dst)
 {
@@ -105,7 +105,14 @@ void pdm_pcm_process_half(pdm_pcm_t *st, const uint16_t *src, int16_t *dst)
     {
       st->dc_acc += v;
     }
-    x[s] = sat16(v >> 3);
+    /* The gain goes in here, before anything rounds: one step of v is two
+       output LSBs, so 2v keeps every bit the CIC delivered. Applied after
+       the FIR's >>15 (as it was until 2026-10) it multiplied an already
+       rounded value - the low 4 bits of every sample were zero, a 12-bit
+       stream with its rounding noise near the mic's own noise floor.
+       |v * PCM_GAIN| <= 2^23; sat16 clips at the same level as before (full
+       scale = |v| 2^14), and the FIR accumulator bound above still holds. */
+    x[s] = sat16((v * PCM_GAIN) >> 3);
   }
 
   for (uint32_t s = 0; s < PCM_SAMPLES_PER_HALF; s++)
@@ -123,7 +130,7 @@ void pdm_pcm_process_half(pdm_pcm_t *st, const uint16_t *src, int16_t *dst)
     }
     else
     {
-      dst[s] = sat16((acc >> 15) * PCM_GAIN);
+      dst[s] = sat16(acc >> 15);
     }
   }
 

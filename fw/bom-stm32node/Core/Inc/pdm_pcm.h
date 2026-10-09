@@ -30,7 +30,7 @@
 /* Output: CIC5 D=64 (mask selects 8 of the 16 frame bits), 8 halfwords = 1 sample. */
 #define PCM_FS_HZ            (PDM_SCK_HZ / 2u / 64u)                 /* 48000        */
 #define PCM_SAMPLES_PER_HALF (PDM_RING_HALFWORDS * 16u / 2u / 128u) /* 1024         */
-#define PCM_GAIN             16                                     /* +24 dB       */
+#define PCM_GAIN             16          /* +24 dB, applied before the FIR rounds */
 #define FIR_TAPS             101u
 
 /* Start-up: the mic powers up with its clock (<= 20 ms) and settles on a DC
