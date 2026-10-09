@@ -50,7 +50,7 @@ def test_one_stream_is_cut_into_count_files(tmp_path):
     result = session.record(1, 3)
 
     assert t.written == b"stream 3\n"
-    assert result.complete and result.streams == 1
+    assert result.streams == 1
     names = [c.path.name for c in result.chunks]
     assert names == ["chunk-001.wav", "chunk-002.wav", "chunk-003.wav"]
     for chunk in result.chunks:

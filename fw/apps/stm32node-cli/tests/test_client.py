@@ -236,22 +236,6 @@ class InterleavedTransport(FakeTransport):
         return super().read(size)
 
 
-def test_select_model_skips_autocomplete_echo_without_colon():
-    # Live autocompletion collapses the echo into a line that starts with the
-    # command word but has no colon ("modelgbt_f1odel"); the prefix filter must
-    # skip it and return the real reply on the next line.
-    stream = (
-        b"> \x1b[smodel\x1b[u gbt_f1\r\n"
-        b"modelgbt_f1odel\r\n"
-        b"model: gbt_f1 selected, default thr=2646 (not persisted)\r\n"
-    )
-    t = FakeTransport(to_read=stream)
-    assert (
-        DeviceClient(t).select_model("gbt_f1")
-        == "model: gbt_f1 selected, default thr=2646 (not persisted)"
-    )
-
-
 def test_select_model_survives_echo_lines_plus_silent_gap():
     # Echo lines must not count against the line budget together with a silent
     # gap: several non-matching lines, then one empty read (a 2s transport

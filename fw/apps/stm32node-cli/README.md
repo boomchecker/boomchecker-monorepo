@@ -44,28 +44,23 @@ stm32node-cli micslot            # show which PDM mic of the pair is decoded
 stm32node-cli micslot a          # select slot A (the live mic on this build)
 ```
 
-Both selections mirror the firmware `model`/`micslot` console commands. Neither
-is persisted on the board — a reset returns to the deployed default (`gbt_m1`,
-and the firmware's default slot). They **do** survive across separate CLI calls,
-though: opening the USB serial port does not reset the board, so
-`stm32node-cli model mlp_f2` followed by a separate `stm32node-cli detect 30`
-runs `mlp_f2`. The same commands work in the TUI console.
+Neither selection survives a board reset (back to `gbt_m1` and the firmware's
+default slot), but both survive separate CLI calls, since opening the port does
+not reset the board. The same commands work in the TUI console.
 
 ### Stopping detect
 
-`detect 0` runs until stopped; any positive `<sec>` can also be ended early.
-**Press any key** to stop — the board is sent a byte, so it stops cleanly and
-frees the radio instead of running on blind (the old `bdcli.py` couldn't do
-this); the host then prints `stopped`. Ctrl-C also works. The stop key needs an
-interactive terminal; under a pipe/redirect use Ctrl-C. In the TUI console, type
-`q` then Enter. A run that reaches its `<sec>` limit on its own still prints the
-full `DETEND` summary.
+Press any key to stop (in the TUI console: `q` then Enter); the host stops at
+once, without the `DETEND` summary. The key also sends the board a byte, which
+ends a `detect 0` run and frees the radio; a timed run ignores it and finishes
+its `<sec>` on the board. Ctrl-C stops only the host and is the only stop under
+a pipe/redirect. A run that reaches its `<sec>` limit prints the full summary.
 
 ### Batch recording
 
 `record <sec> <count>` (TUI console and CLI alike) records `<count>` files of
-`<sec>` seconds each into one folder, `recordings/batch-YYYYmmdd-HHMMSS/`.
-Without `<count>` it is the single-file `record` as before:
+`<sec>` seconds each into one folder, `recordings/batch-YYYYmmdd-HHMMSS/`
+(without `<count>`, a single file):
 
 ```
 stm32node-cli record 10 20 --port COM7
@@ -79,9 +74,8 @@ number, real length and the stream's overrun/err health.
 The board is asked for the longest `stream` that holds a whole number of chunks
 (60 s = six 10-second files) and the host cuts it as it arrives. Boundaries
 inside one stream are gapless; between streams there is a command round-trip
-and the mic start-up (the board drops its first 107 ms). Firmware before that
-fix started every stream with a pop (DC step, clipped ~0.12 s, decayed by
-~0.4 s), so the first chunk of each such stream should be deleted. A chunk longer than 60 s is rejected.
+and the mic start-up (the board drops its first 107 ms). A chunk longer than
+60 s is rejected.
 
 ## Protocol
 
@@ -89,6 +83,3 @@ The serial protocol is defined once in `src/stm32node_cli/protocol/spec.py` and
 rendered into [`PROTOCOL.md`](PROTOCOL.md). That document is the contract the
 STM32 firmware must implement (the `stream <sec>` command and the `PCM1` binary
 framing). A test guards that the generated file stays in sync with the spec.
-
-> The firmware `stream <sec>` command does not exist yet — this tool defines the
-> contract; the firmware side is a later phase.

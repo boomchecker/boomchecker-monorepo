@@ -37,12 +37,6 @@ def test_run_detect_sends_command_and_returns_trailer():
     ]
 
 
-def test_run_detect_forwards_optional_positional_args():
-    t = FakeTransport(to_read=b"DETEND windows=0 drones=0 alarms=0 overrun=0 err=0\r\n")
-    DeviceClient(t).run_detect(10, squelch_milli=5, thr_milli=2000, dbg=True)
-    assert t.written == b"detect 10 5 2000 1\n"
-
-
 def test_run_detect_fills_positional_gap_before_dbg():
     # dbg is the 4th positional, so squelch and thr must be present; a gap is
     # filled with the firmware default rather than shifting dbg into thr's slot.

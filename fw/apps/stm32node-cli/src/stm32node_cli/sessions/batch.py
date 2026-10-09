@@ -1,25 +1,17 @@
 """Batch recording: many equal-length WAV files from one sitting.
 
-``recording 10 20`` records twenty ten-second files. Each file is written the
+``record 10 20`` records twenty ten-second files. Each file is written the
 moment its ten seconds have arrived, while the board is still streaming the
 next ones, so an abort or a cable pulled halfway leaves every finished chunk on
-disk and an ``index.csv`` beside them.
-
-Why not twenty ``record 10`` calls: every ``stream`` restarts the microphone
-(the board drops its first 107 ms while it settles; older firmware let a
-clipped pop through instead) and costs a command round-trip, so back-to-back
-single recordings lose a slice of audio at every boundary. Here the board is
-asked for the longest stream that holds a whole number of chunks (60 s = six
-10-second chunks) and the host cuts it as it arrives, so boundaries inside one
-stream are gapless and a start-up gap falls only before the first chunk of each
-stream.
+disk and an ``index.csv`` beside them. Each ``stream`` carries as many whole
+chunks as fit (:func:`plan_streams`), so the only gaps are between streams.
 """
 
 from __future__ import annotations
 
 import csv
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 from pathlib import Path
 
@@ -29,14 +21,13 @@ from ..protocol.codec import StreamAborted, StreamHeader, StreamTrailer
 from ..protocol.spec import STREAM_MAX_SECONDS
 from ..transport.base import TransportTimeout
 from .base import Session
+from .record import ProgressFn
 
 INDEX_NAME = "index.csv"
 INDEX_COLUMNS = ("chunk", "file", "stream", "seconds", "samples", "overrun", "err")
 
 # Callback: (chunk_index_1_based, chunk_count, path) -> None, after a file is written.
 ChunkFn = Callable[[int, int, Path], None]
-# Callback: (bytes_received_overall, bytes_total_overall) -> None
-ProgressFn = Callable[[int, int], None]
 # Callback: (stream_index_1_based, header) -> None, once a stream is acknowledged.
 AckFn = Callable[[int, StreamHeader], None]
 
@@ -67,7 +58,6 @@ class BatchResult:
     """Outcome of a batch, complete or aborted."""
 
     directory: Path
-    chunk_seconds: int
     requested: int
     chunks: list[ChunkResult] = field(default_factory=list)
     streams: int = 0
@@ -75,10 +65,6 @@ class BatchResult:
     @property
     def index_path(self) -> Path:
         return self.directory / INDEX_NAME
-
-    @property
-    def complete(self) -> bool:
-        return len(self.chunks) == self.requested
 
 
 def plan_streams(
@@ -105,12 +91,6 @@ def plan_streams(
     return plan
 
 
-def batch_directory(out_dir: str | Path, prefix: str = "batch") -> Path:
-    """``<out_dir>/<prefix>-YYYYmmdd-HHMMSS``."""
-    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    return Path(out_dir) / f"{prefix}-{stamp}"
-
-
 class BatchRecordSession(Session):
     """Drives one or more ``stream`` transfers and cuts them into equal WAV files."""
 
@@ -134,7 +114,6 @@ class BatchRecordSession(Session):
         count: int,
         *,
         source: str = "mic",
-        directory: Path | None = None,
         on_ack: AckFn | None = None,
         on_chunk: ChunkFn | None = None,
         on_progress: ProgressFn | None = None,
@@ -149,9 +128,9 @@ class BatchRecordSession(Session):
         ``index.csv``. Any other transport error propagates the same way.
         """
         plan = plan_streams(chunk_seconds, count, self._max_stream_s)
-        directory = directory if directory is not None else batch_directory(self._out_dir)
+        directory = self._out_dir / datetime.now().strftime("batch-%Y%m%d-%H%M%S")
         directory.mkdir(parents=True, exist_ok=True)
-        result = BatchResult(directory=directory, chunk_seconds=chunk_seconds, requested=count)
+        result = BatchResult(directory=directory, requested=count)
         self._write_index_header(result.index_path)
 
         # The header tells the real byte rate; until the first one arrives we
@@ -211,15 +190,7 @@ class BatchRecordSession(Session):
     ) -> None:
         """Move a stream's written chunks into the result and the index."""
         for chunk in pending:
-            done = ChunkResult(
-                index=chunk.index,
-                path=chunk.path,
-                stream=chunk.stream,
-                byte_length=chunk.byte_length,
-                sample_rate=chunk.sample_rate,
-                channels=chunk.channels,
-                trailer=trailer,
-            )
+            done = replace(chunk, trailer=trailer)
             result.chunks.append(done)
             self._append_index(result.index_path, done)
         pending.clear()

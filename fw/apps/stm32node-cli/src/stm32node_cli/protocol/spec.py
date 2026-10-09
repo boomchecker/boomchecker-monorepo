@@ -27,19 +27,15 @@ STREAM_MAX_SECONDS = 60
 
 # --- On-device detector (matches firmware App/detect/detect_service.h, cli.c and
 # the model tables in fw/common/boomdetect/models/) -------------------------------
-# Defaults the board applies when `detect` is given fewer arguments. The squelch
-# is the detector's (0.003 since 2026-09-26: at 0.010 most of a drone at 20 m and
-# beyond never made a window in the field recordings); the threshold belongs to
-# the model `model` last selected, and the image boots with the first registry
-# entry, gbt_m1 (a raw log-odds score, chosen at 5 false-alarm windows per hour
-# on the public val negatives). tests/test_firmware_defaults.py checks all of
-# these against the firmware.
+# Defaults the board applies when `detect` is given fewer arguments; the threshold
+# belongs to the model `model` last selected, and the image boots with the first
+# registry entry. tests/test_firmware_defaults.py checks these against the
+# firmware, except the two range limits (SQUELCH_MILLI_MAX, THR_MILLI_LIMIT).
 DETECT_MAX_SECONDS = 86400  # DETECT_MAX_SECONDS in detect_service.h; 0 = until any key
 DETECT_DEFAULT_SQUELCH_MILLI = 3
 DETECT_SQUELCH_MILLI_MAX = 1000
 DETECT_DEFAULT_MODEL = "gbt_m1"  # first entry of classifier_registry.c
 DETECT_DEFAULT_MODEL_THR_MILLI = 3211  # default_thr_milli of model_gbt_m1.c
-DETECT_MLP_V6_DEFAULT_THR_MILLI = 3000  # default_thr_milli of model_mlp_v6.c
 DETECT_THR_MILLI_LIMIT = 20000  # accepted thr_milli range is -LIMIT..+LIMIT
 # The K-of-N alarm above the classifier (App/detect/detect_service.h): ON when at
 # least K_ON of the last N classified windows were called drone, OFF when fewer
@@ -60,12 +56,9 @@ LINE_TERMINATOR = b"\n"
 # End-of-stream trailer sent after the payload, e.g. b"PCMEND overrun=0 err=0".
 # Confirms the stream finished and reports capture health.
 TRAILER_PREFIX = b"PCMEND"
-# Trailer that always closes a `detect` run, e.g.
-# b"DETEND windows=42 drones=8 alarms=3 overrun=0 err=0". Reaching it (and only it)
-# means the detector has stopped; a `DETERR <reason>` line may precede it on a start
-# failure, but the DETEND trailer still arrives with err=1.
+# Trailer that always closes a `detect` run, even after a `DETERR` start failure;
+# reaching it (and only it) means the detector has stopped.
 DETECT_TRAILER_PREFIX = b"DETEND"
-DETECT_ERROR_PREFIX = b"DETERR"
 
 
 @dataclass(frozen=True)
@@ -153,21 +146,13 @@ COMMANDS: tuple[CommandSpec, ...] = (
             "full. Optional overrides in units of 1/1000: squelch_milli (default "
             f"{DETECT_DEFAULT_SQUELCH_MILLI} = RMS 0.003, 0 disables the gate, 0..1000) and "
             "thr_milli (defaults to the selected model's own operating point, "
-            f"{DETECT_DEFAULT_MODEL_THR_MILLI} = 3.211 for gbt_m1 and "
-            f"{DETECT_MLP_V6_DEFAULT_THR_MILLI} for mlp_v6, may be negative, -20000..20000 - "
-            "a value outside that range is rejected, not clamped; gbt_m1's default is the "
-            "threshold with 5 false-alarm windows per hour on the public validation "
-            "negatives, at which, judged on recordings it had not heard, it alarmed on all "
-            "21 DJI takes and on 1 of 27 own negatives; at its stricter 1-per-hour point "
-            "(about 4060) on the DJI straight overhead at every height from 20 to 90 m with "
-            "no negative and no alarm in 30 minutes of traffic). A non-zero dbg adds one "
-            "debug line per frame. "
+            f"{DETECT_DEFAULT_MODEL_THR_MILLI} = 3.211 for gbt_m1, may be negative, "
+            "-20000..20000 - a value outside that range is rejected, not clamped). A non-zero "
+            "dbg adds one debug line per frame. "
             f"rule picks the alarm rule for this run (default {DETECT_ALARM_RULE_DEFAULT}): "
             "`<k>of<n>` is the vote - ON at k of the last n DRONE windows, OFF below k-1 (at "
             "least 1) - and `mean<n>` the mean of the last n decisions relative to thr_milli, "
-            "ON while it is >= 0; n is 1..32. Judged offline on the field recordings, mean4 "
-            "kept every detection of mlp_f2 at its default threshold and dropped its one false "
-            "alarm; 1of4 adds detections at the cost of false alarms."
+            "ON while it is >= 0; n is 1..32."
         ),
         response=(
             "A `LVL t=<s>.<ms> rms=<+d.ddd>` input-level line about once a second, one line "
@@ -229,7 +214,7 @@ COMMANDS: tuple[CommandSpec, ...] = (
             "for each window, `DSTDEC w=<window> logit=<8 hex digits>`, a "
             "`DSTSIG n=<samples> seed=<n> fnv=<8 hex digits>` line covering the generated "
             "input, and a final `DSTEND frames=<n> windows=<n> err=<0|1>` trailer. Every "
-            'float is its raw bit pattern, not a decimal, so "unchanged" means unchanged. '
+            "float is its raw bit pattern, not a decimal, so \"unchanged\" means unchanged. "
             "If the model is missing or the detector fails to init, `DSTERR <reason>` "
             "precedes the trailer with err=1."
         ),

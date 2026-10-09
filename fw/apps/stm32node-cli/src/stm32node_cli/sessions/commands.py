@@ -8,11 +8,9 @@ Importing this module registers the commands with the registry in
 
 from __future__ import annotations
 
-from stm32node_cli.protocol.codec import describe_first_times
-
 from ..config import DEFAULT_TIMEOUT_S
 from ..protocol.client import DeviceClient
-from ..protocol.codec import StreamAborted
+from ..protocol.codec import StreamAborted, describe_first_times
 from ..protocol.spec import (
     DETECT_MAX_SECONDS,
     DETECT_RULE_RE,
@@ -149,8 +147,6 @@ def _record_batch(ctx: CommandContext, seconds: int, count: int) -> None:
     def on_retry(attempt: int, total: int) -> None:
         ctx.emit(f"[yellow]no answer (attempt {attempt}/{total}); resending[/yellow]")
 
-    session: BatchRecordSession | None = None
-    result = None
     try:
         with SerialTransport(ctx.port, timeout=DEFAULT_TIMEOUT_S) as transport:
             session = BatchRecordSession(DeviceClient(transport), ctx.out_dir)

@@ -6,8 +6,6 @@ from pathlib import Path
 
 import typer
 
-from stm32node_cli.protocol.codec import describe_first_times
-
 from .config import DEFAULT_PORT, DEFAULT_TIMEOUT_S, default_output_dir
 from .keywatch import keypress_abort
 from .protocol.spec import (
@@ -84,7 +82,6 @@ def record(
         )
         return
 
-    from .protocol.codec import StreamAborted
     from .sessions.batch import BatchRecordSession, plan_streams
 
     plan = plan_streams(seconds, count)
@@ -97,7 +94,7 @@ def record(
         with SerialTransport(port, timeout=DEFAULT_TIMEOUT_S) as transport:
             batch = BatchRecordSession(DeviceClient(transport), out)
             outcome = batch.record(seconds, count, source=source, on_chunk=on_chunk)
-    except (StreamAborted, KeyboardInterrupt):
+    except KeyboardInterrupt:
         typer.echo("stopped - finished files are on disk, see index.csv")
         raise typer.Exit(code=1) from None
     typer.echo(
@@ -109,7 +106,7 @@ def record(
 @app.command()
 def detect(
     seconds: int = typer.Argument(
-        ..., min=0, max=DETECT_MAX_SECONDS, help="Seconds to run; 0 = until Ctrl-C."
+        ..., min=0, max=DETECT_MAX_SECONDS, help="Seconds to run; 0 = until any key."
     ),
     squelch: int | None = typer.Option(
         None, "--squelch", min=0, max=DETECT_SQUELCH_MILLI_MAX, help="RMS gate, 1/1000."
@@ -132,14 +129,13 @@ def detect(
 ) -> None:
     """Run on-device drone detection, streaming the board's report lines.
 
-    Prints each LVL/DET/ALM line as it arrives and a final DETEND summary. Press
-    any key to stop (the board is told to stop and reports its summary on the way
-    out); with SECONDS 0 this is the intended way to end the run. Ctrl-C also
-    stops it. A stop key works only on an interactive terminal; under a pipe use
-    Ctrl-C.
+    Prints each LVL/DET/ALM line as it arrives and a final DETEND summary. Any key
+    stops the host and sends the board a byte, which ends a SECONDS 0 run (a timed
+    run finishes on the board); Ctrl-C stops only the host. A stop key works only
+    on an interactive terminal; under a pipe use Ctrl-C.
     """
     from .protocol.client import DeviceClient
-    from .protocol.codec import StreamAborted
+    from .protocol.codec import StreamAborted, describe_first_times
     from .transport.serial_transport import SerialTransport
 
     if rule is not None and not DETECT_RULE_RE.fullmatch(rule):

@@ -1,17 +1,9 @@
 """Watch the terminal for a single keypress, to stop a running command from the CLI.
 
-The board's ``detect`` (and a ``sec=0`` run in particular) stops as soon as it
-receives any byte; :meth:`DeviceClient.run_detect` sends that byte when its
-``should_abort`` callback turns True. In the TUI that callback is wired to the
-``q`` key; this module gives the plain CLI the same ability without Ctrl-C, so a
-field operator can end an open-ended run with a single keypress and still get the
-clean ``DETEND`` summary.
-
-:func:`keypress_abort` is a context manager yielding an ``is_pressed()`` callable
-suitable to pass straight in as ``should_abort``. It only arms a watcher when
-stdin is an interactive terminal; under a pipe/redirect it yields a callback that
-never fires (so the caller falls back to Ctrl-C), and it always restores the
-terminal mode on the way out.
+:func:`keypress_abort` yields the ``should_abort`` callback for
+:meth:`DeviceClient.run_detect`, which then sends the board one byte and raises
+:class:`StreamAborted`. The byte ends a ``detect 0`` run; a timed run ignores it
+and finishes on the board. In the TUI, ``q`` then Enter plays the same role.
 
 Single-use per process: the watcher thread is deliberately not joined. When the
 run ends without a keypress (the board hit its time limit), the thread stays

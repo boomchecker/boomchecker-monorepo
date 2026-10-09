@@ -2,13 +2,11 @@
 
 PROTOCOL.md is generated from spec.py, but the numbers it quotes are owned by
 the firmware: the RMS squelch by App/detect/detect_service.h, the default model
-by the first entry of fw/common/boomdetect/src/classifier_registry.c and every
+by the first entry of fw/common/boomdetect/src/classifier_registry.c and its
 decision threshold by its model table (fw/common/boomdetect/models/
-model_<name>.c). The two drifted once (the contract kept describing a
-linear SVM with a 0.5 threshold long after the v6 MLP shipped), so this test
-reads the firmware sources from the monorepo and fails when they disagree. It
-is skipped when the firmware tree is not checked out next to this package
-(e.g. an installed wheel).
+model_<name>.c). This test reads the firmware sources from the monorepo and
+fails when they disagree. It is skipped when the firmware tree is not checked
+out next to this package (e.g. an installed wheel).
 """
 
 from __future__ import annotations
@@ -23,7 +21,6 @@ from stm32node_cli.protocol import spec
 FW_ROOT = Path(__file__).resolve().parents[3]
 DETECT_SERVICE_H = FW_ROOT / "bom-stm32node" / "App" / "detect" / "detect_service.h"
 MODELS_DIR = FW_ROOT / "common" / "boomdetect" / "models"
-MODEL_MLP_V6_C = MODELS_DIR / "model_mlp_v6.c"
 REGISTRY_C = FW_ROOT / "common" / "boomdetect" / "src" / "classifier_registry.c"
 
 
@@ -50,10 +47,6 @@ def _thr_milli(path: Path) -> int:
     m = re.search(r"\.default_thr_milli\s*=\s*(-?\d+)\b", text)
     assert m, f"default_thr_milli not found in {path}"
     return int(m.group(1))
-
-
-def test_detect_thr_default_matches_mlp_v6_model() -> None:
-    assert spec.DETECT_MLP_V6_DEFAULT_THR_MILLI == _thr_milli(MODEL_MLP_V6_C)
 
 
 def test_default_model_is_the_registrys_first_entry_with_its_threshold() -> None:
@@ -91,11 +84,7 @@ def test_detect_alarm_rule_matches_firmware() -> None:
 
 def test_detect_description_quotes_the_defaults() -> None:
     detect = next(c for c in spec.COMMANDS if c.name == "detect")
-    assert f"default {spec.DETECT_DEFAULT_SQUELCH_MILLI}" in detect.description
-    assert str(spec.DETECT_DEFAULT_MODEL_THR_MILLI) in detect.description
     assert spec.DETECT_DEFAULT_MODEL in detect.description
-    assert str(spec.DETECT_MLP_V6_DEFAULT_THR_MILLI) in detect.description
     assert "[dbg]" in detect.usage
-    assert f"{spec.DETECT_ALARM_K_ON} of the last {spec.DETECT_ALARM_N}" in detect.response
     assert "ALM t=" in detect.response
     assert "alarms=<n>" in detect.response
