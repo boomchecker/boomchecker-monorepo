@@ -59,9 +59,7 @@ static void scenario_lookup(void)
         CHECK(m->decide != NULL, "%s has no decide function", m->name);
         CHECK(m->n_features > 0u, "%s reads zero features", m->name);
         /* A model is usable only if some extractor in this build produces its
-           layout, and its slice fits inside THAT extractor's width - not the
-           deployed layout's, which is what this used to check and which would
-           have rejected every layout-2 and layout-3 model on sight. */
+           layout, and its slice fits inside THAT extractor's width. */
         const boomdetect_extractor_t *ex = boomdetect_extractor_for_layout(m->layout_id);
         REQUIRE(ex != NULL, "%s declares layout %u, which no extractor in this build produces",
                 m->name, m->layout_id);
@@ -109,10 +107,7 @@ static void scenario_init_rejects_bad_models(void)
           "a model reading %u features from offset 1 fits in %u and should not",
           bad.n_features, (unsigned)BOOMDETECT_FEATURE_COUNT);
 
-    /* A layout nothing implements. Not "the first layout plus one" - that was a
-       foreign id only while layout 1 was the only one, and it quietly became
-       layout 2 the day stats_spectral shipped, which left this check asserting
-       that a perfectly valid model is rejected. Assert the premise instead. */
+    /* A layout nothing implements; the premise is asserted, not assumed. */
     const uint16_t no_such_layout = 0x7FFFu;
     REQUIRE(boomdetect_extractor_for_layout(no_such_layout) == NULL,
             "layout %u has an extractor now; pick another id for this check",
@@ -125,8 +120,7 @@ static void scenario_init_rejects_bad_models(void)
     CHECK(!boomdetect_init(&d, &cfg), "a model declaring a foreign layout was accepted");
 
     /* And with an extractor the caller named: the layouts have to agree even
-       when both sides exist on their own. This is the pairing init guards once
-       it no longer derives the extractor from the table's first entry. */
+       when both sides exist on their own. */
     classifier_t layout2 = bad;
     layout2.n_features = 4u;
     layout2.layout_id = BOOMDETECT_LAYOUT_STATS_SPECTRAL;

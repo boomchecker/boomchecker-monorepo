@@ -2,6 +2,7 @@
  * @file mfcc_processor.h
  * @brief Header for MFCC feature extraction using CMSIS-DSP.
  */
+
 #ifndef BOOMDETECT_MFCC_PROCESSOR_H
 #define BOOMDETECT_MFCC_PROCESSOR_H
 

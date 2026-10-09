@@ -3,8 +3,7 @@
 The operating point is chosen once, on the validation split of the training
 data, as the lowest threshold whose false-alarm rate on negative windows stays
 under a budget per hour, and is then applied unchanged to the unseen suites.
-Choosing it on the unseen data would be selecting against the test set - the
-trap the research-branch scripts warned about, kept structural here.
+Choosing it on the unseen data would be selecting against the test set.
 
 Two views at that threshold, because the suites have very different clips:
 
@@ -33,8 +32,7 @@ import numpy as np
 import pandas as pd
 
 from boomdetect_train.datasets.cache import FrameCache
-from boomdetect_train.decision import Rule, clip_alarmed
-from boomdetect_train.decision import parse_rule as _parse_rule
+from boomdetect_train.decision import KofN, Rule, clip_alarmed, parse_rule
 from boomdetect_train.evaluate import (
     SUITES,
     ClipScores,
@@ -55,9 +53,6 @@ DEFAULT_FA_PER_HOUR = 5.0
 # The board's squelch, and the one the 2026-09-25 field recordings showed the
 # field needs: at 0.010 most of a drone at 20 m and beyond never makes a window.
 FIELD_SQUELCHES = (0.010, 0.003)
-
-
-parse_rule = _parse_rule  # '2of4' -> KofN, 'mean4' -> MeanN, 'none' -> None (decision.py)
 
 
 @dataclass
@@ -210,15 +205,6 @@ def _decisions(clips: list[ClipScores]) -> np.ndarray:
     return np.concatenate([c.decisions for c in clips] or [np.empty(0, np.float32)])
 
 
-def _auc(pos: np.ndarray, neg: np.ndarray) -> float:
-    if pos.shape[0] == 0 or neg.shape[0] == 0:
-        return float("nan")
-    from sklearn.metrics import roc_auc_score
-
-    y = np.r_[np.ones(pos.shape[0]), np.zeros(neg.shape[0])]
-    return float(roc_auc_score(y, np.r_[pos, neg]))
-
-
 def _recordings_alarmed(
     clips: list[ClipScores], group_of: dict[str, str], thr: float, rule: Rule | None
 ) -> tuple[int, int]:
@@ -250,7 +236,7 @@ def field_stats(
         a, n = _recordings_alarmed(pos, group_of, thr, rule)
         out["drones"][drone] = {
             "windows": int(pos_d.shape[0]),
-            "auc": _auc(pos_d, neg_d),
+            "auc": window_auc(pos + neg),
             "called": float((pos_d >= thr).mean()) if pos_d.shape[0] else float("nan"),
             "alarmed": f"{a}/{n}",
         }
@@ -392,7 +378,9 @@ def render_report(
     fa_per_hour: float = DEFAULT_FA_PER_HOUR,
 ) -> str:
     parts = [f"# {title}", ""]
-    rule_txt = f"{rule.k_on}-of-{rule.n} (off below {rule.k_off})" if rule else ">= 1 window"
+    rule_txt = ">= 1 window" if rule is None else str(rule)
+    if isinstance(rule, KofN):
+        rule_txt = f"{rule.k_on}-of-{rule.n} (off below {rule.k_off})"
     parts += [
         f"Threshold per model: lowest value with at most {fa_per_hour:g} false-alarm windows per "
         "hour on the `val` negatives, then applied unchanged to every other suite. "
@@ -448,7 +436,6 @@ def render_report(
                 "clip_det_halmstad": cell("halmstad", "clip_det"),
                 "stress_fired_pct": stress_pct,
                 "_sort": by_suite["halmstad"].auc if "halmstad" in by_suite else float("nan"),
-                "_sort2": by_suite["test"].auc if "test" in by_suite else float("nan"),
             }
         )
         if "stress" in scored:

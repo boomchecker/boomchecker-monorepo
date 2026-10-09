@@ -16,15 +16,8 @@
  *       run, then compare against the DST* lines in FILE. Every hex token is
  *       decoded as an IEEE-754 float and must satisfy
  *       |a - b| <= TOL * max(|a|, |b|) + 1e-9; every other token must match
- *       exactly. TOL 0 (the default) is therefore bit-exactness. Exit 0 when
- *       everything is within tolerance, 1 otherwise.
- *
- * Why a tolerance exists at all: tests/vectors/selftest_host.txt is the
- * baseline of ONE toolchain (the Linux CI compiler). The same C on MinGW-w64
- * -O2 differs in the last places - measured 4.1e-7 relative on the worst
- * feature and 1.1e-6 on a decision, the same scale as the board-versus-host
- * gap recorded in that file's header. Bit-exactness is a same-binary claim, so
- * the CMake side passes --rel only where the binary is known to differ.
+ *       exactly. Even TOL 0 (the default) lets a value move by that 1e-9. Exit
+ *       0 when everything is within tolerance, 1 otherwise.
  */
 #include "boomdetect.h"
 #include "boomdetect_selftest.h"

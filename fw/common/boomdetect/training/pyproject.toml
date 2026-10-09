@@ -1,9 +1,3 @@
-# The training side of fw/common/boomdetect: the Python that produces the
-# weight tables the C library ships, the evaluation that picks them, and the
-# fixtures that prove the C computes the same numbers.
-#
-# Same ruff settings as the sibling packages (fw/common/boomdetect,
-# fw/common/boomlink), so one `ruff check` behaves the same way everywhere.
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
@@ -24,9 +18,6 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# The CNN family trains with PyTorch; everything else runs without it. Install
-# the CPU build: `pip install torch --index-url https://download.pytorch.org/whl/cpu`.
-torch = ["torch>=2.2"]
 dev = ["pytest>=8", "ruff>=0.5"]
 
 [project.scripts]

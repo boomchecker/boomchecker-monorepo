@@ -95,8 +95,6 @@ def alarm_states(is_drone: np.ndarray, rule: KofN) -> np.ndarray:
 def alarm_states_mean(relative: np.ndarray, rule: MeanN) -> np.ndarray:
     """Alarm state after each window: mean of the last n relative decisions >= 0."""
     rel = np.asarray(relative, dtype=np.float32)
-    if rel.shape[0] == 0:
-        return np.zeros(0, dtype=bool)
     ring = np.zeros(rule.n, dtype=np.float32)  # windows before the first are 0
     out = np.zeros(rel.shape[0], dtype=bool)
     for i, v in enumerate(rel):

@@ -65,9 +65,6 @@ from boomdetect_train.datasets.manifest import (
 )
 from boomdetect_train.paths import LEGACY_DATA_DIR, raw_dir
 
-HF_REPO = "geronimobasso/drone-audio-detection-samples"
-HF_URL = f"https://huggingface.co/datasets/{HF_REPO}/resolve/main/data/"
-
 # How many consecutive clips make one leakage group. A group is what a split is
 # decided on, so it has to be at least as long as the recording a clip was cut
 # from - otherwise the second before and the second after a cut land on
@@ -78,8 +75,6 @@ HF_URL = f"https://huggingface.co/datasets/{HF_REPO}/resolve/main/data/"
 # hours to within a couple of per cent.
 HF_GROUP_CLIPS = {"drone": 256, "no-drone": 32}
 HF_NAME_RE = re.compile("^(no-drone|drone)-([0-9]+)$")
-DRONE_AUDIO_DATASET_URL = "https://github.com/saraalemadi/DroneAudioDataset.git"
-ESC50_URL = "https://github.com/karolpiczak/ESC-50.git"
 
 
 def hf_group(stem: str, fallback: str) -> str:
@@ -317,11 +312,10 @@ def default_hf_shards() -> list[Path]:
     return list(seen.values())
 
 
-def build_rows(hf_paths: Iterable[Path] | None = None) -> pd.DataFrame:
+def build_rows() -> pd.DataFrame:
     """Enumerate every source that exists on this machine."""
     rows: list[dict] = []
-    shards = list(hf_paths) if hf_paths is not None else default_hf_shards()
-    rows.extend(hf_shards(shards))
+    rows.extend(hf_shards(default_hf_shards()))
     if (raw_dir() / "DroneAudioDataset").exists():
         rows.extend(drone_audio_dataset_rows())
     if (raw_dir() / "ESC-50" / "meta" / "esc50.csv").exists():

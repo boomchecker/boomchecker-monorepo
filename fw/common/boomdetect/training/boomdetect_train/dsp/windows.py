@@ -4,8 +4,8 @@ This is the part of the chain the model was NOT trained against, and the reason
 it is a separate module: training slid windows of 14 frames with a hop of 7
 over contiguous audio and kept a window if the median frame RMS cleared the
 gate; the firmware takes disjoint runs of 14 accepted frames and a frame below
-the gate resets the run, so a deployed window can straddle silence. Both are
-expressible here so the skew between them can be measured rather than argued.
+the gate resets the run. Both are expressible here so the skew between them can
+be measured rather than argued.
 """
 
 from __future__ import annotations
@@ -32,7 +32,7 @@ class Gate(StrEnum):
 class Window:
     """Indices of the frames that make one classified window."""
 
-    frames: np.ndarray  # (accum,) int frame indices, ascending
+    frames: np.ndarray  # (ACCUM_FRAMES,) int frame indices, ascending
 
     @property
     def start(self) -> int:
@@ -43,10 +43,8 @@ class Window:
         return int(self.frames[-1])
 
 
-def firmware_windows(
-    rms: np.ndarray, squelch: float = DEFAULT_SQUELCH, accum: int = ACCUM_FRAMES
-) -> Iterator[Window]:
-    """boomdetect_step()'s policy: disjoint runs of `accum` accepted frames.
+def firmware_windows(rms: np.ndarray, squelch: float = DEFAULT_SQUELCH) -> Iterator[Window]:
+    """boomdetect_step()'s policy: disjoint runs of ACCUM_FRAMES accepted frames.
 
     A frame below `squelch` resets the accumulator; `squelch` 0 disables the gate.
     """
@@ -56,16 +54,13 @@ def firmware_windows(
             run = []
             continue
         run.append(i)
-        if len(run) >= accum:
+        if len(run) >= ACCUM_FRAMES:
             yield Window(np.asarray(run, dtype=np.int64))
             run = []
 
 
 def sliding_windows(
-    rms: np.ndarray,
-    squelch: float | None = None,
-    accum: int = ACCUM_FRAMES,
-    hop: int = TRAIN_HOP_FRAMES,
+    rms: np.ndarray, squelch: float | None = None, hop: int = TRAIN_HOP_FRAMES
 ) -> Iterator[Window]:
     """The training pipeline's policy: overlapping windows, gated on the median.
 
@@ -74,8 +69,8 @@ def sliding_windows(
     """
     rms = np.asarray(rms, dtype=np.float32)
     n = rms.shape[0]
-    for s in range(0, n - accum + 1, hop):
-        idx = np.arange(s, s + accum, dtype=np.int64)
+    for s in range(0, n - ACCUM_FRAMES + 1, hop):
+        idx = np.arange(s, s + ACCUM_FRAMES, dtype=np.int64)
         if squelch is not None and float(np.median(rms[idx])) < squelch:
             continue
         yield Window(idx)
@@ -85,15 +80,9 @@ def windows(
     rms: np.ndarray,
     gate: Gate = Gate.PER_FRAME,
     squelch: float | None = DEFAULT_SQUELCH,
-    accum: int = ACCUM_FRAMES,
     hop: int | None = None,
 ) -> list[Window]:
     """Dispatch on `gate`. `hop` only matters for the sliding policy."""
     if gate == Gate.PER_FRAME:
-        return list(firmware_windows(rms, 0.0 if squelch is None else squelch, accum))
-    return list(sliding_windows(rms, squelch, accum, hop if hop is not None else TRAIN_HOP_FRAMES))
-
-
-def window_seconds(accum: int = ACCUM_FRAMES, hop_samples: int = 512, sr: int = 16000) -> float:
-    """Audio covered by one window of contiguous frames (about 0.448 s)."""
-    return ((accum - 1) * hop_samples + 1024) / sr
+        return list(firmware_windows(rms, 0.0 if squelch is None else squelch))
+    return list(sliding_windows(rms, squelch, hop if hop is not None else TRAIN_HOP_FRAMES))

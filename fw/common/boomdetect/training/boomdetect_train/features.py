@@ -42,10 +42,9 @@ LAYOUT_STATS = 1
 LAYOUT_STATS_SPECTRAL = 2
 LAYOUT_LOGMEL = 3
 LAYOUT_STATS_SPECTRAL_MOD = 4
-# Offline only (2026-10-07, the far-range question): the modulation spectrum over a
-# 4 s ring instead of 2 s - more segments averaged, so a hovering drone's steady
-# blade-pass line rises further over the background. 7 = layout 2 + the ten
-# modulation numbers over 4 s; 8 = layout 2 + both the 2 s and the 4 s sets.
+# Offline only: the modulation spectrum over a 4 s ring instead of 2 s - more segments averaged,
+# so a hovering drone's steady blade-pass line rises further over the background.
+# 7 = layout 2 + the ten modulation numbers over 4 s; 8 = layout 2 + both the 2 s and the 4 s sets.
 LAYOUT_STATS_SPECTRAL_MOD4S = 7
 LAYOUT_STATS_SPECTRAL_MOD2S4S = 8
 MOD_FRAMES_LONG = 125  # 125 x 32 = 4000 samples, 4.0 s
@@ -68,19 +67,17 @@ N_STATS_SPECTRAL_MOD = N_STATS_SPECTRAL + N_MOD  # 79
 # that end with the window (MOD_FRAMES x ENV_PER_FRAME samples at 1 kHz). A
 # drone's rotor noise is amplitude-modulated at its blade-pass rate and the
 # modulation survives at distances where the spectrum itself is at the
-# background (the 2026-10-02 takes: DJI at 80-90 m overhead). Prominence of a
-# modulation bin = its log power over the mean log power of the +-40 Hz around
-# it. A window without the full ring behind it (the first two seconds of a
-# clip) carries NaN here: training fills those with the column mean
-# (train._impute_missing) so that no model can learn which sources have short
-# clips, and the board, whose ring is always full, never produces them.
+# background. Prominence of a modulation bin = its log power over the mean log
+# power of the +-40 Hz around it. A window without the full ring behind it (the
+# first two seconds of a clip) carries NaN here: training fills those with the
+# column mean (train._impute_missing) so that no model can learn which sources
+# have short clips, and the board, whose ring is always full, never produces them.
 MOD_FRAMES = 62  # 62 x 32 = 1984 samples, 1.98 s
 MOD_SEG = 512  # Welch segments of the envelope: 0.512 s, bins of 1.95 Hz
 MOD_HOP = 128  # 75 % overlap: 12 segments over the full buffer, averaged
 MOD_NFFT = MOD_SEG
 MOD_BIN_HZ = ENV_RATE_HZ / MOD_NFFT  # 1.953
 MOD_BASELINE_BINS = 41  # +-39 Hz
-MOD_SAMPLES = MOD_FRAMES * ENV_PER_FRAME  # 1984: the full ring, or the features are missing
 MOD_LINE_DB = 6.0
 MOD_MAIN_HZ = (50.0, 400.0)
 MOD_BANDS_HZ = ((50.0, 150.0), (150.0, 250.0), (250.0, 400.0), (400.0, 800.0))
@@ -405,7 +402,7 @@ LAYOUTS = {
 }
 
 
-# --- band-spectrogram layouts (offline only, the 2026-10-07 comparison) ---------
+# --- band-spectrogram layouts (offline only) ------------------------------------
 #
 # Layout id = base + k, k the index of the front-end in dsp.spectro.SPEC_FE_NAMES
 # (mfe1k mfe2k mfe4k gs1k gs2k gs4k). None of them has a C extractor.
@@ -464,9 +461,8 @@ def min_start_frame(layout: int) -> int:
     17 frames before the window. The board always has that history; a clip may not,
     and the public sets make it a class fingerprint: 99 % of the HuggingFace drone
     clips are 0.5 s (one window, all of it at the clip start) while its negatives
-    are long - a model on mirrored history learned "mirror = drone" (test AUC 1.000,
-    2026-10-07). Windows without real history are therefore dropped, in training and
-    in scoring alike.
+    are long, so mirrored history would read as "drone". Windows without real history
+    are therefore dropped, in training and in scoring alike.
     """
     spec = spec_layout(layout)
     if spec is None:
@@ -542,8 +538,3 @@ def extract(layout: int, frames, idx: np.ndarray) -> np.ndarray:
             f"layout {layout} reads the band-spectrogram cache: evaluate.window_features"
         )
     raise ValueError(f"unknown layout {layout}")
-
-
-def window_time_s(end_frame: int) -> float:
-    """When a window closed, in seconds, as the board stamps DET lines."""
-    return (end_frame * HOP) / SAMPLE_RATE_HZ

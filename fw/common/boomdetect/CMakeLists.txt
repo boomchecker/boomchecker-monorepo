@@ -276,21 +276,13 @@ add_library(boomdetect_core OBJECT
   src/mfcc_processor.c
 )
 
-# One translation unit per model. `bdtrain export` generates model_<name>.c for
-# a trained model; adding it here, to models/models.h and to
-# src/classifier_registry.c is what puts it in the image (see
-# training/README.md, "Adding a model to the board").
-set(BOOMDETECT_MODEL_SOURCES
+add_library(boomdetect STATIC
+  src/classifier_registry.c
   models/model_gbt_m1.c
   models/model_mlp_f2.c
   models/model_mlp_m1.c
   models/model_mlp_v6.c
   models/model_svm_v3.c
-)
-
-add_library(boomdetect STATIC
-  src/classifier_registry.c
-  ${BOOMDETECT_MODEL_SOURCES}
   $<TARGET_OBJECTS:boomdetect_core>
 )
 # PUBLIC is the API: boomdetect.h, classifier.h, dsp_config.h. The MFCC wrapper
@@ -401,12 +393,8 @@ if(BOOMDETECT_STANDALONE)
   # compares the host against its own. Whether the two agree is a finding either
   # way, and tests/vectors/README.md records what was actually observed.
   #
-  # The bit-exact claim holds for the toolchain that recorded the file (the
-  # Linux CI compiler). MinGW-w64 at -O2 is the same C with a different
-  # instruction selection and lands a few ULP away - measured 4.1e-7 relative
-  # on the worst feature, 6.8e-7 on a decision, see the fixture's header - so
-  # there the tool compares within a tolerance an order of magnitude above that
-  # measurement. Anywhere else the comparison stays exact.
+  # MinGW-w64 lands a few ULP from the file the Linux CI compiler recorded (see
+  # its header), so there the tool compares within a tolerance; elsewhere exactly.
   if(MINGW)
     add_test(NAME boomdetect_selftest_host
       COMMAND boomdetect_selftest_tool
@@ -437,9 +425,6 @@ if(BOOMDETECT_STANDALONE)
 
   # The items are source stems minus "_test": tests/registry_test.c builds
   # boomdetect_registry_test and registers as the ctest `boomdetect_registry`.
-  # model_parity reads tests/vectors/parity_vectors.h, which `bdtrain export`
-  # regenerates whenever a model is exported; it holds every registered model's
-  # C forward pass to the Python one.
   foreach(test IN ITEMS mfcc_smoke registry pipeline alarm nn_infer extractor model_parity)
     add_executable(boomdetect_${test}_test tests/${test}_test.c)
     target_link_libraries(boomdetect_${test}_test PRIVATE boomdetect)

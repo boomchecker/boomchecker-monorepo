@@ -15,6 +15,7 @@ same way, so frame f covers samples [512 f, 512 f + 1024).
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import lru_cache
 
 import numpy as np
 
@@ -80,19 +81,14 @@ ENV_BAND_HZ = (1000.0, 4000.0)
 ENV_LOWPASS_HZ = 400.0
 
 
-_ENV_SOS: tuple[np.ndarray, np.ndarray] | None = None
-
-
+@lru_cache(maxsize=1)
 def envelope_filters() -> tuple[np.ndarray, np.ndarray]:
     """(band-pass, low-pass) second-order sections, designed once; the C gets the coefficients."""
-    global _ENV_SOS
-    if _ENV_SOS is None:
-        from scipy import signal
+    from scipy import signal
 
-        bp = signal.butter(2, ENV_BAND_HZ, btype="bandpass", fs=SAMPLE_RATE_HZ, output="sos")
-        lp = signal.butter(2, ENV_LOWPASS_HZ, btype="lowpass", fs=SAMPLE_RATE_HZ, output="sos")
-        _ENV_SOS = (bp, lp)
-    return _ENV_SOS
+    bp = signal.butter(2, ENV_BAND_HZ, btype="bandpass", fs=SAMPLE_RATE_HZ, output="sos")
+    lp = signal.butter(2, ENV_LOWPASS_HZ, btype="lowpass", fs=SAMPLE_RATE_HZ, output="sos")
+    return bp, lp
 
 
 def envelope_1k(x16k: np.ndarray) -> np.ndarray:

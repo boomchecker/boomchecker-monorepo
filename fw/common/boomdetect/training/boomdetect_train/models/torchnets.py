@@ -1,4 +1,4 @@
-"""Networks on the band spectrograms (layouts 1xx/4xx/5xx/6xx), for the 2026-10-07 comparison.
+"""Networks on the band spectrograms (the patch and hybrid layouts of features.spec_layout).
 
 Offline only: plain torch modules with no numpy reference and no C side (models/cnn.py
 is the one whose nets reach the board). The architectures follow the TalTech
@@ -12,9 +12,9 @@ classes, plus a mid-sized 2-D CNN of our own:
     lstm20   their Arch 14: LSTM 20 over the frames
 
 then Dense (32, 20 for lstm20) + ReLU + dropout and the logit. On a hybrid layout
-(5xx/6xx) the 78 numbers of layout 4 (mean-c0 dropped, NaN filled with the
-training means, standardised) go through Dense 32 + ReLU and join the network's
-own features before the head - "GS added to layout 4".
+the numbers of its aux layout (features.HYBRID_AUX_LAYOUT: 4, 8 or 10; mean-c0
+dropped, NaN filled with the training means, standardised) go through Dense 32 +
+ReLU and join the network's own features before the head.
 
 The patch is mean-removed log power (features.spec_patch); it is divided by one
 global standard deviation from the training windows. Every model records its
@@ -219,7 +219,7 @@ class TorchNetModel:
 
 
 def split_inputs(x: np.ndarray, layout: int, norm: dict) -> tuple[np.ndarray, np.ndarray | None]:
-    """(normalised patch (N, T, B), normalised layout-4 block (N, 78) or None)."""
+    """(normalised patch (N, T, B), normalised aux block (N, aux_width) or None)."""
     t, b, hybrid = layout_shape(layout)
     patch = (x[:, : t * b] / np.float32(norm["patch_std"])).reshape(-1, t, b).astype(np.float32)
     if not hybrid:

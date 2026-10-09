@@ -34,7 +34,8 @@ static void scenario_single_window_does_not_alarm(void)
     const bool calls[8] = { 0, 1, 0, 0, 0, 1, 0, 0 };
     for (size_t i = 0u; i < 8u; i++)
     {
-        CHECK(!boomdetect_alarm_push(&a, calls[i]), "state changed at window %u", (unsigned)i);
+        CHECK(!boomdetect_alarm_push_decision(&a, calls[i] ? 1.0f : -1.0f),
+              "state changed at window %u", (unsigned)i);
         CHECK(!boomdetect_alarm_on(&a), "a lone drone window raised the alarm at %u", (unsigned)i);
     }
     CHECK(a.onsets == 0u, "onsets %lu, expected 0", (unsigned long)a.onsets);
@@ -49,7 +50,7 @@ static void scenario_two_of_four_alarms_and_hysteresis_holds(void)
     const bool expect[9] = { 0, 0, 1, 1, 1, 1, 0, 0, 0 };
     for (size_t i = 0u; i < 9u; i++)
     {
-        const bool changed = boomdetect_alarm_push(&a, calls[i]);
+        const bool changed = boomdetect_alarm_push_decision(&a, calls[i] ? 1.0f : -1.0f);
         CHECK(boomdetect_alarm_on(&a) == expect[i], "window %u: state %d, expected %d",
               (unsigned)i, boomdetect_alarm_on(&a), expect[i]);
         CHECK(changed == (i == 2u || i == 6u), "window %u: changed=%d", (unsigned)i, changed);
@@ -65,7 +66,7 @@ static void scenario_hysteresis_prevents_flicker(void)
     const bool calls[12] = { 1, 1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 0 };
     for (size_t i = 0u; i < 12u; i++)
     {
-        (void)boomdetect_alarm_push(&a, calls[i]);
+        (void)boomdetect_alarm_push_decision(&a, calls[i] ? 1.0f : -1.0f);
         if (i >= 1u && i <= 8u)
         {
             CHECK(boomdetect_alarm_on(&a), "alarm dropped at window %u while hits kept coming",
@@ -84,13 +85,13 @@ static void scenario_full_width_history(void)
     REQUIRE(boomdetect_alarm_init(&a, &all), "init failed for n = 32");
     for (uint32_t i = 0u; i < 31u; i++)
     {
-        (void)boomdetect_alarm_push(&a, true);
+        (void)boomdetect_alarm_push_decision(&a, 1.0f);
         CHECK(!boomdetect_alarm_on(&a), "alarm on after %lu of 32 hits", (unsigned long)(i + 1u));
     }
-    CHECK(boomdetect_alarm_push(&a, true), "32nd hit did not change the state");
+    CHECK(boomdetect_alarm_push_decision(&a, 1.0f), "32nd hit did not change the state");
     CHECK(boomdetect_alarm_on(&a), "alarm off with 32 of 32 hits");
     CHECK(boomdetect_alarm_hits(&a) == 32u, "hits %u, expected 32", boomdetect_alarm_hits(&a));
-    (void)boomdetect_alarm_push(&a, false);
+    (void)boomdetect_alarm_push_decision(&a, -1.0f);
     CHECK(!boomdetect_alarm_on(&a), "alarm on with 31 of 32 hits under k_off 32");
 }
 
@@ -156,13 +157,6 @@ static void scenario_mean_rule_integrates(void)
         (void)boomdetect_alarm_push_decision(&v, weak[i]);
     }
     CHECK(!boomdetect_alarm_on(&v), "2of4 alarmed on one strong window");
-
-    /* push(bool) under MEAN enters +1 / -1. */
-    REQUIRE(boomdetect_alarm_init(&a, &mean4), "re-init failed");
-    (void)boomdetect_alarm_push(&a, true);
-    CHECK(boomdetect_alarm_mean(&a) == 0.25f, "push(true) did not enter +1 (mean %f)",
-          (double)boomdetect_alarm_mean(&a));
-    CHECK(boomdetect_alarm_on(&a), "mean4 off after one drone call from silence");
 }
 
 static void scenario_mean_rule_validation(void)
@@ -189,5 +183,5 @@ int main(void)
     scenario_vote_reads_the_sign_of_a_decision();
     scenario_mean_rule_integrates();
     scenario_mean_rule_validation();
-    BD_TEST_REPORT("alarm_test", 152); /* exact count from running the compiled binary */
+    BD_TEST_REPORT("alarm_test", 149); /* exact count from running the compiled binary */
 }

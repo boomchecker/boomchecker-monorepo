@@ -98,9 +98,8 @@ def extractor_fixture_text() -> str:
     return "\n".join(lines)
 
 
-def write_extractor_fixture(path: Path | None = None) -> Path:
-    p = path if path is not None else VECTORS_DIR / "extractor_expected.h"
-    return ex.write_text(p, extractor_fixture_text())
+def write_extractor_fixture() -> Path:
+    return ex.write_text(VECTORS_DIR / "extractor_expected.h", extractor_fixture_text())
 
 
 # --- layout 4: the envelope filters and the modulation features --------------
@@ -153,8 +152,8 @@ def envelope_coefs_text() -> str:
     return "\n".join(lines)
 
 
-def write_envelope_coefs(path: Path | None = None) -> Path:
-    return ex.write_text(path if path is not None else ENV_COEFS_H, envelope_coefs_text())
+def write_envelope_coefs() -> Path:
+    return ex.write_text(ENV_COEFS_H, envelope_coefs_text())
 
 
 def mod_fixture_text() -> str:
@@ -227,6 +226,5 @@ def mod_fixture_text() -> str:
     return "\n".join(lines)
 
 
-def write_mod_fixture(path: Path | None = None) -> Path:
-    p = path if path is not None else VECTORS_DIR / "extractor_mod_expected.h"
-    return ex.write_text(p, mod_fixture_text())
+def write_mod_fixture() -> Path:
+    return ex.write_text(VECTORS_DIR / "extractor_mod_expected.h", mod_fixture_text())

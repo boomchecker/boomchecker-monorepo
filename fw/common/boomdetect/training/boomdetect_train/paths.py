@@ -11,9 +11,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-PACKAGE_DIR = Path(__file__).resolve().parent
-TRAINING_DIR = PACKAGE_DIR.parent
-BOOMDETECT_DIR = TRAINING_DIR.parent  # fw/common/boomdetect
+BOOMDETECT_DIR = Path(__file__).resolve().parents[2]  # fw/common/boomdetect
 REPO_ROOT = BOOMDETECT_DIR.parents[1].parent  # fw/common -> fw -> repo root
 
 MFCC_TABLES_H = BOOMDETECT_DIR / "src" / "mfcc_tables.h"

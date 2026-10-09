@@ -44,11 +44,10 @@
 #define MOD_TWO_PI    6.283185307179586
 
 _Static_assert(MOD_NSEG == 12u, "features.py averages twelve segments over the ring");
-_Static_assert(MOD_SEG <= BOOMDETECT_ENV_RING, "a segment cannot be longer than the ring");
 
-/* All static: the superloop's stack is small and a 1 KB frame once wedged the
-   board. The detector runs one window at a time, so one set serves every
-   detector, like the MFCC instance in mfcc_processor.c. */
+/* All static: the superloop's stack is small. The detector runs one window at
+   a time, so one set serves every detector, like the MFCC instance in
+   mfcc_processor.c. */
 static arm_rfft_fast_instance_f32 s_rfft;
 static bool                       s_ready = false;
 static float                      s_hann[MOD_SEG];

@@ -32,11 +32,7 @@ static arm_mfcc_instance_f32 mfcc_inst;
 
 /* 2*BOOMDETECT_FFT_SIZE, and it has to be: the magnitude step inside the MFCC asks for
    fftLen magnitudes and so reads twice that many floats, while upstream's doc
-   comment claims "FFT length + 2" is enough. See boomdetect_mfcc_f32.c.
-
-   After a call the first BOOMDETECT_MEL_FILTERS entries hold the log-mel vector
-   the DCT was applied to (boomdetect_mfcc_f32 computes it in place there); see
-   mfcc_last_logmel(). */
+   comment claims "FFT length + 2" is enough. See boomdetect_mfcc_f32.c. */
 static float32_t scratch_buffer[BOOMDETECT_FFT_SIZE * 2];
 
 arm_status mfcc_init(void)

@@ -103,13 +103,9 @@ def fetch_one(name: str, dest_dir: Path, log=print) -> Path:
     return dest
 
 
-def fetch_all(
-    dest_dir: Path | None = None,
-    shards: list[int] | None = None,
-    log=print,
-) -> list[Path]:
+def fetch_all(shards: list[int] | None = None, log=print) -> list[Path]:
     """Every shard (or the listed ones) into the raw tree, skipping what is there."""
-    d = dest_dir if dest_dir is not None else hf_dir()
+    d = hf_dir()
     d.mkdir(parents=True, exist_ok=True)
     want = shards if shards is not None else list(range(SHARD_COUNT))
     out: list[Path] = []

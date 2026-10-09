@@ -1,10 +1,9 @@
 """Read the shipped model headers back into Python scorers.
 
-The deployed models exist only as C arrays (models/mlp_model_data_v6.h,
-models/svm_model_data_v3.h): the sklearn pickles they came from live on a
-research branch and are not needed here. Parsing the headers gives the exact
-weights the board multiplies by, which is what a baseline evaluation and a
-parity fixture both want.
+mlp_v6 and svm_v3 exist only as C arrays (models/mlp_model_data_v6.h,
+models/svm_model_data_v3.h). Parsing the headers gives the exact weights the
+board multiplies by, which is what a baseline evaluation and a parity fixture
+both want.
 """
 
 from __future__ import annotations
@@ -22,9 +21,8 @@ from boomdetect_train.paths import MODELS_DIR
 class MlpHeader:
     """A scaler, one or two hidden ReLU layers and a linear output (a logit).
 
-    With one hidden layer `w2` is the output vector and `b2` the output bias
-    (the format of every header before mlp_f2). With two, `w2`/`b2` are the
-    second hidden layer and `w3`/`b3` the output.
+    With one hidden layer `w2` is the output vector and `b2` the output bias.
+    With two, `w2`/`b2` are the second hidden layer and `w3`/`b3` the output.
     """
 
     name: str
@@ -122,7 +120,7 @@ def load_svm_header(path: Path | str, name: str, offset: int = 0) -> LinearHeade
 
 
 def shipped_models() -> dict[str, MlpHeader | LinearHeader]:
-    """The two models in the firmware's registry, by their registry names."""
+    """mlp_v6 and svm_v3, the registry models that exist only as headers, by registry name."""
     return {
         "mlp_v6": load_mlp_header(MODELS_DIR / "mlp_model_data_v6.h", "mlp_v6", offset=1),
         "svm_v3": load_svm_header(MODELS_DIR / "svm_model_data_v3.h", "svm_v3", offset=0),
@@ -130,4 +128,4 @@ def shipped_models() -> dict[str, MlpHeader | LinearHeader]:
 
 
 # The operating points the registry declares (classifier_t::default_thr_milli).
-SHIPPED_THRESHOLDS = {"mlp_v6": 3.0, "svm_v3": 0.5}  # mlp_v6: 15.0 until 2026-09-23
+SHIPPED_THRESHOLDS = {"mlp_v6": 3.0, "svm_v3": 0.5}

@@ -44,8 +44,8 @@ UNKNOWN_DRONE = "drone"
 
 # Firmware before the PDM warm-up fix started every stream with a DC step:
 # clipped for ~0.12 s, then decaying with the DC blocker's 43 ms tau, still
-# 3-10x the background at 0.35 s (measured on the 2026-09-30 takes). A clip
-# that begins at the first sample of a stream drops this much.
+# 3-10x the background at 0.35 s. A clip that begins at the first sample of a
+# stream drops this much.
 START_SKIP_S = 0.5
 
 CHUNK_GLOB = "chunk-*.wav"

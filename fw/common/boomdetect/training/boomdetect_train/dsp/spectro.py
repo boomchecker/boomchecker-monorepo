@@ -1,4 +1,4 @@
-"""Band spectrograms for the 2026-10-07 comparison: MFE (mel) and GS (gammatone), three FFTs.
+"""Band spectrograms: MFE (mel) and GS (gammatone), three FFT lengths each.
 
 Offline only - there is no C side. Six front-ends, named `<kind><n_fft / 1024>k`:
 
@@ -22,9 +22,9 @@ could learn.
 
 Gammatone weights: |H(f)|^2 = (1 + ((f - fc) / b)^2)^-4 with b = 1.019 ERB(fc),
 Glasberg & Moore's ERB(f) = 24.7 (4.37 f / 1000 + 1), centres equally spaced in
-ERB-rate - the construction of the 2026-10-06 GTCC experiment. Computed from the
-FFT magnitude it keeps the gammatone's frequency selectivity, not its time-domain
-fine structure: the cheap version the board could afford.
+ERB-rate. Computed from the FFT magnitude it keeps the gammatone's frequency
+selectivity, not its time-domain fine structure: the cheap version the board
+could afford.
 """
 
 from __future__ import annotations
@@ -192,8 +192,3 @@ def spec_frames(
                 continue
             out[fe.name] = np.log(p @ band_matrix(fe).T + SPEC_LOG_OFFSET).astype(np.float32)
     return out
-
-
-def frame_seconds(n_fft: int) -> float:
-    """How much audio one frame of a front-end looks at."""
-    return n_fft / SAMPLE_RATE_HZ

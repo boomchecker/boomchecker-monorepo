@@ -9,11 +9,10 @@
  * declaring a new layout made init fail. The id was a version tag with exactly
  * one legal value, and the docs said otherwise.
  *
- * There are now four extractors (src/extractors.h), and the seam is what made
- * the later ones additions rather than edits to the pipeline: each is a
- * file under src/, an id below, a line in the registry, and a model that
- * declares the same id. boomdetect_init() checks the model against the
- * CONFIGURED extractor's layout, never against a constant.
+ * Adding one is a file under src/, a new BOOMDETECT_LAYOUT_* id, and a line in
+ * the extractor registry. The pipeline gains nothing: it already asks the
+ * configured extractor for its layout and checks the model against THAT rather
+ * than against a constant.
  */
 #ifndef BOOMDETECT_EXTRACTOR_H
 #define BOOMDETECT_EXTRACTOR_H
@@ -96,15 +95,15 @@ typedef struct
 
     /** One-time set-up - a transform instance, a window table - done by
         boomdetect_init() rather than inside the first window, which on the
-        board is real time: layout 4's tables took 6 ms there and cost a block.
-        NULL when there is nothing to prepare; returning false fails init. */
+        board closes inside the real-time loop. NULL when there is nothing to
+        prepare; returning false fails init. */
     bool (*prepare)(void *ctx);
 
     boomdetect_extract_fn extract;
     void                 *ctx;
 } boomdetect_extractor_t;
 
-/** @brief The extractor a detector uses unless told otherwise. */
+/** @brief The registry's first entry ("stats"); init() picks by the model's layout. */
 const boomdetect_extractor_t *boomdetect_extractor_default(void);
 
 /** @brief Extractor at @p idx, for listing. NULL past the end. */

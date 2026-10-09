@@ -53,7 +53,6 @@ typedef struct
     uint32_t                history; /**< bit i set: window i back was a drone call */
     float                   ring[BOOMDETECT_ALARM_MAX_N]; /**< last n relative decisions */
     uint8_t                 head;    /**< next ring slot to overwrite */
-    uint8_t                 count;   /**< windows seen so far, saturating at n */
     bool                    on;
     uint32_t                onsets;  /**< OFF -> ON transitions since init */
 } boomdetect_alarm_t;
@@ -69,15 +68,6 @@ bool boomdetect_alarm_init(boomdetect_alarm_t *a, const boomdetect_alarm_rule_t 
  * @return true if the alarm state CHANGED on this window.
  */
 bool boomdetect_alarm_push_decision(boomdetect_alarm_t *a, float relative);
-
-/**
- * @brief Record one window's verdict, for callers that only have the call.
- *
- * Under VOTE this is the whole story. Under MEAN a call enters the mean as
- * +1 (drone) or -1 (noise) - the shape of the rule without its soft part.
- * @return true if the alarm state CHANGED on this window.
- */
-bool boomdetect_alarm_push(boomdetect_alarm_t *a, bool is_drone);
 
 /** @brief Current state. */
 bool boomdetect_alarm_on(const boomdetect_alarm_t *a);

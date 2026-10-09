@@ -199,7 +199,9 @@ def main(argv: list[str] | None = None) -> int:
 
     sub.add_parser("paths", help="print the directories in use").set_defaults(fn=cmd_paths)
     sub.add_parser(
-        "fixtures", help="regenerate tests/vectors/extractor_expected.h from the Python spec"
+        "fixtures",
+        help="regenerate tests/vectors/extractor_expected.h, extractor_mod_expected.h and "
+        "src/envelope_coefs.h from the Python spec",
     ).set_defaults(fn=cmd_fixtures)
     sub.add_parser("manifest", help="enumerate datasets into manifest.parquet").set_defaults(
         fn=cmd_manifest

@@ -109,9 +109,9 @@ static uint32_t run_lcg(const boomdetect_extractor_t *ex, float *out, uint32_t m
         boomdetect_event_t ev;
         while (boomdetect_step(&d, &ev))
         {
-            const float *row = boomdetect_last_frame(&d);
-            if (row != NULL && ev.frame_index < n_scalar_frames)
+            if (d.last_mfcc_slot < d.cfg.accum_frames && ev.frame_index < n_scalar_frames)
             {
+                const float *row = &d.mfccs[d.last_mfcc_slot * BOOMDETECT_FRAME_WIDTH];
                 memcpy(scalars + ev.frame_index * BOOMDETECT_FRAME_SCALARS,
                        row + BOOMDETECT_FRAME_SCALAR_OFF, BOOMDETECT_FRAME_SCALARS * sizeof(float));
             }

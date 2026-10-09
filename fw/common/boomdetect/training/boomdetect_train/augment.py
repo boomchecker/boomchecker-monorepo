@@ -1,12 +1,10 @@
 """Field augmentation: the same recording heard from further away.
 
-The field recordings were made within tens of metres of the drone, and the
-first models trained on them lean on the top of the band: low-pass a recording
-at 6 kHz and every one of them stops detecting, the DJI included. Distance does
-a milder version of that to every real drone - air absorbs 8 kHz at roughly
-0.08 dB per metre and 1 kHz at 0.005 - and the negatives played from a phone
-were band-limited to begin with, so "no highs" had become a cue for "not a
-drone". A variant here is therefore:
+The field recordings were made within tens of metres of the drone, so they
+carry the top of the band that distance takes away from every real drone - air
+absorbs 8 kHz at roughly 0.08 dB per metre and 1 kHz at 0.005 - while the
+negatives played from a phone were band-limited to begin with, so "no highs"
+becomes a cue for "not a drone". A variant here is therefore:
 
 * a zero-phase FIR with the air-absorption loss of a random distance (ISO
   9613-1, 20 degC, 60 % RH, interpolated in log-frequency);

@@ -1,13 +1,10 @@
 """The frame cache: the front end's output for every clip, computed once.
 
-Per clip the cache holds one float32 row per frame, FRAME_WIDTH wide:
-
-    [rms | mfcc x 13 | logmel x 20 | spectral scalars x 8]
-
-which is everything any layout needs (see features.py): layout 1 from the MFCC
-block, layout 2 from MFCC, scalars and log-mel, layout 3 from log-mel. The raw
-magnitude spectra are not kept - at 513 float64 per frame they would be most of
-a gigabyte, and the scalars are the only thing derived from them.
+Per clip the cache holds one float32 row per frame, FRAME_WIDTH wide and cut
+into the COL_* slices below: everything the layouts read except the band
+spectrograms, which have their own cache (build_spec_cache). The raw magnitude
+spectra are not kept - at 513 float64 per frame they would be most of a
+gigabyte, and the scalars are the only thing derived from them.
 
 Storage is one .npz per source: a (total_frames, FRAME_WIDTH) matrix plus an
 index table (clip id -> offset, count). Tens of thousands of tiny files were
@@ -16,7 +13,6 @@ the alternative and are slow on every filesystem.
 
 from __future__ import annotations
 
-import io
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -99,7 +95,7 @@ class CachedFrames:
         return self.rows[:, COL_ENV]
 
 
-def _load_clip(path: str) -> tuple[np.ndarray, int]:
+def load_clip_audio(path: str) -> tuple[np.ndarray, int]:
     """Audio of a manifest `path`: a file, `<parquet>#<row>`, or a field clip spec."""
     if "#" in path and path.rsplit("#", 1)[1].isdigit():
         shard, row = path.rsplit("#", 1)
@@ -109,13 +105,6 @@ def _load_clip(path: str) -> tuple[np.ndarray, int]:
     if is_field_path(path):
         return load_field_audio(path)
     return read_audio(path)
-
-
-def _load_shard_clips(shard: str, rows: list[int]) -> dict[int, bytes]:
-    """All requested rows of one shard in one read; row-by-row was quadratic."""
-    table = pq.read_table(shard, columns=["audio"])
-    col = table.column("audio")
-    return {r: col[r].as_py()["bytes"] for r in rows}
 
 
 class FrameCache:
@@ -165,10 +154,6 @@ class FrameCache:
                 self._spec[key] = z["spec"]
         return self._spec[key]
 
-    def drop_specs(self) -> None:
-        """Forget every loaded spectrogram (they are large; a run needs one front-end)."""
-        self._spec.clear()
-
     def drop_loaded(self) -> None:
         """Forget everything loaded (frames, index, spectrograms); it reloads on the next get.
 
@@ -189,10 +174,6 @@ class FrameCache:
 
         return CachedFrames(self._data[source][off : off + cnt], spec_loader=loader)
 
-    def ids(self, source: str) -> list[str]:
-        self._ensure(source)
-        return list(self._index[source].index)
-
 
 def _source_parts(
     manifest: pd.DataFrame, source: str
@@ -202,7 +183,6 @@ def _source_parts(
     The frame cache's order is every shard's clips in turn, then the files.
     """
     sub = manifest[manifest["source"] == source]
-    # Parquet-backed clips are read shard by shard; file clips one by one.
     shard_rows: dict[str, list[tuple[str, int]]] = {}
     file_items: list[tuple[str, str]] = []
     for rec in sub.itertuples(index=False):
@@ -214,21 +194,19 @@ def _source_parts(
     return shard_rows, file_items
 
 
-def iter_source_audio(
-    manifest: pd.DataFrame, source: str, *, show_progress: bool = True
-) -> Iterator[tuple[str, np.ndarray]]:
+def iter_source_audio(manifest: pd.DataFrame, source: str) -> Iterator[tuple[str, np.ndarray]]:
     """(clip id, 16 kHz audio) of every clip of `source`, in the frame cache's order."""
     shard_rows, file_items = _source_parts(manifest, source)
     for shard, items in shard_rows.items():
         table = pq.read_table(shard, columns=["audio"])
         col = table.column("audio")
-        it = tqdm(items, desc=f"{source} {Path(shard).stem}", disable=not show_progress)
+        it = tqdm(items, desc=f"{source} {Path(shard).stem}")
         for cid, row in it:
             x, sr = read_audio(col[row].as_py()["bytes"])
             yield cid, to_16k(x, sr)
-    it = tqdm(file_items, desc=source, disable=not show_progress)
+    it = tqdm(file_items, desc=source)
     for cid, path in it:
-        x, sr = _load_clip(path)
+        x, sr = load_clip_audio(path)
         yield cid, to_16k(x, sr)
 
 
@@ -242,21 +220,14 @@ def _index_arrays(ids: list[str], counts: list[int]) -> dict[str, np.ndarray]:
     }
 
 
-def build_source_cache(
-    manifest: pd.DataFrame,
-    source: str,
-    frontend: Frontend,
-    root: Path | None = None,
-    *,
-    show_progress: bool = True,
-) -> Path:
+def build_source_cache(manifest: pd.DataFrame, source: str, frontend: Frontend) -> Path:
     """Run the front end over every clip of `source` and write its .npz."""
-    cache = FrameCache(root)
+    cache = FrameCache()
     cache.root.mkdir(parents=True, exist_ok=True)
     ids: list[str] = []
     counts: list[int] = []
     blocks: list[np.ndarray] = []
-    for cid, x16 in iter_source_audio(manifest, source, show_progress=show_progress):
+    for cid, x16 in iter_source_audio(manifest, source):
         rows = frame_rows(frontend.process(x16))
         ids.append(cid)
         counts.append(rows.shape[0])
@@ -289,7 +260,7 @@ def _spec_task(task: tuple, names: tuple[str, ...]) -> tuple[list[str], list[int
             add(cid, to_16k(x, sr))
     else:
         for cid, path in items:
-            x, sr = _load_clip(path)
+            x, sr = load_clip_audio(path)
             add(cid, to_16k(x, sr))
     empty = np.empty((0, SPEC_N_BANDS), np.float16)
     return ids, counts, {n: np.concatenate(b) if b else empty for n, b in blocks.items()}
@@ -299,10 +270,8 @@ def build_spec_cache(
     manifest: pd.DataFrame,
     source: str,
     names: tuple[str, ...] | list[str] = SPEC_FE_NAMES,
-    root: Path | None = None,
     *,
     workers: int = 1,
-    show_progress: bool = True,
 ) -> list[Path]:
     """Every band spectrogram of `source` in one pass over its audio, float16 per front-end.
 
@@ -313,7 +282,7 @@ def build_spec_cache(
     from concurrent.futures import ProcessPoolExecutor
 
     names = tuple(names)
-    cache = FrameCache(root)
+    cache = FrameCache()
     shard_rows, file_items = _source_parts(manifest, source)
     tasks: list[tuple] = [("shard", shard, items) for shard, items in shard_rows.items()]
     step = 200
@@ -327,9 +296,7 @@ def build_spec_cache(
     else:
         pool = None
         results = (_spec_task(t, names) for t in tasks)
-    for t_ids, t_counts, t_blocks in tqdm(
-        results, total=len(tasks), desc=f"{source} spec", disable=not show_progress
-    ):
+    for t_ids, t_counts, t_blocks in tqdm(results, total=len(tasks), desc=f"{source} spec"):
         ids += t_ids
         counts += t_counts
         for n in names:
@@ -347,12 +314,3 @@ def build_spec_cache(
         written.append(out)
         blocks[n] = []
     return written
-
-
-def load_clip_audio(path: str) -> tuple[np.ndarray, int]:
-    """Public wrapper for one-off reads (evaluation of a single file, plots)."""
-    return _load_clip(path)
-
-
-def bytes_to_audio(b: bytes) -> tuple[np.ndarray, int]:
-    return read_audio(io.BytesIO(b).getvalue())

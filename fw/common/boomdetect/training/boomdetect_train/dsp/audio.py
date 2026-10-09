@@ -78,9 +78,3 @@ def read_audio(source: Path | str | bytes) -> tuple[np.ndarray, int]:
             data = f.read(dtype="float32", always_2d=False)
             x = to_mono(data).astype(np.float32)
     return x, sr
-
-
-def load_16k(source: Path | str | bytes, *, firmware_decimation: bool = True) -> np.ndarray:
-    """read_audio() followed by to_16k()."""
-    x, sr = read_audio(source)
-    return to_16k(x, sr, firmware_decimation=firmware_decimation)

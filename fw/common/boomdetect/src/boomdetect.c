@@ -11,18 +11,17 @@
 #include "boomdetect.h"
 
 #include "arm_math.h"
+#include "mfcc_processor.h"
 #include "classifier.h"
 #include "envelope.h"
 #include "extractors.h"
 #include "frame_scalars.h"
-#include "mfcc_processor.h"
 
 #include <math.h>
 #include <string.h>
 
 _Static_assert(BOOMDETECT_FEATURE_COUNT <= BOOMDETECT_FEATURE_MAX &&
                    BOOMDETECT_FEATURE_COUNT_STATS_SPECTRAL <= BOOMDETECT_FEATURE_MAX &&
-                   BOOMDETECT_FEATURE_COUNT_LOGMEL <= BOOMDETECT_FEATURE_MAX &&
                    BOOMDETECT_FEATURE_COUNT_STATS_SPECTRAL_MOD <= BOOMDETECT_FEATURE_MAX,
                "boomdetect_t::features cannot hold every layout this build produces");
 _Static_assert(BOOMDETECT_HOP / BOOMDETECT_ENV_DECIM == BOOMDETECT_ENV_PER_HOP,
@@ -84,14 +83,6 @@ bool boomdetect_init(boomdetect_t *d, const boomdetect_config_t *cfg)
 
     const classifier_t *model = (cfg->classifier != NULL) ? cfg->classifier
                                                           : classifier_default();
-    /* No extractor named means "the one this model reads", not "the first one
-       in the table". Those were the same answer only while every model was
-       layout 1; the moment a layout-2 model becomes the default, taking the
-       table's first entry rejects it, and the caller gets a false from init
-       with nothing to say why. The consumer-side version of this cost a board
-       session in September - detect_service.c left the field zero and every
-       layout-2 and layout-3 model answered "init failed" - and fixing it there
-       left every other caller free to make the same mistake. */
     const boomdetect_extractor_t *ex =
         (cfg->extractor != NULL) ? cfg->extractor
                                  : boomdetect_extractor_for_layout(model->layout_id);
@@ -125,9 +116,6 @@ bool boomdetect_init(boomdetect_t *d, const boomdetect_config_t *cfg)
         }
         s_mfcc_ready = true;
     }
-    /* Whatever the extractor needs set up happens here, not in the first
-       window: on the board a window closes inside the real-time loop, and
-       layout 4's tables took 6 ms there - a lost block. */
     if (ex->prepare != NULL && !ex->prepare(ex->ctx))
     {
         return false;
@@ -231,16 +219,10 @@ bool boomdetect_step(boomdetect_t *d, boomdetect_event_t *out)
        classified at all. */
     out->window.decision = NAN;
 
-    /* The envelope follows the audio whether or not this frame is accepted: a
-       window's modulation spectrum is taken over the last two seconds of
-       sound, silence between accepted frames included, exactly as the
-       training package computed it over contiguous recordings. Frames overlap
-       by WINDOW - hop, so the first `hop` samples of this one are the only
-       ones the chain has not seen; they are read before the MFCC destroys the
-       buffer. A gap means the ring no longer describes two continuous seconds
-       and starts filling again. Only kept for an extractor that asks for it:
-       the three biquads cost about 0.15 ms per frame on the board, a tenth of
-       the frame, and a layout-2 model never reads the ring. */
+    /* For an extractor that reads the envelope ring (envelope.h), every frame
+       feeds it, accepted or not. Frames overlap by WINDOW - hop, so only the
+       first `hop` samples are new; they are read before the MFCC destroys the
+       buffer. */
     if (d->cfg.extractor->env_required > 0u)
     {
         if (out->gap)
@@ -279,11 +261,8 @@ bool boomdetect_step(boomdetect_t *d, boomdetect_event_t *out)
         }
 
         /* The MFCC destroys its input, which is why d->frame is a copy of the
-           ring rather than a view into it. What it leaves behind is the
-           magnitude spectrum, which the spectral scalars read; the log-mel
-           vector it applied the DCT to is still in its scratch buffer. Both go
-           into the frame descriptor next to the coefficients, so an extractor
-           that wants them pays nothing more than the copy. */
+           ring rather than a view into it. What it leaves there, the magnitude
+           spectrum, is what the spectral scalars read (mfcc_processor.h). */
         float *row = &d->mfccs[d->accum * BOOMDETECT_FRAME_WIDTH];
         d->last_mfcc_slot = d->accum;
         mfcc_process(d->frame, row + BOOMDETECT_FRAME_MFCC_OFF);
@@ -302,10 +281,7 @@ bool boomdetect_step(boomdetect_t *d, boomdetect_event_t *out)
             const boomdetect_extractor_t *ext = d->cfg.extractor;
             if (keep && ext->env_required > d->env_fill)
             {
-                /* Layout 4 in its first two seconds, or after a gap: the window
-                   is consumed, there is no decision, and the event says why. The
-                   training package has NaN here and never fitted a model on
-                   such a window, so there is nothing right to hand the model. */
+                /* Fewer envelope samples than the extractor needs (extractor.h). */
                 out->window.warming     = true;
                 out->window.start_frame = d->window_start_frame;
                 out->window.end_frame   = d->frame_index;
@@ -397,15 +373,6 @@ const float *boomdetect_last_mfcc(const boomdetect_t *d)
         return NULL;
     }
     return &d->mfccs[d->last_mfcc_slot * BOOMDETECT_FRAME_WIDTH + BOOMDETECT_FRAME_MFCC_OFF];
-}
-
-const float *boomdetect_last_frame(const boomdetect_t *d)
-{
-    if (d->last_mfcc_slot >= d->cfg.accum_frames)
-    {
-        return NULL;
-    }
-    return &d->mfccs[d->last_mfcc_slot * BOOMDETECT_FRAME_WIDTH];
 }
 
 const float *boomdetect_last_features(const boomdetect_t *d)

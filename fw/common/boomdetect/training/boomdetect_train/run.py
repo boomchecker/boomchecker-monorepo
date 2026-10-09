@@ -1,11 +1,11 @@
 """A training run: every requested family on every requested layout, saved together.
 
-    runs/<name>/run.json            settings, dataset summary, window counts
-    runs/<name>/models/<m>.joblib   a ScaledModel (scikit-learn families)
-    runs/<name>/models/<m>.npz/json a CnnModel (weights + descriptor)
-    runs/<name>/models/<m>.json     kind, layout, offset, width, training meta
-    runs/<name>/folds.json          field recording -> fold, when the run has folds
-    runs/<name>/folds/<k>/models/   the same models trained without fold k's recordings
+    runs/<name>/run.json             settings, dataset summary, window counts
+    runs/<name>/models/<m>.joblib    a ScaledModel (scikit-learn families)
+    runs/<name>/models/<m>.npz/json  a CnnModel (weights + descriptor)
+    runs/<name>/models/<m>.meta.json kind, layout, offset, width, training meta
+    runs/<name>/folds.json           field recording -> fold, when the run has folds
+    runs/<name>/folds/<k>/models/    the same models trained without fold k's recordings
 
 Model names are `<family>_l<layout>` for the scikit-learn families and the
 architecture name for the CNNs (they only ever read layout 3). The C registry
@@ -84,14 +84,12 @@ SKLEARN_FAMILIES = {
     "mlp": lambda ws, seed=SEED: train_mlp(ws, seed=seed),
     "svm": lambda ws, seed=SEED: train_svm(ws, seed=seed),
     "gbt": lambda ws, seed=SEED: train_gbt(ws, seed=seed),
-    # Regularised variants: the first run showed the plain MLP and forest fitting
-    # the training sources and losing on the unseen ones.
+    # Regularised variants: the plain MLP and forest overfit the training sources.
     "mlp_reg": lambda ws, seed=SEED: train_mlp(ws, hidden=(16,), alpha=1e-2, seed=seed),
     "gbt_reg": lambda ws, seed=SEED: train_gbt(
         ws, max_iter=120, max_leaf_nodes=7, learning_rate=0.05, seed=seed
     ),
-    # Two hidden layers, regularised like mlp_reg: a candidate only, the C export
-    # (export.py, export_c.py) still writes one hidden layer.
+    # Two hidden layers, regularised like mlp_reg.
     "mlp2": lambda ws, seed=SEED: train_mlp(ws, hidden=(32, 16), alpha=1e-2, seed=seed),
 }
 DEFAULT_FAMILIES = ["mlp", "svm", "gbt", "mlp_reg", "gbt_reg", *sorted(ARCHS)]
@@ -278,13 +276,11 @@ def train_all(
 
     # A run is often filled in two passes - the cheap stats layouts over every
     # window, then the CNNs over a capped set - so a second call adds to the
-    # run rather than forgetting what the first one trained. The models on
-    # disk always survived; run.json used to be the thing that lost them.
+    # run rather than forgetting what the first one trained.
     info: dict = {"families": [], "layouts": [], "max_neg_windows_per_clip": {}, "models": {}}
     run_json = run_dir / "run.json"
     if run_json.exists():
         info |= json.loads(run_json.read_text())
-        info.setdefault("models", {})
     info["dataset"] = summarize(manifest).to_dict(orient="records")
     info["families"] = sorted({*info.get("families", []), *families})
     info["layouts"] = sorted({*info.get("layouts", []), *layouts})
@@ -440,18 +436,6 @@ def _val_threshold(
     return 0.0 if np.isnan(thr) else float(thr)
 
 
-class _HeaderAsModel:
-    """Give a header scorer the .score/.offset/.layout shape the exporters expect."""
-
-    def __init__(self, hdr, layout: int):
-        self.hdr = hdr
-        self.layout = layout
-        self.offset = hdr.offset
-
-    def score(self, features):
-        return self.hdr.score(features)
-
-
 def _export_names(models: list[str] | None, run_models: dict) -> list[tuple[str, str]]:
     """(name in the run, name in the C tree) pairs; `mlp_l2=mlp_f1_l2` exports under a new name.
 
@@ -523,9 +507,8 @@ def export_run(
     # The shipped models first, scored by their headers; their parity vectors
     # are what proves the harness itself against the known-good C.
     for name, hdr in shipped_models().items():
-        wrapper = _HeaderAsModel(hdr, LAYOUT_STATS)
         entries.append(
-            (name, LAYOUT_STATS, hdr.offset, ex.parity_vectors(wrapper, feats(LAYOUT_STATS)))
+            (name, LAYOUT_STATS, hdr.offset, ex.parity_vectors(hdr, feats(LAYOUT_STATS)))
         )
 
     loaded: dict[str, dict] = {}
@@ -557,8 +540,7 @@ def export_run(
             )
         else:
             header = ex.export_model(m, name, p)
-            prefix = {"mlp": "mlp", "svm": "svm", "gbt": "gbt"}[m.kind]
-            written.append(ex.write_text(MODELS_DIR / f"{prefix}_model_data_{name}.h", header))
+            written.append(ex.write_text(MODELS_DIR / f"{m.kind}_model_data_{name}.h", header))
             tu = {"mlp": exc.mlp_tu, "svm": exc.linear_tu, "gbt": exc.gbt_tu}[m.kind]
             if m.kind == "mlp" and ex.mlp_hidden_layers(m) == 2:
                 tu = exc.mlp2_tu

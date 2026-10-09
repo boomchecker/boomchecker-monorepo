@@ -182,12 +182,10 @@ def test_long_patch_early_window_is_mirrored():
     assert v.shape == (31 * SPEC_N_BANDS,) and np.isfinite(v).all()
 
 
-torch = pytest.importorskip("torch")
-
-
 @pytest.mark.parametrize("arch", ["cnn_m", "crnn1d", "crnn2d", "lstm20"])
 @pytest.mark.parametrize("layout", [100, 500, 403, 803])
 def test_torchnets_train_and_score(arch, layout):
+    pytest.importorskip("torch")
     from boomdetect_train.models.torchnets import (
         load_torchnet,
         save_torchnet,

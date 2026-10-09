@@ -2,9 +2,8 @@
 
 Three table formats, one per family the C knows how to run:
 
-* MLP: scaler, one hidden ReLU layer, linear output - the format
-  models/mlp_model_data_v6.h already has, so model_mlp_v6.c's forward pass
-  runs any exported MLP unchanged. Only the dimensions differ.
+* MLP: scaler, one or two hidden ReLU layers, linear output - with one, the
+  format models/mlp_model_data_v6.h already has.
 * linear: scaler, weights, bias - models/svm_model_data_v3.h's format.
 * GBT: a forest as flat node arrays. Each tree is a contiguous run of nodes;
   a node with feature 0xFF is a leaf and its value is added to the sum. Split
@@ -46,21 +45,23 @@ def _chunks(tokens: list[str], per_line: int = 8, indent: str = "    ") -> list[
 
 
 def _c_array(name: str, ctype: str, values: np.ndarray, dims: tuple[int, ...], fmt) -> str:
-    """`static const <ctype> name[d0][d1] = { ... };` with 8 values per line.
+    """`static const <ctype> name[d0][d1] = { ... };` with 8 floats or 16 integers per line.
 
     A 2-D array gets one braced row per leading index: gcc's -Wmissing-braces
     (on under -Wall, fatal under -Werror) rejects a flat initializer for it.
     """
     arr = np.asarray(values)
+    per_line = 8 if ctype == "float" else 16
     dim_str = "".join(f"[{d}]" for d in dims)
     lines = [f"static const {ctype} {name}{dim_str} = {{"]
     if len(dims) == 2:
         for r in arr.reshape(dims):
-            lines.append("    {")
-            lines += _chunks([fmt(v) for v in r], indent="        ")
-            lines.append("    },")
+            row = _chunks([fmt(v) for v in r], per_line, indent="      ")
+            row[0] = "    { " + row[0].lstrip()
+            row[-1] += " },"
+            lines += row
     else:
-        lines += _chunks([fmt(v) for v in arr.reshape(-1)])
+        lines += _chunks([fmt(v) for v in arr.reshape(-1)], per_line)
     lines.append("};")
     return "\n".join(lines)
 

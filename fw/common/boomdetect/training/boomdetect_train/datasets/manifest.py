@@ -9,7 +9,7 @@ Columns
     group     leakage key: clips from the same recording share a group and
               never straddle a split
     split     train / val / test / unseen / eval_real / field / stress
-    role      what the clip is for (see ROLES) - a label alone does not say
+    role      what the clip is for (see ROLE_*) - a label alone does not say
               whether a clip may be trained on
     sr        native sample rate
     duration  seconds at the native rate
@@ -43,33 +43,18 @@ ROLE_UNSEEN = "unseen"  # public data the models never see in training
 ROLE_REAL = "real_mic"  # recorded with the node's own microphone chain
 ROLE_FIELD = "field"  # the node's field recordings: trainable, judged out of fold
 ROLE_STRESS = "stress"  # synthetic probes
-ROLES = (ROLE_TRAIN, ROLE_UNSEEN, ROLE_REAL, ROLE_FIELD, ROLE_STRESS)
 
-# The three-way partition of the trainable clips.
-#
-#     train 57 % | val 10 % | test 33 %
-#
-# Two thirds of the data are therefore available to build a model with and the
-# remaining third only ever judges it. `test` is held out of everything: it
-# never trains a model and never picks a threshold, so its numbers are the only
-# ones nothing has been fitted to. `val` is what chooses the operating point
-# (threshold_for_fa_rate) and ranks the families, which is exactly why it
-# cannot double as that held-out third.
+# train 57 % | val 10 % | test 33 % of the trainable clips; README "How a model is judged".
 TEST_FRACTION = 1.0 / 3.0
 VAL_FRACTION = 0.10
-SPLITS = ("train", "val", "test")
 
 
-def split_for_group(
-    group: str,
-    test_fraction: float = TEST_FRACTION,
-    val_fraction: float = VAL_FRACTION,
-) -> str:
+def split_for_group(group: str) -> str:
     """train, val or test, decided by a hash of the group key so it never moves."""
     h = int.from_bytes(hashlib.sha1(group.encode("utf-8")).digest()[:4], "big") / 2**32
-    if h < test_fraction:
+    if h < TEST_FRACTION:
         return "test"
-    if h < test_fraction + val_fraction:
+    if h < TEST_FRACTION + VAL_FRACTION:
         return "val"
     return "train"
 

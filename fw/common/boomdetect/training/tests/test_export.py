@@ -76,7 +76,7 @@ def test_gbt_flatten_matches_sklearn(ws):
     assert (flat["feature"][flat["feature"] != export.GBT_LEAF] < x.shape[1]).all()
 
 
-def test_gbt_header_parses_and_is_consistent(ws, tmp_path):
+def test_gbt_header_parses_and_is_consistent(ws):
     model = train_gbt(ws, max_iter=20, max_leaf_nodes=7)
     text = export.export_gbt(model, "t3", ["test"])
     defines = parse_defines(text)

@@ -7,6 +7,7 @@
  * defining a bare `FFT_SIZE` is not hypothetical trouble: another board in this
  * repo (fw/bom-node/components/impulse_detection) already defines its own.
  */
+
 #ifndef BOOMDETECT_DSP_CONFIG_H
 #define BOOMDETECT_DSP_CONFIG_H
 
@@ -23,6 +24,7 @@
 /* MFCC shape. These describe what src/mfcc_tables.h was GENERATED with, and
    mfcc_processor.c static-asserts them against the tables' own macros, because
    the two sets are independent and nothing else made them agree.
+
    The generator also used a 0..8000 Hz mel range. That is not a macro here: it
    is baked into the tables and cannot be changed by editing a header, so
    carrying it as a settable-looking constant was a lie. It is recorded in

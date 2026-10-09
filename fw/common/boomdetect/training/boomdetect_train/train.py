@@ -1,11 +1,10 @@
 """Training rows from the frame cache, and the scikit-learn model families.
 
 Rows are windows, not clips: the board classifies 14-frame windows, so a model
-trained on whole-clip statistics meets a different distribution at run time
-(the E0-versus-E1 finding on the research branch). Training windows slide
-with a hop of 7 frames over each clip - twice the windows of the disjoint
-firmware policy, and the overlap is harmless for a classifier - while every
-evaluation uses the firmware policy through evaluate.py.
+trained on whole-clip statistics meets a different distribution at run time.
+Training windows slide with a hop of 7 frames over each clip - twice the
+windows of the disjoint firmware policy, and the overlap is harmless for a
+classifier - while every evaluation uses the firmware policy through evaluate.py.
 
 Positive windows quieter than POS_WIN_MIN_RMS (median frame RMS) are dropped:
 a drone clip's silent tail is label noise. Negatives keep every window; a
@@ -41,7 +40,6 @@ from boomdetect_train.evaluate import clip_windows
 from boomdetect_train.features import LAYOUT_LOGMEL, LAYOUTS, spec_layout
 
 POS_WIN_MIN_RMS = 0.002
-TRAIN_HOP = 7
 SEED = 42
 
 
@@ -106,10 +104,7 @@ def build_window_set(
     split: str,
     *,
     roles: tuple[str, ...] = (ROLE_TRAIN,),
-    hop: int = TRAIN_HOP,
-    pos_min_rms: float = POS_WIN_MIN_RMS,
     max_neg_windows_per_clip: int | None = None,
-    seed: int = SEED,
 ) -> WindowSet:
     """Sliding training windows for every clip of `split` whose role is one of `roles`."""
     rows = manifest[(manifest["role"].isin(roles)) & (manifest["split"] == split)]
@@ -117,35 +112,25 @@ def build_window_set(
         (rec.id, rec.source, int(rec.label), cache.get(rec.source, rec.id))
         for rec in rows.itertuples(index=False)
     )
-    return frames_window_set(
-        items,
-        layout,
-        hop=hop,
-        pos_min_rms=pos_min_rms,
-        max_neg_windows_per_clip=max_neg_windows_per_clip,
-        seed=seed,
-    )
+    return frames_window_set(items, layout, max_neg_windows_per_clip=max_neg_windows_per_clip)
 
 
 def frames_window_set(
     items,
     layout: int,
     *,
-    hop: int = TRAIN_HOP,
-    pos_min_rms: float = POS_WIN_MIN_RMS,
     max_neg_windows_per_clip: int | None = None,
-    seed: int = SEED,
 ) -> WindowSet:
     """Sliding training windows of (clip id, source, label, CachedFrames) items.
 
     What build_window_set does for the cache, for frames that never were in it
     (augmented variants, computed per run).
     """
-    rng = np.random.default_rng(seed)
+    rng = np.random.default_rng(SEED)
     xs, ys, ids, srcs = [], [], [], []
     for clip_id, source, label, cf in items:
-        squelch = pos_min_rms if label == 1 else None
-        feats, _ = clip_windows(cf, layout, Gate.WINDOW_MEDIAN, squelch, hop=hop)
+        squelch = POS_WIN_MIN_RMS if label == 1 else None
+        feats, _ = clip_windows(cf, layout, Gate.WINDOW_MEDIAN, squelch)
         if feats.shape[0] == 0:
             continue
         if label == 0 and max_neg_windows_per_clip and feats.shape[0] > max_neg_windows_per_clip:
@@ -247,9 +232,8 @@ class ScaledModel:
     def _slice(self, features: np.ndarray) -> np.ndarray:
         x = np.atleast_2d(np.asarray(features, dtype=np.float32))
         x = x[:, self.offset : self.offset + self.n_features]
-        fill = getattr(self, "impute", None)  # models pickled before the field have none
-        if fill is not None and np.isnan(x).any():
-            x = np.where(np.isnan(x), fill, x)
+        if self.impute is not None and np.isnan(x).any():
+            x = np.where(np.isnan(x), self.impute, x)
         return x
 
     def _scaled(self, features: np.ndarray) -> np.ndarray:
@@ -263,9 +247,7 @@ class ScaledModel:
         z = self._scaled(features)
         if self.kind == "mlp":
             out = mlp_logit(self.model, z)
-        elif self.kind == "svm":
-            out = self.model.decision_function(z.astype(np.float64))
-        elif self.kind == "gbt":
+        elif self.kind in ("svm", "gbt"):
             out = self.model.decision_function(z.astype(np.float64))
         else:
             raise ValueError(self.kind)

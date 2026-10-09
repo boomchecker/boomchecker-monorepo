@@ -106,8 +106,8 @@ typedef struct
     int32_t thr_milli;
     /** Which model scores the windows. NULL selects classifier_default(). */
     const classifier_t *classifier;
-    /** What shape the model is handed. NULL selects
-        boomdetect_extractor_default(). init() checks the model's layout_id
+    /** What shape the model is handed. NULL selects the extractor that
+        produces the model's layout. init() checks the model's layout_id
         against THIS rather than against a constant, which is what makes a new
         feature representation an addition rather than an edit to the pipeline. */
     const boomdetect_extractor_t *extractor;
@@ -148,10 +148,8 @@ typedef struct
     struct
     {
         bool     complete;
-        /** The window closed but the extractor's envelope ring was not yet
-            full (boomdetect_extractor_t::env_required): consumed, no
-            decision, `complete` false. Only layout 4 ever sets it, during the
-            first two seconds after init or after a gap. */
+        /** The window closed before the envelope ring held what the extractor
+            needs (boomdetect_extractor_t::env_required): consumed, no decision. */
         bool     warming;
         uint32_t start_frame;
         /** Frame that closed the window. Not `start_frame + accum_frames - 1`:
@@ -166,8 +164,8 @@ typedef struct
 } boomdetect_event_t;
 
 /**
- * Detector state. Big (about 29 KB: the FIFO and the envelope ring), so give it
- * static storage rather than a stack frame. Held by the caller rather than hidden in this
+ * Detector state. Big (about 31 KB: FIFO and envelope ring), so give it static storage
+ * rather than a stack frame. Held by the caller rather than hidden in this
  * translation unit rather than a hidden singleton, so several detectors can be
  * driven side by side - pipeline_test does exactly that.
  *
@@ -188,21 +186,15 @@ typedef struct
     bool     gap_pending; /**< a drop happened; the next frame reports it */
 
     float    frame[BOOMDETECT_WINDOW_SIZE]; /**< contiguous copy; the MFCC destroys it */
-    /** One descriptor row per accepted frame of the current window:
-        [mfcc x 13 | log-mel x 20 | spectral scalars x 8] (src/extractors.h).
-        The name predates the log-mel and scalar blocks; the MFCC still comes
-        first in every row, so boomdetect_last_mfcc() is unchanged. */
+    /** One descriptor row per accepted frame of the current window, laid out
+        as src/extractors.h describes; the MFCC comes first in every row. */
     float    mfccs[BOOMDETECT_ACCUM_FRAMES * BOOMDETECT_FRAME_WIDTH];
     /** Per-frame RMS of the frames held in the current window, for
         BOOMDETECT_GATE_WINDOW_MEDIAN. Unused by the per-frame gate. */
     float    rms_hist[BOOMDETECT_ACCUM_FRAMES];
 
-    /** The 1-4 kHz envelope at 1 kHz (src/envelope.c): the last
-        BOOMDETECT_ENV_RING samples of CONTINUOUS audio, accepted frames or not,
-        which is what layout 4 takes its modulation spectrum over. Oldest sample
-        at env_head; env_fill is below the ring length for the first two seconds
-        after init and after a gap, and an extractor that needs the ring full
-        (boomdetect_extractor_t::env_required) gets no window before that. */
+    /** The envelope ring (src/envelope.h): oldest sample at env_head, env_fill
+        samples held. */
     float    env_ring[BOOMDETECT_ENV_RING];
     uint32_t env_head, env_fill;
     uint32_t env_phase; /**< chain samples until the next kept envelope sample */
@@ -252,10 +244,8 @@ size_t boomdetect_push(boomdetect_t *d, const int16_t *pcm, size_t n);
  * what keeps the firmware inside its real-time budget. A host test that wants
  * to drain everything simply loops.
  *
- * Every frame, accepted or squelched, also feeds the envelope ring (the first
- * `hop` samples of the frame are the ones not seen before). An extractor that
- * needs the ring full lets its first windows close without a decision; the
- * event says so (`window.warming`).
+ * An extractor that reads the envelope ring (src/envelope.h) lets the windows
+ * before it is full close without a decision; the event says so (`window.warming`).
  */
 bool boomdetect_step(boomdetect_t *d, boomdetect_event_t *out);
 
@@ -298,19 +288,9 @@ void boomdetect_counts(const boomdetect_t *d, uint32_t *windows, uint32_t *drone
 const float *boomdetect_last_mfcc(const boomdetect_t *d);
 
 /**
- * @brief The whole descriptor row of the frame the last successful step() consumed.
- *
- * BOOMDETECT_FRAME_WIDTH values: the MFCC coefficients, then the log-mel
- * vector, then the spectral scalars (src/extractors.h gives the offsets). NULL
- * under the same conditions as boomdetect_last_mfcc(). Exists for the parity
- * fixtures of the layouts that read more than the coefficients.
- */
-const float *boomdetect_last_frame(const boomdetect_t *d);
-
-/**
  * @brief The aggregated feature vector of the last completed window.
  *
- * BOOMDETECT_FEATURE_COUNT values in [mean, std, dmean, cmax] x BOOMDETECT_MFCC_COEFFS order.
+ * The configured extractor's n_features values, in its layout (extractor.h).
  * NULL before the first window completes.
  */
 const float *boomdetect_last_features(const boomdetect_t *d);

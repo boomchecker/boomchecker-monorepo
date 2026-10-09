@@ -14,7 +14,6 @@ import numpy as np
 
 SELFTEST_INPUT_LEN = 66048
 SELFTEST_SEED = 1
-SELFTEST_MFCC_FRAMES = 3
 _MASK32 = 0xFFFFFFFF
 
 
@@ -42,10 +41,6 @@ def fnv1a(samples: np.ndarray) -> int:
 
 def hex_to_f32(token: str) -> float:
     return struct.unpack("<f", struct.pack("<I", int(token, 16)))[0]
-
-
-def f32_to_hex(value: float) -> str:
-    return f"{struct.unpack('<I', struct.pack('<f', float(np.float32(value))))[0]:08X}"
 
 
 def parse_fixture(path: Path | str) -> dict:
@@ -91,11 +86,10 @@ def parse_fixture(path: Path | str) -> dict:
 #
 # The LCG above is 1.4 s long, and the modulation features need two seconds of
 # envelope before they say anything, so layout 4 gets its own signal: the same
-# LCG noise, amplitude-modulated in integer arithmetic at AM_HZ so both sides
+# LCG noise, amplitude-modulated in integer arithmetic (AM_PERIOD) so both sides
 # see identical int16 samples and the envelope has one line to find.
 AM_INPUT_LEN = 240000  # 5 s at 48 kHz: 155 frames, the ring full from frame 61
 AM_PERIOD = 250  # samples at 48 kHz -> 192 Hz, inside the 150-250 Hz band
-AM_HZ = 48000 / AM_PERIOD
 AM_DEPTH_Q10 = 512  # modulation depth 0.5 in Q10
 
 

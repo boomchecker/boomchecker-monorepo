@@ -10,6 +10,3 @@ write the model headers and the parity fixtures the C tests consume.
 Nothing here runs on the board, and nothing on the board depends on this
 package at build time.
 """
-
-__all__ = ["__version__"]
-__version__ = "0.1.0"

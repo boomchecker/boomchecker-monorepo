@@ -1,11 +1,8 @@
 """Parse the C tables the firmware's MFCC is generated from.
 
-src/mfcc_tables.h records its own provenance (16 kHz, 1024-sample Hamming
-window, 20 mel filters over 0..8000 Hz, 13 DCT rows) and the generator that
-wrote it is not in the repository. Reading the header is therefore the only way
-to get exactly the numbers the board multiplies by - a librosa call with the
-"same" parameters lands a few ULP away on every filter edge, and those ULPs are
-what a parity test would then report.
+Reading src/mfcc_tables.h (its header comment records the provenance) is the
+only way to get exactly the numbers the board multiplies by: librosa with the
+same parameters lands a few ULP away, and a parity test would report those ULPs.
 
 The parser is deliberately dumb: it finds `static const <type> name[..] = {..};`
 blocks and reads every number inside the braces. Nested braces (the DCT is a
@@ -17,7 +14,6 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from functools import lru_cache
-from pathlib import Path
 
 import numpy as np
 
@@ -37,14 +33,13 @@ def parse_defines(text: str) -> dict[str, int]:
     return {m.group(1): int(m.group(2)) for m in _DEFINE_RE.finditer(text)}
 
 
-def parse_arrays(text: str, defines: dict[str, int] | None = None) -> dict[str, np.ndarray]:
+def parse_arrays(text: str, defines: dict[str, int]) -> dict[str, np.ndarray]:
     """Every `static const` array in `text`, shaped from its declared dimensions.
 
     A dimension may be a literal or a macro from `defines`. Float arrays come
     back as float32 - the type the board holds them in - and integer arrays as
     int64.
     """
-    defines = defines if defines is not None else parse_defines(text)
     out: dict[str, np.ndarray] = {}
     for m in _ARRAY_RE.finditer(text):
         dims: list[int] = []
@@ -110,11 +105,10 @@ class MfccTables:
         return m
 
 
-@lru_cache(maxsize=4)
-def load_tables(path: Path | str | None = None) -> MfccTables:
-    """Read the tables from `path` (default: the firmware's src/mfcc_tables.h)."""
-    p = Path(path) if path is not None else MFCC_TABLES_H
-    text = p.read_text(encoding="utf-8")
+@lru_cache(maxsize=1)
+def load_tables() -> MfccTables:
+    """Read the tables from the firmware's src/mfcc_tables.h."""
+    text = MFCC_TABLES_H.read_text(encoding="utf-8")
     defines = parse_defines(text)
     arrays = parse_arrays(text, defines)
     tables = MfccTables(

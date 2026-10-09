@@ -1,12 +1,10 @@
 /**
  * @file extractor_stats.c
- * @brief Layout 1, the deployed extractor, and the extractor registry.
+ * @brief Layout 1 and the extractor registry.
  *
  * [mean, std, dmean, cmax] per MFCC coefficient. The arithmetic is
  * boomdetect_aggregate_stats() in extractor_spectral.c, shared with layout 2
- * so the two agree bit for bit on their common prefix; it is unchanged from the
- * version that lived in boomdetect.c - the deployed model was selected against
- * exactly these numbers, and the fixtures pin them.
+ * so the two agree bit for bit on their common prefix.
  */
 #include "extractors.h"
 

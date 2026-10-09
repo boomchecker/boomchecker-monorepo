@@ -27,17 +27,14 @@ from boomdetect_train.dsp.mfcc import HOP, SAMPLE_RATE_HZ, Frontend
 from boomdetect_train.dsp.spectro import spec_frames
 from boomdetect_train.dsp.windows import DEFAULT_SQUELCH, Gate, windows
 from boomdetect_train.evaluate import window_features
-from boomdetect_train.features import LAYOUT_STATS, SCALAR_NAMES
+from boomdetect_train.features import F0_MAX_HZ, LAYOUT_STATS, SCALAR_NAMES
 from boomdetect_train.models.headers import SHIPPED_THRESHOLDS, shipped_models
-from boomdetect_train.paths import runs_dir
-
-F0_SCALE_HZ = 400.0  # features.py normalises f0 by this
+from boomdetect_train.paths import MODELS_DIR, runs_dir
 
 
 @dataclass
 class ScoredModel:
     name: str
-    layout: int
     thr: float
     decisions: np.ndarray  # (windows,)
 
@@ -61,8 +58,6 @@ def load_models(run: str | None, names: list[str] | None):
 
 def _exported_threshold(name: str) -> float:
     """The default_thr_milli the exporter wrote into models/model_<name>.c, if any."""
-    from boomdetect_train.paths import MODELS_DIR
-
     p = MODELS_DIR / f"model_{name}.c"
     if not p.exists():
         return float("nan")
@@ -95,7 +90,7 @@ def score_recording(
         }
         for k, nm in enumerate(SCALAR_NAMES):
             row[nm] = float(sc[k])
-        row["f0_hz"] = row.pop("f0") * F0_SCALE_HZ
+        row["f0_hz"] = row.pop("f0") * F0_MAX_HZ
         rows.append(row)
     df = pd.DataFrame(rows)
 
@@ -109,7 +104,7 @@ def score_recording(
         else:
             dec = np.empty(0, np.float32)
         df[name] = dec
-        scored.append(ScoredModel(name, layout, thr, dec))
+        scored.append(ScoredModel(name, thr, dec))
 
     total_s = len(x16) / SAMPLE_RATE_HZ
     df.attrs["seconds"] = total_s

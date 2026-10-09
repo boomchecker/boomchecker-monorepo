@@ -20,18 +20,9 @@
 
 /* First entry is the default. */
 static const classifier_t *const s_models[] = {
-    /* gbt_m1 (layout 4, the modulation spectrum of the 1-4 kHz envelope added
-       to layout 2; see models.h) is the default since 2026-10-09. It ran on the
-       board from 2026-10-04 and outdoors on 2026-10-05 kept the DJI hovering at
-       60-100 m where mlp_f2 faded, with no alarm on the background; across five
-       training seeds its operating point barely moves, where mlp_m1's does.
-       The first two seconds of a run produce no decision while the envelope
-       ring fills. mlp_f2 (layout 2) was the default before and stays for
-       rollback - moving it back to the front is the whole change. mlp_v6 and
-       svm_v3 are the public-data models the selftest and the parity harness
-       are anchored to. The other field-trained models of 2026-09/10 (gbt_f1-3,
-       mlp_f1, the public-only mlp_l2/gbt_l2/gbt_reg_l2 and cnn_small) left the
-       image on 2026-10-09: none was ahead of these on the field recordings. */
+    /* mlp_f2, the previous default, stays for rollback: moving it back to the
+       front is the whole change. mlp_v6 and svm_v3 are the public-data models
+       the selftest and the registry tests are anchored to. */
     &classifier_gbt_m1,
     &classifier_mlp_f2,
     &classifier_mlp_m1,

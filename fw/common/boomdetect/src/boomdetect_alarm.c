@@ -63,10 +63,6 @@ bool boomdetect_alarm_push_decision(boomdetect_alarm_t *a, float relative)
     a->history         = (a->history << 1) | ((relative >= 0.0f) ? 1u : 0u);
     a->ring[a->head]   = relative;
     a->head            = (uint8_t)((a->head + 1u) % a->rule.n);
-    if (a->count < a->rule.n)
-    {
-        a->count++;
-    }
     if (a->rule.mode == BOOMDETECT_ALARM_MEAN)
     {
         a->on = boomdetect_alarm_mean(a) >= 0.0f;
@@ -88,11 +84,6 @@ bool boomdetect_alarm_push_decision(boomdetect_alarm_t *a, float relative)
         a->onsets++;
     }
     return a->on != was;
-}
-
-bool boomdetect_alarm_push(boomdetect_alarm_t *a, bool is_drone)
-{
-    return boomdetect_alarm_push_decision(a, is_drone ? 1.0f : -1.0f);
 }
 
 bool boomdetect_alarm_on(const boomdetect_alarm_t *a)
