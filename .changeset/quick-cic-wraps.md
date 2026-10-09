@@ -15,6 +15,6 @@ the samples are bit for bit the same, on both slots, quiet or clipping.
 
 Measured on the board, one 21.33 ms ring half: CIC 14.8 -> 3.0 ms, the whole
 conversion 17.9 -> 6.2 ms at the core's 240 MHz; `detect` reports `h=` of
-about 5.9 ms instead of 17.2 ms. The FIR is unchanged. pdm_pcm.h refuses to
-build if a larger decimation or order would no longer fit in 32 bits, or if a
-slot mask stops selecting 8 bits.
+about 5.9 ms instead of 17.2 ms; everything after the CIC takes as long as
+before. pdm_pcm.h refuses to build if a larger decimation or order would no
+longer fit in 32 bits, or if a slot mask stops selecting 8 bits.
