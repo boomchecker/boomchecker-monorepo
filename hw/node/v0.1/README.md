@@ -5,6 +5,9 @@ document is intended as an engineering handoff for STM32/CubeMX setup and
 firmware bring-up, not as a replacement for the Altium project or component
 datasheets.
 
+Bring-up tests for the first assembled revision live in
+[`bringup-checklist.md`](bringup-checklist.md).
+
 ## Source Status
 
 - Hardware project: `bch-node_v0.1.PrjPcb`
@@ -25,6 +28,6 @@ schematic or a verified pin/net export.
 | GNSS | `Teseo-LIV3R` | I2C, GPIO, PPS interrupt | Harness verified, MCU pins TBD |
 | LoRa | `E22-900M22S` | SPI, GPIO, IRQ/status | Harness verified, MCU pins TBD |
 | IMU accel/gyro | `ISM330DLCTR` | SPI, GPIO interrupts | Device verified, MCU pins TBD |
-| Magnetometer | `LIS2MDLTR` | SPI | Device verified, MCU pins TBD |
+| Magnetometer | `LIS2MDLTR` | I2C2 (`MAG_SCL`/`MAG_SDA`) | Device verified, MCU pins TBD |
 | PDM microphones | `IM67D130AXTSA2` | SAI/PDM clock and data | Design intent, schematic/CubeMX TBD |
 | Power | USB-C, `BQ21040DBVR`, `TPS563252DRLR` | No MCU control currently planned | Out of pin-map scope |
