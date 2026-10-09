@@ -56,13 +56,40 @@
 #define PDM_SLOT_MASK_A      0xF807u
 #define PDM_SLOT_MASK_B      0x07F8u
 
+/* CIC: 5th order, decimation 64 = 8 halfwords x the 8 slot bits of each. */
+#define PDM_CIC_ORDER        5u
+#define PDM_CIC_DECIM_LOG2   6u
+#define PDM_SLOT_BITS        8u
+
+#define PDM_BITS16(m)                                                              \
+  ((((m) >> 0) & 1u) + (((m) >> 1) & 1u) + (((m) >> 2) & 1u) + (((m) >> 3) & 1u) + \
+   (((m) >> 4) & 1u) + (((m) >> 5) & 1u) + (((m) >> 6) & 1u) + (((m) >> 7) & 1u) + \
+   (((m) >> 8) & 1u) + (((m) >> 9) & 1u) + (((m) >> 10) & 1u) + (((m) >> 11) & 1u) + \
+   (((m) >> 12) & 1u) + (((m) >> 13) & 1u) + (((m) >> 14) & 1u) + (((m) >> 15) & 1u))
+
+#if (PDM_BITS16(PDM_SLOT_MASK_A) != PDM_SLOT_BITS) || (PDM_BITS16(PDM_SLOT_MASK_B) != PDM_SLOT_BITS)
+#error "each slot mask must select PDM_SLOT_BITS bits of the frame"
+#endif
+#if (8u * PDM_SLOT_BITS) != (1u << PDM_CIC_DECIM_LOG2)
+#error "8 halfwords per output sample must carry exactly the CIC decimation in bits"
+#endif
+/* The CIC runs in 32-bit registers that wrap: a CIC's output stays exact modulo
+   2^N as long as N covers its output range (Hogenauer), here ORDER * log2(D) bits
+   of growth on a +-1 input plus the sign = 5 * 6 + 1 = 31. The integrators wrap
+   either way - a microphone's DC offset overflows even 64 bits within tens of ms -
+   so 32 bits change nothing in the result. A larger D or order needs 64 again. */
+#if (PDM_CIC_ORDER * PDM_CIC_DECIM_LOG2 + 1u) > 32u
+#error "CIC output range exceeds the 32-bit integrators - widen them to 64 bits"
+#endif
+
 /**
  * @brief DSP chain state (continuous across circular-buffer half boundaries).
  */
 typedef struct
 {
-  uint64_t cic_i1, cic_i2, cic_i3, cic_i4, cic_i5; /* CIC integrators */
-  uint64_t cic_c1, cic_c2, cic_c3, cic_c4, cic_c5; /* CIC combs       */
+  uint32_t cic_i1, cic_i2, cic_i3, cic_i4, cic_i5; /* CIC integrators (wrap)  */
+  uint32_t cic_c1, cic_c2, cic_c3, cic_c4, cic_c5; /* CIC combs (wrap)        */
+  uint8_t  slot_bit[PDM_SLOT_BITS];                /* the mask's bits, MSB first */
   int32_t  dc_acc;                                 /* DC blocker accumulator (Q11) */
   uint8_t  dc_seeded;                              /* seeding counter (0..8)       */
   uint32_t dc_fast;                                /* fast-tracking samples left   */
