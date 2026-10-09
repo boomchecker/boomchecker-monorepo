@@ -68,9 +68,8 @@ void pdm_pcm_process_half(pdm_pcm_t *st, const uint16_t *src, int16_t *dst)
   int16_t *x = &st->fir_x[FIR_TAPS - 1u];
 
   /* The CIC state lives in registers for the whole half and wraps modulo 2^32
-     (see pdm_pcm.h); on the M33 this is ~5x faster than 64-bit integrators kept
-     in the struct, with bit-identical output (measured 2026-10: CIC 14.8 -> 3.0 ms
-     per half, the whole chain 17.9 -> 6.2 ms at 240 MHz). */
+     (see pdm_pcm.h); on the M33 that is several times faster than 64-bit
+     integrators kept in the struct, with bit-identical output. */
   uint32_t i1 = st->cic_i1, i2 = st->cic_i2, i3 = st->cic_i3, i4 = st->cic_i4, i5 = st->cic_i5;
   uint32_t c1 = st->cic_c1, c2 = st->cic_c2, c3 = st->cic_c3, c4 = st->cic_c4, c5 = st->cic_c5;
   const uint8_t *bit = st->slot_bit;
@@ -128,12 +127,10 @@ void pdm_pcm_process_half(pdm_pcm_t *st, const uint16_t *src, int16_t *dst)
       st->dc_acc += v;
     }
     /* The gain goes in here, before anything rounds: one step of v is two
-       output LSBs, so 2v keeps every bit the CIC delivered. Applied after
-       the FIR's >>15 (as it was until 2026-10) it multiplied an already
-       rounded value - the low 4 bits of every sample were zero, a 12-bit
-       stream with its rounding noise near the mic's own noise floor.
-       |v * PCM_GAIN| <= 2^23; sat16 clips at the same level as before (full
-       scale = |v| 2^14), and the FIR accumulator bound above still holds. */
+       output LSBs, so 2v keeps every bit the CIC delivered. Applied after the
+       FIR's >>15 it would multiply an already rounded value and leave the low
+       4 bits of every sample zero. |v * PCM_GAIN| <= 2^23; sat16 clips at full
+       scale = |v| 2^14, and the FIR accumulator bound above still holds. */
     x[s] = sat16((v * PCM_GAIN) >> 3);
   }
   st->cic_i1 = i1; st->cic_i2 = i2; st->cic_i3 = i3; st->cic_i4 = i4; st->cic_i5 = i5;

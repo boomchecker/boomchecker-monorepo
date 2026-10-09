@@ -21,12 +21,12 @@
  *                                                   constant: the gate resets
  *                                                   accumulation, so a window
  *                                                   can straddle silence
- *   ALM t=<s>.<ms> <ON|OFF> hits=<k>/<n>            the K-of-N alarm changed
- *                                                   state on the window that
- *                                                   closed at t; k = drone
- *                                                   windows among the last n
+ *   ALM t=<s>.<ms> <ON|OFF> hits=<k>/<n>            the alarm changed state on
+ *   ALM t=<s>.<ms> <ON|OFF> mean=<+d.ddd>/<n>       the window that closed at t
+ *                                                   (vote rule / mean rule)
  *   F=<n> a=<n> r=<n> h=<us> m=<us>                 per frame, only with dbg=1
- *   DETEND windows=<n> drones=<n> alarms=<n> overrun=<0|1> err=<0|1>
+ *   DETEND windows=<n> drones=<n> alarms=<n> first_drone=<s.mmm|->
+ *          first_alarm=<s.mmm|-> overrun=<0|1> err=<0|1>
  *   DETERR <reason>                                 followed by DETEND, always
  *
  * detect_service_selftest() prints a separate DST* family; see
@@ -46,32 +46,20 @@
 #include "boomdetect_alarm.h"
 #include "classifier.h"
 
-/** Default RMS gate, in 1/1000 of full scale. 10 until 2026-09-26: outdoors
-    the background sat at RMS 0.004 and a drone at 20 m and beyond at 0.004-0.009,
-    so at 0.010 most of it never made a window. At 3 a quiet room (0.0026 on this
-    microphone) still yields none - a window needs 14 frames in a row above the
-    gate - and the field-trained models' thresholds were chosen at this gate. */
+/** Default RMS gate, in 1/1000 of full scale: outdoors the background sat at
+    RMS 0.004 and a drone at 20 m and beyond at 0.004-0.009. A quiet room
+    (0.0026) still yields no window - one needs 14 frames in a row above it. */
 #define DETECT_DEFAULT_SQUELCH_MILLI 3
 
-/* Longest timed run `detect` accepts, one day. The 60 s of the first builds was
-   the console's habit (stream has the same limit, for its buffer), not the
-   detector's: the timestamps are 64-bit inside boomdetect_frame_to_ms(), the
-   counters are 32-bit and the loop keeps no per-second state. What a long run
-   does cost is the radio - it is not serviced while `detect` runs (see
-   docs/firmware/bom-stm32node/boomlink.md section 6.2). `detect 0` has no limit
-   at all and ends on the first byte from the console. */
+/* Longest timed run `detect` accepts, one day (64-bit timestamps, 32-bit
+   counters). What a long run costs is the radio, which is not serviced while
+   `detect` runs. `detect 0` has no limit and ends on the first console byte. */
 #define DETECT_MAX_SECONDS 86400
 
-/* The default alarm rule above the classifier (fw/common/boomdetect/include/
-   boomdetect_alarm.h): ON when at least K_ON of the last N classified windows
-   were called drone, OFF when fewer than K_OFF were. One window is 448 ms and
-   one logit; an alarm is a property of seconds. 2-of-4 with release below 1 is
-   what the training package evaluates clip-level verdicts with, so the board
-   and the report mean the same thing by "alarm". `detect` takes another rule
-   per run as its fifth argument (detect_service_parse_rule): `<k>of<n>` for a
-   vote, `mean<n>` for the mean of the last n decisions relative to the
-   threshold - the soft rule that, judged offline on the 2026-10-01 recordings,
-   kept every detection of mlp_f2 and dropped its one false alarm. */
+/* The default alarm rule (boomdetect_alarm.h): ON when at least K_ON of the
+   last N classified windows were called drone, OFF when fewer than K_OFF were -
+   the rule the training package judges clip verdicts with. `detect` takes
+   another per run as its fifth argument: `<k>of<n>` or `mean<n>`. */
 #define DETECT_ALARM_N     4
 #define DETECT_ALARM_K_ON  2
 #define DETECT_ALARM_K_OFF 1
@@ -79,8 +67,7 @@
 
 /* The decision threshold is NOT here. It belongs to the model - a linear SVM's
    decisions live around +-3 while an MLP's are unbounded logits - so it is
-   classifier_t::default_thr_milli, and the measurement behind the deployed
-   model's value is recorded beside it in boomdetect/models/model_mlp_v6.c. */
+   classifier_t::default_thr_milli, set in each model's models/model_*.c. */
 
 /**
  * @brief Run detection for `seconds` and stream results.

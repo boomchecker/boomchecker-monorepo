@@ -27,9 +27,7 @@
 
 /* At 9600 Bd the module produces ~960 B/s; one console write of an 80-byte
    line returns in well under a millisecond, so 1 KB of slack is plenty even
-   for a 115200 Bd scan. After `gpstx` the same 1 KB holds the reply plus
-   about the next second of NMEA; later bytes are dropped (drop-newest), so
-   the reply survives until the next `gps` however long that takes. */
+   for a 115200 Bd scan. */
 #define GPS_RING_LEN 1024u
 #define GPS_LINE_MAX 128u
 

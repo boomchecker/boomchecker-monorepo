@@ -310,12 +310,8 @@ void detect_service_run(uint32_t seconds, uint32_t squelch_milli, int32_t thr_mi
     s_cyccnt_ready = 1u;
   }
 
-  /* The extractor follows the model, not the board: boomdetect_init() compares
-     the model's layout_id against the CONFIGURED extractor and, told nothing,
-     configures `stats` (layout 1). Leaving this field out therefore made every
-     layout-2/3 model in the registry fail init on hardware while passing the
-     host suite, whose tests all resolve the extractor this way (2026-09-07:
-     svm_l2, gbt_reg_l2 and cnn_small all answered DETERR). */
+  /* The extractor for the model's layout, which boomdetect_init() would also
+     pick by itself; looked up here so that a missing one gets its own DETERR. */
   const classifier_t           *model = detect_service_model();
   const boomdetect_extractor_t *ex    = boomdetect_extractor_for_layout(model->layout_id);
   if (ex == NULL)
@@ -352,10 +348,8 @@ void detect_service_run(uint32_t seconds, uint32_t squelch_milli, int32_t thr_mi
   s_first_alarm_ms = UINT32_MAX;
   if (!boomdetect_alarm_init(&s_alarm, (rule != NULL) ? rule : &s_alarm_default))
   {
-    /* cli.c validates a rule it was given through detect_service_parse_rule,
-       and the default is three compile-time constants; this can only fail if
-       someone edits those into an inconsistent set, and it should say so
-       rather than run with an alarm that never fires. */
+    /* cli.c validates a given rule, so only an inconsistent DETECT_ALARM_*
+       default gets here - say so rather than run an alarm that never fires. */
     det_abort("DETERR alarm rule invalid\r\n");
     return;
   }
@@ -376,8 +370,7 @@ void detect_service_run(uint32_t seconds, uint32_t squelch_milli, int32_t thr_mi
   bool mic_got = false;
   bool mic_ok  = true;
 
-  /* 64-bit: a day of blocks is 4.05e9, past what uint32_t holds with the
-     rounding term. An open-ended run simply never reaches its bound. */
+  /* 64-bit so that an open-ended run never reaches its bound. */
   const uint64_t halves =
       until_key ? UINT64_MAX
                 : ((uint64_t)seconds * PCM_FS_HZ + PCM_SAMPLES_PER_HALF - 1u) /
@@ -386,10 +379,9 @@ void detect_service_run(uint32_t seconds, uint32_t squelch_milli, int32_t thr_mi
   for (uint64_t h = 0u; h < halves; h++)
   {
     /* Polled once per mic block (~21 ms), before waiting for it, so the run
-       stops within a block of the keystroke. Bytes are discarded, not queued:
-       the line that stopped the run must not execute as a command afterwards.
-       Only the open-ended run listens - a timed run is what a script drives,
-       and a script's next command must not cut its own measurement short. */
+       stops within a block of the keystroke. Only the open-ended run listens -
+       a timed run is what a script drives, and a script's next command must not
+       cut its own measurement short. */
     if (until_key && usb_cli_key_pressed())
     {
       break;

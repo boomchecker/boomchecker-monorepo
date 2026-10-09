@@ -41,9 +41,8 @@
    output is muted; the caller then drops PDM_WARMUP_BLOCKS whole blocks, so the
    first delivered sample is settled audio, not silence. A mic still settling
    after the fast phase brings the pop back, hence 4x the datasheet's 20 ms.
-   Measured on board B (IM67D130A): the pop (full scale) is gone; what remains
-   is the mic's own sub-20 Hz drift, ~0.005 FS over the first ~0.4 s, which a
-   256 ms warm-up barely reduced. */
+   What remains is the mic's own sub-20 Hz drift, which a longer warm-up
+   barely reduces. */
 #define PDM_WARMUP_SAMPLES   (4u * PCM_SAMPLES_PER_HALF)            /* 85 ms        */
 #define PDM_WARMUP_BLOCKS    5u                                     /* 107 ms       */
 
