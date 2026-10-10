@@ -19,7 +19,8 @@ _Static_assert(BOOMDETECT_ENV_SOS_SECTIONS == BOOMDETECT_ENV_SECTIONS,
                "envelope_coefs.h was generated with a different section count than "
                "boomdetect_t::env_state holds");
 _Static_assert(BOOMDETECT_ENV_COEFS_DECIM == BOOMDETECT_ENV_DECIM &&
-                   BOOMDETECT_ENV_COEFS_RING == BOOMDETECT_ENV_RING,
+                   BOOMDETECT_ENV_COEFS_RING == BOOMDETECT_ENV_RING &&
+                   BOOMDETECT_ENV_COEFS_SPAN_2S == BOOMDETECT_ENV_SPAN_2S,
                "envelope_coefs.h and dsp_config.h disagree about the envelope geometry");
 _Static_assert(BOOMDETECT_ENV_BANDPASS_SECTIONS < BOOMDETECT_ENV_SOS_SECTIONS,
                "the chain needs at least one low-pass section after the rectifier");
@@ -93,6 +94,9 @@ boomdetect_side_t boomdetect_envelope_side(const boomdetect_t *d)
         .env      = d->env_ring,
         .env_head = d->env_head,
         .env_fill = d->env_fill,
+        .gs       = d->gs_ring,
+        .gs_head  = d->gs_head,
+        .gs_fill  = d->gs_fill,
     };
     return side;
 }

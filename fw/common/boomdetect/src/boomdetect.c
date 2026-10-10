@@ -16,14 +16,20 @@
 #include "envelope.h"
 #include "extractors.h"
 #include "frame_scalars.h"
+#include "gammatone.h"
 
 #include <math.h>
 #include <string.h>
 
 _Static_assert(BOOMDETECT_FEATURE_COUNT <= BOOMDETECT_FEATURE_MAX &&
                    BOOMDETECT_FEATURE_COUNT_STATS_SPECTRAL <= BOOMDETECT_FEATURE_MAX &&
-                   BOOMDETECT_FEATURE_COUNT_STATS_SPECTRAL_MOD <= BOOMDETECT_FEATURE_MAX,
+                   BOOMDETECT_FEATURE_COUNT_STATS_SPECTRAL_MOD <= BOOMDETECT_FEATURE_MAX &&
+                   BOOMDETECT_FEATURE_COUNT_HYBRID8_GS1K <= BOOMDETECT_FEATURE_MAX &&
+                   BOOMDETECT_FEATURE_COUNT_HYBRID31_GS1K <= BOOMDETECT_FEATURE_MAX &&
+                   BOOMDETECT_FEATURE_COUNT_HYBRID8_31_GS1K <= BOOMDETECT_FEATURE_MAX,
                "boomdetect_t::features cannot hold every layout this build produces");
+_Static_assert(BOOMDETECT_FEATURE_MAX <= UINT16_MAX,
+               "a feature count travels as uint16_t to classifier_t::decide");
 _Static_assert(BOOMDETECT_HOP / BOOMDETECT_ENV_DECIM == BOOMDETECT_ENV_PER_HOP,
                "dsp_config.h's envelope samples per hop assume the default hop");
 _Static_assert(BOOMDETECT_FRAME_SCALAR_COUNT == BOOMDETECT_FRAME_SCALARS,
@@ -146,6 +152,7 @@ bool boomdetect_init(boomdetect_t *d, const boomdetect_config_t *cfg)
     }
     d->last_mfcc_slot = BOOMDETECT_NO_MFCC;
     boomdetect_envelope_reset(d);
+    boomdetect_gs_reset(d);
     return true;
 }
 
@@ -187,6 +194,19 @@ size_t boomdetect_push(boomdetect_t *d, const int16_t *pcm, size_t n)
     return stored;
 }
 
+/* A decision for the window in `out`: the verdict and the counters. */
+static void window_decided(boomdetect_t *d, boomdetect_event_t *out, float decision)
+{
+    out->window.complete = true;
+    out->window.decision = decision;
+    out->window.is_drone = (decision >= (float)d->cfg.thr_milli / 1000.0f);
+    d->windows++;
+    if (out->window.is_drone)
+    {
+        d->drones++;
+    }
+}
+
 bool boomdetect_step(boomdetect_t *d, boomdetect_event_t *out)
 {
     if (d == NULL || out == NULL || d->cfg.decimation == 0u || d->cfg.hop == 0u)
@@ -223,13 +243,23 @@ bool boomdetect_step(boomdetect_t *d, boomdetect_event_t *out)
        feeds it, accepted or not. Frames overlap by WINDOW - hop, so only the
        first `hop` samples are new; they are read before the MFCC destroys the
        buffer. */
-    if (d->cfg.extractor->env_required > 0u)
+    const boomdetect_extractor_t *ext = d->cfg.extractor;
+    if (ext->env_required > 0u || ext->env_feed)
     {
         if (out->gap)
         {
             boomdetect_envelope_gap(d);
         }
         boomdetect_envelope_push(d, d->frame, d->cfg.hop);
+    }
+    /* The gammatone ring likewise, one row per frame, from the whole frame. */
+    if (ext->gs_required > 0u)
+    {
+        if (out->gap)
+        {
+            boomdetect_gs_reset(d);
+        }
+        boomdetect_gs_push(d, d->frame);
     }
 
     const float    squelch = (float)d->cfg.squelch_milli / 1000.0f;
@@ -278,10 +308,10 @@ bool boomdetect_step(boomdetect_t *d, boomdetect_event_t *out)
                 (d->cfg.gate != BOOMDETECT_GATE_WINDOW_MEDIAN) ||
                 (median_of(d->rms_hist, d->accum) >= squelch);
 
-            const boomdetect_extractor_t *ext = d->cfg.extractor;
-            if (keep && ext->env_required > d->env_fill)
+            if (keep && (ext->env_required > d->env_fill || ext->gs_required > d->gs_fill))
             {
-                /* Fewer envelope samples than the extractor needs (extractor.h). */
+                /* Fewer envelope samples or gammatone rows than the extractor
+                   needs (extractor.h). */
                 out->window.warming     = true;
                 out->window.start_frame = d->window_start_frame;
                 out->window.end_frame   = d->frame_index;
@@ -297,21 +327,33 @@ bool boomdetect_step(boomdetect_t *d, boomdetect_event_t *out)
                    the layout. Passing the width means a model reading past its
                    own slice is a bug it can catch rather than a silent read of
                    the next family's features. */
-                const float decision = model->decide(model->ctx,
-                                                     d->features + model->feature_offset,
-                                                     model->n_features);
-                const float threshold = (float)d->cfg.thr_milli / 1000.0f;
-
-                out->window.complete    = true;
+                const float *x = d->features + model->feature_offset;
                 out->window.start_frame = d->window_start_frame;
                 out->window.end_frame   = d->frame_index;
-                out->window.decision    = decision;
-                out->window.is_drone    = (decision >= threshold);
-
-                d->windows++;
-                if (out->window.is_drone)
+                if (model->job == NULL || d->cfg.job_budget == 0u)
                 {
-                    d->drones++;
+                    window_decided(d, out, model->decide(model->ctx, x, model->n_features));
+                }
+                else if (d->job_active)
+                {
+                    /* One job at a time: a window that closes while the last
+                       one still runs is dropped and counted, which only a
+                       budget too small for the model makes happen. */
+                    d->jobs_skipped++;
+                }
+                else if (model->job->begin(model->ctx, x, model->n_features))
+                {
+                    /* Too heavy for this block: boomdetect_work() finishes it
+                       over the next ones. */
+                    d->job_active       = true;
+                    d->job_start_frame  = d->window_start_frame;
+                    d->job_end_frame    = d->frame_index;
+                    out->window.pending = true;
+                }
+                else
+                {
+                    /* A malformed model: a window that is no drone rather than silence. */
+                    window_decided(d, out, NAN);
                 }
             }
             else
@@ -330,6 +372,36 @@ bool boomdetect_step(boomdetect_t *d, boomdetect_event_t *out)
     d->avail -= d->cfg.hop;
     d->frame_index++;
     return true;
+}
+
+bool boomdetect_work(boomdetect_t *d, boomdetect_event_t *out)
+{
+    if (d == NULL || out == NULL || !d->job_active)
+    {
+        return false;
+    }
+    const classifier_t *model = d->cfg.classifier;
+    if (!model->job->run(model->ctx, d->cfg.job_budget))
+    {
+        return false;
+    }
+    memset(out, 0, sizeof(*out));
+    out->frame_index        = d->frame_index;
+    out->window.start_frame = d->job_start_frame;
+    out->window.end_frame   = d->job_end_frame;
+    d->job_active           = false;
+    window_decided(d, out, model->job->result(model->ctx));
+    return true;
+}
+
+bool boomdetect_job_pending(const boomdetect_t *d)
+{
+    return d->job_active;
+}
+
+uint32_t boomdetect_jobs_skipped(const boomdetect_t *d)
+{
+    return d->jobs_skipped;
 }
 
 uint32_t boomdetect_dropped(const boomdetect_t *d)

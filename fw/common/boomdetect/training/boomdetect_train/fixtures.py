@@ -122,7 +122,7 @@ def envelope_coefs_text() -> str:
         ENV_PER_FRAME,
         envelope_filters,
     )
-    from boomdetect_train.features import MOD_FRAMES
+    from boomdetect_train.features import MOD_FRAMES, MOD_FRAMES_LONG
 
     bp, lp = envelope_filters()
     sos = np.concatenate([bp, lp])
@@ -142,7 +142,8 @@ def envelope_coefs_text() -> str:
         f"#define BOOMDETECT_ENV_BANDPASS_SECTIONS {bp.shape[0]}u",
         f"#define BOOMDETECT_ENV_COEFS_DECIM {ENV_DECIM}u",
         f"#define BOOMDETECT_ENV_COEFS_PER_HOP {ENV_PER_FRAME}u",
-        f"#define BOOMDETECT_ENV_COEFS_RING {MOD_FRAMES * ENV_PER_FRAME}u",
+        f"#define BOOMDETECT_ENV_COEFS_SPAN_2S {MOD_FRAMES * ENV_PER_FRAME}u",
+        f"#define BOOMDETECT_ENV_COEFS_RING {MOD_FRAMES_LONG * ENV_PER_FRAME}u",
         "",
         ex._c_array("boomdetect_env_sos", "float", rows, rows.shape, ex._c_float),
         "",
@@ -228,3 +229,149 @@ def mod_fixture_text() -> str:
 
 def write_mod_fixture() -> Path:
     return ex.write_text(VECTORS_DIR / "extractor_mod_expected.h", mod_fixture_text())
+
+
+# --- the gammatone front end and the spectrogram hybrids (layouts 603 / 703 / 903) ---
+
+GS_TABLE_H = VECTORS_DIR.parent.parent / "src" / "gammatone_table.h"
+GS_FRAMES = 4  # gammatone rows of the first frames, for pinpointing a front-end error
+
+
+def gammatone_table_text() -> str:
+    """src/gammatone_table.h: dsp/spectro.py's 64 gammatone bands over the 1024-point FFT.
+
+    Every band's weights are a contiguous run of bins (the response is unimodal and its
+    tails are cut below GT_WEIGHT_FLOOR), stored like the mel filters: first bin, length,
+    the weights. Rows sum to one in float64; the C sums |X|^2 against them, divides by
+    the window's energy and takes ln(. + offset) - spectro.spec_frames() exactly.
+    """
+    from boomdetect_train.dsp.mfcc import WINDOW_SIZE
+    from boomdetect_train.dsp.spectro import (
+        GT_ORDER,
+        GT_WEIGHT_FLOOR,
+        SPEC_FMAX_HZ,
+        SPEC_FMIN_HZ,
+        SPEC_LOG_OFFSET,
+        gammatone_matrix,
+        hann_periodic,
+    )
+
+    w = gammatone_matrix(WINDOW_SIZE)
+    starts, lens, coefs = [], [], []
+    for row in w:
+        nz = np.flatnonzero(row > 0.0)
+        s, e = int(nz[0]), int(nz[-1]) + 1
+        assert (row[s:e] > 0.0).all(), "a gammatone band is not a contiguous run of bins"
+        starts.append(s)
+        lens.append(e - s)
+        coefs.append(row[s:e])
+    weights = np.concatenate(coefs).astype(np.float32)
+    norm = float((hann_periodic(WINDOW_SIZE) ** 2).sum())
+    guard = "BOOMDETECT_GAMMATONE_TABLE_H"
+    prov = [
+        f"generated: {time.strftime('%Y-%m-%dT%H:%M:%S')} by bdtrain fixtures",
+        f"{w.shape[0]} fourth-order (GT_ORDER {GT_ORDER}) gammatone filters, centres equally "
+        f"spaced in ERB-rate {SPEC_FMIN_HZ:g}-{SPEC_FMAX_HZ:g} Hz, power response "
+        f"(1 + ((f - fc) / (1.019 ERB))^2)^-4 cut below {GT_WEIGHT_FLOOR:g}, DC weight 0, "
+        "rows normalised to sum to one (dsp/spectro.py gammatone_matrix)",
+        f"a frame: periodic Hann {WINDOW_SIZE}, |rfft|^2 / sum(w^2), band sums, ln(. + "
+        f"{SPEC_LOG_OFFSET:g})",
+    ]
+    lines = ex._header(guard, "The gammatone band weights of dsp/spectro.py (front-end gs1k)", prov)
+    lines += [
+        f"#define BOOMDETECT_GS_TABLE_BANDS {w.shape[0]}u",
+        f"#define BOOMDETECT_GS_TABLE_FFT {WINDOW_SIZE}u",
+        f"#define BOOMDETECT_GS_TABLE_WEIGHTS {weights.shape[0]}u",
+        f"#define BOOMDETECT_GS_POWER_NORM {ex._c_float(norm)}",
+        f"#define BOOMDETECT_GS_LOG_OFFSET {ex._c_float(SPEC_LOG_OFFSET)}",
+        "",
+        ex._c_array(
+            "boomdetect_gs_start", "uint16_t", np.asarray(starts), (len(starts),), lambda v: f"{v}u"
+        ),
+        "",
+        ex._c_array(
+            "boomdetect_gs_len", "uint16_t", np.asarray(lens), (len(lens),), lambda v: f"{v}u"
+        ),
+        "",
+        ex._c_array(
+            "boomdetect_gs_weights", "float", weights, weights.shape, ex._c_float_short, 16
+        ),
+        "",
+        f"#endif /* {guard} */",
+        "",
+    ]
+    return "\n".join(lines)
+
+
+def write_gammatone_table() -> Path:
+    return ex.write_text(GS_TABLE_H, gammatone_table_text())
+
+
+def gs_fixture_text() -> str:
+    """tests/vectors/extractor_gs_expected.h: the gammatone hybrids on the AM fixture.
+
+    The firmware's windows (disjoint runs of 14 frames, no squelch) over the 5 s AM
+    signal. Layout 703 closes every window; its aux (layout 8) carries NaN where the
+    envelope ring is still short, which the header keeps. Layouts 903 and 603 read 31
+    frames of spectrogram and close the first windows warming, as min_start_frame drops
+    them in training. The aux of every window is stored, the whole vectors (large) of
+    the last window only: by then the row ring has wrapped.
+    """
+    from boomdetect_train.datasets.cache import CachedFrames, frame_rows
+    from boomdetect_train.dsp.selftest import AM_INPUT_LEN, am_lcg_signal
+    from boomdetect_train.dsp.spectro import spec_frames
+    from boomdetect_train.evaluate import window_features
+    from boomdetect_train.features import LAYOUTS, min_start_frame
+
+    x = pcm16_to_float(decimate3(am_lcg_signal()))
+    frames = Frontend().process(x)
+    gs = spec_frames(x, ["gs1k"])["gs1k"]
+    cf = CachedFrames(frame_rows(frames), specs={"gs1k": gs})
+    wins = list(windows(frames.rms, Gate.PER_FRAME, squelch=0.0))
+    l703 = np.stack([window_features(703, cf, w.frames) for w in wins])
+    first = min_start_frame(903)
+    late = [w for w in wins if w.start >= first]
+    l903 = np.stack([window_features(903, cf, w.frames) for w in late])
+    aux = l703[:, 14 * gs.shape[1] :]
+    rows = gs[:GS_FRAMES]
+
+    def floats(name: str, v: np.ndarray) -> str:
+        return ex._c_array(name, "float", v, v.shape, ex._c_float_short, 16)
+
+    guard = "BOOMDETECT_EXTRACTOR_GS_EXPECTED_H"
+    prov = [
+        f"generated: {time.strftime('%Y-%m-%dT%H:%M:%S')} by bdtrain fixtures",
+        f"signal: the AM fixture of extractor_mod_expected.h ({AM_INPUT_LEN} samples at 48 kHz)",
+        f"windows: {len(wins)} of 14 frames, no squelch; layouts 903/603 close the first "
+        f"{len(wins) - len(late)} warming (31 frames of spectrogram needed)",
+        f"gammatone rows of the first {GS_FRAMES} frames, the layout-8 aux of every window, "
+        "the whole 703 and 903 vectors of the last",
+    ]
+    lines = ex._header(guard, "Gammatone hybrids on the AM fixture, from Python", prov)
+    lines += [
+        "#include <math.h> /* NAN: the modulation numbers before the envelope ring is full */",
+        "",
+        f"#define EXPECTED_GS_FRAMES {GS_FRAMES}",
+        f"#define EXPECTED_GS_BANDS {gs.shape[1]}",
+        f"#define EXPECTED_GS_WINDOWS {len(wins)}",
+        f"#define EXPECTED_GS_LATE {len(late)}",
+        f"#define EXPECTED_703_WIDTH {LAYOUTS[703].n_features}",
+        f"#define EXPECTED_903_WIDTH {LAYOUTS[903].n_features}",
+        f"#define EXPECTED_AUX_WIDTH {aux.shape[1]}",
+        "",
+        floats("expected_gs_rows", rows),
+        "",
+        floats("expected_aux", aux),
+        "",
+        floats("expected_703_last", l703[-1]),
+        "",
+        floats("expected_903_last", l903[-1]),
+        "",
+        f"#endif /* {guard} */",
+        "",
+    ]
+    return "\n".join(lines)
+
+
+def write_gs_fixture() -> Path:
+    return ex.write_text(VECTORS_DIR / "extractor_gs_expected.h", gs_fixture_text())

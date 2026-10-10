@@ -17,14 +17,18 @@ from __future__ import annotations
 
 import numpy as np
 
-from boomdetect_train.export import _c_array, _c_float, _header
+from boomdetect_train.export import _c_array, _c_float, _c_float_short, _header
 from boomdetect_train.features import (
     LAYOUT_LOGMEL,
     LAYOUT_STATS,
     LAYOUT_STATS_SPECTRAL,
     LAYOUT_STATS_SPECTRAL_MOD,
+    LAYOUTS,
+    spec_layout_id,
 )
 from boomdetect_train.models.cnn import L_CONV, L_DENSE, L_DWCONV, L_GAP, L_POOL, CnnModel
+from boomdetect_train.models.crnn import CrnnParams
+from boomdetect_train.models.pair import PairModel, ZTable
 
 LAYOUT_MACRO = {
     LAYOUT_STATS: ("BOOMDETECT_LAYOUT_MEAN_STD_DMEAN_CMAX", "BOOMDETECT_FEATURE_COUNT"),
@@ -38,6 +42,13 @@ LAYOUT_MACRO = {
         "BOOMDETECT_FEATURE_COUNT_STATS_SPECTRAL_MOD",
     ),
 }
+# The gammatone layouts the C carries (include/extractor.h): the 1 s patch alone (only
+# as a pair member), and the hybrids - patch plus layout 4 or layout 8 beside it.
+for _base, _tag in ((400, "PATCH31"), (600, "HYBRID31"), (700, "HYBRID8"), (900, "HYBRID8_31")):
+    LAYOUT_MACRO[spec_layout_id(_base, "gs1k")] = (
+        f"BOOMDETECT_LAYOUT_{_tag}_GS1K",
+        f"BOOMDETECT_FEATURE_COUNT_{_tag}_GS1K",
+    )
 
 
 def _tu_header(name: str, what: str, provenance: list[str]) -> str:
@@ -361,6 +372,122 @@ const classifier_t classifier_{name} = {{
     .ctx               = NULL,
 }};
 """
+
+
+# The weight arrays of a crnn_net_t, by field name (the aux ones only for a hybrid).
+CRNN_ARRAYS = ("w1", "b1", "s1", "t1", "w2", "b2", "s2", "t2", "w_ih", "w_hh", "b_gates")
+CRNN_ARRAYS += ("w_head", "b_head", "w_out")
+CRNN_AUX_ARRAYS = ("aux_fill", "aux_mean", "aux_std", "w_aux", "b_aux")
+
+
+def crnn_header(p: CrnnParams, name: str, provenance: list[str]) -> str:
+    """crnn_model_data_<name>.h: the network's weights in src/crnn.c's order, flat."""
+    guard = f"CRNN_MODEL_DATA_{name.upper()}_H"
+    lines = _header(
+        guard,
+        f"CRNN {name}: patch {p.t} x {p.bands}, conv {p.c1}/{p.c2}, LSTM {p.hidden}, "
+        f"aux {p.n_aux}; {p.macs()} MACs, {p.n_params()} parameters",
+        provenance,
+    )
+    for suffix in CRNN_ARRAYS + (CRNN_AUX_ARRAYS if p.n_aux else ()):
+        flat = np.asarray(getattr(p, suffix), dtype=np.float32).reshape(-1)
+        lines += [
+            _c_array(f"crnn_{name}_{suffix}", "float", flat, flat.shape, _c_float_short, 16),
+            "",
+        ]
+    lines += [f"#endif /* {guard} */", ""]
+    return "\n".join(lines)
+
+
+def crnn_tu(
+    name: str, p: CrnnParams, thr_milli: int, provenance: list[str], registered: bool = True
+) -> str:
+    """model_<name>.c: the network descriptor (also what a pair points at) and its classifier."""
+    layout_macro, width_macro = LAYOUT_MACRO[p.layout]
+    what = "registered" if registered else "not registered: a pair's member"
+    head = _tu_header(name, f"CRNN {name} on the gammatone patch ({what}).", provenance)
+    arrays = CRNN_ARRAYS + (CRNN_AUX_ARRAYS if p.n_aux else ())
+    refs = [f".{a} = crnn_{name}_{a}" for a in arrays]
+    ref_lines = "\n".join("    " + ", ".join(refs[i : i + 3]) + "," for i in range(0, len(refs), 3))
+    reads = p.aux_offset + p.n_aux if p.n_aux else p.t * p.bands
+    return f"""{head}
+#include "classifier.h"
+#include "crnn.h"
+#include "dsp_config.h"
+#include "models.h"
+
+#include "crnn_model_data_{name}.h"
+
+_Static_assert({reads}u <= {width_macro}, "{name} reads past its layout");
+
+crnn_net_t crnn_net_{name} = {{
+    .t = {p.t}u, .bands = {p.bands}u, .c1 = {p.c1}u, .c2 = {p.c2}u, .hidden = {p.hidden}u,
+    .n_aux = {p.n_aux}u, .aux_hidden = {p.aux_hidden}u, .head = {p.head}u,
+    .aux_offset = {p.aux_offset if p.n_aux else 0}u, .patch_std = {_c_float(p.patch_std)},
+{ref_lines}
+    .b_out = {_c_float(p.b_out)},
+}};
+
+const classifier_t classifier_{name} = {{
+    .name = "{name}", .layout_id = {layout_macro}, .n_features = {width_macro},
+    .feature_offset = 0u, .default_thr_milli = {thr_milli},
+    .decide = crnn_classifier_decide, .ctx = &crnn_net_{name}, .job = &crnn_classifier_job,
+}};
+"""
+
+
+def pair_tu(pair: PairModel, thr_milli: int, provenance: list[str]) -> str:
+    """model_<name>.c: an OR pair - member A (a layout-4 model of the registry's table),
+    member B (a network's descriptor), and each member's top val-negative scores."""
+    name = pair.name
+    layout_macro, width_macro = LAYOUT_MACRO[pair.layout]
+    head = _tu_header(name, f"OR pair {name}: {pair.a_name} or {pair.b_name}.", provenance)
+    n_b = LAYOUTS[pair.b.layout].n_features
+    impute = getattr(pair.a, "impute", None)
+    reads_a = pair.base_a + LAYOUTS[pair.a.layout].n_features
+    lines = [
+        head,
+        '#include "classifier.h"',
+        '#include "classifier_pair.h"',
+        '#include "dsp_config.h"',
+        '#include "models.h"',
+        "",
+        f"_Static_assert({pair.base_b + n_b}u <= {width_macro} && {reads_a}u <= {width_macro},",
+        f'               "{name}: a member reads past the layout");',
+        "",
+        f"/* Each member's top val-negative scores, of {pair.za.n_neg} windows. */",
+    ]
+    for tag, z in (("za", pair.za), ("zb", pair.zb)):
+        lines += [_c_array(f"s_{tag}", "float", z.top, (z.k,), _c_float_short, 16), ""]
+    fill = "NULL"
+    if impute is not None:
+        imp = np.asarray(impute, dtype=np.float32).reshape(-1)
+        lines += [
+            f"/* {pair.a_name}'s fill for a NaN input, as its training imputed it. */",
+            _c_array("s_impute_a", "float", imp, imp.shape, _c_float_short, 16),
+            "",
+        ]
+        fill = "s_impute_a"
+
+    def table(tag: str, z: ZTable) -> str:
+        return f"{{ s_{tag}, {z.k}u, {z.n_neg}u, {_c_float(z.gain)} }}"
+
+    lines += [
+        "static pair_t s_pair = {",
+        f"    .a = &classifier_{pair.a_name}, .base_a = {pair.base_a}u, .impute_a = {fill},",
+        f"    .za = {table('za', pair.za)},",
+        f"    .b = &crnn_net_{pair.b_name}, .base_b = {pair.base_b}u, .n_b = {n_b}u,",
+        f"    .zb = {table('zb', pair.zb)},",
+        "};",
+        "",
+        f"const classifier_t classifier_{name} = {{",
+        f'    .name = "{name}", .layout_id = {layout_macro}, .n_features = {width_macro},',
+        f"    .feature_offset = 0u, .default_thr_milli = {thr_milli},",
+        "    .decide = pair_classifier_decide, .ctx = &s_pair, .job = &pair_classifier_job,",
+        "};",
+        "",
+    ]
+    return "\n".join(lines)
 
 
 def registry_lines(names: list[str]) -> tuple[str, str]:

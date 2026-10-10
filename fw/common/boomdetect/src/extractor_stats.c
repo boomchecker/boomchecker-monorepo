@@ -32,6 +32,9 @@ static const boomdetect_extractor_t *const s_extractors[] = {
     &boomdetect_extractor_stats_spectral,
     &boomdetect_extractor_logmel,
     &boomdetect_extractor_stats_spectral_mod,
+    &boomdetect_extractor_hybrid8_gs1k,
+    &boomdetect_extractor_hybrid8_31_gs1k,
+    &boomdetect_extractor_hybrid31_gs1k,
 };
 
 size_t boomdetect_extractor_count(void)

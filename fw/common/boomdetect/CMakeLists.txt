@@ -268,9 +268,13 @@ add_library(boomdetect_core OBJECT
   src/extractor_spectral.c
   src/extractor_logmel.c
   src/extractor_mod.c
+  src/extractor_gs.c
   src/envelope.c
+  src/gammatone.c
   src/frame_scalars.c
   src/nn_infer.c
+  src/crnn.c
+  src/classifier_pair.c
   src/boomdetect_mfcc_f32.c
   src/boomdetect_selftest.c
   src/mfcc_processor.c
@@ -283,6 +287,12 @@ add_library(boomdetect STATIC
   models/model_mlp_m1.c
   models/model_mlp_v6.c
   models/model_svm_v3.c
+  models/model_crnn_h.c
+  models/model_crnn_hl.c
+  models/model_crnn_l.c
+  models/model_or_h.c
+  models/model_or_hl.c
+  models/model_or_l.c
   $<TARGET_OBJECTS:boomdetect_core>
 )
 # PUBLIC is the API: boomdetect.h, classifier.h, dsp_config.h. The MFCC wrapper
@@ -433,7 +443,8 @@ if(BOOMDETECT_STANDALONE)
     # could not check it.
     target_include_directories(boomdetect_${test}_test PRIVATE
       ${CMAKE_CURRENT_SOURCE_DIR}/tests
-      ${CMAKE_CURRENT_SOURCE_DIR}/src)
+      ${CMAKE_CURRENT_SOURCE_DIR}/src
+      ${CMAKE_CURRENT_SOURCE_DIR}/models)
     target_compile_options(boomdetect_${test}_test PRIVATE
       ${BOOMDETECT_WARNING_FLAGS} ${BOOMDETECT_WERROR_FLAGS})
     add_test(NAME boomdetect_${test} COMMAND boomdetect_${test}_test)

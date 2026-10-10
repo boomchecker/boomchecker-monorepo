@@ -12,6 +12,7 @@
 #include "bd_test.h"
 #include "boomdetect.h"
 
+#include <math.h>
 #include <string.h>
 
 BD_TEST_STATE;
@@ -364,6 +365,151 @@ static void scenario_offset_is_honoured(void)
           "so the offset is being ignored", (unsigned)BOOMDETECT_MFCC_COEFFS);
 }
 
+/* A model with a job, five steps long whatever the budget below 5000: decide()
+   and the job agree on features[0], so a deferred decision is predictable. */
+#define JOB_STEPS 5u
+static float    s_job_value;
+static uint32_t s_job_left;
+static uint32_t s_job_begins;
+
+static bool job_begin(void *ctx, const float *features, uint16_t n)
+{
+    (void)ctx;
+    (void)n;
+    s_job_value = features[0];
+    s_job_left  = JOB_STEPS;
+    s_job_begins++;
+    return true;
+}
+
+static bool job_run(void *ctx, uint32_t budget)
+{
+    (void)ctx;
+    if (s_job_left > 0u)
+    {
+        s_job_left = (budget >= 5000u) ? 0u : s_job_left - 1u;
+    }
+    return s_job_left == 0u;
+}
+
+static float job_result(void *ctx)
+{
+    (void)ctx;
+    return s_job_value;
+}
+
+static const classifier_job_t s_stub_job = {
+    .begin = job_begin, .run = job_run, .result = job_result,
+};
+
+static const classifier_t job_model = {
+    .name = "stub_job",
+    .layout_id = BOOMDETECT_LAYOUT_MEAN_STD_DMEAN_CMAX,
+    .n_features = 8u,
+    .decide = stub_decide,
+    .job = &s_stub_job,
+};
+
+/* job_budget > 0: the window closes pending, its decision comes out of
+   boomdetect_work() a few calls later with the window's own frames, and a window
+   closing meanwhile is dropped and counted. job_budget 0: the same model decides
+   inline like any other. */
+static void scenario_deferred_decision(void)
+{
+    static boomdetect_t d;
+    static int16_t      loud[BOOMDETECT_WINDOW_SIZE * 3u];
+    for (uint32_t i = 0u; i < BOOMDETECT_WINDOW_SIZE * 3u; i++)
+    {
+        loud[i] = tone(i);
+    }
+    boomdetect_config_t cfg = base_cfg(0u);
+    boomdetect_event_t  ev, wev;
+    cfg.classifier = &job_model;
+    cfg.job_budget = 1000u;
+    REQUIRE(boomdetect_init(&d, &cfg), "init failed");
+    CHECK(!boomdetect_work(&d, &wev), "work() did something with no window closed");
+
+    uint32_t pending = 0u, start = 0u, end = 0u;
+    for (uint32_t f = 0u; f < BOOMDETECT_ACCUM_FRAMES + 2u && pending == 0u; f++)
+    {
+        boomdetect_push(&d, loud, BOOMDETECT_HOP * 3u);
+        while (boomdetect_step(&d, &ev))
+        {
+            CHECK(!ev.window.complete, "a job model completed a window inside step()");
+            if (ev.window.pending)
+            {
+                pending++;
+                start = ev.window.start_frame;
+                end   = ev.window.end_frame;
+                CHECK(isnan(ev.window.decision), "a pending window carried decision %.9g",
+                      (double)ev.window.decision);
+                break;
+            }
+        }
+    }
+    REQUIRE(pending == 1u, "no window closed pending");
+    CHECK(boomdetect_job_pending(&d), "the detector does not report its job");
+    uint32_t windows = 99u;
+    boomdetect_counts(&d, &windows, NULL);
+    CHECK(windows == 0u, "a pending window was counted (%u)", windows);
+
+    uint32_t calls = 0u;
+    bool     done  = false;
+    while (!done && calls < 20u)
+    {
+        done = boomdetect_work(&d, &wev);
+        calls++;
+    }
+    REQUIRE(done, "the job never finished");
+    CHECK(calls == JOB_STEPS, "finished after %u work() calls, the job has %u steps", calls,
+          JOB_STEPS);
+    const float *feat = boomdetect_last_features(&d);
+    REQUIRE(feat != NULL, "no feature vector after the window");
+    CHECK(wev.window.complete && wev.window.decision == feat[0],
+          "the deferred decision %.9g is not features[0] %.9g", (double)wev.window.decision,
+          (double)feat[0]);
+    CHECK(wev.window.start_frame == start && wev.window.end_frame == end,
+          "the decision came for frames %u..%u, the window was %u..%u", wev.window.start_frame,
+          wev.window.end_frame, start, end);
+    CHECK(wev.window.is_drone == (wev.window.decision >= 0.0f), "is_drone does not follow thr 0");
+    boomdetect_counts(&d, &windows, NULL);
+    CHECK(windows == 1u && !boomdetect_job_pending(&d), "after the decision: %u windows, pending %d",
+          windows, (int)boomdetect_job_pending(&d));
+    CHECK(!boomdetect_work(&d, &wev), "work() returned a second decision for one window");
+
+    /* Two more windows without any work in between: the second closes while the
+       first one's job is still running, and is dropped. */
+    const uint32_t begins = s_job_begins;
+    uint32_t       closed = 0u;
+    for (uint32_t f = 0u; f < 2u * BOOMDETECT_ACCUM_FRAMES + 2u; f++)
+    {
+        boomdetect_push(&d, loud, BOOMDETECT_HOP * 3u);
+        while (boomdetect_step(&d, &ev))
+        {
+            closed += ev.window.pending ? 1u : 0u;
+        }
+    }
+    CHECK(closed == 1u && s_job_begins == begins + 1u,
+          "%u windows closed pending, %u jobs begun; expected one of each", closed,
+          s_job_begins - begins);
+    CHECK(boomdetect_jobs_skipped(&d) >= 1u, "the dropped window was not counted");
+
+    /* No budget: the job model is just a model. */
+    cfg.job_budget = 0u;
+    REQUIRE(boomdetect_init(&d, &cfg), "init failed");
+    bool inline_done = false;
+    for (uint32_t f = 0u; f < BOOMDETECT_ACCUM_FRAMES + 2u && !inline_done; f++)
+    {
+        boomdetect_push(&d, loud, BOOMDETECT_HOP * 3u);
+        while (boomdetect_step(&d, &ev))
+        {
+            CHECK(!ev.window.pending, "job_budget 0 still deferred a window");
+            inline_done = inline_done || ev.window.complete;
+        }
+    }
+    CHECK(inline_done && !boomdetect_job_pending(&d), "job_budget 0 did not decide inline");
+}
+
 int main(void)
 {
     scenario_nothing_from_nothing();
@@ -373,5 +519,6 @@ int main(void)
     scenario_squelch_resets_partial_window();
     scenario_window_completes_and_dispatches();
     scenario_offset_is_honoured();
-    BD_TEST_REPORT("pipeline_test", 68);  /* exact count from running the compiled binary */
+    scenario_deferred_decision();
+    BD_TEST_REPORT("pipeline_test", 114);  /* exact count from running the compiled binary */
 }

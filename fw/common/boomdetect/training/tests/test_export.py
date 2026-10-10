@@ -132,11 +132,16 @@ def test_export_names_rename_and_refuse_what_the_c_cannot_take():
     from boomdetect_train.run import _export_names
 
     run_models = {"mlp_l2": object(), "gbt_reg_l1": object()}
-    assert _export_names(["mlp_l2=mlp_f1_l2", "gbt_reg_l1"], run_models) == [
-        ("mlp_l2", "mlp_f1_l2"),
-        ("gbt_reg_l1", "gbt_reg_l1"),
+    specs = ["mlp_l2=mlp_f1_l2", "gbt_reg_l1", "r2:crnn2d_l703=crnn_h"]
+    assert _export_names(specs, run_models, "r1") == [
+        ("r1", "mlp_l2", "mlp_f1_l2"),
+        ("r1", "gbt_reg_l1", "gbt_reg_l1"),
+        ("r2", "crnn2d_l703", "crnn_h"),
     ]
-    assert _export_names(None, run_models) == [("gbt_reg_l1", "gbt_reg_l1"), ("mlp_l2", "mlp_l2")]
+    assert _export_names(None, run_models, "r1") == [
+        ("r1", "gbt_reg_l1", "gbt_reg_l1"),
+        ("r1", "mlp_l2", "mlp_l2"),
+    ]
     with pytest.raises(KeyError):
         _export_names(["mlp_l9"], run_models)
     with pytest.raises(ValueError):

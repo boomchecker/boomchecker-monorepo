@@ -147,6 +147,8 @@ def cmd_export(args: argparse.Namespace) -> int:
         keep=args.keep,
         fa_per_hour=args.fa_per_hour,
         squelch=args.squelch,
+        members=args.member,
+        pairs=args.pair,
     )
     for p in written:
         print(f"wrote {p}")
@@ -172,10 +174,18 @@ def cmd_fixtures(args: argparse.Namespace) -> int:
     from boomdetect_train.fixtures import (
         write_envelope_coefs,
         write_extractor_fixture,
+        write_gammatone_table,
+        write_gs_fixture,
         write_mod_fixture,
     )
 
-    for p in (write_extractor_fixture(), write_mod_fixture(), write_envelope_coefs()):
+    for p in (
+        write_extractor_fixture(),
+        write_mod_fixture(),
+        write_envelope_coefs(),
+        write_gammatone_table(),
+        write_gs_fixture(),
+    ):
         print(f"wrote {p}")
     return 0
 
@@ -299,8 +309,25 @@ def main(argv: list[str] | None = None) -> int:
         "--models",
         nargs="*",
         default=None,
-        metavar="NAME[=CNAME]",
-        help="models to export, optionally under another C name; default all",
+        metavar="[RUN:]NAME[=CNAME]",
+        help="models to export, optionally under another C name; default all. A RUN: prefix "
+        "takes the model from another run (the spectrogram networks: one run per seed)",
+    )
+    p.add_argument(
+        "--member",
+        nargs="*",
+        default=None,
+        metavar="[RUN:]NAME=CNAME",
+        help="networks to export that the registry does NOT list: a pair's member, e.g. "
+        "r2_crnn2d31_gs1k_s1:crnn2d_l403=crnn_l",
+    )
+    p.add_argument(
+        "--pair",
+        nargs="*",
+        default=None,
+        metavar="CNAME=A+B",
+        help="OR pairs of a layout-4 model A and a network B, both C names of this export or "
+        "of --keep, e.g. or_h=gbt_m1+crnn_h",
     )
     p.add_argument(
         "--keep",

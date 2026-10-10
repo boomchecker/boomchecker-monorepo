@@ -173,7 +173,12 @@ COMMANDS: tuple[CommandSpec, ...] = (
             "OFF-to-ON transitions and the two times are when the run first called a "
             "window DRONE and first raised the alarm (`-` if never). With dbg set, each "
             "frame also emits `F=<frame> a=<accumulated> r=<rms_milli> h=<half_us> "
-            "m=<mfcc_us>`. A start failure prints `DETERR <reason>` and then the DETEND "
+            "m=<mfcc_us>`, and before DETEND `DETDBG h_max=<us> m_max=<us> w_max=<us> "
+            "loop_max=<us> skipped=<n>`: the slowest PDM block, frame, network slice and "
+            "whole loop pass of the run, and the windows dropped while a network was still "
+            "busy. A network model (crnn_*, or_*) is scored a slice per mic block, so its "
+            "DET line comes a few blocks after the window closed - `t` is still the "
+            "window's. A start failure prints `DETERR <reason>` and then the DETEND "
             "trailer with err=1, so the trailer always arrives."
         ),
     ),

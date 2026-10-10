@@ -18,12 +18,20 @@ model_parity_test reads those and holds the two implementations together.
 
 from __future__ import annotations
 
+import zlib
 from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
 
-from boomdetect_train.features import LAYOUTS
+from boomdetect_train.features import (
+    HYBRID_AUX_LAYOUT,
+    LAYOUT_STATS_SPECTRAL_MOD2S4S,
+    LAYOUTS,
+    N_MOD,
+    N_STATS_SPECTRAL,
+    spec_layout,
+)
 from boomdetect_train.train import ScaledModel
 
 PARITY_N = 16
@@ -38,20 +46,37 @@ def _c_float(v: float) -> str:
     return s + "f"
 
 
+def _c_float_short(v: float) -> str:
+    """The shortest decimal that reads back as the same float32, with the f suffix, and NaN
+    as math.h's NAN: for the big generated tables (network weights, wide vectors)."""
+    f = np.float32(v)
+    if np.isnan(f):
+        return "NAN"
+    a = np.format_float_positional(f, unique=True, trim="-")
+    b = np.format_float_scientific(f, unique=True, trim="-")
+    s = a if len(a) <= len(b) else b
+    if "." not in s and "e" not in s:
+        s += "."
+    return s + "f"
+
+
 def _chunks(tokens: list[str], per_line: int = 8, indent: str = "    ") -> list[str]:
     return [
         indent + ", ".join(tokens[i : i + per_line]) + "," for i in range(0, len(tokens), per_line)
     ]
 
 
-def _c_array(name: str, ctype: str, values: np.ndarray, dims: tuple[int, ...], fmt) -> str:
-    """`static const <ctype> name[d0][d1] = { ... };` with 8 floats or 16 integers per line.
+def _c_array(
+    name: str, ctype: str, values: np.ndarray, dims: tuple[int, ...], fmt, per_line: int = 0
+) -> str:
+    """`static const <ctype> name[d0][d1] = { ... };` with 8 floats or 16 integers per line
+    (or `per_line`).
 
     A 2-D array gets one braced row per leading index: gcc's -Wmissing-braces
     (on under -Wall, fatal under -Werror) rejects a flat initializer for it.
     """
     arr = np.asarray(values)
-    per_line = 8 if ctype == "float" else 16
+    per_line = per_line or (8 if ctype == "float" else 16)
     dim_str = "".join(f"[{d}]" for d in dims)
     lines = [f"static const {ctype} {name}{dim_str} = {{"]
     if len(dims) == 2:
@@ -86,20 +111,89 @@ def _header(guard: str, title: str, provenance: list[str]) -> list[str]:
 class ParityVectors:
     features: np.ndarray  # (n, n_features_full) float32, the FULL layout vector
     expected: np.ndarray  # (n,) float32 decisions from the Python forward pass
+    # Synthetic vectors: generated on both sides from synth_seed (synthetic_features), so
+    # only the decisions are stored - a wide layout's real vectors cost kilobytes each.
+    synth_expected: np.ndarray | None = None
+    synth_seed: int = 0
+    nan_a: tuple[int, int] = (0, 0)  # (start, length) set to NaN in synthetic vector k % 3 >= 1
+    nan_b: tuple[int, int] = (0, 0)  # ... and this one too in k % 3 == 2
+
+
+# Parity vectors of the wide layouts (the spectrogram networks and their pairs): a few
+# real windows, the rest synthetic. A pair's network is checked by its own entry, so
+# the pair needs one real window to prove the composition.
+PARITY_N_WIDE = 2
+PARITY_N_WIDE_PAIR = 1
+PARITY_N_SYNTH = 8
+SYNTH_SCALE = 3.0
+
+
+def synthetic_features(
+    width: int,
+    seed: int,
+    k: int,
+    nan_a: tuple[int, int] = (0, 0),
+    nan_b: tuple[int, int] = (0, 0),
+) -> np.ndarray:
+    """Synthetic vector k: uniform in [-3, 3) from a 32-bit LCG, the C's exact sequence.
+
+    tests/model_parity_test.c generates the same numbers: the state update is integer
+    arithmetic, v is a 24-bit integer (exact in float32), and v * 2^-23 * 3 rounds once
+    in both languages. Vector k % 3 == 1 has the range nan_a set to NaN, k % 3 == 2 nan_a
+    and nan_b - the shapes a hybrid's aux takes before the envelope ring is full.
+    """
+    mask = 0xFFFFFFFF
+    state = (seed * 2654435761 + k * 40503 + 1) & mask
+    out = np.empty(width, dtype=np.float32)
+    unit = np.float32(1.0 / 8388608.0)
+    scale = np.float32(SYNTH_SCALE)
+    for i in range(width):
+        state = (state * 1664525 + 1013904223) & mask
+        v = ((state >> 8) & 0xFFFFFF) - 0x800000
+        out[i] = np.float32(v) * unit * scale
+    if k % 3 >= 1 and nan_a[1]:
+        out[nan_a[0] : nan_a[0] + nan_a[1]] = np.nan
+    if k % 3 == 2 and nan_b[1]:
+        out[nan_b[0] : nan_b[0] + nan_b[1]] = np.nan
+    return out
+
+
+def synth_seed_of(name: str) -> int:
+    return zlib.crc32(name.encode("utf-8")) & 0xFFFFFFFF
+
+
+def mod_nan_ranges(layout: int) -> tuple[tuple[int, int], tuple[int, int]]:
+    """Where a spectrogram hybrid's aux holds modulation sets that are NaN while the
+    envelope ring fills: (the set that fills last, the one before it)."""
+    spec = spec_layout(layout)
+    if spec is None or spec[0] not in HYBRID_AUX_LAYOUT:
+        return (0, 0), (0, 0)
+    start = spec[2] * 64 + N_STATS_SPECTRAL
+    if HYBRID_AUX_LAYOUT[spec[0]] == LAYOUT_STATS_SPECTRAL_MOD2S4S:
+        return (start + N_MOD, N_MOD), (start, N_MOD)
+    return (start, N_MOD), (0, 0)
 
 
 def parity_vectors(
-    model: ScaledModel, x_full: np.ndarray, n: int = PARITY_N, seed: int = 7
+    model, x_full: np.ndarray, n: int = PARITY_N, seed: int = 7, allow_nan: bool = False
 ) -> ParityVectors:
     """Pick `n` real windows spread over the score range and score them in Python.
 
     Windows with a missing feature (layout 4 before its ring is full) are left
-    out: the board never classifies those, so the C has no fill to compare.
+    out unless `allow_nan`: the board never hands those to a tree or an MLP, so
+    the C has no fill to compare. The spectrogram networks and their pairs do
+    take them (their fills are part of the model), so they keep them.
     """
     rng = np.random.default_rng(seed)
-    x_full = np.asarray(x_full)[np.isfinite(np.asarray(x_full)).all(axis=1)]
+    x_full = np.asarray(x_full)
+    if not allow_nan:
+        x_full = x_full[np.isfinite(x_full).all(axis=1)]
     if x_full.shape[0] <= n:
         pick = np.arange(x_full.shape[0])
+    elif n == 1:
+        # The strongest window: for a pair that is above every val negative, where
+        # its z table extrapolates.
+        pick = np.asarray([int(np.argmax(model.score(x_full)))])
     else:
         scores = model.score(x_full)
         order = np.argsort(scores)
@@ -110,6 +204,23 @@ def parity_vectors(
         pick = np.unique(np.concatenate([q, r]))[:n]
     feats = np.asarray(x_full[pick], dtype=np.float32)
     return ParityVectors(feats, np.asarray(model.score(feats), dtype=np.float32).reshape(-1))
+
+
+def wide_parity_vectors(model, name: str, x_full: np.ndarray) -> ParityVectors:
+    """A spectrogram network's or a pair's vectors: PARITY_N_WIDE real windows (NaN kept)
+    and PARITY_N_SYNTH synthetic ones, of which only the decisions are stored."""
+    n_real = PARITY_N_WIDE_PAIR if getattr(model, "kind", "") == "pair" else PARITY_N_WIDE
+    pv = parity_vectors(model, x_full, n=n_real, allow_nan=True)
+    width = LAYOUTS[model.layout].n_features
+    nan_a, nan_b = mod_nan_ranges(model.layout)
+    seed = synth_seed_of(name)
+    synth = np.stack(
+        [synthetic_features(width, seed, k, nan_a, nan_b) for k in range(PARITY_N_SYNTH)]
+    )
+    pv.synth_expected = np.asarray(model.score(synth), dtype=np.float32).reshape(-1)
+    pv.synth_seed = seed
+    pv.nan_a, pv.nan_b = nan_a, nan_b
+    return pv
 
 
 def mlp_hidden_layers(model: ScaledModel) -> int:
@@ -314,13 +425,20 @@ def export_parity_block(name: str, layout: int, offset: int, vectors: ParityVect
     n, width = vectors.features.shape
     assert width == LAYOUTS[layout].n_features
     ident = name.replace("-", "_")
-    return "\n".join(
-        [
-            f"/* {name}: layout {layout} ({LAYOUTS[layout].name}), offset {offset} */",
-            _c_array(f"parity_{ident}_features", "float", vectors.features, (n, width), _c_float),
-            _c_array(f"parity_{ident}_expected", "float", vectors.expected, (n,), _c_float),
-        ]
-    )
+    # A network's or a pair's few wide vectors (NaN kept) in short floats.
+    wide = vectors.synth_expected is not None
+    fmt, per_line = (_c_float_short, 16) if wide else (_c_float, 0)
+    lines = [
+        f"/* {name}: layout {layout} ({LAYOUTS[layout].name}), offset {offset} */",
+        _c_array(f"parity_{ident}_features", "float", vectors.features, (n, width), fmt, per_line),
+        _c_array(f"parity_{ident}_expected", "float", vectors.expected, (n,), _c_float),
+    ]
+    if vectors.synth_expected is not None:
+        m = vectors.synth_expected.shape[0]
+        lines.append(
+            _c_array(f"parity_{ident}_synth", "float", vectors.synth_expected, (m,), _c_float)
+        )
+    return "\n".join(lines)
 
 
 def export_parity_header(
@@ -330,6 +448,8 @@ def export_parity_header(
     guard = "BOOMDETECT_PARITY_VECTORS_H"
     lines = _header(guard, "Python-versus-C parity vectors for every registered model", provenance)
     lines += [
+        "#include <math.h> /* NAN: a hybrid network's aux before the envelope ring is full */",
+        "",
         "typedef struct",
         "{",
         "    const char  *name;",
@@ -338,6 +458,13 @@ def export_parity_header(
         "    uint16_t     n_vectors;",
         "    const float *features;     /* n_vectors x n_features */",
         "    const float *expected;     /* n_vectors */",
+        "    /* Synthetic vectors (training/boomdetect_train/export.py synthetic_features):",
+        "       generated from synth_seed on both sides, only the decisions stored. */",
+        "    uint16_t     n_synth;",
+        "    uint32_t     synth_seed;",
+        "    uint16_t     nan_a_start, nan_a_len; /* NaN in vector k when k % 3 >= 1 */",
+        "    uint16_t     nan_b_start, nan_b_len; /* ... and here too when k % 3 == 2 */",
+        "    const float *synth_expected; /* n_synth, or NULL */",
         "} parity_entry_t;",
         "",
     ]
@@ -347,9 +474,17 @@ def export_parity_header(
     for name, layout, _offset, vec in entries:
         ident = name.replace("-", "_")
         n, width = vec.features.shape
+        if vec.synth_expected is None:
+            synth = "0u, 0u, 0u, 0u, 0u, 0u, NULL"
+        else:
+            synth = (
+                f"{vec.synth_expected.shape[0]}u, {vec.synth_seed}u, "
+                f"{vec.nan_a[0]}u, {vec.nan_a[1]}u, {vec.nan_b[0]}u, {vec.nan_b[1]}u, "
+                f"parity_{ident}_synth"
+            )
         lines.append(
             f'    {{ "{name}", {layout}u, {width}u, {n}u, &parity_{ident}_features[0][0], '
-            f"parity_{ident}_expected }},"
+            f"parity_{ident}_expected, {synth} }},"
         )
     lines += ["};", "", f"#endif /* {guard} */", ""]
     return "\n".join(lines)

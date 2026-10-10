@@ -39,12 +39,21 @@ extern "C" {
 #define BOOMDETECT_LAYOUT_STATS_SPECTRAL      2u /* "stats_spectral", 69 */
 #define BOOMDETECT_LAYOUT_LOGMEL              3u /* "logmel", 280 */
 #define BOOMDETECT_LAYOUT_STATS_SPECTRAL_MOD  4u /* "stats_spectral_mod", 79 */
+/* The gammatone layouts keep the training package's numbering, base + front-end
+   (features.py SPEC_KINDS; gs1k is front-end 3). 403 has no extractor: only a
+   pair's network member reads it, as the first part of 603. */
+#define BOOMDETECT_LAYOUT_PATCH31_GS1K    403u /* "patch31_gs1k", 1984 */
+#define BOOMDETECT_LAYOUT_HYBRID31_GS1K   603u /* "hybrid31_gs1k", 2063: patch 31 + layout 4 */
+#define BOOMDETECT_LAYOUT_HYBRID8_GS1K    703u /* "hybrid8_gs1k", 985: patch 14 + layout 8 */
+#define BOOMDETECT_LAYOUT_HYBRID8_31_GS1K 903u /* "hybrid831_gs1k", 2073: patch 31 + layout 8 */
 
 /**
  * What the pipeline knows beyond the window's own frames: the envelope ring
- * (dsp_config.h, BOOMDETECT_ENV_*), which outlives any window. Layouts 1-3
- * ignore it; layout 4 reads its modulation spectrum. Passed by pointer so a
- * future side channel is one more field here rather than another parameter.
+ * (dsp_config.h, BOOMDETECT_ENV_*) and the gammatone ring (BOOMDETECT_GS_*),
+ * both of which outlive any window. Layouts 1-3 ignore them; layout 4 reads the
+ * envelope's modulation spectrum; the gammatone hybrids read both. Passed by
+ * pointer so a future side channel is one more field here rather than another
+ * parameter.
  */
 typedef struct
 {
@@ -54,6 +63,12 @@ typedef struct
     uint32_t     env_head;
     /** Samples the ring holds; BOOMDETECT_ENV_RING once it is full. */
     uint32_t     env_fill;
+    /** BOOMDETECT_GS_RING_ROWS rows of BOOMDETECT_GS_BANDS log band powers, one
+        per frame, a ring of rows: the oldest is row gs_head. */
+    const float *gs;
+    uint32_t     gs_head;
+    /** Rows the ring holds; BOOMDETECT_GS_RING_ROWS once it is full. */
+    uint32_t     gs_fill;
 } boomdetect_side_t;
 
 /**
@@ -90,8 +105,21 @@ typedef struct
         run; 0 for the layouts that never look at it. boomdetect_step() lets a
         window close without a decision until the ring has that many, which is
         the first two seconds after init or after a gap - the training package
-        has NaN there and never fits a model on those windows. */
+        has NaN there and never fits a model on those windows. The gammatone
+        hybrids say 0 although they read the ring: their networks were trained
+        on windows whose modulation numbers were still NaN, so they decide
+        from the first window and get NaN where the ring is short. */
     uint16_t env_required;
+
+    /** Keep the envelope ring fed although env_required is 0: what those
+        hybrids set. (env_required > 0 feeds it anyway.) */
+    bool env_feed;
+
+    /** Gammatone rows (frames) the ring must hold before this extractor can
+        run: the patch length. Nonzero also switches the gammatone front end on
+        for every frame. A window that closes with fewer closes warming, as
+        training dropped the windows whose patch reached before the clip. */
+    uint16_t gs_required;
 
     /** One-time set-up - a transform instance, a window table - done by
         boomdetect_init() rather than inside the first window, which on the

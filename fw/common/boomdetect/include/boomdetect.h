@@ -124,6 +124,12 @@ typedef struct
     uint16_t hop;
     /** Gating policy. */
     boomdetect_gate_t gate;
+
+    /** For a model with a job (classifier.h): 0 scores it in the step that
+        closes the window, as the host does. Nonzero defers it: the window
+        closes `pending` and each boomdetect_work() runs about this many
+        multiply-accumulates of it - how the board fits a network in. */
+    uint32_t job_budget;
 } boomdetect_config_t;
 
 /** What one processed frame produced. */
@@ -148,9 +154,13 @@ typedef struct
     struct
     {
         bool     complete;
-        /** The window closed before the envelope ring held what the extractor
-            needs (boomdetect_extractor_t::env_required): consumed, no decision. */
+        /** The window closed before the side rings held what the extractor
+            needs (boomdetect_extractor_t::env_required / gs_required):
+            consumed, no decision. */
         bool     warming;
+        /** The window closed and its model's job began (job_budget): the
+            decision comes from a later boomdetect_work() with these frames. */
+        bool     pending;
         uint32_t start_frame;
         /** Frame that closed the window. Not `start_frame + accum_frames - 1`:
             under BOOMDETECT_GATE_PER_FRAME a squelched frame resets the
@@ -164,7 +174,8 @@ typedef struct
 } boomdetect_event_t;
 
 /**
- * Detector state. Big (about 31 KB: FIFO and envelope ring), so give it static storage
+ * Detector state. Big (about 51 KB: FIFO, envelope and gammatone rings, the
+ * widest feature vector), so give it static storage
  * rather than a stack frame. Held by the caller rather than hidden in this
  * translation unit rather than a hidden singleton, so several detectors can be
  * driven side by side - pipeline_test does exactly that.
@@ -199,6 +210,12 @@ typedef struct
     uint32_t env_head, env_fill;
     uint32_t env_phase; /**< chain samples until the next kept envelope sample */
     float    env_state[BOOMDETECT_ENV_SECTIONS][2]; /**< biquad states, DF2T */
+
+    /** The gammatone ring (src/gammatone.h): one row per frame, oldest row at
+        gs_head, gs_fill rows held. Fed only for an extractor with gs_required. */
+    float    gs_ring[BOOMDETECT_GS_RING_ROWS * BOOMDETECT_GS_BANDS];
+    uint32_t gs_head, gs_fill;
+
     /** The configured extractor's output; only its n_features are meaningful. */
     float    features[BOOMDETECT_FEATURE_MAX];
     uint32_t last_mfcc_slot;
@@ -208,6 +225,12 @@ typedef struct
     uint32_t window_start_frame;
     uint32_t windows;
     uint32_t drones;
+
+    /** A deferred decision in progress (config job_budget): the window it
+        belongs to, and how many windows closed while it ran and were dropped. */
+    bool     job_active;
+    uint32_t job_start_frame, job_end_frame;
+    uint32_t jobs_skipped;
 } boomdetect_t;
 
 /**
@@ -244,10 +267,28 @@ size_t boomdetect_push(boomdetect_t *d, const int16_t *pcm, size_t n);
  * what keeps the firmware inside its real-time budget. A host test that wants
  * to drain everything simply loops.
  *
- * An extractor that reads the envelope ring (src/envelope.h) lets the windows
- * before it is full close without a decision; the event says so (`window.warming`).
+ * An extractor that needs the envelope or the gammatone ring (extractor.h) lets
+ * the windows before it is full close without a decision (`window.warming`).
  */
 bool boomdetect_step(boomdetect_t *d, boomdetect_event_t *out);
+
+/**
+ * @brief Run a slice of a deferred decision (config job_budget).
+ * @return true once it finished: @p out then carries it in `window` (complete,
+ *         its window's start/end frame, decision, is_drone; the per-frame
+ *         fields are zero). false when nothing is pending or it is not done.
+ *
+ * Apart from boomdetect_step() because the work needs no frame: the board
+ * calls it in every mic block, also in those where no frame is ready.
+ */
+bool boomdetect_work(boomdetect_t *d, boomdetect_event_t *out);
+
+/** @brief A deferred decision is in progress. */
+bool boomdetect_job_pending(const boomdetect_t *d);
+
+/** @brief Windows dropped because they closed while a deferred decision still
+           ran: nonzero means the budget per call is too small for the model. */
+uint32_t boomdetect_jobs_skipped(const boomdetect_t *d);
 
 /** @brief Samples dropped because the FIFO was full. Nonzero means a gap. */
 uint32_t boomdetect_dropped(const boomdetect_t *d);

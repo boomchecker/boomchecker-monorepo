@@ -26,7 +26,7 @@
 /* Abort waiting for a mic block after this long (mic/SAI not producing). */
 #define DET_MIC_TIMEOUT_MS 500u
 
-/* ~21 KB, so static rather than a stack frame. */
+/* ~51 KB, so static rather than a stack frame. */
 static boomdetect_t s_det;
 static int16_t      s_pcm[PCM_SAMPLES_PER_HALF];
 
@@ -143,10 +143,21 @@ bool detect_service_set_model(const char *name)
   return true;
 }
 
-/* Cycle-accurate timing of the two hot operations (250 MHz -> 250 cyc/us).
+/* Cycle-accurate timing of the hot operations (250 MHz -> 250 cyc/us).
    Cheap enough to keep always-on; reported on the debug breadcrumbs. */
 static uint32_t s_half_us; /* last mic_poll, including the PDM conversion */
 static uint32_t s_step_us; /* last boomdetect_step, i.e. one frame of DSP */
+/* Worst cases over a run - PDM block, frame, network slice, whole loop pass -
+   for DETDBG. */
+static uint32_t s_half_max, s_step_max, s_work_max, s_loop_max;
+
+static void det_max(uint32_t *max, uint32_t us)
+{
+  if (us > *max)
+  {
+    *max = us;
+  }
+}
 
 static void cyccnt_init(void)
 {
@@ -190,6 +201,7 @@ static bool det_wait_block(size_t *nsamp)
     if (mic_poll(s_pcm, nsamp))
     {
       s_half_us = (DWT->CYCCNT - c0) / 250u;
+      det_max(&s_half_max, s_half_us);
       return true;
     }
     usb_cli_pump();
@@ -208,9 +220,21 @@ static bool det_step_timed(boomdetect_event_t *ev)
   if (got)
   {
     s_step_us = (DWT->CYCCNT - c0) / 250u;
+    det_max(&s_step_max, s_step_us);
   }
   return got;
 }
+
+/* One slice of a network's decision, timed. Returns whether it finished. */
+static bool det_work_timed(boomdetect_event_t *ev)
+{
+  const uint32_t c0   = DWT->CYCCNT;
+  const bool     done = boomdetect_work(&s_det, ev);
+  det_max(&s_work_max, (DWT->CYCCNT - c0) / 250u);
+  return done;
+}
+
+static void det_report_window(const boomdetect_event_t *ev);
 
 static void det_report(const boomdetect_event_t *ev, uint32_t debug)
 {
@@ -234,6 +258,16 @@ static void det_report(const boomdetect_event_t *ev, uint32_t debug)
              (unsigned long)(t_ms / 1000u), (unsigned long)(t_ms % 1000u), dec_str);
     det_print(line);
   }
+
+  det_report_window(ev);
+}
+
+/* DET and, on a change, ALM for a window that got its decision - in the step
+   that closed it, or for a network a few blocks later from boomdetect_work. */
+static void det_report_window(const boomdetect_event_t *ev)
+{
+  char line[80];
+  char dec_str[16];
 
   if (ev->window.complete)
   {
@@ -329,6 +363,7 @@ void detect_service_run(uint32_t seconds, uint32_t squelch_milli, int32_t thr_mi
     .thr_milli     = thr_milli,
     .classifier    = model,
     .extractor     = ex,
+    .job_budget    = DETECT_JOB_BUDGET, /* only a model with a job (a network) uses it */
   };
   if (!boomdetect_init(&s_det, &cfg))
   {
@@ -346,6 +381,7 @@ void detect_service_run(uint32_t seconds, uint32_t squelch_milli, int32_t thr_mi
   s_thr            = (float)thr_milli / 1000.0f;
   s_first_drone_ms = UINT32_MAX;
   s_first_alarm_ms = UINT32_MAX;
+  s_half_max = s_step_max = s_work_max = s_loop_max = 0u;
   if (!boomdetect_alarm_init(&s_alarm, (rule != NULL) ? rule : &s_alarm_default))
   {
     /* cli.c validates a given rule, so only an inconsistent DETECT_ALARM_*
@@ -393,6 +429,7 @@ void detect_service_run(uint32_t seconds, uint32_t squelch_milli, int32_t thr_mi
       break;
     }
     mic_got = true;
+    const uint32_t loop_c0 = DWT->CYCCNT;
 
     boomdetect_push(&s_det, s_pcm, nsamp);
 
@@ -402,13 +439,46 @@ void detect_service_run(uint32_t seconds, uint32_t squelch_milli, int32_t thr_mi
        512 consumed per frame, so the FIFO cannot grow unbounded regardless. */
     usb_cli_pump();
     boomdetect_event_t ev;
+    bool               closed = false;
     if (det_step_timed(&ev))
     {
       det_report(&ev, debug);
+      closed = ev.window.complete || ev.window.pending || ev.window.warming;
     }
+    /* A network's decision runs a slice per block - but not in the block whose
+       frame just closed a window: that one already did the window's feature
+       extraction, the heaviest frame there is. */
+    if (!closed && boomdetect_job_pending(&s_det))
+    {
+      boomdetect_event_t wev;
+      if (det_work_timed(&wev))
+      {
+        det_report_window(&wev);
+      }
+    }
+    det_max(&s_loop_max, s_half_us + (DWT->CYCCNT - loop_c0) / 250u);
   }
 
   mic_stop();
+
+  /* The last window's network may still be running: finish it, there is no
+     block to keep up with any more. */
+  while (boomdetect_job_pending(&s_det))
+  {
+    boomdetect_event_t wev;
+    if (boomdetect_work(&s_det, &wev))
+    {
+      det_report_window(&wev);
+    }
+  }
+  if (debug)
+  {
+    snprintf(line, sizeof(line),
+             "DETDBG h_max=%lu m_max=%lu w_max=%lu loop_max=%lu skipped=%lu\r\n",
+             (unsigned long)s_half_max, (unsigned long)s_step_max, (unsigned long)s_work_max,
+             (unsigned long)s_loop_max, (unsigned long)boomdetect_jobs_skipped(&s_det));
+    det_print(line);
+  }
 
   uint32_t windows = 0u, drones = 0u;
   boomdetect_counts(&s_det, &windows, &drones);

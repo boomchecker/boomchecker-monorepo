@@ -25,6 +25,12 @@
  *   ALM t=<s>.<ms> <ON|OFF> mean=<+d.ddd>/<n>       the window that closed at t
  *                                                   (vote rule / mean rule)
  *   F=<n> a=<n> r=<n> h=<us> m=<us>                 per frame, only with dbg=1
+ *   DETDBG h_max=<us> m_max=<us> w_max=<us> loop_max=<us> skipped=<n>
+ *                                                   before DETEND, only with dbg=1:
+ *                                                   the slowest PDM block, frame
+ *                                                   step, network slice and whole
+ *                                                   loop pass, and windows dropped
+ *                                                   because a network was still busy
  *   DETEND windows=<n> drones=<n> alarms=<n> first_drone=<s.mmm|->
  *          first_alarm=<s.mmm|-> overrun=<0|1> err=<0|1>
  *   DETERR <reason>                                 followed by DETEND, always
@@ -68,6 +74,13 @@
 /* The decision threshold is NOT here. It belongs to the model - a linear SVM's
    decisions live around +-3 while an MLP's are unbounded logits - so it is
    classifier_t::default_thr_milli, set in each model's models/model_*.c. */
+
+/* A network (crnn_*, or_*) is scored in slices of about this many
+   multiply-accumulates, one slice per mic block (boomdetect_work): a whole
+   window is 1.3-2.9 M of them, far more than the ~15 ms a 21.33 ms block has
+   left after the PDM conversion. The decision of a window then comes a few
+   blocks after it closed; DET still stamps the window's own time. */
+#define DETECT_JOB_BUDGET 200000u
 
 /**
  * @brief Run detection for `seconds` and stream results.

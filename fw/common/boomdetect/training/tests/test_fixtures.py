@@ -27,6 +27,20 @@ def test_modulation_fixture_is_current():
     )
 
 
+def test_gammatone_table_header_is_current():
+    want = fx.GS_TABLE_H.read_text(encoding="utf-8")
+    assert _without_stamp(want) == _without_stamp(fx.gammatone_table_text()), (
+        "src/gammatone_table.h is stale: run `bdtrain fixtures`"
+    )
+
+
+def test_gammatone_fixture_is_current():
+    want = (VECTORS_DIR / "extractor_gs_expected.h").read_text(encoding="utf-8")
+    assert _without_stamp(want) == _without_stamp(fx.gs_fixture_text()), (
+        "tests/vectors/extractor_gs_expected.h is stale: run `bdtrain fixtures`"
+    )
+
+
 def test_am_signal_truncates_like_c():
     n = 3000
     base = lcg_signal(n).astype(np.int64)

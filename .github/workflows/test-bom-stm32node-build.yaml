@@ -363,7 +363,8 @@ jobs:
           # the fixture generator: it moved into the package, so the port
           # linking without it would mean detselftest silently gone.
           for symbol in detect_service_run boomdetect_step mfcc_process \
-                        classifier_by_name boomdetect_selftest gps_run; do
+                        classifier_by_name boomdetect_selftest gps_run \
+                        boomdetect_work boomdetect_gs_row crnn_run pair_classifier_decide; do
             if ! arm-none-eabi-nm build/Debug/bom-stm32node.elf | grep -q "$symbol"; then
               echo "❌ $symbol is not linked into bom-stm32node.elf"
               status=1
@@ -382,5 +383,5 @@ jobs:
             echo "- BoomProtocol linked and referenced (not just compiled) ✓"
             echo "- Protocol dispatcher linked and referenced (not just compiled) ✓"
             echo "- Fleet discovery (Wakeup) linked and referenced (not just compiled) ✓"
-            echo "- Detector (MFCC + inference) and GPS console linked ✓"
+            echo "- Detector (MFCC, gammatone, CRNN + inference) and GPS console linked ✓"
           } >> "$GITHUB_STEP_SUMMARY"

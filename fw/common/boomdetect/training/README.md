@@ -103,10 +103,19 @@ bdtrain export r1 [--models m ...]   # headers + translation units + parity vect
 bdtrain export fw4_modb --models gbt_l4=gbt_m1 mlp2_l4=mlp_m1 --keep fw2_mlp2:mlp2_l2=mlp_f2
                               # export under a new C name; parity for registry models of
                               # older runs, under the name the registry knows them by
-                              # (with --fa-per-hour 5 --squelch 0.003 this is the export
-                              # behind today's registry)
+bdtrain export r2_hybL8_gs1k_s42 --models crnn2d_l703=crnn_h \
+    r2_hybL8_31_gs1k_s2:crnn2d_l903=crnn_hl \
+    --member r2_crnn2d31_gs1k_s4:crnn2d_l403=crnn_l \
+    --pair or_h=gbt_m1+crnn_h or_hl=gbt_m1+crnn_hl or_l=gbt_m1+crnn_l \
+    --keep fw2_mlp2:mlp2_l2=mlp_f2 fw4_modb:gbt_l4=gbt_m1 fw4_modb:mlp2_l4=mlp_m1 \
+    --fa-per-hour 1 --squelch 0.003
+                              # the export behind today's registry: CRNNs from other runs
+                              # (RUN:MODEL, one run per seed), a network that only a pair
+                              # uses (--member, not registered), OR pairs of a layout-4
+                              # model and a network (--pair, models/pair.py)
 bdtrain fixtures              # regenerate tests/vectors/extractor_expected.h,
-                              # extractor_mod_expected.h and src/envelope_coefs.h
+                              # extractor_mod_expected.h, extractor_gs_expected.h,
+                              # src/envelope_coefs.h and src/gammatone_table.h
 ```
 
 `bdtrain` is `python -m boomdetect_train`.
@@ -158,11 +167,15 @@ at the same time.
 | 9 | `stats_spectral_mod2s8s` | 89 | the same six; layout 2 + the 2 s and an 8 s set (offline only) |
 | 10 | `stats_spectral_modspec` | 329 | the same six; layout 4 + the modulation prominence spectrum 10-500 Hz (offline only) |
 
-The band-spectrogram layouts (offline only, no C side; `features.spec_layout`) are
+The band-spectrogram layouts (`features.spec_layout`) are
 `base + k`, k the front-end in `dsp/spectro.SPEC_FE_NAMES` (mfe1k mfe2k mfe4k gs1k gs2k
 gs4k = mel or gammatone, 64 bands, FFT 1024/2048/4096): 100 patch 14 x 64, 400 patch
 31 x 64 (~1 s), 200 per-band stats, 300 layout 4 + per-band stats, 500 / 600 patch 14 /
 31 + layout 4 (hybrid), 700 / 900 patch 14 / 31 + layout 8, 800 patch 14 + layout 10.
+The C carries the gs1k ones the board's models read - 603, 703 and 903 as extractors
+(`src/extractor_gs.c`, held to `evaluate.window_features` by `extractor_test`), 403
+inside 603 - and the `crnn2d` family as `src/crnn.c`; `models/crnn.py` is its weights
+in the C's form, `models/pair.py` the OR pair the board runs.
 The patch and hybrid layouts take the `models/torchnets.py` families `cnn_m`, `crnn1d`,
 `crnn2d`, `lstm20` (the TalTech BEC 2026 architectures), trained on the GPU when one is
 there. A window whose FFT or patch would reach before the start of its clip is dropped
@@ -185,7 +198,10 @@ held to it by `extractor_test`.
    `models/models.h`, the `&classifier_NAME,` line to
    `src/classifier_registry.c`, and the translation unit to the `boomdetect`
    target in `CMakeLists.txt`. The parity test fails for any exported model
-   the registry does not list, so this cannot be forgotten silently.
+   the registry does not list, so this cannot be forgotten silently. A CRNN
+   also declares its `crnn_net_NAME` in `models/models.h` (a pair points at
+   it); a `--member` network is left out of the registry and listed in
+   `tests/model_parity_test.c`'s `s_members` instead.
 3. `task test` in `fw/common/boomdetect`, then the firmware build.
 
 ## What it cannot do yet

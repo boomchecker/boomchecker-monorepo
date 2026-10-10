@@ -41,6 +41,12 @@ extern const boomdetect_extractor_t boomdetect_extractor_stats_spectral;
 extern const boomdetect_extractor_t boomdetect_extractor_logmel;
 /** Layout 4: layout 2, then the modulation spectrum of the envelope ring (79). */
 extern const boomdetect_extractor_t boomdetect_extractor_stats_spectral_mod;
+/** Layout 703: the 14 x 64 gammatone patch, then layout 8 (985). extractor_gs.c */
+extern const boomdetect_extractor_t boomdetect_extractor_hybrid8_gs1k;
+/** Layout 903: the 31 x 64 gammatone patch, then layout 8 (2073). */
+extern const boomdetect_extractor_t boomdetect_extractor_hybrid8_31_gs1k;
+/** Layout 603: the 31 x 64 gammatone patch, then layout 4 (2063). */
+extern const boomdetect_extractor_t boomdetect_extractor_hybrid31_gs1k;
 
 /**
  * @brief [mean, std, dmean, cmax] of the first `coeffs` values of each row.
@@ -73,6 +79,29 @@ void boomdetect_extract_stats_spectral(const float *frames, uint32_t nframes, ui
  * whole ring - the pipeline never calls it then, a direct caller learns so.
  */
 void boomdetect_modulation_features(const boomdetect_side_t *side, float *out);
+
+/**
+ * @brief The same ten numbers over the newest @p span envelope samples
+ *        (BOOMDETECT_ENV_SPAN_2S or BOOMDETECT_ENV_SPAN_4S); NaN in every output
+ *        while the ring holds fewer.
+ */
+void boomdetect_modulation_features_span(const boomdetect_side_t *side, uint32_t span, float *out);
+
+/** @brief The FFT and window tables the modulation features use, built once. */
+bool boomdetect_modulation_prepare(void);
+
+/**
+ * @brief Layout 4 (79): layout 2, then the two-second modulation set - NaN while
+ *        the ring is short, which the layout-4 extractor never lets through but
+ *        a hybrid's aux does.
+ */
+void boomdetect_extract_stats_spectral_mod(const float *frames, uint32_t nframes, uint32_t stride,
+                                           const boomdetect_side_t *side, float *out);
+
+/** @brief Layout 8 (89): layout 4, then the four-second set (NaN while short). */
+void boomdetect_extract_stats_spectral_mod2s4s(const float *frames, uint32_t nframes,
+                                               uint32_t stride, const boomdetect_side_t *side,
+                                               float *out);
 
 #ifdef __cplusplus
 }

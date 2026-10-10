@@ -16,6 +16,7 @@
 #ifndef BOOMDETECT_CLASSIFIER_H
 #define BOOMDETECT_CLASSIFIER_H
 
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -42,6 +43,19 @@ extern "C" {
  *         SVM's lives around +-3, an MLP's is an unbounded logit.
  */
 typedef float (*classifier_decide_fn)(void *ctx, const float *features, uint16_t n);
+
+/**
+ * A model too heavy for one 21.33 ms mic block, scored in slices: the board
+ * begins the job when a window closes and runs it from boomdetect_work() over
+ * the next blocks. One job at a time; begin() copies what it needs out of
+ * `features`. decide() gives the same number in one call (host, tests).
+ */
+typedef struct
+{
+    bool (*begin)(void *ctx, const float *features, uint16_t n); /**< false = malformed */
+    bool (*run)(void *ctx, uint32_t budget); /**< ~budget MACs, >= 1 step; true = done */
+    float (*result)(void *ctx);              /**< once run() returned true */
+} classifier_job_t;
 
 typedef struct
 {
@@ -74,6 +88,9 @@ typedef struct
 
     classifier_decide_fn decide;
     void                *ctx;
+
+    /** The sliced form of decide(); NULL for a model that fits one mic block. */
+    const classifier_job_t *job;
 } classifier_t;
 
 /* The layout ids live in extractor.h, with the code that produces them. */

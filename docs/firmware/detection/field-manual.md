@@ -4,7 +4,9 @@ Krátký návod, jak na desce přepínat modely a ladit citlivost detekce, když
 jdeme ven testovat s dronem. Technický popis řetězce je v [index.md](index.md).
 Výchozí model je `gbt_m1` (vrstva 4 s modulací obálky, práh 3.211), ověřený
 s dronem venku; `mlp_f2` (předchozí výchozí) a `mlp_m1` zůstávají v image pro
-srovnání.
+srovnání. Nově jsou v image i sítě na gammatonovém spektrogramu (`crnn_h`,
+`crnn_hl`) a jejich dvojice s `gbt_m1` (`or_h`, `or_hl`, `or_l`), viz
+kapitolu 4b; venku zatím ověřené nejsou.
 
 ## 1. Než začneš
 
@@ -35,7 +37,7 @@ Totéž jde napsat i do ruční konzole jako `micslot a` a `model`.
 | příkaz | co dělá |
 |---|---|
 | `model` | vypíše modely v image, `*` označuje aktivní, u každého výchozí práh |
-| `model <jméno>` | přepne model, např. `model mlp_f2` (předchozí výchozí, vrstva 2) nebo `model mlp_m1` (MLP na vrstvě 4) |
+| `model <jméno>` | přepne model, např. `model mlp_f2` (předchozí výchozí, vrstva 2), `model mlp_m1` (MLP na vrstvě 4) nebo `model or_h` (nové sítě, kap. 4b) |
 | `detect <s> [squelch] [thr] [dbg] [rule]` | běží `<s>` sekund (až 86400), vypisuje okna a alarmy; `rule` = pravidlo alarmu, `2of4` (výchozí) nebo `mean4`, viz kap. 6 |
 | `detect 0 ...` | běží bez limitu, dokud v konzoli nestiskneš libovolnou klávesu; pak přijde `DETEND` |
 | `micslot a` | přepne na živý mikrofon |
@@ -79,6 +81,16 @@ Pro hodnocení citlivosti sleduj čísla z `DETEND`:
   `gbt_m1` a `mlp_m1` odečti 2,2 s zahřívání (plní se kruh obálky, totéž po
   výpadku vzorků), dřív okno přijít nemůže.
 - `overrun=1` znamená ztracené vzorky, zapiš si to k běhu.
+- U sítí (`crnn_*`, `or_*`) se síť počítá po kouscích v dalších blocích
+  mikrofonu, takže řádek `DET` přijde asi o 0,1–0,3 s později, než okno
+  skončilo; čas `t` v něm je pořád čas okna. První rozhodnutí: `crnn_h` a
+  `or_h` asi 0,5 s od startu, `crnn_hl`, `or_hl` a `or_l` asi 1,4 s (čekají
+  na sekundu spektrogramu); modulační čísla se přidají po 2 a 4 s, na ně
+  nečekají.
+- S `dbg` = 1 přijde před `DETEND` řádek `DETDBG h_max= m_max= w_max=
+  loop_max= skipped=`: nejpomalejší blok PDM, snímek, kousek sítě a celý
+  průchod smyčkou v µs (blok má 21 333 µs) a počet oken zahozených, protože
+  síť ještě počítala to předchozí (má být 0).
 
 Hodnota `dec` je rozhodnutí modelu (logit). Práh se porovnává přímo s ním,
 takže z výpisu vidíš, o kolik drony a rušiče přelétají nebo podlétají práh.
@@ -124,6 +136,56 @@ Co z toho plyne pro test venku:
 - Typ dronu, který v trénovacích datech není, zatím spolehlivě nepozná: na
   cizích dronech (sada Halmstad) chytí modely jen menšinu klipů. Každý nový
   dron (FPV, jiná DJI) potřebuje vlastní nahrávky.
+
+## 4b. Nové modely: sítě na gammatonovém spektrogramu a dvojice s gbt_m1
+
+Sítě (CRNN: dvě konvoluce, LSTM a hlava) čtou spektrogram v 64 gammatonových
+pásmech, buď okno 0,45 s (`crnn_h`), nebo sekundu, která oknem končí
+(`crnn_hl`), a vedle něj modulační čísla vrstvy 8 (vrstva 4 a totéž přes 4 s).
+Dvojice `or_*` pustí na stejné okno `gbt_m1` i síť a dron hlásí, když zabere
+kterýkoli z nich. Pocházejí ze srovnání ze 7.–9. 10. (souhrn
+`boomdetect-data/analysis/2026-10-09-souhrn/vysledky.md`).
+
+Mimo fold, podíl oken označených „dron“ při výchozím prahu. Nové modely mají
+výchozí práh na 1 falešném okně za hodinu veřejných val negativ, staré na 5,
+proto je `gbt_m1` pro srovnání při svém bodu 1 FA/h (4.06). „V pohybu“ =
+nahrávky s pohybem: Runner přílet a odlet ze 40 m, přiblížení, náklony; DJI
+vzlet do 100 m, nahoru a dolů, let z boku. Falešné alarmy = polní negativa
+s alarmem (z 27) a alarmy za hodinu na 30 min dopravy při 5 FA/h.
+
+| model | výchozí práh | DJI 60–90 m | DJI blízko | Runner | Runner v pohybu | DJI v pohybu | falešné alarmy | první rozhodnutí |
+|---|---|---|---|---|---|---|---|---|
+| `gbt_m1` (srovnání) | 4.06 | 71 | 68 | 21 | 11 | 64 | 0 / 0 | 2,2 s |
+| `crnn_h` | 7.196 | 82 | 89 | 81 | 88 | 87 | 1 (lidský ruch) / 4 | 0,5 s |
+| `or_h` | z 3.831 | 79 | 86 | 77 | 81 | 80 | 0 / 0 | 0,5 s |
+| `crnn_hl` | 8.774 | 88 | 94 | 77 | 90 | 90 | 1 (doprava) / 6 | 1,4 s |
+| `or_hl` | z 3.760 | ≈ 89 | ≈ 94 | ≈ 77 | ≈ 88 | ≈ 91 | ≈ 1 / ≈ 6 | 1,4 s |
+| `or_l` | z 3.760 | ≈ 78 | ≈ 91 | ≈ 74 | ≈ 75 | ≈ 76 | 0 / 0 | 1,4 s |
+
+Čísla bez ≈ patří přesně modelům v image. U `or_hl` a `or_l` analýza párovala
+síť se stromy z jiného tréninku než `gbt_m1`, čísla jsou proto jen přibližná.
+`or_l` používá síť na samotném sekundovém spektrogramu (`crnn_l`), která sama
+v seznamu není, protože na dálku je slabá.
+
+Jak je použít venku:
+
+- **`or_h`** je nejbezpečnější nový model: v analýze bez falešného alarmu,
+  oproti `gbt_m1` výrazně lepší na Runnera a na dron v pohybu, rozhoduje už po
+  0,5 s.
+- **`crnn_hl` / `or_hl`** dosáhnou nejdál (DJI v simulované vzdálenosti
+  ~106 m: `crnn_hl` 50 % oken, `gbt_m1` 21 %), ale v analýze alarmovaly na
+  aku vrtačce, venkovním pozadí, lidech nebo dopravě. Venku proto u nich
+  pohlídej pozadí bez dronu a při falešném alarmu zvedni práh (kap. 5).
+- **`crnn_h`** je nejlepší na Runnera a na rychlé změny (pohyb, plyn).
+- **`or_l`** je opatrná varianta: v analýze žádný falešný alarm, na Runnera
+  a v pohybu slabší než ostatní nové.
+- Práh dvojice není logit, ale **z**: −log10 podílu val negativních oken,
+  která dopadla aspoň tak vysoko. 3.8 ≈ 1 falešné okno za hodinu, vyšší
+  = přísnější. Nad zhruba 4.2–4.3 je okno silnější než cokoli ve val a z se
+  jen protahuje. `dec` v řádku `DET` je u dvojice tohle z.
+- Sítě na desce zatím neběžely venku ani se nezměřilo, kolik času zaberou;
+  první běh pusť s `dbg` = 1 a podívej se na `DETDBG` (`loop_max` musí být pod
+  21 333 µs a `skipped` 0).
 
 ## 5. Citlivost: jak si s prahem hrát
 
@@ -176,6 +238,27 @@ detect 30 3 7656              # výchozí mlp_f2
 detect 30 3 9000 0 mean4      # nula falešných
 detect 30 3 5570              # jen pro měření dosahu, pálí doprava
 ```
+
+### Nové modely (sítě a dvojice)
+
+Prahy při 1 / 5 / 20 falešných oknech za hodinu na val, v tisícinách, jak se
+zadávají do `detect` (u dvojic je to z × 1000):
+
+| model | 1 FA/h (výchozí) | 5 FA/h | 20 FA/h |
+|---|---|---|---|
+| `crnn_h` | 7196 | 5519 | 1988 |
+| `crnn_hl` | 8774 | 6962 | 3619 |
+| `or_h` | 3831 | 3267 | 2696 |
+| `or_hl`, `or_l` | 3760 | 3196 | 2646 |
+
+```
+model or_h
+detect 30 3                   # výchozí, 1 FA/h
+detect 30 3 3267              # 5 FA/h, citlivější
+detect 30 3 4100              # přísnější, než val umí změřit
+```
+
+Pod 5 FA/h ještě nikdo nic venku nezkoušel; nejdřív ověř pozadí bez dronu.
 
 ## 6. Brány
 
@@ -237,7 +320,10 @@ co by dalo jiné pravidlo, aniž bys běh opakoval, loguj proto celé běhy
    prahů z kapitoly 5; od ~100 m zkus i squelch 1 (`detect 30 1`).
 5. Stejné manévry s `model mlp_m1` (stejné příznaky, jiný model) a
    `model mlp_f2` (vrstva 2, bez modulace) pro srovnání.
-6. Nahraj i syrový zvuk jako WAV, doma ho pak přehraje
+6. Stejné manévry s novými modely (kap. 4b): `model or_h` (bezpečná volba),
+   `model crnn_hl` (nejdál) a `model crnn_h` (pohyb, Runner), u každého i
+   pozadí bez dronu; poprvé s `dbg` = 1 kvůli `DETDBG`.
+7. Nahraj i syrový zvuk jako WAV, doma ho pak přehraje
    `bdtrain score nahravka.wav` přes všechny modely bez dalšího létání:
 
    ```

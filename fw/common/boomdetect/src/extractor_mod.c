@@ -12,14 +12,18 @@
  *   [  77   ]  mod_depth          envelope std over mean
  *   [  78   ]  mod_share_100_250  envelope power 100-250 Hz over 10-500 Hz
  *
- * Specified by features.modulation_stats() in the training package. The ring
- * (BOOMDETECT_ENV_RING samples of the 1 kHz envelope, 1.98 s) is read oldest
- * first in 12 segments of 512 every 128 samples; each loses its mean, is
- * Hann-windowed (numpy's symmetric window) and transformed, the power spectra
- * are averaged (Welch), and a bin's prominence is its 10 log10 power over the
- * mean of the 41 bins around it, the ends repeating their edge value. A
+ * Specified by features.modulation_stats() in the training package. The newest
+ * two seconds of the envelope ring (BOOMDETECT_ENV_SPAN_2S samples at 1 kHz) are
+ * read oldest first in 12 segments of 512 every 128 samples; each loses its
+ * mean, is Hann-windowed (numpy's symmetric window) and transformed, the power
+ * spectra are averaged (Welch), and a bin's prominence is its 10 log10 power
+ * over the mean of the 41 bins around it, the ends repeating their edge value. A
  * hovering drone puts one line at its blade-pass rate (170-185 Hz for a
  * Phantom 4) with a harmonic at twice it; backgrounds have none.
+ *
+ * Layout 8 (the aux block of the gammatone hybrids, extractor_gs.c) takes the
+ * same ten numbers twice: over those two seconds and over the whole four-second
+ * ring (28 segments), where more averaging lifts a steady line further.
  *
  * Float32 where the Python runs float64: the FFT is CMSIS's, log10f is the
  * libm one, and tests/vectors/extractor_mod_expected.h states the tolerance
@@ -35,7 +39,7 @@
 
 #define MOD_SEG       512u
 #define MOD_HOP       128u
-#define MOD_NSEG      ((BOOMDETECT_ENV_RING - MOD_SEG) / MOD_HOP + 1u) /* 12 */
+#define MOD_NSEG(span) (((span) - MOD_SEG) / MOD_HOP + 1u)
 #define MOD_BINS      (MOD_SEG / 2u + 1u)                               /* 257 */
 #define MOD_BIN_HZ    (1000.0f / (float)MOD_SEG) /* 1.953125, exact in float32 */
 #define MOD_BASE_HALF 20u                        /* +-20 bins: a 41-bin running mean */
@@ -43,7 +47,10 @@
 #define MOD_EPS       1.0e-20f
 #define MOD_TWO_PI    6.283185307179586
 
-_Static_assert(MOD_NSEG == 12u, "features.py averages twelve segments over the ring");
+_Static_assert(MOD_NSEG(BOOMDETECT_ENV_SPAN_2S) == 12u,
+               "features.py averages twelve segments over the two-second ring");
+_Static_assert(MOD_NSEG(BOOMDETECT_ENV_SPAN_4S) == 28u,
+               "features.py averages 28 segments over the four-second ring");
 
 /* All static: the superloop's stack is small. The detector runs one window at
    a time, so one set serves every detector, like the MFCC instance in
@@ -118,10 +125,10 @@ static float band_sum(const float *v, uint32_t k0, uint32_t k1)
     return s;
 }
 
-void boomdetect_modulation_features(const boomdetect_side_t *side, float *out)
+void boomdetect_modulation_features_span(const boomdetect_side_t *side, uint32_t span, float *out)
 {
-    if (side == NULL || side->env == NULL || side->env_fill < BOOMDETECT_ENV_RING ||
-        !ensure_tables())
+    if (side == NULL || side->env == NULL || span < MOD_SEG || span > BOOMDETECT_ENV_RING ||
+        side->env_fill < span || !ensure_tables())
     {
         for (uint32_t i = 0u; i < BOOMDETECT_MOD_FEATURES; i++)
         {
@@ -130,15 +137,18 @@ void boomdetect_modulation_features(const boomdetect_side_t *side, float *out)
         return;
     }
 
-    /* Oldest sample first, as the Python reads its env rows in time order. */
-    for (uint32_t i = 0u; i < BOOMDETECT_ENV_RING; i++)
+    /* The newest `span` samples, oldest first, as the Python reads its env rows
+       in time order over the frames that end with the window. */
+    const uint32_t first = side->env_head + side->env_fill - span;
+    for (uint32_t i = 0u; i < span; i++)
     {
-        s_env[i] = side->env[(side->env_head + i) % BOOMDETECT_ENV_RING];
+        s_env[i] = side->env[(first + i) % BOOMDETECT_ENV_RING];
     }
 
     /* Welch: segment minus its mean, Hann, |FFT|^2 summed, then averaged. */
+    const uint32_t nseg = MOD_NSEG(span);
     memset(s_p, 0, sizeof(s_p));
-    for (uint32_t s = 0u; s < MOD_NSEG; s++)
+    for (uint32_t s = 0u; s < nseg; s++)
     {
         const float *seg  = s_env + s * MOD_HOP;
         float        mean = 0.0f;
@@ -164,7 +174,7 @@ void boomdetect_modulation_features(const boomdetect_side_t *side, float *out)
     }
     for (uint32_t k = 0u; k < MOD_BINS; k++)
     {
-        s_p[k]    = s_p[k] / (float)MOD_NSEG + MOD_EPS;
+        s_p[k]    = s_p[k] / (float)nseg + MOD_EPS;
         s_logp[k] = 10.0f * log10f(s_p[k]);
     }
 
@@ -222,18 +232,18 @@ void boomdetect_modulation_features(const boomdetect_side_t *side, float *out)
 
     /* Depth: population std of the envelope over its mean. */
     float sum = 0.0f;
-    for (uint32_t i = 0u; i < BOOMDETECT_ENV_RING; i++)
+    for (uint32_t i = 0u; i < span; i++)
     {
         sum += s_env[i];
     }
-    const float mean = sum / (float)BOOMDETECT_ENV_RING;
+    const float mean = sum / (float)span;
     float       sq   = 0.0f;
-    for (uint32_t i = 0u; i < BOOMDETECT_ENV_RING; i++)
+    for (uint32_t i = 0u; i < span; i++)
     {
         const float d = s_env[i] - mean;
         sq += d * d;
     }
-    out[8] = (mean > 0.0f) ? (sqrtf(sq / (float)BOOMDETECT_ENV_RING) / (mean + 1.0e-9f)) : 0.0f;
+    out[8] = (mean > 0.0f) ? (sqrtf(sq / (float)span) / (mean + 1.0e-9f)) : 0.0f;
 
     /* Share of the envelope power that sits where a drone's modulation does. */
     uint32_t t0, t1, h0, h1;
@@ -241,6 +251,32 @@ void boomdetect_modulation_features(const boomdetect_side_t *side, float *out)
     band(100.0f, 250.0f, &h0, &h1);
     const float total = band_sum(s_p, t0, t1);
     out[9]            = (total > 0.0f) ? (band_sum(s_p, h0, h1) / total) : 0.0f;
+}
+
+void boomdetect_modulation_features(const boomdetect_side_t *side, float *out)
+{
+    boomdetect_modulation_features_span(side, BOOMDETECT_ENV_SPAN_2S, out);
+}
+
+bool boomdetect_modulation_prepare(void)
+{
+    return ensure_tables();
+}
+
+void boomdetect_extract_stats_spectral_mod(const float *frames, uint32_t nframes, uint32_t stride,
+                                           const boomdetect_side_t *side, float *out)
+{
+    boomdetect_extract_stats_spectral(frames, nframes, stride, out);
+    boomdetect_modulation_features(side, out + BOOMDETECT_FEATURE_COUNT_STATS_SPECTRAL);
+}
+
+void boomdetect_extract_stats_spectral_mod2s4s(const float *frames, uint32_t nframes,
+                                               uint32_t stride, const boomdetect_side_t *side,
+                                               float *out)
+{
+    boomdetect_extract_stats_spectral_mod(frames, nframes, stride, side, out);
+    boomdetect_modulation_features_span(side, BOOMDETECT_ENV_SPAN_4S,
+                                        out + BOOMDETECT_FEATURE_COUNT_STATS_SPECTRAL_MOD);
 }
 
 static bool mod_prepare(void *ctx)
@@ -253,15 +289,14 @@ static void mod_extract(void *ctx, const float *frames, uint32_t nframes, uint32
                         const boomdetect_side_t *side, float *out)
 {
     (void)ctx;
-    boomdetect_extract_stats_spectral(frames, nframes, stride, out);
-    boomdetect_modulation_features(side, out + BOOMDETECT_FEATURE_COUNT_STATS_SPECTRAL);
+    boomdetect_extract_stats_spectral_mod(frames, nframes, stride, side, out);
 }
 
 const boomdetect_extractor_t boomdetect_extractor_stats_spectral_mod = {
     .name         = "stats_spectral_mod",
     .layout_id    = BOOMDETECT_LAYOUT_STATS_SPECTRAL_MOD,
     .n_features   = (uint16_t)BOOMDETECT_FEATURE_COUNT_STATS_SPECTRAL_MOD,
-    .env_required = (uint16_t)BOOMDETECT_ENV_RING,
+    .env_required = (uint16_t)BOOMDETECT_ENV_SPAN_2S,
     .prepare      = mod_prepare,
     .extract      = mod_extract,
     .ctx          = NULL,

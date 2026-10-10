@@ -16,12 +16,19 @@
  * at 192 Hz in integer arithmetic (tests/vectors/extractor_mod_expected.h, from
  * dsp/selftest.py am_lcg_signal). The windows that close before the ring is
  * full must produce no decision; the ones after are held to Python.
+ *
+ * The gammatone hybrids (layouts 703 / 903 / 603) run on the same AM signal
+ * (tests/vectors/extractor_gs_expected.h): the front end's first rows, the
+ * layout-8 aux of every window with its NaN where the envelope ring is short,
+ * the last window's whole vectors, and 603 against 903 (the same patch,
+ * layout 4 = the prefix of layout 8).
  */
 #include "bd_test.h"
 #include "boomdetect.h"
 #include "boomdetect_selftest.h"
 #include "extractors.h"
 #include "vectors/extractor_expected.h"
+#include "vectors/extractor_gs_expected.h"
 #include "vectors/extractor_mod_expected.h"
 
 #include <math.h>
@@ -60,6 +67,11 @@ BD_TEST_STATE;
 #define L4_LINES_ABS (1.5f / 179.0f)
 #define L4_IDX_LINES (BOOMDETECT_FEATURE_COUNT_STATS_SPECTRAL + 1u)
 #define L4_IDX_FPEAK (BOOMDETECT_FEATURE_COUNT_STATS_SPECTRAL + 2u)
+/* Gammatone rows: ln of a float32 band sum against the float64 one. */
+#define GS_REL 1e-5f
+#define GS_ABS 1e-4f
+/* A patch value is a row value minus the patch mean (a sum of up to 1984). */
+#define PATCH_ABS 3e-4f
 
 static float probe_decide(void *ctx, const float *features, uint16_t n)
 {
@@ -137,7 +149,8 @@ static uint32_t run_lcg(const boomdetect_extractor_t *ex, float *out, uint32_t m
 static int16_t s_am_block[BOOMDETECT_SELFTEST_BLOCK];
 
 static uint32_t run_am(const boomdetect_extractor_t *ex, float *out, uint32_t max_windows,
-                       uint16_t *end_frames, uint32_t *warming, float *env_first)
+                       uint16_t *end_frames, uint32_t *warming, float *env_first,
+                       float *gs_first)
 {
     static boomdetect_t d;
     classifier_t        probe = {
@@ -173,6 +186,12 @@ static uint32_t run_am(const boomdetect_extractor_t *ex, float *out, uint32_t ma
                 memcpy(env_first, d.env_ring,
                        (size_t)EXPECTED_ENV_FRAMES * EXPECTED_ENV_PER_FRAME * sizeof(float));
             }
+            /* The ring has not wrapped yet, so its first rows are frames 0.. */
+            if (gs_first != NULL && ev.frame_index == EXPECTED_GS_FRAMES - 1u)
+            {
+                memcpy(gs_first, d.gs_ring,
+                       (size_t)EXPECTED_GS_FRAMES * EXPECTED_GS_BANDS * sizeof(float));
+            }
             if (ev.window.warming)
             {
                 warm++;
@@ -205,10 +224,43 @@ static float    s_am_l2[EXPECTED_AM_WINDOWS][EXPECTED_L2_WIDTH];
 static uint16_t s_l4_end[EXPECTED_AM_READY];
 static float    s_env_first[EXPECTED_ENV_FRAMES * EXPECTED_ENV_PER_FRAME];
 
+static float    s_gs_first[EXPECTED_GS_FRAMES * EXPECTED_GS_BANDS];
+static float    s_703[EXPECTED_GS_WINDOWS][EXPECTED_703_WIDTH];
+static float    s_903[EXPECTED_GS_LATE][EXPECTED_903_WIDTH];
+static float    s_603[EXPECTED_GS_LATE][BOOMDETECT_FEATURE_COUNT_HYBRID31_GS1K];
+static uint16_t s_903_end[EXPECTED_GS_LATE];
+static uint16_t s_603_end[EXPECTED_GS_LATE];
+
 static void scenario_registry(void)
 {
-    REQUIRE(boomdetect_extractor_count() == 4u, "expected four extractors, got %u",
+    REQUIRE(boomdetect_extractor_count() == 7u, "expected seven extractors, got %u",
             (unsigned)boomdetect_extractor_count());
+    const boomdetect_extractor_t *h8 = boomdetect_extractor_by_name("hybrid8_gs1k");
+    const boomdetect_extractor_t *h831 = boomdetect_extractor_by_name("hybrid831_gs1k");
+    const boomdetect_extractor_t *h31 = boomdetect_extractor_by_name("hybrid31_gs1k");
+    REQUIRE(h8 != NULL && h831 != NULL && h31 != NULL, "a gammatone extractor is missing by name");
+    CHECK(h8->layout_id == BOOMDETECT_LAYOUT_HYBRID8_GS1K && h8->n_features == EXPECTED_703_WIDTH &&
+              h8->gs_required == 14u,
+          "hybrid8_gs1k: layout %u width %u gs %u", h8->layout_id, h8->n_features,
+          h8->gs_required);
+    CHECK(h831->layout_id == BOOMDETECT_LAYOUT_HYBRID8_31_GS1K &&
+              h831->n_features == EXPECTED_903_WIDTH && h831->gs_required == 31u,
+          "hybrid831_gs1k: layout %u width %u gs %u", h831->layout_id, h831->n_features,
+          h831->gs_required);
+    CHECK(h31->layout_id == BOOMDETECT_LAYOUT_HYBRID31_GS1K && h31->n_features == 2063u &&
+              h31->gs_required == 31u,
+          "hybrid31_gs1k: layout %u width %u gs %u", h31->layout_id, h31->n_features,
+          h31->gs_required);
+    /* The hybrids' networks decide with the modulation numbers missing, so they
+       keep the envelope fed without waiting for it. */
+    CHECK(h8->env_required == 0u && h831->env_required == 0u && h31->env_required == 0u &&
+              h8->env_feed && h831->env_feed && h31->env_feed,
+          "the gammatone hybrids should feed the envelope without waiting for it");
+    CHECK(boomdetect_extractor_for_layout(703u) == h8 && boomdetect_extractor_for_layout(903u) == h831 &&
+              boomdetect_extractor_for_layout(603u) == h31,
+          "for_layout() did not find a gammatone hybrid");
+    CHECK(boomdetect_extractor_for_layout(403u) == NULL,
+          "403 (the bare 1 s patch) is only ever read as part of 603");
     const boomdetect_extractor_t *s = boomdetect_extractor_by_name("stats");
     const boomdetect_extractor_t *p = boomdetect_extractor_by_name("stats_spectral");
     const boomdetect_extractor_t *l = boomdetect_extractor_by_name("logmel");
@@ -223,9 +275,9 @@ static void scenario_registry(void)
           "logmel: layout %u width %u", l->layout_id, l->n_features);
     CHECK(m->layout_id == BOOMDETECT_LAYOUT_STATS_SPECTRAL_MOD && m->n_features == EXPECTED_L4_WIDTH,
           "stats_spectral_mod: layout %u width %u", m->layout_id, m->n_features);
-    CHECK(m->env_required == BOOMDETECT_ENV_RING && s->env_required == 0u &&
+    CHECK(m->env_required == BOOMDETECT_ENV_SPAN_2S && s->env_required == 0u &&
               p->env_required == 0u && l->env_required == 0u,
-          "only layout 4 should wait for the envelope ring (%u / %u / %u / %u)",
+          "only layout 4 should wait for the envelope ring, two seconds of it (%u / %u / %u / %u)",
           s->env_required, p->env_required, l->env_required, m->env_required);
     CHECK(boomdetect_extractor_for_layout(2u) == p, "for_layout(2) did not find stats_spectral");
     CHECK(boomdetect_extractor_for_layout(4u) == m, "for_layout(4) did not find stats_spectral_mod");
@@ -323,7 +375,8 @@ static void scenario_layout4_matches_python(void)
     const boomdetect_extractor_t *m = boomdetect_extractor_by_name("stats_spectral_mod");
     REQUIRE(m != NULL, "no stats_spectral_mod extractor");
     uint32_t       warming = 0u;
-    const uint32_t n = run_am(m, &s_l4[0][0], EXPECTED_AM_READY, s_l4_end, &warming, s_env_first);
+    const uint32_t n =
+        run_am(m, &s_l4[0][0], EXPECTED_AM_READY, s_l4_end, &warming, s_env_first, NULL);
     REQUIRE(n == EXPECTED_AM_READY, "layout 4 produced %lu windows with a full ring, python has %d",
             (unsigned long)n, EXPECTED_AM_READY);
     CHECK(warming == (uint32_t)(EXPECTED_AM_WINDOWS - EXPECTED_AM_READY),
@@ -371,7 +424,7 @@ static void scenario_layout4_matches_python(void)
 static void scenario_layout4_prefix_is_layout2(void)
 {
     const uint32_t n = run_am(boomdetect_extractor_by_name("stats_spectral"), &s_am_l2[0][0],
-                              EXPECTED_AM_WINDOWS, NULL, NULL, NULL);
+                              EXPECTED_AM_WINDOWS, NULL, NULL, NULL, NULL);
     REQUIRE(n == EXPECTED_AM_WINDOWS, "layout 2 produced %lu windows on the AM signal, expected %d",
             (unsigned long)n, EXPECTED_AM_WINDOWS);
     /* Layout 2 closes every window; layout 4 only the last EXPECTED_AM_READY of them. */
@@ -401,6 +454,124 @@ static void scenario_layout4_short_ring_is_nan(void)
     CHECK(isnan(out[0]), "a NULL side channel did not give NaN");
 }
 
+/* One modulation number (index j of its set of ten) against Python, NaN for NaN:
+   the peak frequency exactly, the line share to one bin, the rest as layout 4. */
+static bool mod_value_ok(float got, float want, uint32_t j)
+{
+    if (isnan(want) || isnan(got))
+    {
+        return isnan(want) && isnan(got);
+    }
+    if (j == 2u)
+    {
+        return fabsf(got - want) <= 1e-6f;
+    }
+    if (j == 1u)
+    {
+        return fabsf(got - want) <= L4_LINES_ABS;
+    }
+    return close_enough(got, want, L4_MOD_REL, L4_MOD_ABS);
+}
+
+/* The layout-8 aux of a hybrid vector against Python's: its layout-2 part bit for
+   bit against the C's own layout 2 of the same window (held to Python above), its
+   two modulation sets against Python. */
+static void check_aux(const float *aux, const float *want, const float *own_l2, const char *what,
+                      uint32_t w, uint32_t sets)
+{
+    CHECK(memcmp(aux, own_l2, BOOMDETECT_FEATURE_COUNT_STATS_SPECTRAL * sizeof(float)) == 0,
+          "%s window %lu: the layout-2 part of the aux is not the layout-2 extractor's", what,
+          (unsigned long)w);
+    for (uint32_t s = 0u; s < sets; s++)
+    {
+        for (uint32_t j = 0u; j < BOOMDETECT_MOD_FEATURES; j++)
+        {
+            const uint32_t i = BOOMDETECT_FEATURE_COUNT_STATS_SPECTRAL + s * BOOMDETECT_MOD_FEATURES + j;
+            CHECK(mod_value_ok(aux[i], want[i], j), "%s window %lu aux %lu: got %.9g, python %.9g",
+                  what, (unsigned long)w, (unsigned long)i, (double)aux[i], (double)want[i]);
+        }
+    }
+}
+
+/* The last window's patch against Python's (by then the row ring has wrapped). */
+static void check_patch(const float *got, const float *want, uint32_t n, const char *what)
+{
+    for (uint32_t i = 0u; i < n; i++)
+    {
+        CHECK(close_enough(got[i], want[i], 0.0f, PATCH_ABS), "%s patch %lu: got %.9g, python %.9g",
+              what, (unsigned long)i, (double)got[i], (double)want[i]);
+    }
+}
+
+static void scenario_gs_hybrids_match_python(void)
+{
+    const boomdetect_extractor_t *h8 = boomdetect_extractor_by_name("hybrid8_gs1k");
+    REQUIRE(h8 != NULL, "no hybrid8_gs1k extractor");
+    uint32_t       warming = 0u;
+    const uint32_t n = run_am(h8, &s_703[0][0], EXPECTED_GS_WINDOWS, NULL, &warming, NULL,
+                              s_gs_first);
+    REQUIRE(n == EXPECTED_GS_WINDOWS && warming == 0u,
+            "layout 703 closed %lu windows and %lu warming; python has %d and none (its network "
+            "decides before the envelope ring is full)",
+            (unsigned long)n, (unsigned long)warming, EXPECTED_GS_WINDOWS);
+
+    /* The front end itself, before anything is made of it: a wrong window, FFT
+       packing, weight row or normalisation shows here first. */
+    for (uint32_t i = 0u; i < (uint32_t)(EXPECTED_GS_FRAMES * EXPECTED_GS_BANDS); i++)
+    {
+        const float want = expected_gs_rows[i / EXPECTED_GS_BANDS][i % EXPECTED_GS_BANDS];
+        CHECK(close_enough(s_gs_first[i], want, GS_REL, GS_ABS),
+              "gammatone frame %lu band %lu: got %.9g, python %.9g",
+              (unsigned long)(i / EXPECTED_GS_BANDS), (unsigned long)(i % EXPECTED_GS_BANDS),
+              (double)s_gs_first[i], (double)want);
+    }
+
+    const uint32_t patch14 = 14u * EXPECTED_GS_BANDS;
+    for (uint32_t w = 0u; w < EXPECTED_GS_WINDOWS; w++)
+    {
+        check_aux(s_703[w] + patch14, expected_aux[w], s_am_l2[w], "703", w, 2u);
+    }
+    check_patch(s_703[EXPECTED_GS_WINDOWS - 1u], expected_703_last, patch14, "703");
+
+    /* The 1 s patch: the windows whose 31 frames reach before the first close
+       warming, the rest carry a vector. */
+    const boomdetect_extractor_t *h831 = boomdetect_extractor_by_name("hybrid831_gs1k");
+    REQUIRE(h831 != NULL, "no hybrid831_gs1k extractor");
+    const uint32_t n31 = run_am(h831, &s_903[0][0], EXPECTED_GS_LATE, s_903_end, &warming, NULL,
+                                NULL);
+    REQUIRE(n31 == EXPECTED_GS_LATE && warming == (uint32_t)(EXPECTED_GS_WINDOWS - EXPECTED_GS_LATE),
+            "layout 903 closed %lu windows and %lu warming; python has %d and %d",
+            (unsigned long)n31, (unsigned long)warming, EXPECTED_GS_LATE,
+            EXPECTED_GS_WINDOWS - EXPECTED_GS_LATE);
+    const uint32_t patch31 = 31u * EXPECTED_GS_BANDS;
+    const uint32_t last    = EXPECTED_GS_LATE - 1u;
+    check_patch(s_903[last], expected_903_last, patch31, "903");
+    check_aux(s_903[last] + patch31, expected_903_last + patch31,
+              s_am_l2[EXPECTED_GS_WINDOWS - 1u], "903", last, 2u);
+}
+
+static void scenario_603_is_903_with_layout4(void)
+{
+    const boomdetect_extractor_t *h31 = boomdetect_extractor_by_name("hybrid31_gs1k");
+    REQUIRE(h31 != NULL, "no hybrid31_gs1k extractor");
+    uint32_t       warming = 0u;
+    const uint32_t n       = run_am(h31, &s_603[0][0], EXPECTED_GS_LATE, s_603_end, &warming, NULL,
+                                    NULL);
+    REQUIRE(n == EXPECTED_GS_LATE, "layout 603 closed %lu windows, 903 %d", (unsigned long)n,
+            EXPECTED_GS_LATE);
+    const uint32_t patch31 = 31u * EXPECTED_GS_BANDS;
+    for (uint32_t w = 0u; w < EXPECTED_GS_LATE; w++)
+    {
+        CHECK(s_603_end[w] == s_903_end[w], "window %lu: 603 closed at %u, 903 at %u",
+              (unsigned long)w, s_603_end[w], s_903_end[w]);
+        CHECK(memcmp(s_603[w], s_903[w], patch31 * sizeof(float)) == 0,
+              "window %lu: the 1 s patch differs between 603 and 903", (unsigned long)w);
+        CHECK(memcmp(s_603[w] + patch31, s_903[w] + patch31,
+                     BOOMDETECT_FEATURE_COUNT_STATS_SPECTRAL_MOD * sizeof(float)) == 0,
+              "window %lu: 603's layout 4 is not the first 79 of 903's layout 8", (unsigned long)w);
+    }
+}
+
 int main(void)
 {
     scenario_registry();
@@ -411,5 +582,7 @@ int main(void)
     scenario_layout4_matches_python();
     scenario_layout4_prefix_is_layout2();
     scenario_layout4_short_ring_is_nan();
-    BD_TEST_REPORT("extractor_test", 1280); /* exact count from running the compiled binary */
+    scenario_gs_hybrids_match_python();
+    scenario_603_is_903_with_layout4();
+    BD_TEST_REPORT("extractor_test", 4708); /* exact count from running the compiled binary */
 }

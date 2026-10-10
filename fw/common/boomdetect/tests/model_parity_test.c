@@ -15,7 +15,9 @@
  */
 #include "bd_test.h"
 #include "classifier.h"
+#include "dsp_config.h"
 #include "extractor.h"
+#include "models.h"
 #include "vectors/parity_vectors.h"
 
 #include <math.h>
@@ -26,6 +28,52 @@ BD_TEST_STATE;
 #define PARITY_REL 1e-4f
 #define PARITY_ABS 1e-4f
 
+/* A registered model, or crnn_l: a pair's member only, in models.h but not the registry. */
+static const classifier_t *find_model(const char *name)
+{
+    const classifier_t *m = classifier_by_name(name);
+    return (m == NULL && strcmp(name, classifier_crnn_l.name) == 0) ? &classifier_crnn_l : m;
+}
+
+/* export.py synthetic_features(): a 32-bit LCG, v a 24-bit integer, v * 2^-23 * 3,
+   then the NaN ranges - the same numbers bit for bit. */
+static float s_vec[BOOMDETECT_FEATURE_MAX];
+
+static void synth_vector(const parity_entry_t *p, uint32_t k, float *out)
+{
+    uint32_t state = p->synth_seed * 2654435761u + k * 40503u + 1u;
+    for (uint32_t i = 0u; i < p->n_features; i++)
+    {
+        state           = state * 1664525u + 1013904223u;
+        const int32_t v = (int32_t)((state >> 8) & 0xFFFFFFu) - 0x800000;
+        out[i]          = (float)v * (1.0f / 8388608.0f) * 3.0f;
+    }
+    if (k % 3u >= 1u)
+    {
+        for (uint32_t i = 0u; i < p->nan_a_len; i++)
+        {
+            out[p->nan_a_start + i] = NAN;
+        }
+    }
+    if (k % 3u == 2u)
+    {
+        for (uint32_t i = 0u; i < p->nan_b_len; i++)
+        {
+            out[p->nan_b_start + i] = NAN;
+        }
+    }
+}
+
+static bool parity_ok(float got, float want, float *worst)
+{
+    const float err = fabsf(got - want);
+    if (err > *worst)
+    {
+        *worst = err;
+    }
+    return err <= PARITY_REL * fmaxf(fabsf(got), fabsf(want)) + PARITY_ABS;
+}
+
 static void scenario_every_entry_has_a_model_and_vice_versa(void)
 {
     const size_t n_entries = sizeof(parity_entries) / sizeof(parity_entries[0]);
@@ -33,7 +81,7 @@ static void scenario_every_entry_has_a_model_and_vice_versa(void)
     for (size_t e = 0u; e < n_entries; e++)
     {
         const parity_entry_t *p = &parity_entries[e];
-        CHECK(classifier_by_name(p->name) != NULL, "parity vectors exist for '%s' but no such model",
+        CHECK(find_model(p->name) != NULL, "parity vectors exist for '%s' but no such model",
               p->name);
     }
     /* Every registered model must have vectors: a model without them is a
@@ -59,16 +107,20 @@ static void scenario_decisions_match(void)
     for (size_t e = 0u; e < n_entries; e++)
     {
         const parity_entry_t *p = &parity_entries[e];
-        const classifier_t   *m = classifier_by_name(p->name);
+        const classifier_t   *m = find_model(p->name);
         if (m == NULL)
         {
             continue; /* reported above */
         }
+        /* A registered model's layout has an extractor; a pair's member may be
+           read only as part of another (403 inside 603). */
         const boomdetect_extractor_t *ex = boomdetect_extractor_for_layout(m->layout_id);
-        REQUIRE(ex != NULL, "%s: no extractor for layout %u", p->name, m->layout_id);
-        REQUIRE(p->layout_id == m->layout_id && p->n_features == ex->n_features,
+        const bool registered = classifier_by_name(p->name) != NULL;
+        REQUIRE(ex != NULL || !registered, "%s: no extractor for layout %u", p->name, m->layout_id);
+        const uint16_t width = (ex != NULL) ? ex->n_features : p->n_features;
+        REQUIRE(p->layout_id == m->layout_id && p->n_features == width,
                 "%s: vectors are layout %u x %u, model is layout %u over %u", p->name, p->layout_id,
-                p->n_features, m->layout_id, ex->n_features);
+                p->n_features, m->layout_id, width);
         REQUIRE((uint32_t)m->feature_offset + m->n_features <= p->n_features,
                 "%s reads past the vector", p->name);
 
@@ -78,17 +130,55 @@ static void scenario_decisions_match(void)
             const float *feat = p->features + (size_t)v * p->n_features;
             const float  got  = m->decide(m->ctx, feat + m->feature_offset, m->n_features);
             const float  want = p->expected[v];
-            const float  err  = fabsf(got - want);
-            const float  tol  = PARITY_REL * fmaxf(fabsf(got), fabsf(want)) + PARITY_ABS;
-            if (err > worst)
-            {
-                worst = err;
-            }
             CHECK(isfinite(got), "%s vector %u: non-finite decision", p->name, v);
-            CHECK(err <= tol, "%s vector %u: C %.9g, python %.9g (err %.3g > tol %.3g)", p->name, v,
-                  (double)got, (double)want, (double)err, (double)tol);
+            CHECK(parity_ok(got, want, &worst), "%s vector %u: C %.9g, python %.9g", p->name, v,
+                  (double)got, (double)want);
         }
-        printf("%-16s %2u vectors, worst |C - python| = %.3g\n", p->name, p->n_vectors, (double)worst);
+        float worst_synth = 0.0f;
+        for (uint16_t k = 0u; k < p->n_synth; k++)
+        {
+            synth_vector(p, k, s_vec);
+            const float got  = m->decide(m->ctx, s_vec + m->feature_offset, m->n_features);
+            const float want = p->synth_expected[k];
+            CHECK(isfinite(got), "%s synthetic %u: non-finite decision", p->name, k);
+            CHECK(parity_ok(got, want, &worst_synth), "%s synthetic %u: C %.9g, python %.9g",
+                  p->name, k, (double)got, (double)want);
+        }
+        printf("%-16s %2u vectors + %2u synthetic, worst |C - python| = %.3g / %.3g\n", p->name,
+               p->n_vectors, p->n_synth, (double)worst, (double)worst_synth);
+    }
+}
+
+/* A model with a job gives the same decision in slices as in one call: the board
+   runs the slices, the parity above checked the one call. */
+static void scenario_jobs_slice_to_the_same_decision(void)
+{
+    const size_t n_entries = sizeof(parity_entries) / sizeof(parity_entries[0]);
+    for (size_t e = 0u; e < n_entries; e++)
+    {
+        const parity_entry_t *p = &parity_entries[e];
+        const classifier_t   *m = find_model(p->name);
+        if (m == NULL || m->job == NULL || p->n_vectors == 0u)
+        {
+            continue;
+        }
+        const float *feat = p->features + m->feature_offset;
+        const float  once = m->decide(m->ctx, feat, m->n_features);
+        REQUIRE(m->job->begin(m->ctx, feat, m->n_features), "%s: the job refused vector 0", p->name);
+        uint32_t calls = 0u;
+        bool     done  = false;
+        while (!done && calls < 10000u)
+        {
+            done = m->job->run(m->ctx, 20000u);
+            calls++;
+        }
+        CHECK(done, "%s: the job did not finish in %lu calls", p->name, (unsigned long)calls);
+        CHECK(calls > 10u, "%s: finished in %lu slices of 20k multiply-accumulates", p->name,
+              (unsigned long)calls);
+        const float sliced = m->job->result(m->ctx);
+        CHECK(memcmp(&sliced, &once, sizeof(float)) == 0,
+              "%s: sliced %.9g, in one call %.9g", p->name, (double)sliced, (double)once);
+        CHECK(m->job->run(m->ctx, 1u), "%s: a finished job should stay finished", p->name);
     }
 }
 
@@ -96,5 +186,6 @@ int main(void)
 {
     scenario_every_entry_has_a_model_and_vice_versa();
     scenario_decisions_match();
-    BD_TEST_REPORT("model_parity_test", 186); /* exact count from running the compiled binary */
+    scenario_jobs_slice_to_the_same_decision();
+    BD_TEST_REPORT("model_parity_test", 359); /* exact count from running the compiled binary */
 }

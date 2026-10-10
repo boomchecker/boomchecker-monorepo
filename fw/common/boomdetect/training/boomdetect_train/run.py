@@ -48,7 +48,13 @@ from boomdetect_train.dsp.audio import to_16k
 from boomdetect_train.dsp.mfcc import Frontend
 from boomdetect_train.dsp.spectro import spec_frames
 from boomdetect_train.dsp.windows import DEFAULT_SQUELCH
-from boomdetect_train.evaluate import clip_windows, score_clips, select_suite, threshold_for_fa_rate
+from boomdetect_train.evaluate import (
+    ClipScores,
+    clip_windows,
+    score_clips,
+    select_suite,
+    threshold_for_fa_rate,
+)
 from boomdetect_train.features import (
     LAYOUT_LOGMEL,
     LAYOUT_STATS,
@@ -56,7 +62,9 @@ from boomdetect_train.features import (
     spec_layout,
 )
 from boomdetect_train.models.cnn import ARCHS, CnnModel, load_cnn, save_cnn, train_cnn
+from boomdetect_train.models.crnn import crnn_params
 from boomdetect_train.models.headers import shipped_models
+from boomdetect_train.models.pair import PairModel, build_pair, pair_layout
 from boomdetect_train.models.torchnets import (
     TORCH_ARCHS,
     TorchNetModel,
@@ -416,14 +424,14 @@ def _val_features(manifest: pd.DataFrame, cache: FrameCache, layout: int, n_clip
     return np.concatenate(feats) if feats else np.empty((0, 0), np.float32)
 
 
-def _val_threshold(
+def _val_thresholds(
     manifest: pd.DataFrame,
     cache: FrameCache,
     model,
-    fa_per_hour: float,
+    budgets,
     squelch: float = DEFAULT_SQUELCH,
-) -> float:
-    """The operating point the exported model ships with: FA budget on the val negatives.
+) -> dict[float, float]:
+    """The operating points the exported model ships with: FA budgets on the val negatives.
 
     Chosen under the squelch the board will run with: a lower gate lets quieter
     windows through, and a budget per hour of negative audio is only kept if
@@ -432,26 +440,60 @@ def _val_threshold(
     rows = select_suite(manifest, "val")
     rows = rows[[cache.has(s) for s in rows["source"]]]
     clips = score_clips(rows, cache, model.layout, model.score, squelch=squelch)
-    thr = threshold_for_fa_rate(clips, fa_per_hour)
-    return 0.0 if np.isnan(thr) else float(thr)
+    return _fa_thresholds(clips, budgets)
 
 
-def _export_names(models: list[str] | None, run_models: dict) -> list[tuple[str, str]]:
-    """(name in the run, name in the C tree) pairs; `mlp_l2=mlp_f1_l2` exports under a new name.
+# The false-alarm budgets every export reports, for the field manual's threshold ladder.
+LADDER_FA_PER_HOUR = (1.0, 5.0, 20.0)
+
+
+def _fa_thresholds(clips: list[ClipScores], budgets) -> dict[float, float]:
+    out = {}
+    for b in budgets:
+        thr = threshold_for_fa_rate(clips, b)
+        out[b] = 0.0 if np.isnan(thr) else float(thr)
+    return out
+
+
+def _export_names(
+    models: list[str] | None, run_models: dict, this_run: str = ""
+) -> list[tuple[str, str, str]]:
+    """(run, name in the run, name in the C tree) of `[RUN:]MODEL[=CNAME]` entries.
 
     A retrained family keeps its run name (mlp_l2 ...), which may already be a
-    registry entry from an earlier run; the rename is what lets both stay.
+    registry entry from an earlier run; the rename is what lets both stay. `RUN:`
+    takes a model of another run: the spectrogram networks were trained one seed per run.
     """
-    pairs = []
+    out = []
     for spec in models or sorted(run_models):
-        src, _, dst = spec.partition("=")
+        head, _, dst = spec.partition("=")
+        run, sep, src = head.partition(":")
+        if not sep:
+            run, src = this_run, head
+            if src not in run_models:
+                raise KeyError(f"{src!r} is not a model of this run: {sorted(run_models)}")
         dst = dst or src
-        if src not in run_models:
-            raise KeyError(f"{src!r} is not a model of this run: {sorted(run_models)}")
         if not dst.isidentifier():
             raise ValueError(f"{dst!r} is not a C identifier")
-        pairs.append((src, dst))
-    return pairs
+        out.append((run, src, dst))
+    return out
+
+
+def _val_negative_windows(
+    manifest: pd.DataFrame, cache: FrameCache, layout: int, squelch: float
+) -> tuple[np.ndarray, float]:
+    """The val negatives' windows in `layout` under the board's gate, and their seconds:
+    what a pair's z tables and its threshold are taken on (combo_eval.py's val_x)."""
+    rows = select_suite(manifest, "val")
+    rows = rows[[cache.has(s) for s in rows["source"]]]
+    rows = rows[rows["label"] == 0]
+    feats = [
+        clip_windows(cache.get(r.source, r.id), layout, squelch=squelch)[0]
+        for r in rows.itertuples()
+    ]
+    feats = [f for f in feats if f.shape[0]]
+    x = np.concatenate(feats).astype(np.float32) if feats else np.empty((0, 0), np.float32)
+    return x, float(rows["duration"].sum())
 
 
 def _keep_specs(keep: list[str] | None) -> list[tuple[str, str, str]]:
@@ -482,6 +524,8 @@ def export_run(
     keep: list[str] | None = None,
     squelch: float = DEFAULT_SQUELCH,
     log=print,
+    members: list[str] | None = None,
+    pairs: list[str] | None = None,
 ) -> list[Path]:
     """Write each model's header + translation unit, and the parity header for all.
 
@@ -489,20 +533,40 @@ def export_run(
     registry can hold models from earlier runs: `keep` names them as
     "RUN:MODEL", and they get parity vectors (from their run's weights, which
     are the ones their headers were written from) but no new C files.
+
+    `models` may name models of other runs ("RUN:MODEL=CNAME"); `members` are
+    networks exported but left out of the registry (a pair's member); `pairs`
+    ("CNAME=A+B") are OR pairs of a layout-4 model and a network, both named by
+    their C names in this export or in `keep` (models/pair.py).
     """
     written: list[Path] = []
     run_models = load_run_models(run_dir)
-    pairs = _export_names(models, run_models)
+    loaded: dict[str, dict] = {run_dir.name: run_models}
+
+    def run_of(run: str) -> dict:
+        if run not in loaded:
+            loaded[run] = load_run_models(runs_dir() / run)
+        return loaded[run]
+
+    todo = [(*e, True) for e in _export_names(models, run_models, run_dir.name)]
+    if members:
+        todo += [(*e, False) for e in _export_names(members, run_models, run_dir.name)]
     stamp = time.strftime("%Y-%m-%dT%H:%M:%S")
     prov = [f"run: {run_dir.name}", f"generated: {stamp}"]
 
     entries: list[tuple[str, int, int, ex.ParityVectors]] = []
     feats_by_layout: dict[int, np.ndarray] = {}
+    by_cname: dict[str, object] = {}
 
     def feats(layout: int) -> np.ndarray:
         if layout not in feats_by_layout:
             feats_by_layout[layout] = _val_features(manifest, cache, layout)
         return feats_by_layout[layout]
+
+    def vectors(m, name: str) -> ex.ParityVectors:
+        if isinstance(m, TorchNetModel | PairModel):
+            return ex.wide_parity_vectors(m, name, feats(m.layout))
+        return ex.parity_vectors(m, feats(m.layout))
 
     # The shipped models first, scored by their headers; their parity vectors
     # are what proves the harness itself against the known-good C.
@@ -511,27 +575,48 @@ def export_run(
             (name, LAYOUT_STATS, hdr.offset, ex.parity_vectors(hdr, feats(LAYOUT_STATS)))
         )
 
-    loaded: dict[str, dict] = {}
     for run, src, name in _keep_specs(keep):
-        if run not in loaded:
-            loaded[run] = load_run_models(runs_dir() / run)
-        m = loaded[run][src]
-        entries.append((name, m.layout, m.offset, ex.parity_vectors(m, feats(m.layout))))
+        m = run_of(run)[src]
+        by_cname[name] = m
+        entries.append((name, m.layout, m.offset, vectors(m, name)))
         log(f"{name}: parity vectors from run {run} model {src} (already in the C tree)")
 
-    names = [dst for _, dst in pairs]
-    for src, name in pairs:
-        m = run_models[src]
-        thr = _val_threshold(manifest, cache, m, fa_per_hour, squelch)
+    budgets = sorted({fa_per_hour, *LADDER_FA_PER_HOUR})
+
+    def ladder(thrs: dict[float, float]) -> str:
+        return " / ".join(f"{thrs[b]:.3f}" for b in LADDER_FA_PER_HOUR)
+
+    names = [dst for _, _, dst, registered in todo if registered]
+    for run, src, name, registered in todo:
+        m = run_of(run)[src]
+        by_cname[name] = m
+        thrs = _val_thresholds(manifest, cache, m, budgets, squelch)
+        thr = thrs[fa_per_hour]
         thr_milli = exc.thr_milli_from(thr)
-        p = prov + [
+        p = [
+            f"run: {run}",
+            f"generated: {stamp}",
             f"family: {m.kind}",
             f"layout: {m.layout}",
             f"default threshold: {thr:.3f} (<= {fa_per_hour:g} FA/h on val at squelch {squelch:g})",
         ]
         if src != name:
             p.append(f"trained as: {src}")
-        if isinstance(m, CnnModel):
+        if isinstance(m, TorchNetModel):
+            p.append(f"thresholds at 1 / 5 / 20 FA/h: {ladder(thrs)}")
+            cp = crnn_params(m)
+            written.append(
+                ex.write_text(
+                    MODELS_DIR / f"crnn_model_data_{name}.h", exc.crnn_header(cp, name, p)
+                )
+            )
+            written.append(
+                ex.write_text(
+                    MODELS_DIR / f"model_{name}.c",
+                    exc.crnn_tu(name, cp, thr_milli, p, registered=registered),
+                )
+            )
+        elif isinstance(m, CnnModel):
             written.append(
                 ex.write_text(MODELS_DIR / f"nn_model_data_{name}.h", exc.cnn_header(m, name, p))
             )
@@ -549,8 +634,40 @@ def export_run(
                     MODELS_DIR / f"model_{name}.c", tu(name, m.layout, m.offset, thr_milli, p)
                 )
             )
-        entries.append((name, m.layout, m.offset, ex.parity_vectors(m, feats(m.layout))))
-        log(f"{name}: threshold {thr:.3f} (<= {fa_per_hour:g} FA/h on val at squelch {squelch:g})")
+        entries.append((name, m.layout, m.offset, vectors(m, name)))
+        log(
+            f"{name}: threshold {thr:.3f} (<= {fa_per_hour:g} FA/h on val at squelch {squelch:g}); "
+            f"ladder 1/5/20 FA/h {ladder(thrs)}"
+        )
+
+    for spec in pairs or []:
+        pname, _, ab = spec.partition("=")
+        a_name, _, b_name = ab.partition("+")
+        if not (pname.isidentifier() and a_name in by_cname and b_name in by_cname):
+            raise ValueError(f"--pair wants CNAME=A+B of exported or kept models, got {spec!r}")
+        a, b = by_cname[a_name], by_cname[b_name]
+        layout = pair_layout(b.layout, a.layout)[0]
+        x_neg, seconds = _val_negative_windows(manifest, cache, layout, squelch)
+        pair = build_pair(pname, a, a_name, b, b_name, x_neg)
+        decisions = np.asarray(pair.score(x_neg), dtype=np.float32).reshape(-1)
+        pooled = ClipScores("val", "val", 0, "", "", "val", seconds, decisions, np.empty(0, int))
+        thrs = _fa_thresholds([pooled], budgets)
+        thr = thrs[fa_per_hour]
+        p = prov + [
+            f"family: pair ({a_name} or {b_name})",
+            f"layout: {layout}",
+            f"default threshold: z {thr:.3f} (<= {fa_per_hour:g} FA/h on val at squelch "
+            f"{squelch:g})",
+            f"thresholds at 1 / 5 / 20 FA/h: {ladder(thrs)}",
+        ]
+        tu = exc.pair_tu(pair, exc.thr_milli_from(thr), p)
+        written.append(ex.write_text(MODELS_DIR / f"model_{pname}.c", tu))
+        entries.append((pname, layout, 0, vectors(pair, pname)))
+        names.append(pname)
+        log(
+            f"{pname}: z threshold {thr:.3f} (<= {fa_per_hour:g} FA/h on {x_neg.shape[0]} val "
+            f"negative windows, {seconds / 3600:.2f} h); ladder 1/5/20 FA/h {ladder(thrs)}"
+        )
 
     written.append(
         ex.write_text(VECTORS_DIR / "parity_vectors.h", ex.export_parity_header(entries, prov))
