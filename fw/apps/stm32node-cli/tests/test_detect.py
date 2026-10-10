@@ -7,7 +7,29 @@ import pytest
 from conftest import FakeTransport
 from stm32node_cli.protocol.client import DeviceClient
 from stm32node_cli.protocol.codec import ProtocolError, StreamAborted
-from stm32node_cli.protocol.spec import DETECT_DEFAULT_MODEL_THR_MILLI
+
+_DETEND0 = b"DETEND windows=0 drones=0 alarms=0 overrun=0 err=0\r\n"
+# The `model` listing with a CRNN pair selected: its threshold is a z, not gbt_m1's 3211.
+_LISTING = (
+    b"model: gbt_m1     feat=1..78 thr=3211\r\n"
+    b"model: or_h     * feat=0..984 thr=3831\r\n"
+    b"model: crnn_hl    feat=0..2072 thr=8774\r\n"
+)
+
+
+class _BoardTransport(FakeTransport):
+    """Answers each command when it is written, as the board does: the `model`
+    listing to `model`, a detect run to `detect`. A FakeTransport preloaded with
+    both would let the listing read swallow the run (there is no pause between)."""
+
+    def __init__(self, listing: bytes = _LISTING, run: bytes = _DETEND0) -> None:
+        super().__init__()
+        self._answers = {b"model": listing, b"detect": run}
+
+    def write(self, data: bytes) -> None:
+        super().write(data)
+        self.feed(self._answers.get(data.split()[0], b""))
+
 
 # A whole run: a level line, one DRONE window, its alarm transition, then DETEND.
 _RUN = (
@@ -38,23 +60,47 @@ def test_run_detect_sends_command_and_returns_trailer():
 
 
 def test_run_detect_fills_positional_gap_before_dbg():
-    # dbg is the 4th positional, so squelch and thr must be present; a gap is
-    # filled with the firmware default rather than shifting dbg into thr's slot.
-    t = FakeTransport(to_read=b"DETEND windows=0 drones=0 alarms=0 overrun=0 err=0\r\n")
+    # dbg is the 4th positional, so squelch and thr must be present: squelch takes
+    # the firmware default, thr the ACTIVE model's own, read off `model` first -
+    # not gbt_m1's 3211, which is wrong for every other model.
+    t = _BoardTransport()
     DeviceClient(t).run_detect(5, dbg=True)
-    assert t.written == f"detect 5 3 {DETECT_DEFAULT_MODEL_THR_MILLI} 1\n".encode()
+    assert t.written == b"model\ndetect 5 3 3831 1\n"
 
 
 def test_run_detect_sends_the_rule_as_the_fifth_argument():
-    # A rule alone fills squelch, thr and dbg with the defaults in front of it.
-    t = FakeTransport(to_read=b"DETEND windows=0 drones=0 alarms=0 overrun=0 err=0\r\n")
+    # A rule alone fills squelch, thr and dbg in front of it (thr from the board).
+    t = _BoardTransport()
     DeviceClient(t).run_detect(30, rule="mean4")
-    assert t.written == f"detect 30 3 {DETECT_DEFAULT_MODEL_THR_MILLI} 0 mean4\n".encode()
-    t = FakeTransport(to_read=b"DETEND windows=0 drones=0 alarms=0 overrun=0 err=0\r\n")
+    assert t.written == b"model\ndetect 30 3 3831 0 mean4\n"
+    # Everything given: no question to the board.
+    t = FakeTransport(to_read=_DETEND0)
     DeviceClient(t).run_detect(30, squelch_milli=2, thr_milli=7660, dbg=True, rule="1of4")
     assert t.written == b"detect 30 2 7660 1 1of4\n"
     with pytest.raises(ValueError):
         DeviceClient(FakeTransport(to_read=b"")).run_detect(5, rule="sometimes")
+
+
+def test_run_detect_without_dbg_or_rule_asks_nothing():
+    # The firmware applies the model's own threshold itself when nothing follows.
+    t = FakeTransport(to_read=_DETEND0)
+    DeviceClient(t).run_detect(5, squelch_milli=1)
+    assert t.written == b"detect 5 1\n"
+
+
+def test_run_detect_refuses_when_the_active_threshold_is_unknown():
+    # No `*` line (no answer, or a listing it cannot read): refuse rather than
+    # send a threshold that belongs to another model.
+    t = _BoardTransport(listing=b"model: gbt_m1     feat=1..78 thr=3211\r\n")
+    with pytest.raises(ProtocolError):
+        DeviceClient(t).run_detect(5, dbg=True)
+    assert t.written == b"model\n"
+
+
+def test_active_model_threshold_reads_the_starred_line():
+    assert DeviceClient(_BoardTransport()).active_model_threshold() == 3831
+    negative = b"model: weird    * feat=0..9 thr=-1500\r\n"
+    assert DeviceClient(_BoardTransport(listing=negative)).active_model_threshold() == -1500
 
 
 def test_run_detect_reports_error_trailer():

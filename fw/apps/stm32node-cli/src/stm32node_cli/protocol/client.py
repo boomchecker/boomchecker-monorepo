@@ -21,7 +21,6 @@ from .codec import (
     parse_trailer,
 )
 from .spec import (
-    DETECT_DEFAULT_MODEL_THR_MILLI,
     DETECT_DEFAULT_SQUELCH_MILLI,
     DETECT_MAX_SECONDS,
     DETECT_RULE_RE,
@@ -34,6 +33,9 @@ from .spec import (
 # Strips terminal control sequences the board's console echoes (embedded-cli wraps
 # each echoed key in cursor save/restore codes, e.g. b"\x1b[s\x1b[u").
 _ANSI_RE = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]")
+
+# The active model's line of the `model` listing: `model: <name> * feat=<lo>..<hi> thr=<milli>`.
+_ACTIVE_MODEL_THR_RE = re.compile(r"^model:\s+\S+\s+\*\s.*\bthr=(-?\d+)")
 
 # Called when an attempt gets no acknowledgement and the command is resent:
 # (attempt_that_failed, total_attempts).
@@ -112,6 +114,18 @@ class DeviceClient:
         """
         self._t.write(encode_command("model", name))
         return self._read_prefixed("model: ")
+
+    def active_model_threshold(self) -> int | None:
+        """The default threshold (1/1000) of the model the next ``detect`` runs.
+
+        Read off the ``model`` listing, where the active model's line carries a
+        ``*``; None when no line does (no answer, or a format this does not know).
+        """
+        for line in self.list_models():
+            m = _ACTIVE_MODEL_THR_RE.match(line)
+            if m:
+                return int(m.group(1))
+        return None
 
     def mic_slot(self) -> str:
         """Send ``micslot`` and return the board's current-slot line verbatim."""
@@ -211,11 +225,14 @@ class DeviceClient:
         failure), or None if the board sent no trailer before the transport gave up.
 
         ``detect`` takes positional arguments, so to pass a later one every earlier
-        one must be present; a gap is filled with the firmware default. This
-        matters when ``dbg`` or ``rule`` is given without an explicit ``thr_milli``,
-        in which case the default model's threshold is sent - right after boot,
-        wrong once ``model`` has selected another one. ``rule`` is the alarm rule
-        for this run, ``<k>of<n>`` (a vote) or ``mean<n>``; see spec.DETECT_RULE_RE.
+        one must be present. A missing ``squelch_milli`` is filled with the firmware
+        default. A missing ``thr_milli`` in front of ``dbg`` or ``rule`` cannot be:
+        the threshold belongs to the selected model and the firmware has no token
+        for "the model's own" in that slot, so the active model's threshold is read
+        off the ``model`` listing first (:meth:`active_model_threshold`), and
+        :class:`ProtocolError` is raised when it cannot be. ``rule`` is the alarm
+        rule for this run, ``<k>of<n>`` (a vote) or ``mean<n>``; see
+        spec.DETECT_RULE_RE.
 
         Startup handshake mirrors :meth:`start_stream`: the command is resent only
         while the board stays *silent* (it was lost). Once any byte arrives the run
@@ -231,13 +248,22 @@ class DeviceClient:
 
         if rule is not None and not DETECT_RULE_RE.fullmatch(rule):
             raise ValueError(f"rule must be <k>of<n> or mean<n>, got {rule!r}")
+        if thr_milli is None and (dbg or rule is not None):
+            # The default model's threshold here would be wrong for every other
+            # model (a CRNN's 8774, a pair's z of 3760): ask the board.
+            thr_milli = self.active_model_threshold()
+            if thr_milli is None:
+                raise ProtocolError(
+                    "could not read the active model's threshold from `model` - "
+                    "give thr_milli (--thr) explicitly"
+                )
         args: list[int | str] = [int(seconds)]
         if squelch_milli is not None or thr_milli is not None or dbg or rule is not None:
             args.append(
                 DETECT_DEFAULT_SQUELCH_MILLI if squelch_milli is None else int(squelch_milli)
             )
-        if thr_milli is not None or dbg or rule is not None:
-            args.append(DETECT_DEFAULT_MODEL_THR_MILLI if thr_milli is None else int(thr_milli))
+        if thr_milli is not None:
+            args.append(int(thr_milli))
         if dbg or rule is not None:
             args.append(1 if dbg else 0)
         if rule is not None:
