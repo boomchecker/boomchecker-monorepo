@@ -20,6 +20,12 @@
 
 /* First entry is the default. */
 static const classifier_t *const s_models[] = {
+    /* mlp_f2, the previous default, stays for rollback: moving it back to the
+       front is the whole change. mlp_v6 and svm_v3 are the public-data models
+       the selftest and the registry tests are anchored to. */
+    &classifier_gbt_m1,
+    &classifier_mlp_f2,
+    &classifier_mlp_m1,
     &classifier_mlp_v6,
     &classifier_svm_v3,
 };

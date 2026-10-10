@@ -149,7 +149,7 @@ int main(void)
   /* Enable the instruction cache. The core runs code from flash at 250 MHz with
      5 wait states (FLASH_LATENCY_5); with the cache off, every instruction fetch
      stalls the CPU and the PDM->PCM DSP misses its 21.33 ms/ring-half real-time
-     budget (~39 ms measured -> mic overrun). Cached it takes ~17 ms and fits.
+     budget (~39 ms measured -> mic overrun). Cached it takes ~6 ms and fits.
      CubeMX leaves HAL_ICACHE_MODULE_ENABLED off in stm32h5xx_hal_conf.h, so the
      cache is driven directly here (keeps the CubeMX-owned conf untouched). The
      cache is invalidated on reset; wait for any pending invalidation, then

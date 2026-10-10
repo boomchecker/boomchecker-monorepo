@@ -9,6 +9,7 @@ When the protocol changes, edit this file and run ``task proto`` to refresh
 
 from __future__ import annotations
 
+import re
 import struct
 from dataclasses import dataclass
 
@@ -24,6 +25,29 @@ SAMPLES_PER_BLOCK = 1024
 # validate up front rather than mistaking that text for a missing acknowledgement.
 STREAM_MAX_SECONDS = 60
 
+# --- On-device detector (matches firmware App/detect/detect_service.h, cli.c and
+# the model tables in fw/common/boomdetect/models/) -------------------------------
+# Defaults the board applies when `detect` is given fewer arguments; the threshold
+# belongs to the model `model` last selected, and the image boots with the first
+# registry entry. tests/test_firmware_defaults.py checks these against the
+# firmware, except the two range limits (SQUELCH_MILLI_MAX, THR_MILLI_LIMIT).
+DETECT_MAX_SECONDS = 86400  # DETECT_MAX_SECONDS in detect_service.h; 0 = until any key
+DETECT_DEFAULT_SQUELCH_MILLI = 3
+DETECT_SQUELCH_MILLI_MAX = 1000
+DETECT_DEFAULT_MODEL = "gbt_m1"  # first entry of classifier_registry.c
+DETECT_DEFAULT_MODEL_THR_MILLI = 3211  # default_thr_milli of model_gbt_m1.c
+DETECT_THR_MILLI_LIMIT = 20000  # accepted thr_milli range is -LIMIT..+LIMIT
+# The K-of-N alarm above the classifier (App/detect/detect_service.h): ON when at
+# least K_ON of the last N classified windows were called drone, OFF when fewer
+# than K_OFF were. One window is ~448 ms; an alarm is a property of seconds.
+DETECT_ALARM_N = 4
+DETECT_ALARM_K_ON = 2
+DETECT_ALARM_K_OFF = 1
+DETECT_ALARM_RULE_DEFAULT = "2of4"  # DETECT_ALARM_RULE_DEFAULT in detect_service.h
+# The fifth `detect` argument: a vote `<k>of<n>` or the mean of the last n relative
+# decisions `mean<n>`; the firmware validates the numbers (n 1..32, 1 <= k <= n).
+DETECT_RULE_RE = re.compile(r"(\d{1,2}of\d{1,2}|mean\d{1,2})", re.IGNORECASE)
+
 # --- Framing -----------------------------------------------------------------
 PROTOCOL_VERSION = 1
 MAGIC = b"PCM1"
@@ -32,6 +56,9 @@ LINE_TERMINATOR = b"\n"
 # End-of-stream trailer sent after the payload, e.g. b"PCMEND overrun=0 err=0".
 # Confirms the stream finished and reports capture health.
 TRAILER_PREFIX = b"PCMEND"
+# Trailer that always closes a `detect` run, even after a `DETERR` start failure;
+# reaching it (and only it) means the detector has stopped.
+DETECT_TRAILER_PREFIX = b"DETEND"
 
 
 @dataclass(frozen=True)
@@ -104,21 +131,28 @@ COMMANDS: tuple[CommandSpec, ...] = (
     ),
     CommandSpec(
         name="detect",
-        usage="detect <sec> [squelch_milli] [thr_milli] [dbg]",
+        usage="detect <sec> [squelch_milli] [thr_milli] [dbg] [rule]",
         description=(
-            "Run on-device drone detection for <sec> seconds (1..60): microphone PCM is "
+            "Run on-device drone detection for <sec> seconds (1..86400; 0 runs until the "
+            "console receives any byte, which is discarded rather than executed): "
+            "microphone PCM is "
             "decimated to 16 kHz, MFCC features are extracted (1024-sample frames, hop 512), "
-            "every run of 14 frames above the RMS squelch is aggregated to a 52-value feature "
-            "vector and classified by the model compiled into the firmware. That is currently "
-            "a small MLP (v6), whose decision value is a raw logit, not a probability. "
-            "Optional overrides in units of 1/1000: squelch_milli (default 10 = RMS 0.010, "
-            "0 disables the gate, 0..1000) and thr_milli (defaults to the selected "
-            "model's own operating point, 15000 = logit 15.0 for mlp_v6, may be "
-            "negative, -20000..20000 - a value outside that range is rejected, not clamped; "
-            "the default was measured against ambient room noise on hardware, with no "
-            "drone present, so it trades away an unquantified amount of sensitivity to "
-            "avoid false alarms). "
-            "A non-zero dbg adds one debug line per frame."
+            "every run of 14 frames above the RMS squelch is aggregated to a feature vector "
+            "(the layout the selected model reads) and classified by the model `model` last "
+            "selected. The image boots with gbt_m1, a gradient-boosted forest trained with the "
+            "node's own field recordings that also reads the modulation spectrum of the "
+            "1-4 kHz envelope; its decision value is a raw log-odds score, not a probability, "
+            "and its first decision comes about 2 s into a run, once the envelope ring is "
+            "full. Optional overrides in units of 1/1000: squelch_milli (default "
+            f"{DETECT_DEFAULT_SQUELCH_MILLI} = RMS 0.003, 0 disables the gate, 0..1000) and "
+            "thr_milli (defaults to the selected model's own operating point, "
+            f"{DETECT_DEFAULT_MODEL_THR_MILLI} = 3.211 for gbt_m1, may be negative, "
+            "-20000..20000 - a value outside that range is rejected, not clamped). A non-zero "
+            "dbg adds one debug line per frame. "
+            f"rule picks the alarm rule for this run (default {DETECT_ALARM_RULE_DEFAULT}): "
+            "`<k>of<n>` is the vote - ON at k of the last n DRONE windows, OFF below k-1 (at "
+            "least 1) - and `mean<n>` the mean of the last n decisions relative to thr_milli, "
+            "ON while it is >= 0; n is 1..32."
         ),
         response=(
             "A `LVL t=<s>.<ms> rms=<+d.ddd>` input-level line about once a second, one line "
@@ -126,9 +160,18 @@ COMMANDS: tuple[CommandSpec, ...] = (
             "- `t` is when the window CLOSED and `span` how many frames it covered, which "
             "is not a constant: the RMS gate resets accumulation, so a window can straddle "
             "silence and start arbitrarily far from where the decision was made (windows are "
-            "~448 ms of audio at the default hop; input below the squelch yields no windows), "
-            "then a final "
-            "`DETEND windows=<n> drones=<n> overrun=<0|1> err=<0|1>` line. With dbg set, each "
+            "~448 ms of audio at the default hop; input below the squelch yields no windows). "
+            "An `ALM t=<s>.<ms> <ON|OFF> hits=<k>/<n>` line whenever the alarm changes "
+            "state: under the default vote ON once at least "
+            f"{DETECT_ALARM_K_ON} of the last {DETECT_ALARM_N} classified windows were DRONE, "
+            f"OFF once fewer than {DETECT_ALARM_K_OFF} were - printed only on transitions, so "
+            "a steady drone gives one ON and one OFF, and a lone DRONE window gives nothing; "
+            "under a mean rule the line reads `mean=<+d.ddd>/<n>` instead of hits. "
+            "Then a final "
+            "`DETEND windows=<n> drones=<n> alarms=<n> first_drone=<s.mmm|-> "
+            "first_alarm=<s.mmm|-> overrun=<0|1> err=<0|1>` line, where alarms counts "
+            "OFF-to-ON transitions and the two times are when the run first called a "
+            "window DRONE and first raised the alarm (`-` if never). With dbg set, each "
             "frame also emits `F=<frame> a=<accumulated> r=<rms_milli> h=<half_us> "
             "m=<mfcc_us>`. A start failure prints `DETERR <reason>` and then the DETEND "
             "trailer with err=1, so the trailer always arrives."
@@ -203,7 +246,9 @@ COMMANDS: tuple[CommandSpec, ...] = (
             "seconds (1..300). The board re-inits UART4 at [baud] (default 9600, the "
             "module's ROM default; 1200..921600) and forwards each received line verbatim. "
             "The Teseo-LIV3R is a ROM part - its configuration does not persist without "
-            "VBAT, so hosts should adapt to 9600 rather than reconfigure the module."
+            "VBAT, so hosts should adapt to 9600 rather than reconfigure the module. UART "
+            "reception is switched off again when the run ends, so no stale sentences pile "
+            "up between commands; a reply buffered by an earlier `gpstx` is delivered first."
         ),
         response=(
             "A `GPS baud=<baud> sec=<sec>` acknowledgement line, then raw NMEA lines "
@@ -221,8 +266,11 @@ COMMANDS: tuple[CommandSpec, ...] = (
         description=(
             "Send one NMEA sentence to the GNSS module (e.g. `gpstx $PSTMGETSWVER`). The "
             "leading `$` is optional; the NMEA checksum and CRLF are appended by the board. "
-            "The sentence must not contain spaces. UART reception stays armed afterwards, "
-            "so the module's reply is buffered and delivered by the next `gps` run."
+            "The sentence must not contain spaces. The board discards any stale input, arms "
+            "UART reception and then transmits, so the module's reply (plus roughly the next "
+            "second of NMEA, after which the 1 KB buffer drops further bytes) is buffered and "
+            "delivered at the start of the next `gps` run. Several `gpstx` in a row queue "
+            "their replies behind each other until a `gps` drains them."
         ),
         response="`GPSTX ok` on success, `GPSERR tx failed` or a usage line otherwise.",
     ),

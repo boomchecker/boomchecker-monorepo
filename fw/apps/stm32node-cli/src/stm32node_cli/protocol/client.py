@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import re
 import time
 from collections.abc import Callable, Iterator
@@ -9,15 +10,26 @@ from dataclasses import dataclass
 
 from ..transport.base import Transport
 from .codec import (
+    DetectTrailer,
     ProtocolError,
     StreamAborted,
     StreamHeader,
     StreamTrailer,
     encode_command,
+    parse_detect_trailer,
     parse_header,
     parse_trailer,
 )
-from .spec import HEADER_SIZE, MAGIC, STREAM_MAX_SECONDS
+from .spec import (
+    DETECT_DEFAULT_MODEL_THR_MILLI,
+    DETECT_DEFAULT_SQUELCH_MILLI,
+    DETECT_MAX_SECONDS,
+    DETECT_RULE_RE,
+    DETECT_TRAILER_PREFIX,
+    HEADER_SIZE,
+    MAGIC,
+    STREAM_MAX_SECONDS,
+)
 
 # Strips terminal control sequences the board's console echoes (embedded-cli wraps
 # each echoed key in cursor save/restore codes, e.g. b"\x1b[s\x1b[u").
@@ -28,6 +40,8 @@ _ANSI_RE = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]")
 RetryFn = Callable[[int, int], None]
 # Returns True if the user asked to abort; polled during blocking waits.
 AbortFn = Callable[[], bool]
+# Called with each text line a streaming text command emits (without its terminator).
+LineFn = Callable[[str], None]
 
 # Defaults for the start-of-stream handshake.
 DEFAULT_STREAM_RETRIES = 3
@@ -78,6 +92,36 @@ class DeviceClient:
         """Send ``version`` and return the reported firmware version line."""
         self._t.write(encode_command("version"))
         return self._read_response("version")
+
+    def list_models(self) -> list[str]:
+        """Send ``model`` and return the board's per-model listing lines verbatim.
+
+        The board prints one ``model: <name> ...`` line per classifier in the
+        image and then falls silent - there is no trailer - so we read until the
+        transport goes quiet and keep only the ``model: `` lines (the command echo
+        has no colon, so it is filtered out).
+        """
+        self._t.write(encode_command("model"))
+        return self._collect_prefixed("model: ")
+
+    def select_model(self, name: str) -> str:
+        """Send ``model <name>`` and return the board's single confirmation line.
+
+        The reply is ``model: <name> selected ...`` on success or
+        ``model: no such model '<name>'`` otherwise; both start with ``model: ``.
+        """
+        self._t.write(encode_command("model", name))
+        return self._read_prefixed("model: ")
+
+    def mic_slot(self) -> str:
+        """Send ``micslot`` and return the board's current-slot line verbatim."""
+        self._t.write(encode_command("micslot"))
+        return self._read_prefixed("micslot: ")
+
+    def select_mic_slot(self, slot: str) -> str:
+        """Send ``micslot <a|b>`` and return the board's confirmation line."""
+        self._t.write(encode_command("micslot", slot))
+        return self._read_prefixed("micslot: ")
 
     def start_stream(
         self,
@@ -144,23 +188,184 @@ class DeviceClient:
         """
         return parse_trailer(self._read_line())
 
+    def run_detect(
+        self,
+        seconds: int,
+        *,
+        squelch_milli: int | None = None,
+        thr_milli: int | None = None,
+        dbg: bool = False,
+        rule: str | None = None,
+        on_line: LineFn | None = None,
+        should_abort: AbortFn | None = None,
+        on_retry: RetryFn | None = None,
+        retries: int = DEFAULT_STREAM_RETRIES,
+        ack_timeout: float = DEFAULT_ACK_TIMEOUT_S,
+    ) -> DetectTrailer | None:
+        """Run the board's ``detect`` command and stream its report lines.
+
+        Sends ``detect <sec> [squelch_milli] [thr_milli] [dbg] [rule]`` and reads
+        the ``LVL``/``DET``/``ALM`` (and, with ``dbg``, ``F=``) lines the board
+        emits, handing each to ``on_line`` as it arrives. Returns the parsed
+        ``DETEND`` trailer that always closes the run (even after a ``DETERR`` start
+        failure), or None if the board sent no trailer before the transport gave up.
+
+        ``detect`` takes positional arguments, so to pass a later one every earlier
+        one must be present; a gap is filled with the firmware default. This
+        matters when ``dbg`` or ``rule`` is given without an explicit ``thr_milli``,
+        in which case the default model's threshold is sent - right after boot,
+        wrong once ``model`` has selected another one. ``rule`` is the alarm rule
+        for this run, ``<k>of<n>`` (a vote) or ``mean<n>``; see spec.DETECT_RULE_RE.
+
+        Startup handshake mirrors :meth:`start_stream`: the command is resent only
+        while the board stays *silent* (it was lost). Once any byte arrives the run
+        has started, so a resend would queue a duplicate detect - we stop retrying
+        and read on. ``should_abort`` is polled throughout; when it returns True we
+        send one byte (which stops a ``sec=0`` run on the board) and raise
+        :class:`StreamAborted`.
+        """
+        if seconds < 0 or seconds > DETECT_MAX_SECONDS:
+            raise ValueError(f"seconds must be 0..{DETECT_MAX_SECONDS}")
+        if retries < 1:
+            raise ValueError("retries must be >= 1")
+
+        if rule is not None and not DETECT_RULE_RE.fullmatch(rule):
+            raise ValueError(f"rule must be <k>of<n> or mean<n>, got {rule!r}")
+        args: list[int | str] = [int(seconds)]
+        if squelch_milli is not None or thr_milli is not None or dbg or rule is not None:
+            args.append(
+                DETECT_DEFAULT_SQUELCH_MILLI if squelch_milli is None else int(squelch_milli)
+            )
+        if thr_milli is not None or dbg or rule is not None:
+            args.append(DETECT_DEFAULT_MODEL_THR_MILLI if thr_milli is None else int(thr_milli))
+        if dbg or rule is not None:
+            args.append(1 if dbg else 0)
+        if rule is not None:
+            args.append(rule.lower())
+        encoded = encode_command("detect", *args)
+
+        prefix = DETECT_TRAILER_PREFIX.decode("ascii")
+        partial = bytearray()
+        attempt = 1
+        seen_any = False
+        self._t.write(encoded)
+        deadline = time.monotonic() + ack_timeout
+        while True:
+            if should_abort is not None and should_abort():
+                with contextlib.suppress(Exception):
+                    self._t.write(b"\n")  # stop a `sec=0` run on the board
+                raise StreamAborted("aborted by user")
+            b = self._t.read(1)
+            if not b:
+                # Silent read. Resend only while nothing has arrived at all (the
+                # command was lost); once the run is under way, LVL lines pace it
+                # ~once a second, so keep waiting for the DETEND trailer.
+                if not seen_any and time.monotonic() >= deadline:
+                    if attempt >= retries:
+                        raise ProtocolError(
+                            f"no response from the board after {retries} attempt(s) - "
+                            "is it connected and running?"
+                        )
+                    attempt += 1
+                    if on_retry is not None:
+                        on_retry(attempt - 1, retries)
+                    self._t.write(encoded)
+                    deadline = time.monotonic() + ack_timeout
+                continue
+            seen_any = True
+            if b == b"\r":
+                continue
+            if b != b"\n":
+                partial += b
+                continue
+            line = partial.decode("ascii", errors="replace")
+            partial.clear()
+            if line.startswith(prefix):
+                return parse_detect_trailer(line)
+            if line and on_line is not None:
+                on_line(line)
+
     def _read_response(self, sent: str, *, max_lines: int = 8) -> str:
         """Read a text command's reply, skipping the board's echo and prompt.
 
         embedded-cli echoes every received character (wrapped in cursor
         save/restore escapes) and prints a ``> `` prompt, so the first line(s)
-        after a command are the echo, not the answer. Return the first line that,
-        once ANSI escapes and a leading prompt are stripped, is neither empty nor
-        the echoed command itself.
+        after a command are the echo, not the answer. With live autocompletion
+        enabled the board also echoes, after each typed character, the
+        autocomplete suffix of the command (e.g. typing ``version`` emits
+        ``version`` then ``ersion``, ``rsion``, ``sion`` ...). Once the escapes
+        and ``\\r`` are stripped these collapse onto one line that *starts with*
+        the sent command but is not equal to it (``versionersionrsion...``).
+
+        Return the first line that, once ANSI escapes and a leading prompt are
+        stripped, is non-empty and does not start with the echoed command - so
+        both a clean echo and an autocompletion-mangled one are skipped, while a
+        genuine reply (which never begins with the command word) is returned.
         """
+        target = sent.replace(" ", "")
         for _ in range(max_lines):
             line = _ANSI_RE.sub("", self._read_line())
             if line.startswith("> "):
                 line = line[2:]
             line = line.strip()
-            if line and line != sent:
+            if line and not line.replace(" ", "").startswith(target):
                 return line
         return ""
+
+    def _read_prefixed(self, prefix: str, *, max_lines: int = 8) -> str:
+        """Return the first reply line that starts with ``prefix``.
+
+        For commands whose answer echoes the command word (``model``, ``micslot``)
+        the echo-skipping in :meth:`_read_response` cannot help - the real lines
+        start with the command word too. Instead we key on the ``<cmd>: `` prefix,
+        which the raw echo (no colon) never has. ANSI escapes and a leading prompt
+        are stripped first. Returns ``""`` if no such line arrives.
+
+        Only non-empty lines count against ``max_lines``: an empty ``_read_line``
+        is a transport timeout, and a slow board must not have its echo lines plus
+        one silent gap mistaken for "no response". Two consecutive empty reads
+        (~2x the transport timeout of silence) do end the wait - the board has
+        either answered already or is not going to.
+        """
+        seen = 0
+        empties = 0
+        while seen < max_lines and empties < 2:
+            raw = self._read_line()
+            if not raw:
+                empties += 1
+                continue
+            empties = 0
+            seen += 1
+            line = _ANSI_RE.sub("", raw)
+            if line.startswith("> "):
+                line = line[2:]
+            line = line.strip()
+            if line.startswith(prefix):
+                return line
+        return ""
+
+    def _collect_prefixed(self, prefix: str, *, max_lines: int = 32) -> list[str]:
+        """Return all reply lines starting with ``prefix`` until the board goes quiet.
+
+        Used for the untrailed ``model`` listing: the board prints its lines in one
+        burst, so once at least one has arrived the first empty read (the transport
+        timeout) means the listing is done. Non-matching lines (the echo) are
+        skipped; ``max_lines`` bounds a misbehaving board.
+        """
+        lines: list[str] = []
+        for _ in range(max_lines):
+            raw = self._read_line()
+            if not raw:
+                if lines:
+                    break  # gone quiet after the burst - listing complete
+                continue  # still waiting for the first line
+            line = _ANSI_RE.sub("", raw)
+            if line.startswith("> "):
+                line = line[2:]
+            line = line.strip()
+            if line.startswith(prefix):
+                lines.append(line)
+        return lines
 
     # -- internals -----------------------------------------------------------
     def _read_line(self) -> str:

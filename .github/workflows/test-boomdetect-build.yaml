@@ -15,10 +15,6 @@ permissions:
 # trained floats it ships could not be exercised by anything. This job runs the
 # arithmetic on a host, under sanitizers, on every change to it.
 #
-# What it does NOT yet do is compare that arithmetic against the Python the
-# models were trained with. That needs the reference implementation and is the
-# next piece of work; until then "green" means self-consistent, not correct.
-#
 # The cache holds only the fetched SOURCE. Caching the build tree looked
 # cheaper and is not: cmsisdsp-subbuild carries absolute paths, and Ninja's
 # .ninja_log lives a level up outside the cached path, so the restored objects
@@ -43,7 +39,33 @@ jobs:
 
       - name: Run ruff
         working-directory: ./fw/common/boomdetect
-        run: ruff check tests
+        run: ruff check tests training
+
+  # The Python that trains the models and specifies the feature layouts. Its
+  # tests hold the Python front end to the detselftest fixture and the exporters
+  # to their own parsers; they need the C sources (read from the checkout) but
+  # no build, no data and no torch (the CNN tests skip without it).
+  training:
+    name: Training package (pytest)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install the package
+        working-directory: ./fw/common/boomdetect/training
+        run: pip install --quiet -e .[dev]
+
+      - name: Run pytest
+        working-directory: ./fw/common/boomdetect/training
+        run: python -m pytest -q
 
   test:
     name: Build and test (host, Debug)
@@ -129,10 +151,9 @@ jobs:
             echo ""
             echo "- CMSIS-DSP v1.15.0 fetched and built for the host"
             echo "- MFCC front end, classifier registry and pipeline tests passed"
-            echo "- both models' trained weights executed under the sanitizers"
+            echo "- every registered model's trained weights executed under the sanitizers"
+            echo "- the extractors and every model's decisions matched the Python reference"
             echo "- the test harness was verified able to fail"
             echo "- ASan + UBSan on, warnings are errors"
             echo "- the fixture reproduced on the host, and -O2 shown not to move it"
-            echo ""
-            echo "Parity against the Python reference is not part of this job yet."
           } >> "$GITHUB_STEP_SUMMARY"

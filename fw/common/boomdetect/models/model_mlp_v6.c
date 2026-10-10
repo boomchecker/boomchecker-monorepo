@@ -1,20 +1,13 @@
 /**
  * @file model_mlp_v6.c
- * @brief The deployed model: a 51 -> 32 -> 1 ReLU MLP.
+ * @brief The public-data model: a 51 -> 32 -> 1 ReLU MLP.
  *
  * Selected by pick_champion.py as the winner of the bebop/membo alarm criterion
  * with zero two-window false alarms, at an operating point of +7.25.
  *
- * default_thr_milli below is 15000, not 7250, because +7.25 was chosen offline
- * against recordings and this was the first time the model met a node with a
- * working microphone: it fired on 23 of 396 windows of ordinary office noise,
- * peaking at 12.05, and a second three-minute campaign at 15.0 saw none.
- *
- * What that number is not: it was measured against ambient noise with no drone
- * present, so the sensitivity it gives up is unquantified, and the spread
- * between sessions (one peaked at 12.05, another at 2.77, same board and
- * firmware) is wider than the change it justified. A field default chosen to
- * stop crying wolf, not an operating point swept on labelled data.
+ * default_thr_milli below is 3000, not 7250: calibrated on labelled recordings
+ * from the node's own microphone - one drone, one room - so it belongs to that
+ * rig, not to the model; a calibration, not a validation.
  *
  * The decision is a raw logit, not a probability. A threshold that looks
  * sensible for a probability (0.5, say) is nowhere near this model's operating
@@ -64,7 +57,7 @@ const classifier_t classifier_mlp_v6 = {
     .layout_id         = BOOMDETECT_LAYOUT_MEAN_STD_DMEAN_CMAX,
     .n_features        = MLP_NUM_INPUTS,
     .feature_offset    = MLP_V6_OFFSET,
-    .default_thr_milli = 15000,
+    .default_thr_milli = 3000,
     .decide            = mlp_v6_decide,
     .ctx               = NULL,
 };

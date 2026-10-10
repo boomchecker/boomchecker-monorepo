@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from .spec import (
+    DETECT_TRAILER_PREFIX,
     HEADER_SIZE,
     HEADER_STRUCT,
     LINE_TERMINATOR,
@@ -61,6 +62,73 @@ def parse_trailer(line: str) -> StreamTrailer | None:
         key, _, value = token.partition("=")
         fields[key] = value
     return StreamTrailer(overrun=fields.get("overrun") == "1", err=fields.get("err") == "1")
+
+
+@dataclass(frozen=True)
+class DetectTrailer:
+    """Parsed ``DETEND`` trailer that always closes a ``detect`` run."""
+
+    windows: int  # classified windows in the run
+    drones: int  # windows called DRONE
+    alarms: int  # OFF-to-ON alarm transitions
+    overrun: bool  # mic overran or the detector dropped frames
+    err: bool  # mic failed/timed out, or the host disconnected mid-run
+    # Seconds into the run of the first window called DRONE and of the first
+    # alarm ON; None when it never happened (the board prints `-`) or when an
+    # older firmware did not report them.
+    first_drone_s: float | None = None
+    first_alarm_s: float | None = None
+
+
+def describe_first_times(trailer: DetectTrailer) -> str:
+    """\", first drone at 2.4 s, first alarm at 3.3 s\" - or \"\" when neither happened."""
+    parts = []
+    if trailer.first_drone_s is not None:
+        parts.append(f"first drone at {trailer.first_drone_s:.1f} s")
+    if trailer.first_alarm_s is not None:
+        parts.append(f"first alarm at {trailer.first_alarm_s:.1f} s")
+    return (", " + ", ".join(parts)) if parts else ""
+
+
+def parse_detect_trailer(line: str) -> DetectTrailer | None:
+    """Parse a ``DETEND windows=.. drones=.. alarms=.. first_drone=.. first_alarm=.. ...`` line.
+
+    Returns None if the line is not a DETEND trailer. Missing count fields
+    default to 0, missing flags to False and missing or `-` times to None,
+    mirroring :func:`parse_trailer`.
+    """
+    text = line.strip()
+    if not text.startswith(DETECT_TRAILER_PREFIX.decode("ascii")):
+        return None
+    fields: dict[str, str] = {}
+    for token in text.split()[1:]:
+        key, _, value = token.partition("=")
+        fields[key] = value
+
+    def _int(key: str) -> int:
+        try:
+            return int(fields.get(key, "0"))
+        except ValueError:
+            return 0
+
+    def _when(key: str) -> float | None:
+        raw = fields.get(key, "-")
+        if raw == "-":
+            return None
+        try:
+            return float(raw)
+        except ValueError:
+            return None
+
+    return DetectTrailer(
+        windows=_int("windows"),
+        drones=_int("drones"),
+        alarms=_int("alarms"),
+        overrun=fields.get("overrun") == "1",
+        err=fields.get("err") == "1",
+        first_drone_s=_when("first_drone"),
+        first_alarm_s=_when("first_alarm"),
+    )
 
 
 def encode_command(name: str, *args: object) -> bytes:

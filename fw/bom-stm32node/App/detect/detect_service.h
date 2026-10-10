@@ -21,8 +21,12 @@
  *                                                   constant: the gate resets
  *                                                   accumulation, so a window
  *                                                   can straddle silence
+ *   ALM t=<s>.<ms> <ON|OFF> hits=<k>/<n>            the alarm changed state on
+ *   ALM t=<s>.<ms> <ON|OFF> mean=<+d.ddd>/<n>       the window that closed at t
+ *                                                   (vote rule / mean rule)
  *   F=<n> a=<n> r=<n> h=<us> m=<us>                 per frame, only with dbg=1
- *   DETEND windows=<n> drones=<n> overrun=<0|1> err=<0|1>
+ *   DETEND windows=<n> drones=<n> alarms=<n> first_drone=<s.mmm|->
+ *          first_alarm=<s.mmm|-> overrun=<0|1> err=<0|1>
  *   DETERR <reason>                                 followed by DETEND, always
  *
  * detect_service_selftest() prints a separate DST* family; see
@@ -39,25 +43,50 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "boomdetect_alarm.h"
 #include "classifier.h"
 
-/** Default RMS gate, in 1/1000 of full scale. */
-#define DETECT_DEFAULT_SQUELCH_MILLI 10
+/** Default RMS gate, in 1/1000 of full scale: outdoors the background sat at
+    RMS 0.004 and a drone at 20 m and beyond at 0.004-0.009. A quiet room
+    (0.0026) still yields no window - one needs 14 frames in a row above it. */
+#define DETECT_DEFAULT_SQUELCH_MILLI 3
+
+/* Longest timed run `detect` accepts, one day (64-bit timestamps, 32-bit
+   counters). What a long run costs is the radio, which is not serviced while
+   `detect` runs. `detect 0` has no limit and ends on the first console byte. */
+#define DETECT_MAX_SECONDS 86400
+
+/* The default alarm rule (boomdetect_alarm.h): ON when at least K_ON of the
+   last N classified windows were called drone, OFF when fewer than K_OFF were -
+   the rule the training package judges clip verdicts with. `detect` takes
+   another per run as its fifth argument: `<k>of<n>` or `mean<n>`. */
+#define DETECT_ALARM_N     4
+#define DETECT_ALARM_K_ON  2
+#define DETECT_ALARM_K_OFF 1
+#define DETECT_ALARM_RULE_DEFAULT "2of4"
 
 /* The decision threshold is NOT here. It belongs to the model - a linear SVM's
    decisions live around +-3 while an MLP's are unbounded logits - so it is
-   classifier_t::default_thr_milli, and the measurement behind the deployed
-   model's value is recorded beside it in boomdetect/models/model_mlp_v6.c. */
+   classifier_t::default_thr_milli, set in each model's models/model_*.c. */
 
 /**
- * @brief Run detection for `seconds` (clamped to 1..60) and stream results.
- * @param seconds       capture length
+ * @brief Run detection for `seconds` and stream results.
+ * @param seconds       capture length, clamped to 1..DETECT_MAX_SECONDS; 0 runs
+ *                      until the console receives any byte (usb_cli_key_pressed)
  * @param squelch_milli RMS squelch threshold in 1/1000 (0 disables the gate)
  * @param thr_milli     decision threshold in 1/1000 (may be negative)
  * @param debug         non-zero: print an F=<frame> breadcrumb per frame
+ * @param rule          alarm rule for this run; NULL = the DETECT_ALARM_* default
  */
 void detect_service_run(uint32_t seconds, uint32_t squelch_milli, int32_t thr_milli,
-                        uint32_t debug);
+                        uint32_t debug, const boomdetect_alarm_rule_t *rule);
+
+/**
+ * @brief Parse an alarm rule token: `<k>of<n>` (vote, off below k-1, at least
+ *        1) or `mean<n>` (mean of the last n relative decisions), n 1..32.
+ * @return false if the token is not one of those or the rule is inconsistent.
+ */
+bool detect_service_parse_rule(const char *token, boomdetect_alarm_rule_t *out);
 
 /**
  * @brief Run the pipeline over a deterministic synthetic signal and print every

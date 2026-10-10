@@ -29,11 +29,21 @@ static void scenario_lookup(void)
 
     const classifier_t *def = classifier_default();
     REQUIRE(def != NULL, "classifier_default() returned NULL");
-    CHECK(strcmp(def->name, "mlp_v6") == 0,
+    CHECK(strcmp(def->name, "gbt_m1") == 0,
           "the deployed model should be the default, got '%s'", def->name);
 
-    CHECK(classifier_by_name("mlp_v6") == def,
-          "by_name(\"mlp_v6\") did not return the same entry as default()");
+    CHECK(classifier_by_name("gbt_m1") == def,
+          "by_name(\"gbt_m1\") did not return the same entry as default()");
+    const classifier_t *mm = classifier_by_name("mlp_m1");
+    CHECK(mm != NULL, "mlp_m1 is missing - the layout-4 MLP with the modulation features");
+    CHECK(def->layout_id == BOOMDETECT_LAYOUT_STATS_SPECTRAL_MOD,
+          "gbt_m1 declares layout %u, not the modulation layout", def->layout_id);
+    CHECK(mm == NULL || mm->layout_id == BOOMDETECT_LAYOUT_STATS_SPECTRAL_MOD,
+          "mlp_m1 declares layout %u, not the modulation layout", mm ? mm->layout_id : 0u);
+    CHECK(classifier_by_name("mlp_f2") != NULL,
+          "mlp_f2 is missing - the previous default must stay in the image for rollback");
+    CHECK(classifier_by_name("mlp_v6") != NULL,
+          "mlp_v6 is missing - the public-data default must stay in the image for comparison");
     CHECK(classifier_by_name("svm_v3") != NULL, "svm_v3 is missing from the registry");
     CHECK(classifier_by_name("nope") == NULL, "an unknown name resolved to something");
     CHECK(classifier_by_name(NULL) == NULL, "a NULL name did not resolve to NULL");
@@ -48,12 +58,14 @@ static void scenario_lookup(void)
         REQUIRE(m != NULL, "classifier_at(%zu) is NULL below the count", i);
         CHECK(m->decide != NULL, "%s has no decide function", m->name);
         CHECK(m->n_features > 0u, "%s reads zero features", m->name);
-        CHECK((uint32_t)m->feature_offset + m->n_features <= BOOMDETECT_FEATURE_COUNT,
-              "%s reads %u features from offset %u, past the %u the aggregate produces",
-              m->name, m->n_features, m->feature_offset, (unsigned)BOOMDETECT_FEATURE_COUNT);
-        CHECK(m->layout_id == BOOMDETECT_LAYOUT_MEAN_STD_DMEAN_CMAX,
-              "%s declares layout %u, this build produces %u", m->name, m->layout_id,
-              BOOMDETECT_LAYOUT_MEAN_STD_DMEAN_CMAX);
+        /* A model is usable only if some extractor in this build produces its
+           layout, and its slice fits inside THAT extractor's width. */
+        const boomdetect_extractor_t *ex = boomdetect_extractor_for_layout(m->layout_id);
+        REQUIRE(ex != NULL, "%s declares layout %u, which no extractor in this build produces",
+                m->name, m->layout_id);
+        CHECK((uint32_t)m->feature_offset + m->n_features <= ex->n_features,
+              "%s reads %u features from offset %u, past the %u extractor '%s' produces",
+              m->name, m->n_features, m->feature_offset, ex->n_features, ex->name);
     }
 }
 
@@ -95,11 +107,34 @@ static void scenario_init_rejects_bad_models(void)
           "a model reading %u features from offset 1 fits in %u and should not",
           bad.n_features, (unsigned)BOOMDETECT_FEATURE_COUNT);
 
+    /* A layout nothing implements; the premise is asserted, not assumed. */
+    const uint16_t no_such_layout = 0x7FFFu;
+    REQUIRE(boomdetect_extractor_for_layout(no_such_layout) == NULL,
+            "layout %u has an extractor now; pick another id for this check",
+            (unsigned)no_such_layout);
+
     classifier_t wrong_layout = bad;
     wrong_layout.n_features = 4u;
-    wrong_layout.layout_id = BOOMDETECT_LAYOUT_MEAN_STD_DMEAN_CMAX + 1u;
+    wrong_layout.layout_id = no_such_layout;
     cfg.classifier = &wrong_layout;
     CHECK(!boomdetect_init(&d, &cfg), "a model declaring a foreign layout was accepted");
+
+    /* And with an extractor the caller named: the layouts have to agree even
+       when both sides exist on their own. */
+    classifier_t layout2 = bad;
+    layout2.n_features = 4u;
+    layout2.layout_id = BOOMDETECT_LAYOUT_STATS_SPECTRAL;
+    cfg.classifier = &layout2;
+    cfg.extractor = boomdetect_extractor_for_layout(BOOMDETECT_LAYOUT_MEAN_STD_DMEAN_CMAX);
+    REQUIRE(cfg.extractor != NULL, "the stats extractor is missing");
+    CHECK(!boomdetect_init(&d, &cfg),
+          "a layout-2 model was accepted against the layout-1 extractor");
+
+    cfg.extractor = boomdetect_extractor_for_layout(BOOMDETECT_LAYOUT_STATS_SPECTRAL);
+    REQUIRE(cfg.extractor != NULL, "the stats_spectral extractor is missing");
+    CHECK(boomdetect_init(&d, &cfg),
+          "a layout-2 model was rejected against its own extractor");
+    cfg.extractor = NULL;
 
     classifier_t no_decide = bad;
     no_decide.n_features = 4u;
@@ -187,12 +222,22 @@ static void scenario_real_models_actually_run(void)
             };
             REQUIRE(boomdetect_init(&d, &cfg), "init failed for %s", model->name);
 
-            bool got = false;
-            for (uint32_t f = 0u; f < BOOMDETECT_ACCUM_FRAMES + 4u && !got; f++)
+            /* Enough frames for a layout-4 model too: its extractor waits for
+               two seconds of envelope (BOOMDETECT_MOD_FRAMES hops) before the
+               first window carries a decision, and the windows before that
+               close `warming`. */
+            bool     got    = false;
+            uint32_t warmed = 0u;
+            for (uint32_t f = 0u;
+                 f < BOOMDETECT_MOD_FRAMES + BOOMDETECT_ACCUM_FRAMES + 4u && !got; f++)
             {
                 boomdetect_push(&d, input, BOOMDETECT_HOP * 3u);
                 while (boomdetect_step(&d, &ev))
                 {
+                    if (ev.window.warming)
+                    {
+                        warmed++;
+                    }
                     if (ev.window.complete)
                     {
                         decisions[m][sig] = ev.window.decision;
@@ -201,6 +246,10 @@ static void scenario_real_models_actually_run(void)
                 }
             }
             REQUIRE(got, "%s never completed a window on signal %zu", model->name, sig);
+            const bool waits = d.cfg.extractor->env_required > 0u;
+            CHECK(waits == (warmed > 0u),
+                  "%s: extractor %s waits for the envelope ring, yet %lu windows closed warming",
+                  model->name, d.cfg.extractor->name, (unsigned long)warmed);
             CHECK(isfinite(decisions[m][sig]),
                   "%s produced a non-finite decision (%g) - a NaN here means a weight "
                   "table or a scaler is wrong, and nothing else would catch it",
@@ -218,8 +267,8 @@ static void scenario_real_models_actually_run(void)
     }
 
     CHECK(decisions[0][0] != decisions[1][0],
-          "mlp_v6 and svm_v3 returned the same decision (%.9g) on identical input; "
-          "one forward pass is probably being dispatched twice",
+          "the first two registry models returned the same decision (%.9g) on identical "
+          "input; one forward pass is probably being dispatched twice",
           (double)decisions[0][0]);
 }
 
@@ -230,12 +279,13 @@ static void scenario_real_models_actually_run(void)
 #define FAKE_WIDTH  6u
 
 static void fake_extract(void *ctx, const float *frames, uint32_t nframes, uint32_t coeffs,
-                         float *out)
+                         const boomdetect_side_t *side, float *out)
 {
     (void)ctx;
     (void)frames;
     (void)nframes;
     (void)coeffs;
+    (void)side;
     for (uint32_t i = 0u; i < FAKE_WIDTH; i++)
     {
         out[i] = 100.0f + (float)i;
@@ -336,5 +386,5 @@ int main(void)
     scenario_two_families_differ();
     scenario_init_rejects_bad_models();
     scenario_real_models_actually_run();
-    BD_TEST_REPORT("registry_test", 60);  /* exact count from running the compiled binary */
+    BD_TEST_REPORT("registry_test", 89); /* exact count from running the compiled binary */
 }
