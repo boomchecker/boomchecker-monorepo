@@ -1,0 +1,37 @@
+version: "3"
+
+vars:
+  TEX_DIR: slides
+  TEX: slides.tex
+  JOB: slides
+
+tasks:
+  setup:
+    desc: Install LaTeX packages the deck needs (FiraSans/FiraMono, newtxsf, fontawesome5 from texlive-fonts-extra)
+    cmds:
+      - sudo apt-get update
+      - sudo apt-get install -y texlive-fonts-extra
+    status:
+      - kpsewhich FiraSans.sty
+      - kpsewhich FiraMono.sty
+      - kpsewhich newtxsf.sty
+      - kpsewhich fontawesome5.sty
+
+  build:
+    desc: Compile slides/slides.tex to slides/slides.pdf
+    dir: '{{.TEX_DIR}}'
+    cmds:
+      - pdflatex -interaction=nonstopmode -halt-on-error {{.TEX}}
+      - pdflatex -interaction=nonstopmode -halt-on-error {{.TEX}}
+
+  clean:
+    desc: Remove LaTeX auxiliary files
+    dir: '{{.TEX_DIR}}'
+    cmds:
+      - rm -f {{.JOB}}.aux {{.JOB}}.log {{.JOB}}.out {{.JOB}}.nav {{.JOB}}.snm {{.JOB}}.toc {{.JOB}}.vrb {{.JOB}}.synctex.gz
+
+  rebuild:
+    desc: Clean and compile again
+    cmds:
+      - task: clean
+      - task: build
