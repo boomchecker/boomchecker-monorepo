@@ -17,10 +17,6 @@ jobs:
   test-build:
     name: Build firmware (Debug)
     runs-on: ubuntu-latest
-    # A build takes about a minute and a half. The cap is for the apt install
-    # below: on 2026-10-10 the toolchain download stalled on the Ubuntu mirror
-    # for half an hour, and without a cap the job would have held the runner
-    # for GitHub's default six hours.
     timeout-minutes: 15
 
     steps:
