@@ -1,4 +1,4 @@
-"""The C translation units the exported models need, and the CNN weight header.
+"""The C translation units the exported models need, and the CRNN weight header.
 
 export.py writes the weight tables. A table is not a model until a translation
 unit under models/ wraps it in a classifier_t and the registry lists it; those
@@ -19,14 +19,12 @@ import numpy as np
 
 from boomdetect_train.export import _c_array, _c_float, _c_float_short, _header
 from boomdetect_train.features import (
-    LAYOUT_LOGMEL,
     LAYOUT_STATS,
     LAYOUT_STATS_SPECTRAL,
     LAYOUT_STATS_SPECTRAL_MOD,
     LAYOUTS,
     spec_layout_id,
 )
-from boomdetect_train.models.cnn import L_CONV, L_DENSE, L_DWCONV, L_GAP, L_POOL, CnnModel
 from boomdetect_train.models.crnn import CrnnParams
 from boomdetect_train.models.pair import PairModel, ZTable
 
@@ -36,7 +34,6 @@ LAYOUT_MACRO = {
         "BOOMDETECT_LAYOUT_STATS_SPECTRAL",
         "BOOMDETECT_FEATURE_COUNT_STATS_SPECTRAL",
     ),
-    LAYOUT_LOGMEL: ("BOOMDETECT_LAYOUT_LOGMEL", "BOOMDETECT_FEATURE_COUNT_LOGMEL"),
     LAYOUT_STATS_SPECTRAL_MOD: (
         "BOOMDETECT_LAYOUT_STATS_SPECTRAL_MOD",
         "BOOMDETECT_FEATURE_COUNT_STATS_SPECTRAL_MOD",
@@ -265,108 +262,6 @@ const classifier_t classifier_{name} = {{
     .layout_id         = {layout_macro},
     .n_features        = GBT_NUM_FEATURES,
     .feature_offset    = OFFSET,
-    .default_thr_milli = {thr_milli},
-    .decide            = decide,
-    .ctx               = NULL,
-}};
-"""
-
-
-def cnn_header(model: CnnModel, name: str, provenance: list[str]) -> str:
-    """nn_model_data_<name>.h: weight arrays and the nn_layer_t table."""
-    net = model.net
-    guard = f"NN_MODEL_DATA_{name.upper()}_H"
-    lines = _header(
-        guard,
-        f"CNN {name} ({net.name}): {net.macs} MACs, {net.params} parameters, "
-        f"{len(net.layers)} layers",
-        provenance,
-    )
-    lines += ['#include "nn_infer.h"', ""]
-    for i, layer in enumerate(net.layers):
-        if layer.weight is None:
-            continue
-        w = layer.weight.reshape(-1)
-        lines += [
-            _c_array(f"nn_w{i}", "float", w, (w.shape[0],), _c_float),
-            "",
-            _c_array(f"nn_b{i}", "float", layer.bias, (layer.bias.shape[0],), _c_float),
-            "",
-        ]
-    kinds = {
-        L_CONV: "NN_CONV",
-        L_DWCONV: "NN_DWCONV",
-        L_POOL: "NN_POOL",
-        L_GAP: "NN_GAP",
-        L_DENSE: "NN_DENSE",
-    }
-    lines.append(f"static const nn_layer_t nn_layers_{name}[{len(net.layers)}] = {{")
-    for i, layer in enumerate(net.layers):
-        ic, ih, iw = layer.in_shape
-        oc, oh, ow = layer.out_shape
-        kh, kw = layer.kernel
-        ph, pw = layer.pad
-        w_ref = f"nn_w{i}" if layer.weight is not None else "NULL"
-        b_ref = f"nn_b{i}" if layer.bias is not None else "NULL"
-        lines.append(
-            f"    {{ {kinds[layer.kind]}, {1 if layer.relu else 0}u, {ic}u, {ih}u, {iw}u, "
-            f"{oc}u, {oh}u, {ow}u, {kh}u, {kw}u, {ph}u, {pw}u, {w_ref}, {b_ref} }},"
-        )
-    lines.append("};")
-    in_layout = "NN_IN_FRAME_MAJOR" if net.input_layout == 0 else "NN_IN_MEL_CHANNELS"
-    lines += [
-        "",
-        f"#define NN_MAX_ACT_{name.upper()} {net.max_activation}u",
-        f"#define NN_MACS_{name.upper()} {net.macs}u",
-        "",
-        f"static const nn_net_t nn_net_{name} = {{",
-        f"    {in_layout}, {len(net.layers)}u, nn_layers_{name}, {net.max_activation}u, "
-        f"{model.n_features}u,",
-        "};",
-        "",
-        f"#endif /* {guard} */",
-        "",
-    ]
-    return "\n".join(lines)
-
-
-def cnn_tu(name: str, thr_milli: int, provenance: list[str], mac_budget: int = 1_500_000) -> str:
-    layout_macro, width_macro = LAYOUT_MACRO[LAYOUT_LOGMEL]
-    up = name.upper()
-    head = _tu_header(name, f"CNN {name} over the log-mel patch, through nn_infer.", provenance)
-    return f"""{head}
-#include "classifier.h"
-#include "dsp_config.h"
-#include "models.h"
-
-#include "nn_infer.h"
-#include "nn_model_data_{name}.h"
-
-_Static_assert(NN_MACS_{up} <= {mac_budget}u,
-               "{name} exceeds the multiply-accumulate budget for one window");
-
-/* Two activation buffers, static: at up to NN_MAX_ACT floats each they are far
-   too big for the superloop's stack, and the detector runs one window at a time. */
-static float s_act_a[NN_MAX_ACT_{up}];
-static float s_act_b[NN_MAX_ACT_{up}];
-
-static float decide(void *ctx, const float *features, uint16_t n)
-{{
-    (void)ctx;
-    float out = 0.0f;
-    if (n != {width_macro})
-    {{
-        return 0.0f;
-    }}
-    (void)nn_forward(&nn_net_{name}, features, s_act_a, s_act_b, &out);
-    return out;
-}}
-
-const classifier_t classifier_{name} = {{
-    .name              = "{name}",
-    .layout_id         = {layout_macro},
-    .n_features        = {width_macro},
-    .feature_offset    = 0u,
     .default_thr_milli = {thr_milli},
     .decide            = decide,
     .ctx               = NULL,

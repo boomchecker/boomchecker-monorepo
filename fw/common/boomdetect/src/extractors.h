@@ -37,8 +37,6 @@ extern "C" {
 extern const boomdetect_extractor_t boomdetect_extractor_stats;
 /** Layout 2: layout 1, then mean and std of the 8 scalars, then log-mel flux (69). */
 extern const boomdetect_extractor_t boomdetect_extractor_stats_spectral;
-/** Layout 3: the 14 x 20 log-mel patch minus its mean, frame-major (280). */
-extern const boomdetect_extractor_t boomdetect_extractor_logmel;
 /** Layout 4: layout 2, then the modulation spectrum of the envelope ring (79). */
 extern const boomdetect_extractor_t boomdetect_extractor_stats_spectral_mod;
 /** Layout 703: the 14 x 64 gammatone patch, then layout 8 (985). extractor_gs.c */

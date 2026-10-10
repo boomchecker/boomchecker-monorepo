@@ -4,7 +4,7 @@ tests/vectors/extractor_expected.h carries, for the board's LCG fixture signal:
 
 * the 8 spectral scalars of the first frames (frame_scalars.c against
   features.frame_scalars);
-* the layout-2 and layout-3 feature vectors of every window;
+* the layout-2 feature vector of every window;
 * per window, whether the comb fundamental was numerically stable - the C
   and the Python pick the argmax of 66 comb sums, and when the best two are
   within a hair the float32 side may pick the other. Such windows are marked
@@ -28,7 +28,6 @@ from boomdetect_train.dsp.mfcc import Frontend
 from boomdetect_train.dsp.selftest import lcg_signal
 from boomdetect_train.dsp.windows import Gate, windows
 from boomdetect_train.features import (
-    LAYOUT_LOGMEL,
     LAYOUT_STATS_SPECTRAL,
     N_HARMONICS,
     SAMPLE_RATE_HZ,
@@ -62,7 +61,6 @@ def extractor_fixture_text() -> str:
     scal = frame_scalars_batch(frames.mag[:SCALAR_FRAMES])
 
     l2 = np.stack([extract(LAYOUT_STATS_SPECTRAL, frames, w.frames) for w in wins])
-    l3 = np.stack([extract(LAYOUT_LOGMEL, frames, w.frames) for w in wins])
     stable = np.asarray(
         [all(comb_margin(frames.mag[f]) >= F0_STABLE_MARGIN for f in w.frames) for w in wins],
         dtype=np.int64,
@@ -77,18 +75,15 @@ def extractor_fixture_text() -> str:
         "f0 stable = every frame's best comb beats the runner-up by >= "
         f"{F0_STABLE_MARGIN:g} relative",
     ]
-    lines = ex._header(guard, "Layout 2 / layout 3 features of the LCG fixture, from Python", prov)
+    lines = ex._header(guard, "Layout 2 features of the LCG fixture, from Python", prov)
     lines += [
         f"#define EXPECTED_SCALAR_FRAMES {SCALAR_FRAMES}",
         f"#define EXPECTED_WINDOWS {len(wins)}",
         f"#define EXPECTED_L2_WIDTH {l2.shape[1]}",
-        f"#define EXPECTED_L3_WIDTH {l3.shape[1]}",
         "",
         ex._c_array("expected_scalars", "float", scal, (SCALAR_FRAMES, scal.shape[1]), ex._c_float),
         "",
         ex._c_array("expected_l2", "float", l2, l2.shape, ex._c_float),
-        "",
-        ex._c_array("expected_l3", "float", l3, l3.shape, ex._c_float),
         "",
         ex._c_array("expected_f0_stable", "uint8_t", stable, (len(wins),), lambda v: f"{int(v)}u"),
         "",

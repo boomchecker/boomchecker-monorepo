@@ -15,9 +15,6 @@ Layout 2, "stats_spectral" (69): layout 1, then mean and std over the window of
     rotor from a hum: how much energy sits above 4 kHz, how flat the spectrum
     is, how strongly a harmonic comb fits and where, and whether that pitch
     holds still across the window.
-Layout 3, "logmel" (280): the 14 x 20 log-mel patch minus its own mean, frame
-    major. The CNN input. Subtracting the window mean is what makes it
-    level-invariant, the same role feature 0 being skipped plays for the MLPs.
 """
 
 from __future__ import annotations
@@ -30,7 +27,6 @@ from boomdetect_train.dsp.mfcc import (
     ENV_PER_FRAME,
     ENV_RATE_HZ,
     HOP,
-    N_MELS,
     N_MFCC,
     SAMPLE_RATE_HZ,
     WINDOW_SIZE,
@@ -40,7 +36,8 @@ from boomdetect_train.dsp.windows import ACCUM_FRAMES
 
 LAYOUT_STATS = 1
 LAYOUT_STATS_SPECTRAL = 2
-LAYOUT_LOGMEL = 3
+# 3 was the log-mel patch of a CNN, removed; older runs still carry its models, so the
+# id is not reused.
 LAYOUT_STATS_SPECTRAL_MOD = 4
 # Offline only: the modulation spectrum over a 4 s ring instead of 2 s - more segments averaged,
 # so a hovering drone's steady blade-pass line rises further over the background.
@@ -58,7 +55,6 @@ MOD_FRAMES_8S = 250  # 250 x 32 = 8000 samples, 8.0 s
 N_STATS = 4 * N_MFCC  # 52
 N_SCALARS = 8
 N_STATS_SPECTRAL = N_STATS + 2 * N_SCALARS + 1  # 69
-N_LOGMEL_PATCH = ACCUM_FRAMES * N_MELS  # 280
 N_MOD = 10
 N_STATS_SPECTRAL_MOD = N_STATS_SPECTRAL + N_MOD  # 79
 
@@ -283,14 +279,6 @@ def stats_spectral_from_scalars(
     )
 
 
-def logmel_patch(logmel_win: np.ndarray) -> np.ndarray:
-    """Layout 3: the (14, 20) log-mel block minus its scalar mean, flattened frame-major."""
-    lm = np.asarray(logmel_win, dtype=np.float32)
-    if lm.shape != (ACCUM_FRAMES, N_MELS):
-        raise ValueError(f"expected ({ACCUM_FRAMES}, {N_MELS}), got {lm.shape}")
-    return (lm - lm.mean(dtype=np.float32)).reshape(-1).astype(np.float32)
-
-
 _MOD_FREQS = np.arange(MOD_NFFT // 2 + 1) * MOD_BIN_HZ
 _MOD_WINDOW = np.hanning(MOD_SEG)
 
@@ -383,7 +371,6 @@ class Layout:
 LAYOUTS = {
     LAYOUT_STATS: Layout(LAYOUT_STATS, "stats", N_STATS),
     LAYOUT_STATS_SPECTRAL: Layout(LAYOUT_STATS_SPECTRAL, "stats_spectral", N_STATS_SPECTRAL),
-    LAYOUT_LOGMEL: Layout(LAYOUT_LOGMEL, "logmel", N_LOGMEL_PATCH),
     LAYOUT_STATS_SPECTRAL_MOD: Layout(
         LAYOUT_STATS_SPECTRAL_MOD, "stats_spectral_mod", N_STATS_SPECTRAL_MOD
     ),
@@ -417,7 +404,7 @@ LAYOUTS = {
 #                            the patch with convolutions and layout 4 beside it
 #   600 + k  hybrid long     the same with T = 31
 #
-# Like layout 3 every patch has its mean removed (level invariance); the band
+# Every patch has its mean removed (level invariance); the band
 # means of the stats are relative for the same reason. A long patch reaches back
 # past the window into contiguous history, the way the modulation ring does; a
 # clip too short for it (the public 0.5 s and 1 s clips) is mirrored in time.
@@ -528,8 +515,6 @@ def extract(layout: int, frames, idx: np.ndarray) -> np.ndarray:
         return stats52(frames.mfcc[idx])
     if layout == LAYOUT_STATS_SPECTRAL:
         return stats_spectral(frames.mfcc[idx], frames.mag[idx], frames.logmel[idx])
-    if layout == LAYOUT_LOGMEL:
-        return logmel_patch(frames.logmel[idx])
     if layout == LAYOUT_STATS_SPECTRAL_MOD:
         base = stats_spectral(frames.mfcc[idx], frames.mag[idx], frames.logmel[idx])
         return np.concatenate([base, modulation_stats(frames.env, idx)]).astype(np.float32)

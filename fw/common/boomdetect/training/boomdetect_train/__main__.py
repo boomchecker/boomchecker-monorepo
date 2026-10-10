@@ -242,10 +242,10 @@ def main(argv: list[str] | None = None) -> int:
 
     p = sub.add_parser("train", help="train the model families")
     p.add_argument("--name", default=None, help="run name (default: timestamp)")
-    p.add_argument("--families", nargs="*", default=None, help="mlp svm gbt cnn ...")
-    p.add_argument("--layouts", nargs="*", type=int, default=None, help="1 2 3")
+    p.add_argument("--families", nargs="*", default=None, help="mlp svm gbt crnn2d ...")
+    p.add_argument("--layouts", nargs="*", type=int, default=None, help="1 2 4 ...")
     p.add_argument("--max-neg-windows", type=int, default=None, help="cap per negative clip")
-    p.add_argument("--cnn-epochs", type=int, default=40, help="epochs for the CNN families")
+    p.add_argument("--cnn-epochs", type=int, default=40, help="epochs for the networks")
     p.add_argument(
         "--field", action="store_true", help="also train on the field recordings (raw/field)"
     )

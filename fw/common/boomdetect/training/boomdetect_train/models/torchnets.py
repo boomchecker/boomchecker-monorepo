@@ -1,7 +1,7 @@
 """Networks on the band spectrograms (the patch and hybrid layouts of features.spec_layout).
 
-Offline only: plain torch modules with no numpy reference and no C side (models/cnn.py
-is the one whose nets reach the board). The architectures follow the TalTech
+Plain torch modules with no numpy reference; crnn2d alone has a C side (models/crnn.py,
+src/crnn.c). The architectures follow the TalTech
 BEC 2026 paper (Alagiyadura Fernando et al., "Acoustic Drone Detection on
 Resource-Constrained Edge Devices") with a single logit instead of their three
 classes, plus a mid-sized 2-D CNN of our own:
@@ -264,7 +264,7 @@ def train_torchnet(
     seed: int = 42,
     log=print,
 ) -> TorchNetModel:
-    """Adam + BCE-with-logits + cosine schedule, early stopping on a held-out slice (as train_cnn).
+    """Adam + BCE-with-logits + cosine schedule, early stopping on a held-out slice.
 
     The whole training set sits on the device in float16 and batches are indexed
     there - the nets are small, so feeding them is the cost, not computing them.

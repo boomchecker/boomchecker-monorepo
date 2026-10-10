@@ -39,7 +39,7 @@ Or directly: `stm32node-cli tui`, `stm32node-cli record 5 --port /dev/ttyACM0`,
 
 ```
 stm32node-cli model              # list the classifiers in the image, * = active
-stm32node-cli model mlp_f2       # select one for later detect runs
+stm32node-cli model mlp_m1       # select one for later detect runs
 stm32node-cli micslot            # show which PDM mic of the pair is decoded
 stm32node-cli micslot a          # select slot A (the live mic on this build)
 ```

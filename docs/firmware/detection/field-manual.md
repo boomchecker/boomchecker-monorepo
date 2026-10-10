@@ -3,8 +3,7 @@
 Krátký návod, jak na desce přepínat modely a ladit citlivost detekce, když
 jdeme ven testovat s dronem. Technický popis řetězce je v [index.md](index.md).
 Výchozí model je `gbt_m1` (vrstva 4 s modulací obálky, práh 3.211), ověřený
-s dronem venku; `mlp_f2` (předchozí výchozí) a `mlp_m1` zůstávají v image pro
-srovnání. Nově jsou v image i sítě na gammatonovém spektrogramu (`crnn_h`,
+s dronem venku; `mlp_m1` zůstává v image pro srovnání. Nově jsou v image i sítě na gammatonovém spektrogramu (`crnn_h`,
 `crnn_hl`) a jejich dvojice s `gbt_m1` (`or_h`, `or_hl`, `or_l`), viz
 kapitolu 4b; venku zatím ověřené nejsou.
 
@@ -37,7 +36,7 @@ Totéž jde napsat i do ruční konzole jako `micslot a` a `model`.
 | příkaz | co dělá |
 |---|---|
 | `model` | vypíše modely v image, `*` označuje aktivní, u každého výchozí práh |
-| `model <jméno>` | přepne model, např. `model mlp_f2` (předchozí výchozí, vrstva 2), `model mlp_m1` (MLP na vrstvě 4) nebo `model or_h` (nové sítě, kap. 4b) |
+| `model <jméno>` | přepne model, např. `model mlp_m1` (MLP na vrstvě 4) nebo `model or_h` (nové sítě, kap. 4b) |
 | `detect <s> [squelch] [thr] [dbg] [rule]` | běží `<s>` sekund (až 86400), vypisuje okna a alarmy; `rule` = pravidlo alarmu, `2of4` (výchozí) nebo `mean4`, viz kap. 6 |
 | `detect 0 ...` | běží bez limitu, dokud v konzoli nestiskneš libovolnou klávesu; pak přijde `DETEND` |
 | `micslot a` | přepne na živý mikrofon |
@@ -53,7 +52,7 @@ detect 600               # deset minut, výchozí squelch a práh
 detect 0 3 3211          # bez limitu, zastaví libovolná klávesa v konzoli
 ```
 
-Práh platí pro aktivní model: po `model mlp_f2` je jeho výchozí 7656.
+Práh platí pro aktivní model: po `model mlp_m1` je jeho výchozí 8400.
 
 Během `detect` deska neobsluhuje rádio, takže dlouhý běh znamená dlouhý výpadek
 LoRa. Běh bez limitu (`detect 0`) zastavíš v `stm32node-cli detect 0` libovolnou
@@ -101,14 +100,13 @@ Zapiš si při každém běhu rozsah `dec` pro dron a pro rušiče, tím se prá
 Vyhodnoceno „mimo fold“: každou terénní nahrávku posuzuje model, který ji při
 tréninku neslyšel; squelch 3, alarm 2 ze 4. `gbt_m1` a `mlp_m1` na nahrávkách do
 2. 10. (21× DJI Phantom 4, 19× Runner 250, 27 negativ včetně venkovního pozadí,
-klimatizace, lidí a 30 min dopravy), `mlp_f2` a `mlp_v6` na starším základu do
-1. 10. (14 DJI, 19 Runner, 22 negativ). Sloupec fal. alarmy/h = falešné alarmy
+klimatizace, lidí a 30 min dopravy), `mlp_v6` na starším základu do 1. 10.
+(14 DJI, 19 Runner, 22 negativ). Sloupec fal. alarmy/h = falešné alarmy
 za hodinu na 11,6 h veřejných negativních nahrávek, které nikdo netrénoval.
 
 | model | výchozí práh | DJI | Runner | negativa | fal. alarmy/h | poznámka |
 |---|---|---|---|---|---|---|
 | **gbt_m1** (výchozí) | 3.211 | 21/21 | 14/19 | 1/27 | 1,7 | vrstva 4 (modulace obálky), 200 stromů; první 2 s běhu bez rozhodnutí; venku 5. 10. ve 100 m 35/35 oken |
-| mlp_f2 | 7.656 | 11/14 | 18/19 | 4/22 | 2,0 | vrstva 2, MLP 68→32→16→1; předchozí výchozí, rollback; venku slábne od 60 m |
 | mlp_m1 | 8.400 | 21/21 | 14/19 | 2/27 | 1,9 | vrstva 4, MLP 78→32→16→1; nejvyšší polní AUC, ale jeho práh se mezi tréninky hodně liší |
 | mlp_v6 | 3.0 | 7/14 | 10/19 | 5/22 | 16,7 | jen veřejná data; práh 3.0 byl laděn na Runneru |
 | svm_v3 | 0.5 | – | – | – | – | pálí na čtvrtinu negativních oken, nepoužívat |
@@ -117,7 +115,8 @@ Co z toho plyne pro test venku:
 
 - **Dosah je teď hlavní limit, ne typ dronu.** DJI visící nad mikrofonem (mimo
   fold, výchozí práh, podíl oken nad prahem): `gbt_m1` 60/80/90 m 86/85/71 %
-  (`mlp_m1` podobně), vrstva 2 (`mlp_f2`) jen 38/44/17 %. **Venku na desce**,
+  (`mlp_m1` podobně), vrstva 2 (dřívější `mlp_f2`, už není v image) jen
+  38/44/17 %. **Venku na desce**,
   dron visí: 60 m 100 % oken proti 58 % u `mlp_f2`, 80 m 65 % proti 21 %, 100 m
   `gbt_m1` 35 z 35 oken, `mlp_f2` 1 z 31; pozadí s lidmi bez falešného alarmu.
   Ve 120 m nechytil nikdo, nejspíš brána (squelch 3): už na 80–100 m prošlo jen
@@ -130,7 +129,7 @@ Co z toho plyne pro test venku:
   stálých otáček: při přeletu a klesání se čára rozmaže a detekce je o dost
   horší než při visení. Runner na 40 m nechytí ani vrstva 4.
 - Druhý názor na stejném zvuku: `model mlp_m1` (stejné příznaky, jiný druh
-  modelu) nebo `model mlp_f2` (bez modulace). `model mlp_f2` je i rollback.
+  modelu).
 - **Známá slabina trvá:** když se ze vstupu odřízne všechno nad 6 kHz, model
   nepozná nic. Na přehrávky z mobilu se nespoléhej.
 - Typ dronu, který v trénovacích datech není, zatím spolehlivě nepozná: na
@@ -226,19 +225,6 @@ A ke každému kroku stejnou sekvenci bez dronu (mluvení, chůze, auto, vítr),
 aby byl vidět odstup. Práh volíme jako nejvyšší hodnotu, při které dron stále
 dává alespoň třetinu oken, a nejnižší, při které rušiče nedají žádný alarm.
 
-### mlp_f2 (rollback)
-
-Výchozí práh `mlp_f2` je 7.656 (5 FA/h). Pod 7 začne pálit doprava, od 7.656
-výš je doprava i venkovní pozadí čisté a `9000 + mean4` nedal falešný alarm na
-ničem, co jsme zatím nahráli. Žebřík pro `mlp_f2`:
-
-```
-model mlp_f2
-detect 30 3 7656              # výchozí mlp_f2
-detect 30 3 9000 0 mean4      # nula falešných
-detect 30 3 5570              # jen pro měření dosahu, pálí doprava
-```
-
 ### Nové modely (sítě a dvojice)
 
 Prahy při 1 / 5 / 20 falešných oknech za hodinu na val, v tisícinách, jak se
@@ -318,8 +304,7 @@ co by dalo jiné pravidlo, aniž bys běh opakoval, loguj proto celé běhy
 4. Dron: hover blízko, hover daleko, přelet; k tomu známé vzdálenosti
    (20, 40, 60, 80, 100 m a dál), protože dosah je teď hlavní otázka. Žebřík
    prahů z kapitoly 5; od ~100 m zkus i squelch 1 (`detect 30 1`).
-5. Stejné manévry s `model mlp_m1` (stejné příznaky, jiný model) a
-   `model mlp_f2` (vrstva 2, bez modulace) pro srovnání.
+5. Stejné manévry s `model mlp_m1` (stejné příznaky, jiný model) pro srovnání.
 6. Stejné manévry s novými modely (kap. 4b): `model or_h` (bezpečná volba),
    `model crnn_hl` (nejdál) a `model crnn_h` (pohyb, Runner), u každého i
    pozadí bez dronu; poprvé s `dbg` = 1 kvůli `DETDBG`.

@@ -37,7 +37,6 @@ extern "C" {
  */
 #define BOOMDETECT_LAYOUT_MEAN_STD_DMEAN_CMAX 1u /* "stats", 52 */
 #define BOOMDETECT_LAYOUT_STATS_SPECTRAL      2u /* "stats_spectral", 69 */
-#define BOOMDETECT_LAYOUT_LOGMEL              3u /* "logmel", 280 */
 #define BOOMDETECT_LAYOUT_STATS_SPECTRAL_MOD  4u /* "stats_spectral_mod", 79 */
 /* The gammatone layouts keep the training package's numbering, base + front-end
    (features.py SPEC_KINDS; gs1k is front-end 3). 403 has no extractor: only a
@@ -50,7 +49,7 @@ extern "C" {
 /**
  * What the pipeline knows beyond the window's own frames: the envelope ring
  * (dsp_config.h, BOOMDETECT_ENV_*) and the gammatone ring (BOOMDETECT_GS_*),
- * both of which outlive any window. Layouts 1-3 ignore them; layout 4 reads the
+ * both of which outlive any window. Layouts 1 and 2 ignore them; layout 4 reads the
  * envelope's modulation spectrum; the gammatone hybrids read both. Passed by
  * pointer so a future side channel is one more field here rather than another
  * parameter.

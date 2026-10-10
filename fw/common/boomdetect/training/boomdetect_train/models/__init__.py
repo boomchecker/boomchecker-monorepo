@@ -1,1 +1,2 @@
-"""Model families beyond scikit-learn (cnn.py, torchnets.py) and the shipped-header scorers."""
+"""Model families beyond scikit-learn (torchnets.py, crnn.py, pair.py) and the shipped-header
+scorers."""

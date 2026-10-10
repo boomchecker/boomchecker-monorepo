@@ -37,7 +37,7 @@ from boomdetect_train.datasets.cache import FrameCache
 from boomdetect_train.datasets.manifest import ROLE_TRAIN
 from boomdetect_train.dsp.windows import Gate
 from boomdetect_train.evaluate import clip_windows
-from boomdetect_train.features import LAYOUT_LOGMEL, LAYOUTS, spec_layout
+from boomdetect_train.features import LAYOUTS, spec_layout
 
 POS_WIN_MIN_RMS = 0.002
 SEED = 42
@@ -52,7 +52,7 @@ def feature_offset(layout: int) -> int:
     spec = spec_layout(layout)
     if spec is not None:
         return 1 if spec[0] == "modbstat" else 0
-    return 0 if layout == LAYOUT_LOGMEL else 1
+    return 1
 
 
 @dataclass

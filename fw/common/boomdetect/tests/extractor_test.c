@@ -1,7 +1,7 @@
 /**
  * @file extractor_test.c
- * @brief The four extractors against the Python specification, and against
- *        each other.
+ * @brief The extractors against the Python specification, and against each
+ *        other.
  *
  * Drives the board's LCG fixture signal through detectors configured with each
  * extractor and compares what comes out with tests/vectors/extractor_expected.h,
@@ -44,9 +44,6 @@ BD_TEST_STATE;
    parity of the shipped fixture already holds to 1e-4). */
 #define L2_REL 3e-4f
 #define L2_ABS 3e-4f
-/* Log-mel values are O(1)..O(10); ln() of a float32 mel sum. */
-#define L3_REL 1e-4f
-#define L3_ABS 2e-4f
 
 /* Indices of the two f0 entries in layout 2: mean and std of scalar 7. */
 #define L2_F0_MEAN (4u * BOOMDETECT_MFCC_COEFFS + BOOMDETECT_SCALAR_F0)
@@ -216,7 +213,6 @@ static uint32_t run_am(const boomdetect_extractor_t *ex, float *out, uint32_t ma
 }
 
 static float    s_l2[EXPECTED_WINDOWS][EXPECTED_L2_WIDTH];
-static float    s_l3[EXPECTED_WINDOWS][EXPECTED_L3_WIDTH];
 static float    s_l1[EXPECTED_WINDOWS][BOOMDETECT_FEATURE_COUNT];
 static float    s_scal[EXPECTED_SCALAR_FRAMES][BOOMDETECT_FRAME_SCALARS];
 static float    s_l4[EXPECTED_AM_READY][EXPECTED_L4_WIDTH];
@@ -233,7 +229,7 @@ static uint16_t s_603_end[EXPECTED_GS_LATE];
 
 static void scenario_registry(void)
 {
-    REQUIRE(boomdetect_extractor_count() == 7u, "expected seven extractors, got %u",
+    REQUIRE(boomdetect_extractor_count() == 6u, "expected six extractors, got %u",
             (unsigned)boomdetect_extractor_count());
     const boomdetect_extractor_t *h8 = boomdetect_extractor_by_name("hybrid8_gs1k");
     const boomdetect_extractor_t *h831 = boomdetect_extractor_by_name("hybrid831_gs1k");
@@ -263,27 +259,23 @@ static void scenario_registry(void)
           "403 (the bare 1 s patch) is only ever read as part of 603");
     const boomdetect_extractor_t *s = boomdetect_extractor_by_name("stats");
     const boomdetect_extractor_t *p = boomdetect_extractor_by_name("stats_spectral");
-    const boomdetect_extractor_t *l = boomdetect_extractor_by_name("logmel");
     const boomdetect_extractor_t *m = boomdetect_extractor_by_name("stats_spectral_mod");
-    REQUIRE(s != NULL && p != NULL && l != NULL && m != NULL, "an extractor is missing by name");
+    REQUIRE(s != NULL && p != NULL && m != NULL, "an extractor is missing by name");
     CHECK(boomdetect_extractor_default() == s, "the default is not 'stats'");
     CHECK(s->layout_id == BOOMDETECT_LAYOUT_MEAN_STD_DMEAN_CMAX && s->n_features == 52u,
           "stats: layout %u width %u", s->layout_id, s->n_features);
     CHECK(p->layout_id == BOOMDETECT_LAYOUT_STATS_SPECTRAL && p->n_features == EXPECTED_L2_WIDTH,
           "stats_spectral: layout %u width %u", p->layout_id, p->n_features);
-    CHECK(l->layout_id == BOOMDETECT_LAYOUT_LOGMEL && l->n_features == EXPECTED_L3_WIDTH,
-          "logmel: layout %u width %u", l->layout_id, l->n_features);
     CHECK(m->layout_id == BOOMDETECT_LAYOUT_STATS_SPECTRAL_MOD && m->n_features == EXPECTED_L4_WIDTH,
           "stats_spectral_mod: layout %u width %u", m->layout_id, m->n_features);
     CHECK(m->env_required == BOOMDETECT_ENV_SPAN_2S && s->env_required == 0u &&
-              p->env_required == 0u && l->env_required == 0u,
-          "only layout 4 should wait for the envelope ring, two seconds of it (%u / %u / %u / %u)",
-          s->env_required, p->env_required, l->env_required, m->env_required);
+              p->env_required == 0u,
+          "only layout 4 should wait for the envelope ring, two seconds of it (%u / %u / %u)",
+          s->env_required, p->env_required, m->env_required);
     CHECK(boomdetect_extractor_for_layout(2u) == p, "for_layout(2) did not find stats_spectral");
     CHECK(boomdetect_extractor_for_layout(4u) == m, "for_layout(4) did not find stats_spectral_mod");
     CHECK(boomdetect_extractor_for_layout(99u) == NULL, "for_layout(99) found something");
-    CHECK(p->n_features <= BOOMDETECT_FEATURE_MAX && l->n_features <= BOOMDETECT_FEATURE_MAX &&
-              m->n_features <= BOOMDETECT_FEATURE_MAX,
+    CHECK(p->n_features <= BOOMDETECT_FEATURE_MAX && m->n_features <= BOOMDETECT_FEATURE_MAX,
           "a layout is wider than boomdetect_t::features");
 }
 
@@ -347,26 +339,6 @@ static void scenario_layout2_prefix_is_layout1(void)
         CHECK(memcmp(s_l1[w], s_l2[w], sizeof(s_l1[w])) == 0,
               "window %lu: the first 52 of layout 2 are not bit-identical to layout 1",
               (unsigned long)w);
-    }
-}
-
-static void scenario_layout3_matches_python_and_is_zero_mean(void)
-{
-    const uint32_t n = run_lcg(boomdetect_extractor_by_name("logmel"), &s_l3[0][0], EXPECTED_WINDOWS,
-                               &s_scal[0][0], 0u);
-    REQUIRE(n == EXPECTED_WINDOWS, "layout 3 produced %lu windows", (unsigned long)n);
-    for (uint32_t w = 0u; w < EXPECTED_WINDOWS; w++)
-    {
-        float sum = 0.0f;
-        for (uint32_t i = 0u; i < EXPECTED_L3_WIDTH; i++)
-        {
-            sum += s_l3[w][i];
-            CHECK(close_enough(s_l3[w][i], expected_l3[w][i], L3_REL, L3_ABS),
-                  "window %lu patch value %lu: got %.9g, python %.9g", (unsigned long)w,
-                  (unsigned long)i, (double)s_l3[w][i], (double)expected_l3[w][i]);
-        }
-        CHECK(fabsf(sum / (float)EXPECTED_L3_WIDTH) < 1e-4f, "window %lu patch mean %.3g is not ~0",
-              (unsigned long)w, (double)(sum / (float)EXPECTED_L3_WIDTH));
     }
 }
 
@@ -578,11 +550,10 @@ int main(void)
     scenario_scalars_match_python();
     scenario_layout2_matches_python();
     scenario_layout2_prefix_is_layout1();
-    scenario_layout3_matches_python_and_is_zero_mean();
     scenario_layout4_matches_python();
     scenario_layout4_prefix_is_layout2();
     scenario_layout4_short_ring_is_nan();
     scenario_gs_hybrids_match_python();
     scenario_603_is_903_with_layout4();
-    BD_TEST_REPORT("extractor_test", 4708); /* exact count from running the compiled binary */
+    BD_TEST_REPORT("extractor_test", 3863); /* exact count from running the compiled binary */
 }

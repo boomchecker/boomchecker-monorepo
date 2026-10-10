@@ -48,3 +48,8 @@ threshold is a z, 3.8 is about 1 false window an hour.
 
 The thresholds are the 1 FA/h points on val (the other models ship at 5 FA/h).
 The image grows to 1.0 MB of flash and 270 kB of RAM.
+
+**Removed**, as nothing on the board uses it: `mlp_f2` (layout 2, the default
+before gbt_m1), the CNN interpreter `nn_infer` and layout 3, the log-mel patch
+it read. In the training package the numpy CNNs on layout 3 (`cnn_small` ...)
+go with them, and `bdtrain train` now defaults to layouts 1 and 2.

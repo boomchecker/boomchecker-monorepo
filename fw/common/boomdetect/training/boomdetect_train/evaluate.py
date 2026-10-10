@@ -36,7 +36,6 @@ from boomdetect_train.decision import Rule, clip_alarmed
 from boomdetect_train.dsp.windows import DEFAULT_SQUELCH, Gate, windows
 from boomdetect_train.features import (
     HYBRID_AUX_LAYOUT,
-    LAYOUT_LOGMEL,
     LAYOUT_STATS,
     LAYOUT_STATS_SPECTRAL,
     LAYOUT_STATS_SPECTRAL_MOD,
@@ -47,7 +46,6 @@ from boomdetect_train.features import (
     MOD_FRAMES_8S,
     MOD_FRAMES_LONG,
     band_stats,
-    logmel_patch,
     min_start_frame,
     modulation_prominence,
     modulation_stats,
@@ -66,8 +64,6 @@ def window_features(layout: int, cf: CachedFrames, idx: np.ndarray) -> np.ndarra
         return stats52(cf.mfcc[idx])
     if layout == LAYOUT_STATS_SPECTRAL:
         return stats_spectral_from_scalars(cf.mfcc[idx], cf.scalars[idx], cf.logmel[idx])
-    if layout == LAYOUT_LOGMEL:
-        return logmel_patch(cf.logmel[idx])
     if layout == LAYOUT_STATS_SPECTRAL_MOD:
         base = stats_spectral_from_scalars(cf.mfcc[idx], cf.scalars[idx], cf.logmel[idx])
         return np.concatenate([base, modulation_stats(cf.env, idx)]).astype(np.float32)

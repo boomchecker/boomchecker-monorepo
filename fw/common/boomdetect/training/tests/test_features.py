@@ -17,7 +17,6 @@ def frames(frontend, lcg48k):
 def test_layout_widths():
     assert F.LAYOUTS[F.LAYOUT_STATS].n_features == 52
     assert F.LAYOUTS[F.LAYOUT_STATS_SPECTRAL].n_features == 69
-    assert F.LAYOUTS[F.LAYOUT_LOGMEL].n_features == 280
     assert F.LAYOUTS[F.LAYOUT_STATS_SPECTRAL_MOD].n_features == 79
     assert len(F.SCALAR_NAMES) == F.N_SCALARS == 8
 
@@ -104,23 +103,10 @@ def test_stats_spectral_layout_and_cache_path_agree(frames):
     np.testing.assert_allclose(direct, via_cache, rtol=1e-6)
 
 
-def test_logmel_patch_is_zero_mean_and_frame_major(frames):
-    idx = np.arange(14)
-    patch = F.logmel_patch(frames.logmel[idx])
-    assert patch.shape == (280,)
-    assert abs(float(patch.mean())) < 1e-4
-    np.testing.assert_allclose(
-        patch.reshape(14, 20), frames.logmel[idx] - frames.logmel[idx].mean(), rtol=1e-5
-    )
-    with pytest.raises(ValueError):
-        F.logmel_patch(frames.logmel[:13])
-
-
 def test_extract_dispatch(frames):
     idx = np.arange(14)
     assert F.extract(F.LAYOUT_STATS, frames, idx).shape == (52,)
     assert F.extract(F.LAYOUT_STATS_SPECTRAL, frames, idx).shape == (69,)
-    assert F.extract(F.LAYOUT_LOGMEL, frames, idx).shape == (280,)
     l4 = F.extract(F.LAYOUT_STATS_SPECTRAL_MOD, frames, idx)
     assert l4.shape == (79,)
     np.testing.assert_array_equal(l4[:69], F.extract(F.LAYOUT_STATS_SPECTRAL, frames, idx))

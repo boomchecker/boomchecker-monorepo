@@ -187,5 +187,5 @@ int main(void)
     scenario_every_entry_has_a_model_and_vice_versa();
     scenario_decisions_match();
     scenario_jobs_slice_to_the_same_decision();
-    BD_TEST_REPORT("model_parity_test", 359); /* exact count from running the compiled binary */
+    BD_TEST_REPORT("model_parity_test", 322); /* exact count from running the compiled binary */
 }

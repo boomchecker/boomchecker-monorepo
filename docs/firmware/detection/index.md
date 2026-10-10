@@ -42,7 +42,6 @@ absolute loudness — the MLP models skip it deliberately, to stay gain-invarian
 | `fw/common/boomdetect/src/gammatone.c` | the gammatone band spectrogram the CRNNs read, one row per frame into a ring |
 | `fw/common/boomdetect/src/crnn.c` | float32 CRNN (convolutions, LSTM, head), runnable in slices |
 | `fw/common/boomdetect/src/classifier_pair.c` | OR pairs of a tree model and a CRNN on one false-alarm scale |
-| `fw/common/boomdetect/src/nn_infer.c` | float32 interpreter for the small CNNs |
 | `fw/common/boomdetect/src/boomdetect_alarm.c` | K-of-N alarm with hysteresis over window verdicts |
 | `fw/common/boomdetect/models/` | one translation unit per model, each exporting a `classifier_t` |
 | `fw/common/boomdetect/training/` | the Python that trains, compares and exports the models (below) |
@@ -105,7 +104,6 @@ strength of the best harmonic comb between 60 and 400 Hz and its fundamental).
 |---|---|---|---|
 | 1 | `stats` | 52 | `[mean, std, dmean, cmax] × 13` — what `mlp_v6` and `svm_v3` read |
 | 2 | `stats_spectral` | 69 | layout 1, then mean and std of the eight scalars, then log-mel flux |
-| 3 | `logmel` | 280 | the 14 × 20 log-mel patch minus its mean, frame-major — a CNN's input |
 | 4 | `stats_spectral_mod` | 79 | layout 2, then ten numbers from the modulation spectrum of the 1–4 kHz envelope over the last two seconds (`src/extractor_mod.c`) |
 | 703 | `hybrid8_gs1k` | 985 | the 14 × 64 gammatone patch of the window, then layout 8 (layout 4 plus the same ten numbers over four seconds) (`src/extractor_gs.c`) |
 | 903 | `hybrid831_gs1k` | 2073 | the 31 × 64 patch that ends with the window (about one second), then layout 8 |
@@ -229,10 +227,9 @@ does not list.
 `models/models.h` lists what the image carries; each generated `model_*.c`
 records its run, layout and threshold, and the field manual
 ([field-manual.md](field-manual.md)) has the numbers. The
-default is `gbt_m1` on layout 4, with `mlp_m1` beside it on the same layout and
-`mlp_f2` on layout 2 as the previous default; `mlp_v6` and `svm_v3` are the
-public-data models the selftest is anchored to. The three field-trained models
-ship at the threshold that kept their false-alarm windows under 5 per hour on
+default is `gbt_m1` on layout 4, with `mlp_m1` beside it on the same layout;
+`mlp_v6` and `svm_v3` are the public-data models the selftest is anchored to.
+The two field-trained models ship at the threshold that kept their false-alarm windows under 5 per hour on
 the validation negatives, and `model <name>` switches between them.
 
 A model needing a different feature *representation* — raw frames for a CNN, say
@@ -244,7 +241,7 @@ constant. So a new representation is one file under `src/`, a new id, a line in
 the extractor registry, and a model that declares the same id; nothing in
 `boomdetect.c` changes.
 
-The image carries the seven extractors of the table above, `stats` being the
+The image carries the six extractors of the table above, `stats` being the
 default. A consumer must hand `boomdetect_init()` the extractor that produces the
 model's layout — `boomdetect_extractor_for_layout(model->layout_id)`, which is
 what the host tests and `App/detect/detect_service.c` do; a config with the field
@@ -366,10 +363,9 @@ cd fw/common/boomdetect && task test
 
 ASan and UBSan are on by default in the preset. The suite covers the MFCC front
 end, the registry, the pipeline's edge cases, every model's trained weights, the
-fixture, the extractors against the Python specification, the alarm, the
-CNN interpreter, and — through a stub registry linked in place of the real one
-— that the model table really is replaceable. The harness itself is checked able
-to fail, because a test framework that silently returns 0 is the failure mode
+fixture, the extractors against the Python specification, the alarm, and —
+through a stub registry linked in place of the real one — that the model table
+really is replaceable. The harness itself is checked able to fail, because a test framework that silently returns 0 is the failure mode
 this repository has already hit once.
 
 On Windows the host suite runs under MinGW-w64 (no sanitizers there; the

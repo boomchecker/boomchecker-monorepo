@@ -40,8 +40,6 @@ static void scenario_lookup(void)
           "gbt_m1 declares layout %u, not the modulation layout", def->layout_id);
     CHECK(mm == NULL || mm->layout_id == BOOMDETECT_LAYOUT_STATS_SPECTRAL_MOD,
           "mlp_m1 declares layout %u, not the modulation layout", mm ? mm->layout_id : 0u);
-    CHECK(classifier_by_name("mlp_f2") != NULL,
-          "mlp_f2 is missing - the previous default must stay in the image for rollback");
     CHECK(classifier_by_name("mlp_v6") != NULL,
           "mlp_v6 is missing - the public-data default must stay in the image for comparison");
     CHECK(classifier_by_name("svm_v3") != NULL, "svm_v3 is missing from the registry");
@@ -386,5 +384,5 @@ int main(void)
     scenario_two_families_differ();
     scenario_init_rejects_bad_models();
     scenario_real_models_actually_run();
-    BD_TEST_REPORT("registry_test", 114); /* exact count from running the compiled binary */
+    BD_TEST_REPORT("registry_test", 108); /* exact count from running the compiled binary */
 }

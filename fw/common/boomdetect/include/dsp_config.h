@@ -53,8 +53,6 @@
 /* Layout 2: layout 1, mean and std of the 8 scalars, log-mel flux. */
 #define BOOMDETECT_FEATURE_COUNT_STATS_SPECTRAL \
     (BOOMDETECT_FEATURE_COUNT + 2u * BOOMDETECT_FRAME_SCALAR_COUNT + 1u)
-/* Layout 3: the log-mel patch, frame-major. */
-#define BOOMDETECT_FEATURE_COUNT_LOGMEL (BOOMDETECT_ACCUM_FRAMES_MAX * BOOMDETECT_MEL_FILTERS)
 /* Layout 4: layout 2, then the modulation features of the 1-4 kHz envelope
    (src/extractor_mod.c; features.py MOD_NAMES). */
 #define BOOMDETECT_MOD_FEATURES 10u

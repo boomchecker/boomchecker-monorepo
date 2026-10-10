@@ -266,13 +266,11 @@ add_library(boomdetect_core OBJECT
   src/boomdetect_alarm.c
   src/extractor_stats.c
   src/extractor_spectral.c
-  src/extractor_logmel.c
   src/extractor_mod.c
   src/extractor_gs.c
   src/envelope.c
   src/gammatone.c
   src/frame_scalars.c
-  src/nn_infer.c
   src/crnn.c
   src/classifier_pair.c
   src/boomdetect_mfcc_f32.c
@@ -283,7 +281,6 @@ add_library(boomdetect_core OBJECT
 add_library(boomdetect STATIC
   src/classifier_registry.c
   models/model_gbt_m1.c
-  models/model_mlp_f2.c
   models/model_mlp_m1.c
   models/model_mlp_v6.c
   models/model_svm_v3.c
@@ -435,7 +432,7 @@ if(BOOMDETECT_STANDALONE)
 
   # The items are source stems minus "_test": tests/registry_test.c builds
   # boomdetect_registry_test and registers as the ctest `boomdetect_registry`.
-  foreach(test IN ITEMS mfcc_smoke registry pipeline alarm nn_infer extractor model_parity)
+  foreach(test IN ITEMS mfcc_smoke registry pipeline alarm extractor model_parity)
     add_executable(boomdetect_${test}_test tests/${test}_test.c)
     target_link_libraries(boomdetect_${test}_test PRIVATE boomdetect)
     # tests/ for the harness, src/ because these are white-box tests: the MFCC

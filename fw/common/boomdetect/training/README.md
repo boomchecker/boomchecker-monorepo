@@ -14,7 +14,7 @@ consume.
 cd fw/common/boomdetect/training
 python -m venv .venv
 .venv/bin/pip install -e .[dev]                 # numpy, scipy, soundfile, scikit-learn, ...
-.venv/bin/pip install torch --index-url https://download.pytorch.org/whl/cpu   # CNNs only
+.venv/bin/pip install torch --index-url https://download.pytorch.org/whl/cpu   # networks only
 .venv/bin/pytest                                # no data needed
 ```
 
@@ -100,19 +100,20 @@ bdtrain features --spec all [SOURCE..] [--workers 12]
 bdtrain compare r1            # the comparison report -> runs/r1/report.md
 bdtrain compare r1 --rule mean4      # judged under another alarm rule (2of4 default, 1of4, mean8 ...)
 bdtrain export r1 [--models m ...]   # headers + translation units + parity vectors
-bdtrain export fw4_modb --models gbt_l4=gbt_m1 mlp2_l4=mlp_m1 --keep fw2_mlp2:mlp2_l2=mlp_f2
-                              # export under a new C name; parity for registry models of
-                              # older runs, under the name the registry knows them by
+bdtrain export fw4_modb --models gbt_l4=gbt_m1 mlp2_l4=mlp_m1
+                              # export under a new C name
 bdtrain export r2_hybL8_gs1k_s42 --models crnn2d_l703=crnn_h \
     r2_hybL8_31_gs1k_s2:crnn2d_l903=crnn_hl \
     --member r2_crnn2d31_gs1k_s4:crnn2d_l403=crnn_l \
     --pair or_h=gbt_m1+crnn_h or_hl=gbt_m1+crnn_hl or_l=gbt_m1+crnn_l \
-    --keep fw2_mlp2:mlp2_l2=mlp_f2 fw4_modb:gbt_l4=gbt_m1 fw4_modb:mlp2_l4=mlp_m1 \
+    --keep fw4_modb:gbt_l4=gbt_m1 fw4_modb:mlp2_l4=mlp_m1 \
     --fa-per-hour 1 --squelch 0.003
                               # the export behind today's registry: CRNNs from other runs
                               # (RUN:MODEL, one run per seed), a network that only a pair
                               # uses (--member, not registered), OR pairs of a layout-4
-                              # model and a network (--pair, models/pair.py)
+                              # model and a network (--pair, models/pair.py), and parity
+                              # for the models already in the tree under their C names
+                              # (--keep)
 bdtrain fixtures              # regenerate tests/vectors/extractor_expected.h,
                               # extractor_mod_expected.h, extractor_gs_expected.h,
                               # src/envelope_coefs.h and src/gammatone_table.h
@@ -160,7 +161,6 @@ at the same time.
 |---|---|---|---|
 | 1 | `stats` | 52 | `mlp`, `mlp_reg`, `mlp2`, `svm`, `gbt`, `gbt_reg` |
 | 2 | `stats_spectral` | 69 | the same six |
-| 3 | `logmel` | 280 | `cnn_small`, `cnn_ds`, `cnn_1d`, `cnn_wide`, and the same six on the patch as a flat vector (`gbt_l3` ...) |
 | 4 | `stats_spectral_mod` | 79 | the same six; layout 2 plus ten modulation features of the 1-4 kHz envelope over the last 2 s (`features.modulation_stats`) - the family behind `gbt_m1` / `mlp_m1` |
 | 7 | `stats_spectral_mod4s` | 79 | the same six; layout 2 + the modulation features over a 4 s ring (offline only) |
 | 8 | `stats_spectral_mod2s4s` | 89 | the same six; layout 2 + the 2 s and the 4 s sets (offline only) |
@@ -184,11 +184,11 @@ HuggingFace drone clips. The 2026-10-07/09 comparison of all of them is in the
 data root, `analysis/2026-10-09-souhrn/vysledky.md`.
 
 `mlp` is 32 hidden units, `mlp_reg` 16 with alpha 1e-2, `mlp2` two hidden layers
-(32, 16) with the same alpha - the family behind `mlp_f2`. The C side takes an
+(32, 16) with the same alpha - the family behind `mlp_m1`. The C side takes an
 MLP with one or two hidden layers (export.py writes either header format).
 
-`features.py` is the specification of the four layouts; the C extractors are
-held to it by `extractor_test`.
+`features.py` is the specification of every layout; the C extractors are held
+to it by `extractor_test`.
 
 ## Adding a model to the board
 
@@ -200,8 +200,8 @@ held to it by `extractor_test`.
    target in `CMakeLists.txt`. The parity test fails for any exported model
    the registry does not list, so this cannot be forgotten silently. A CRNN
    also declares its `crnn_net_NAME` in `models/models.h` (a pair points at
-   it); a `--member` network is left out of the registry and listed in
-   `tests/model_parity_test.c`'s `s_members` instead.
+   it); a `--member` network is left out of the registry and named in
+   `tests/model_parity_test.c`'s `find_model()` instead.
 3. `task test` in `fw/common/boomdetect`, then the firmware build.
 
 ## What it cannot do yet
