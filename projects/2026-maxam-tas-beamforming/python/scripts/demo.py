@@ -1,0 +1,143 @@
+"""Demo figure: power maps of the grid methods for one drone clip and one direction.
+
+Writes the PDF for the report and ``demo.tex`` with the numbers used in its caption.
+"""
+
+from __future__ import annotations
+
+import argparse
+from pathlib import Path
+
+import matplotlib
+
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt  # noqa: E402
+import numpy as np  # noqa: E402
+from matplotlib.layout_engine import ConstrainedLayoutEngine  # noqa: E402
+from matplotlib.lines import Line2D  # noqa: E402
+
+from beamforming import dads, doa  # noqa: E402
+from beamforming import geometry as g  # noqa: E402
+from beamforming import signals as sg  # noqa: E402
+from beamforming.texfmt import czech  # noqa: E402
+
+SEED = 7
+CLIP = 0
+AZ_DEG, EL_DEG, SNR_DB = 123.4, 57.2, 10.0  # off the 5 deg grid nodes
+DIAMETER, HEIGHT = 0.20, 0.07
+DB_FLOOR = -12.0
+
+TITLES = {"das": "DAS", "mvdr": "MVDR", "srp_phat": "SRP-PHAT", "music": "MUSIC"}
+MACRO = {"das": "DAS", "mvdr": "MVDR", "srp_phat": "SRP", "music": "MUSIC", "gcc_phat_ls": "GCC"}
+
+# sequential single hue (blue 100 to 700), light = low power
+BLUES = ["#cde2fb", "#9ec5f4", "#6da7ec", "#3987e5", "#256abf", "#184f95", "#0d366b"]
+TRUE_COLOR = "#eb6834"  # categorical slot 2, contrasts with every blue step
+INK = "#0b0b0b"
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--out", type=Path, default=Path("report/figures/doa_demo.pdf"))
+    parser.add_argument("--tex", type=Path, default=Path("report/generated/demo.tex"))
+    parser.add_argument("--data", type=Path, default=dads.DEFAULT_OUT)
+    args = parser.parse_args()
+
+    rng = np.random.default_rng(SEED)
+    mic = g.make_array("2x8_rot", DIAMETER, HEIGHT)
+    clip = dads.load_clip(dads.list_clips(args.data)[CLIP])
+    u_true = g.unit_vector(np.deg2rad(AZ_DEG), np.deg2rad(EL_DEG))
+    x = sg.observe(clip, mic, u_true, dads.random_offset(len(clip), rng))
+    x = sg.add_noise(x, SNR_DB, rng)
+
+    cfg = doa.DEFAULT
+    X = sg.stft(x, cfg.nfft, cfg.hop)
+    bins = sg.band_bins(cfg.fs, cfg.nfft, cfg.band)
+    freqs = sg.bin_freqs(bins, cfg.fs, cfg.nfft)
+    gain = doa.snr_gain(X, bins, cfg) if cfg.bin_weighting == "snr" else None
+
+    cmap = matplotlib.colors.LinearSegmentedColormap.from_list("blue_seq", BLUES)
+    fig, axes = plt.subplots(
+        1,
+        4,
+        figsize=(7.16, 1.95),
+        sharex=True,
+        sharey=True,
+        layout=ConstrainedLayoutEngine(w_pad=0.03, h_pad=0.03, wspace=0.03),
+    )
+    step = cfg.coarse_step
+    az_nodes = np.arange(0.0, 360.0, step)
+    el_nodes = np.arange(0.0, 90.0 + 1e-9, step)
+    errors: dict[str, float] = {}
+    mesh = None
+    for ax, method in zip(axes, TITLES, strict=True):
+        P = doa.power_map(method, X[:, bins], mic, freqs, cfg, gain=gain)
+        db = np.maximum(10 * np.log10(P / P.max()), DB_FLOOR)
+        mesh = ax.pcolormesh(
+            np.append(az_nodes - step / 2, 360 - step / 2),
+            np.append(el_nodes - step / 2, 90 + step / 2),
+            db.T,
+            cmap=cmap,
+            vmin=DB_FLOOR,
+            vmax=0.0,
+            shading="flat",
+            rasterized=True,
+        )
+        az_e, el_e = doa.localize(method, x, mic, cfg)
+        errors[method] = float(g.angular_error_deg(g.unit_vector(az_e, el_e), u_true))
+        ax.plot(
+            np.rad2deg(az_e),
+            np.rad2deg(el_e),
+            marker="o",
+            ms=5.5,
+            mfc="white",
+            mec=INK,
+            mew=1.0,
+            ls="none",
+            zorder=3,
+        )
+        ax.plot(AZ_DEG, EL_DEG, marker="x", ms=6.5, mec=TRUE_COLOR, mew=1.8, ls="none", zorder=4)
+        ax.set_title(TITLES[method], fontsize=8, color=INK)
+        ax.set_xlim(-step / 2, 360 - step / 2)
+        ax.set_ylim(-step / 2, 90 + step / 2)
+        ax.set_xticks([0, 90, 180, 270, 360 - step])
+        ax.set_xticklabels(["0", "90", "180", "270", "355"])
+        ax.tick_params(labelsize=7, length=2.5)
+        ax.set_xlabel(r"azimut $\phi$ (°)", fontsize=7.5)
+    axes[0].set_ylabel(r"elevace $\theta$ (°)", fontsize=7.5)
+    axes[0].set_yticks([0, 30, 60, 90])
+
+    assert mesh is not None
+    cbar = fig.colorbar(mesh, ax=axes, pad=0.012, fraction=0.025, aspect=18)
+    cbar.set_label("výkon vůči maximu (dB)", fontsize=7.5)
+    cbar.set_ticks([0, -3, -6, -9, -12])
+    cbar.ax.tick_params(labelsize=7, length=2.5)
+    handles = [
+        Line2D([], [], marker="x", ls="none", mec=TRUE_COLOR, mew=1.6, ms=6, label="skutečný směr"),
+        Line2D([], [], marker="o", ls="none", mfc="white", mec=INK, mew=1.0, ms=5.5, label="odhad"),
+    ]
+    fig.legend(handles=handles, loc="outside lower center", ncols=2, fontsize=7, frameon=False)
+
+    args.out.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(args.out, metadata={"CreationDate": None, "Creator": "demo.py"})
+
+    az_g, el_g = doa.localize("gcc_phat_ls", x, mic, cfg)
+    errors["gcc_phat_ls"] = float(g.angular_error_deg(g.unit_vector(az_g, el_g), u_true))
+    lines = [
+        "% generated by python/scripts/demo.py",
+        f"\\newcommand{{\\demoAz}}{{{czech(AZ_DEG)}}}",
+        f"\\newcommand{{\\demoEl}}{{{czech(EL_DEG)}}}",
+        f"\\newcommand{{\\demoSnr}}{{{SNR_DB:.0f}}}",
+        f"\\newcommand{{\\demoDiameter}}{{{DIAMETER * 1000:.0f}}}",
+        f"\\newcommand{{\\demoHeight}}{{{HEIGHT * 1000:.0f}}}",
+    ]
+    lines += [f"\\newcommand{{\\demoErr{MACRO[m]}}}{{{czech(e)}}}" for m, e in errors.items()]
+    args.tex.parent.mkdir(parents=True, exist_ok=True)
+    args.tex.write_text("\n".join(lines) + "\n")
+    print(f"wrote {args.out} and {args.tex}")
+    for m, e in errors.items():
+        print(f"  {m:12s} error {e:.2f} deg")
+
+
+if __name__ == "__main__":
+    main()

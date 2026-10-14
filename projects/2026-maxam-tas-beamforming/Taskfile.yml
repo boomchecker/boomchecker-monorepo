@@ -1,0 +1,173 @@
+version: "3"
+
+dotenv: [.env]
+
+vars:
+  VENV: python/venv
+  PY: python/venv/bin/python
+  N: '{{.N | default 100}}'
+
+tasks:
+  default:
+    desc: List tasks
+    cmds:
+      - task --list
+
+  setup:
+    desc: Create Python venv, install pinned requirements and the beamforming package
+    sources:
+      - requirements.txt
+      - python/pyproject.toml
+    generates:
+      - '{{.PY}}'
+    cmds:
+      - python3 -m venv {{.VENV}}
+      - '{{.PY}} -m pip install --upgrade pip'
+      - '{{.PY}} -m pip install -r requirements.txt'
+      - '{{.PY}} -m pip install -e python/'
+
+  setup:clean:
+    desc: Remove the Python venv
+    cmds:
+      - rm -rf {{.VENV}}
+
+  sim:fetch:
+    desc: Download N drone clips from DADS into data/dads (default N=100, runs once per N)
+    deps: [setup]
+    status:
+      - '{{.PY}} python/scripts/fetch_dads.py --check --n {{.N}} --out data/dads'
+    cmds:
+      - '{{.PY}} python/scripts/fetch_dads.py --n {{.N}} --out data/dads'
+
+  sim:test:
+    desc: Run the simulation test suite (needs DADS clips)
+    deps: [sim:fetch]
+    dir: python
+    cmds:
+      - venv/bin/python -m pytest {{.CLI_ARGS}}
+
+  sim:lint:
+    desc: Check formatting, lint and types
+    deps: [setup]
+    dir: python
+    cmds:
+      - venv/bin/python -m ruff check .
+      - venv/bin/python -m ruff format --check .
+      - venv/bin/python -m mypy beamforming scripts
+
+  sim:fmt:
+    desc: Format and auto-fix lint findings
+    deps: [setup]
+    dir: python
+    cmds:
+      - venv/bin/python -m ruff format .
+      - venv/bin/python -m ruff check --fix .
+
+  sim:demo:
+    desc: Plot DOA power maps into report/figures/doa_demo.pdf and report/generated/demo.tex
+    deps: [sim:fetch]
+    sources:
+      - python/beamforming/*.py
+      - python/scripts/demo.py
+      - data/dads/manifest.json
+    generates:
+      - report/figures/doa_demo.pdf
+      - report/generated/demo.tex
+    cmds:
+      - '{{.PY}} python/scripts/demo.py {{.CLI_ARGS}}'
+
+  sim:validate:
+    desc: Validation table (30, 10, 0 dB) into report/generated/validation.tex, about 9 min on 4 cores
+    deps: [sim:fetch]
+    sources:
+      - python/beamforming/*.py
+      - python/scripts/validate.py
+      - data/dads/manifest.json
+    generates:
+      - report/generated/validation.tex
+    cmds:
+      - '{{.PY}} python/scripts/validate.py {{.CLI_ARGS}}'
+
+  sim:ablate:
+    desc: Ablation of band guard, SNR bin gain, smoothing and overlap on the reference geometry (rows into python/results/summary.csv)
+    deps: [sim:fetch]
+    sources:
+      - python/beamforming/*.py
+      - python/scripts/ablate.py
+      - data/dads/manifest.json
+    cmds:
+      - '{{.PY}} python/scripts/ablate.py {{.CLI_ARGS}}'
+
+  sim:sweep:geometry:
+    desc: Geometry sweep, screening of 21 geometries and confirmation of the best 3 (stages screening and confirm)
+    deps: [sim:fetch]
+    sources:
+      - python/beamforming/*.py
+      - python/scripts/sweep.py
+      - data/dads/manifest.json
+    cmds:
+      - '{{.PY}} python/scripts/sweep.py screening {{.CLI_ARGS}}'
+      - '{{.PY}} python/scripts/sweep.py confirm {{.CLI_ARGS}}'
+
+  sim:sweep:snr:
+    desc: SNR sweep with CRB and sensitivity on the geometry in python/results/selected.json
+    deps: [sim:fetch]
+    sources:
+      - python/beamforming/*.py
+      - python/scripts/sweep.py
+      - python/results/selected.json
+      - data/dads/manifest.json
+    cmds:
+      - '{{.PY}} python/scripts/sweep.py snr {{.CLI_ARGS}}'
+      - '{{.PY}} python/scripts/sweep.py sensitivity {{.CLI_ARGS}}'
+
+  sim:sweep:
+    desc: All sweep stages (ablation excluded); needs python/results/selected.json for the second half
+    cmds:
+      - task: sim:sweep:geometry
+      - task: sim:sweep:snr
+
+  sim:figures:
+    desc: Sweep figures and tables for the report from python/results/summary.csv
+    deps: [setup]
+    sources:
+      - python/results/summary.csv
+      - python/beamforming/*.py
+      - python/scripts/figures.py
+    generates:
+      - report/figures/sweep.pdf
+      - report/figures/beampattern.pdf
+      - report/generated/ablation.tex
+      - report/generated/confirm.tex
+      - report/generated/beampattern.tex
+      - report/generated/cost.tex
+      - python/results/beampattern.csv
+    cmds:
+      - '{{.PY}} python/scripts/figures.py {{.CLI_ARGS}}'
+
+  sim:all:
+    desc: Regenerate every figure and table of the report (demo, validation, ablation, sweep, figures)
+    cmds:
+      - task: sim:demo
+      - task: sim:validate
+      - task: sim:ablate
+      - task: sim:sweep
+      - task: sim:figures
+
+  sim:clean:
+    desc: Remove simulation caches and scratch outputs
+    cmds:
+      - rm -rf python/out python/.pytest_cache python/.mypy_cache python/.ruff_cache python/beamforming.egg-info
+      - find python -name __pycache__ -not -path '*/venv/*' -prune -exec rm -rf {} +
+
+  report:build:
+    desc: Build the beamforming report PDF
+    dir: report
+    cmds:
+      - task build
+
+  report:clean:
+    desc: Remove report build artifacts
+    dir: report
+    cmds:
+      - task clean
