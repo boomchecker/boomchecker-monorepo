@@ -55,7 +55,7 @@ def test_connect_opens_console_with_help(monkeypatch):
             # Help is printed on mount and lists the registered device commands.
             text = _log_text(app)
             assert "/dev/ttyFAKE" in text
-            for name in ("record", "test", "version"):
+            for name in ("record", "test", "version", "model", "micslot"):
                 assert name in text
 
     asyncio.run(flow())

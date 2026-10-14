@@ -21,11 +21,14 @@
 #define GPS_MAX_SECONDS  300u
 
 /** Stream NMEA lines from the module to the console for `seconds`.
- *  Emits "GPS baud=..." first, raw NMEA lines, then "GPSEND lines=... " */
+ *  Emits "GPS baud=..." first, raw NMEA lines, then "GPSEND lines=... ".
+ *  A reply buffered by a preceding gps_send() comes out first. Reception is
+ *  switched off when the run ends, so nothing stale accumulates in idle. */
 void gps_run(uint32_t seconds, uint32_t baud);
 
 /** Send one sentence to the module at `baud`. `sentence` may omit the
- *  leading '$'; the NMEA checksum and CRLF are appended here.
+ *  leading '$'; the NMEA checksum and CRLF are appended here. The reply waits
+ *  in the ring for the next gps_run(), behind those of any earlier sends.
  *  @return 0 on success, non-zero on UART error. */
 int gps_send(const char *sentence, uint32_t baud);
 

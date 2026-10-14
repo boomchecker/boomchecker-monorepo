@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import wave
+from pathlib import Path
 
 from stm32node_cli.audio.wav import timestamped_path, write_wav
 
@@ -30,4 +31,5 @@ def test_timestamped_path_shape():
     p = timestamped_path("/tmp/recordings", prefix="rec")
     assert p.name.startswith("rec-")
     assert p.suffix == ".wav"
-    assert str(p.parent) == "/tmp/recordings"
+    # Compare paths, not strings: on Windows the separator is a backslash.
+    assert p.parent == Path("/tmp/recordings")

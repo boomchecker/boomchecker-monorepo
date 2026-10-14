@@ -125,6 +125,23 @@ void usb_cli_pump(void)
   ux_system_tasks_run();
 }
 
+bool usb_cli_key_pressed(void)
+{
+  /* Same read state machine and scratch buffer as usb_cli_process(): the two
+     never run concurrently, because a command binding that calls this is
+     itself executing inside cli_process(), before that iteration's read_run.
+     Whatever arrives is dropped rather than fed to the CLI - a line typed to
+     stop a run must not be executed as a command once the run ends. */
+  UX_SLAVE_CLASS_CDC_ACM *cdc = s_cdc;
+  if (cdc == UX_NULL)
+  {
+    return false;
+  }
+  ULONG actual = 0;
+  UINT  st = ux_device_class_cdc_acm_read_run(cdc, s_rx, sizeof(s_rx), &actual);
+  return (st == UX_STATE_NEXT && actual > 0);
+}
+
 /* Finish any chunk already staged by usb_cli_tx() so the blocking path does not
    interleave with a console write that is still in flight. */
 static bool finish_staged_tx(void)

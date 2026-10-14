@@ -44,13 +44,14 @@ extern "C" {
 #endif
 
 /**
- * Largest number of MFCC frames that can be aggregated into one window, and the
+ * Largest number of frames that can be aggregated into one window, and the
  * firmware's value. A ceiling rather than the setting itself: it sizes
  * boomdetect_t::mfccs, while boomdetect_config_t::accum_frames picks the value
  * actually used, so a host run can reproduce the training pipeline's windowing
- * without a rebuild.
+ * without a rebuild. Defined in dsp_config.h because the log-mel layout's
+ * width is derived from it; this is the name the rest of the API uses.
  */
-#define BOOMDETECT_ACCUM_FRAMES 14u
+#define BOOMDETECT_ACCUM_FRAMES BOOMDETECT_ACCUM_FRAMES_MAX
 
 /**
  * Default frame hop, in 16 kHz samples. Frames are BOOMDETECT_WINDOW_SIZE long and
@@ -105,8 +106,8 @@ typedef struct
     int32_t thr_milli;
     /** Which model scores the windows. NULL selects classifier_default(). */
     const classifier_t *classifier;
-    /** What shape the model is handed. NULL selects
-        boomdetect_extractor_default(). init() checks the model's layout_id
+    /** What shape the model is handed. NULL selects the extractor that
+        produces the model's layout. init() checks the model's layout_id
         against THIS rather than against a constant, which is what makes a new
         feature representation an addition rather than an edit to the pipeline. */
     const boomdetect_extractor_t *extractor;
@@ -147,6 +148,9 @@ typedef struct
     struct
     {
         bool     complete;
+        /** The window closed before the envelope ring held what the extractor
+            needs (boomdetect_extractor_t::env_required): consumed, no decision. */
+        bool     warming;
         uint32_t start_frame;
         /** Frame that closed the window. Not `start_frame + accum_frames - 1`:
             under BOOMDETECT_GATE_PER_FRAME a squelched frame resets the
@@ -160,7 +164,7 @@ typedef struct
 } boomdetect_event_t;
 
 /**
- * Detector state. Big (about 21 KB, mostly the FIFO), so give it static storage
+ * Detector state. Big (about 31 KB: FIFO and envelope ring), so give it static storage
  * rather than a stack frame. Held by the caller rather than hidden in this
  * translation unit rather than a hidden singleton, so several detectors can be
  * driven side by side - pipeline_test does exactly that.
@@ -182,11 +186,21 @@ typedef struct
     bool     gap_pending; /**< a drop happened; the next frame reports it */
 
     float    frame[BOOMDETECT_WINDOW_SIZE]; /**< contiguous copy; the MFCC destroys it */
-    float    mfccs[BOOMDETECT_ACCUM_FRAMES * BOOMDETECT_MFCC_COEFFS];
+    /** One descriptor row per accepted frame of the current window, laid out
+        as src/extractors.h describes; the MFCC comes first in every row. */
+    float    mfccs[BOOMDETECT_ACCUM_FRAMES * BOOMDETECT_FRAME_WIDTH];
     /** Per-frame RMS of the frames held in the current window, for
         BOOMDETECT_GATE_WINDOW_MEDIAN. Unused by the per-frame gate. */
     float    rms_hist[BOOMDETECT_ACCUM_FRAMES];
-    float    features[BOOMDETECT_FEATURE_COUNT];
+
+    /** The envelope ring (src/envelope.h): oldest sample at env_head, env_fill
+        samples held. */
+    float    env_ring[BOOMDETECT_ENV_RING];
+    uint32_t env_head, env_fill;
+    uint32_t env_phase; /**< chain samples until the next kept envelope sample */
+    float    env_state[BOOMDETECT_ENV_SECTIONS][2]; /**< biquad states, DF2T */
+    /** The configured extractor's output; only its n_features are meaningful. */
+    float    features[BOOMDETECT_FEATURE_MAX];
     uint32_t last_mfcc_slot;
 
     uint32_t accum;
@@ -229,6 +243,9 @@ size_t boomdetect_push(boomdetect_t *d, const int16_t *pcm, size_t n);
  * At most one, never "as much as possible": one MFCC per caller iteration is
  * what keeps the firmware inside its real-time budget. A host test that wants
  * to drain everything simply loops.
+ *
+ * An extractor that reads the envelope ring (src/envelope.h) lets the windows
+ * before it is full close without a decision; the event says so (`window.warming`).
  */
 bool boomdetect_step(boomdetect_t *d, boomdetect_event_t *out);
 
@@ -273,7 +290,7 @@ const float *boomdetect_last_mfcc(const boomdetect_t *d);
 /**
  * @brief The aggregated feature vector of the last completed window.
  *
- * BOOMDETECT_FEATURE_COUNT values in [mean, std, dmean, cmax] x BOOMDETECT_MFCC_COEFFS order.
+ * The configured extractor's n_features values, in its layout (extractor.h).
  * NULL before the first window completes.
  */
 const float *boomdetect_last_features(const boomdetect_t *d);

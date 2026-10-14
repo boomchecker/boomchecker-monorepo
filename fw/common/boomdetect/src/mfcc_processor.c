@@ -12,7 +12,7 @@
    buffers in boomdetect_t) and mfcc_tables.h's (which the generator wrote). They
    agree today and nothing made them. A regenerated table with a different
    coefficient count would have mfcc_process() write MFCC_DCT_ROWS floats into a
-   slot strided by BOOMDETECT_MFCC_COEFFS - an overrun that stays inside boomdetect_t,
+   slot strided by BOOMDETECT_FRAME_WIDTH - an overrun that stays inside boomdetect_t,
    so ASan never sees it and only the decisions go quietly wrong. */
 _Static_assert(MFCC_DCT_ROWS == BOOMDETECT_MFCC_COEFFS,
                "mfcc_tables.h was generated for a different coefficient count");
@@ -54,4 +54,9 @@ void mfcc_process(float32_t *p_audio_buffer, float32_t *p_mfcc_out)
        line later, which is the kind of thing that reads as a formality until
        someone passes a buffer they still needed. */
     boomdetect_mfcc_f32(&mfcc_inst, p_audio_buffer, p_mfcc_out, scratch_buffer);
+}
+
+const float32_t *mfcc_last_logmel(void)
+{
+    return scratch_buffer;
 }

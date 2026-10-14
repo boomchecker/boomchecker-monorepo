@@ -149,7 +149,7 @@ int main(void)
   /* Enable the instruction cache. The core runs code from flash at 250 MHz with
      5 wait states (FLASH_LATENCY_5); with the cache off, every instruction fetch
      stalls the CPU and the PDM->PCM DSP misses its 21.33 ms/ring-half real-time
-     budget (~39 ms measured -> mic overrun). Cached it takes ~17 ms and fits.
+     budget (~39 ms measured -> mic overrun). Cached it takes ~6 ms and fits.
      CubeMX leaves HAL_ICACHE_MODULE_ENABLED off in stm32h5xx_hal_conf.h, so the
      cache is driven directly here (keeps the CubeMX-owned conf untouched). The
      cache is invalidated on reset; wait for any pending invalidation, then
@@ -223,12 +223,12 @@ void SystemClock_Config(void)
   RCC_OscInitStruct.CSICalibrationValue = RCC_CSICALIBRATION_DEFAULT;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLL1_SOURCE_HSE;
-  RCC_OscInitStruct.PLL.PLLM = 2;
-  RCC_OscInitStruct.PLL.PLLN = 40;
+  RCC_OscInitStruct.PLL.PLLM = 6;
+  RCC_OscInitStruct.PLL.PLLN = 125;
   RCC_OscInitStruct.PLL.PLLP = 2;
   RCC_OscInitStruct.PLL.PLLQ = 4;
   RCC_OscInitStruct.PLL.PLLR = 2;
-  RCC_OscInitStruct.PLL.PLLRGE = RCC_PLL1_VCIRANGE_3;
+  RCC_OscInitStruct.PLL.PLLRGE = RCC_PLL1_VCIRANGE_2;
   RCC_OscInitStruct.PLL.PLLVCOSEL = RCC_PLL1_VCORANGE_WIDE;
   RCC_OscInitStruct.PLL.PLLFRACN = 0;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)

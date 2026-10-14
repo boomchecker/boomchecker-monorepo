@@ -23,6 +23,13 @@
 # same-binary, same-target claim - which is exactly what each of these two files
 # is used for.
 #
+# A third data point, 2026-09-06, MinGW-w64 gcc 13.2 (x86-64, -O2, no
+# sanitizer) against this file: DSTSIG identical, 20 of the 199 values differ,
+# features by at most 4.1e-7 relative and decisions by at most 6.8e-7 - the same
+# scale as the board. So even two x86-64 compilers do not agree bit for bit, and
+# CMake compares within --rel 1e-5 on MinGW rather than exactly (see the
+# add_test in CMakeLists.txt; `boomdetect_selftest_tool --compare` does it).
+#
 # Regenerate with:
 #     cd fw/common/boomdetect && task test        # asserts this file
 #     ./build/Debug/boomdetect_selftest_tool      # to see it

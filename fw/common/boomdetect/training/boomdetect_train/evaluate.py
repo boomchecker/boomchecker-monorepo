@@ -1,0 +1,347 @@
+"""Scoring windows the way the board does, and turning the scores into numbers.
+
+Every model is judged on identical windows: the firmware's gating policy
+(disjoint runs of 14 accepted frames, per-frame RMS gate) over the cached
+frames of each clip, one decision per window. The metrics are the ones the
+project has actually needed and never had in one place:
+
+* window AUC - is the score ordering positives above negatives at all;
+* file-level detection and false-alarm rates at a threshold, with the alarm
+  rule the board will run (K-of-N) or the bare ">= 1 window" rule;
+* false alarms per hour of negative audio - the number a field deployment is
+  judged by, which a percentage of windows hides.
+
+Suites are named subsets of the manifest (val, halmstad, salford, real_mic,
+stress) so a report can say where a model wins rather than only whether.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Callable, Iterable
+from dataclasses import dataclass
+
+import numpy as np
+import pandas as pd
+from sklearn.metrics import roc_auc_score
+
+from boomdetect_train.datasets.cache import CachedFrames, FrameCache
+from boomdetect_train.datasets.manifest import (
+    ROLE_FIELD,
+    ROLE_REAL,
+    ROLE_STRESS,
+    ROLE_TRAIN,
+    ROLE_UNSEEN,
+)
+from boomdetect_train.decision import Rule, clip_alarmed
+from boomdetect_train.dsp.windows import DEFAULT_SQUELCH, Gate, windows
+from boomdetect_train.features import (
+    HYBRID_AUX_LAYOUT,
+    LAYOUT_LOGMEL,
+    LAYOUT_STATS,
+    LAYOUT_STATS_SPECTRAL,
+    LAYOUT_STATS_SPECTRAL_MOD,
+    LAYOUT_STATS_SPECTRAL_MOD2S4S,
+    LAYOUT_STATS_SPECTRAL_MOD2S8S,
+    LAYOUT_STATS_SPECTRAL_MOD4S,
+    LAYOUT_STATS_SPECTRAL_MODSPEC,
+    MOD_FRAMES_8S,
+    MOD_FRAMES_LONG,
+    band_stats,
+    logmel_patch,
+    min_start_frame,
+    modulation_prominence,
+    modulation_stats,
+    spec_layout,
+    spec_patch,
+    stats52,
+    stats_spectral_from_scalars,
+)
+
+Scorer = Callable[[np.ndarray], np.ndarray]
+
+
+def window_features(layout: int, cf: CachedFrames, idx: np.ndarray) -> np.ndarray:
+    """A feature vector of `layout` from cached frames (no magnitude spectra needed)."""
+    if layout == LAYOUT_STATS:
+        return stats52(cf.mfcc[idx])
+    if layout == LAYOUT_STATS_SPECTRAL:
+        return stats_spectral_from_scalars(cf.mfcc[idx], cf.scalars[idx], cf.logmel[idx])
+    if layout == LAYOUT_LOGMEL:
+        return logmel_patch(cf.logmel[idx])
+    if layout == LAYOUT_STATS_SPECTRAL_MOD:
+        base = stats_spectral_from_scalars(cf.mfcc[idx], cf.scalars[idx], cf.logmel[idx])
+        return np.concatenate([base, modulation_stats(cf.env, idx)]).astype(np.float32)
+    if layout in (
+        LAYOUT_STATS_SPECTRAL_MOD4S,
+        LAYOUT_STATS_SPECTRAL_MOD2S4S,
+        LAYOUT_STATS_SPECTRAL_MOD2S8S,
+        LAYOUT_STATS_SPECTRAL_MODSPEC,
+    ):
+        base = stats_spectral_from_scalars(cf.mfcc[idx], cf.scalars[idx], cf.logmel[idx])
+        parts = [base]
+        if layout != LAYOUT_STATS_SPECTRAL_MOD4S:
+            parts.append(modulation_stats(cf.env, idx))
+        if layout in (LAYOUT_STATS_SPECTRAL_MOD4S, LAYOUT_STATS_SPECTRAL_MOD2S4S):
+            parts.append(modulation_stats(cf.env, idx, MOD_FRAMES_LONG))
+        elif layout == LAYOUT_STATS_SPECTRAL_MOD2S8S:
+            parts.append(modulation_stats(cf.env, idx, MOD_FRAMES_8S))
+        else:
+            parts.append(modulation_prominence(cf.env, idx))
+        return np.concatenate(parts).astype(np.float32)
+    spec = spec_layout(layout)
+    if spec is not None:
+        kind, fe, t = spec
+        s = cf.spec(fe)
+        if kind == "patch":
+            return spec_patch(s, idx, t)
+        if kind == "bstat":
+            return band_stats(s[idx])
+        if kind == "modbstat":
+            l4 = window_features(LAYOUT_STATS_SPECTRAL_MOD, cf, idx)
+            return np.concatenate([l4, band_stats(s[idx])]).astype(np.float32)
+        aux = window_features(HYBRID_AUX_LAYOUT[kind], cf, idx)  # hybrid*
+        return np.concatenate([spec_patch(s, idx, t), aux]).astype(np.float32)
+    raise ValueError(f"unknown layout {layout}")
+
+
+def clip_windows(
+    cf: CachedFrames,
+    layout: int,
+    gate: Gate = Gate.PER_FRAME,
+    squelch: float | None = DEFAULT_SQUELCH,
+) -> tuple[np.ndarray, np.ndarray]:
+    """(features, end_frames) for every window of one clip under `gate`."""
+    wins = windows(cf.rms, gate, squelch)
+    first = min_start_frame(layout)
+    if first:
+        wins = [w for w in wins if w.start >= first]
+    if not wins:
+        return np.empty((0, 0), dtype=np.float32), np.empty((0,), dtype=np.int64)
+    feats = np.stack([window_features(layout, cf, w.frames) for w in wins]).astype(np.float32)
+    ends = np.asarray([w.end for w in wins], dtype=np.int64)
+    return feats, ends
+
+
+@dataclass
+class ClipScores:
+    id: str
+    source: str
+    label: int
+    category: str
+    role: str
+    split: str
+    duration: float
+    decisions: np.ndarray  # (windows,) float32
+    ends: np.ndarray  # (windows,) frame index that closed each window
+
+
+SUITES = {
+    # name: (roles, splits, sources) - None means any
+    "val": ((ROLE_TRAIN,), ("val",), None),
+    # The held-out third: nothing is fitted on it (no weight, threshold or model choice).
+    "test": ((ROLE_TRAIN,), ("test",), None),
+    "halmstad": ((ROLE_UNSEEN,), None, ("halmstad",)),
+    "salford": ((ROLE_UNSEEN,), None, ("salford",)),
+    "real_mic": ((ROLE_REAL,), None, ("own_recordings",)),
+    # Real drones through the node's microphone. A model trained on field
+    # recordings is scored here out of fold (report.py), never on a recording
+    # it was fitted to.
+    "field": ((ROLE_FIELD,), None, ("field",)),
+    "stress": ((ROLE_STRESS,), None, None),
+}
+
+
+def select_suite(manifest: pd.DataFrame, name: str) -> pd.DataFrame:
+    roles, splits, sources = SUITES[name]
+    m = manifest["role"].isin(roles)
+    if splits is not None:
+        m &= manifest["split"].isin(splits)
+    if sources is not None:
+        m &= manifest["source"].isin(sources)
+    return manifest[m]
+
+
+SCORE_BATCH = 1 << 16
+
+
+def score_clips(
+    rows: pd.DataFrame,
+    cache: FrameCache,
+    layout: int,
+    scorer: Scorer,
+    *,
+    gate: Gate = Gate.PER_FRAME,
+    squelch: float | None = DEFAULT_SQUELCH,
+    batch: int = SCORE_BATCH,
+) -> list[ClipScores]:
+    """Score every window of every clip, then hand each clip its own slice back.
+
+    The windows of all clips are scored together in batches: the half-second
+    clips of the HuggingFace set yield one window each, so scoring clip by clip
+    would be all per-call overhead. Batching does not change a single number.
+    """
+    meta, feats_by_clip, ends_by_clip = [], [], []
+    for rec in rows.itertuples(index=False):
+        cf = cache.get(rec.source, rec.id)
+        feats, ends = clip_windows(cf, layout, gate, squelch)
+        meta.append(rec)
+        feats_by_clip.append(feats)
+        ends_by_clip.append(ends)
+
+    counts = np.asarray([f.shape[0] for f in feats_by_clip], dtype=np.int64)
+    nonempty = [f for f in feats_by_clip if f.shape[0]]
+    if nonempty:
+        allf = np.concatenate(nonempty).astype(np.float32)
+        parts = [
+            np.asarray(scorer(allf[i : i + batch]), dtype=np.float32).reshape(-1)
+            for i in range(0, allf.shape[0], batch)
+        ]
+        alld = np.concatenate(parts) if parts else np.empty(0, np.float32)
+    else:
+        alld = np.empty(0, np.float32)
+
+    out: list[ClipScores] = []
+    at = 0
+    for rec, n, ends in zip(meta, counts, ends_by_clip, strict=True):
+        dec = alld[at : at + n]
+        at += int(n)
+        out.append(
+            ClipScores(
+                id=rec.id,
+                source=rec.source,
+                label=int(rec.label),
+                category=str(rec.category),
+                role=str(rec.role),
+                split=str(rec.split),
+                duration=float(rec.duration),
+                decisions=dec.astype(np.float32),
+                ends=ends,
+            )
+        )
+    return out
+
+
+def score_clips_by_fold(
+    rows: pd.DataFrame,
+    cache: FrameCache,
+    layout: int,
+    scorers: dict[int, Scorer],
+    fold_of_group: dict[str, int],
+    *,
+    squelch: float | None = DEFAULT_SQUELCH,
+) -> list[ClipScores]:
+    """score_clips() with every clip scored by the model of its group's fold.
+
+    The fold models are the run's models retrained without one fold of
+    recordings each, so a clip scored here was never seen by the model that
+    scores it - which is what makes a field number mean anything when the run
+    trained on field recordings. Clips come back in the order of `rows`.
+    """
+    folds = rows["group"].map(fold_of_group)
+    if folds.isna().any():
+        missing = rows.loc[folds.isna(), "group"].unique()[:3].tolist()
+        raise ValueError(f"no fold for {missing}; retrain the run so its folds cover them")
+    out: list[ClipScores] = []
+    for k, sub in rows.groupby(folds.astype(int)):
+        out.extend(score_clips(sub, cache, layout, scorers[int(k)], squelch=squelch))
+    order = {cid: i for i, cid in enumerate(rows["id"])}
+    out.sort(key=lambda c: order[c.id])
+    return out
+
+
+# --- metrics ------------------------------------------------------------------
+
+
+def window_auc(clips: Iterable[ClipScores]) -> float:
+    """AUC over every window, each carrying its clip's label. NaN if one class is absent."""
+    y, s = [], []
+    for c in clips:
+        y.extend([c.label] * c.decisions.shape[0])
+        s.extend(c.decisions.tolist())
+    if not y or len(set(y)) < 2:
+        return float("nan")
+    return float(roc_auc_score(np.asarray(y), np.asarray(s)))
+
+
+@dataclass
+class WindowRates:
+    """Window-level numbers at a threshold: the clip-length-independent view."""
+
+    pos_windows: int
+    neg_windows: int
+    tpr: float  # positive windows called drone / positive windows
+    neg_rejected: float  # negative windows correctly left alone / negative windows
+    fa_per_hour: float  # negative windows called drone per hour of negative audio
+
+
+def window_rates(clips: list[ClipScores], threshold: float) -> WindowRates:
+    pos = np.concatenate([c.decisions for c in clips if c.label == 1] or [np.empty(0)])
+    neg = np.concatenate([c.decisions for c in clips if c.label == 0] or [np.empty(0)])
+    neg_hours = sum(c.duration for c in clips if c.label == 0) / 3600.0
+    fired = int((neg >= threshold).sum())
+    return WindowRates(
+        pos_windows=int(pos.shape[0]),
+        neg_windows=int(neg.shape[0]),
+        tpr=float((pos >= threshold).mean()) if pos.shape[0] else float("nan"),
+        neg_rejected=1.0 - fired / neg.shape[0] if neg.shape[0] else float("nan"),
+        fa_per_hour=fired / neg_hours if neg_hours > 0 else float("nan"),
+    )
+
+
+def threshold_for_fa_rate(clips: list[ClipScores], max_fa_per_hour: float) -> float:
+    """Lowest threshold at which negative windows fire at most `max_fa_per_hour` times per hour.
+
+    Exact rather than swept: with the negative decisions sorted, the allowed
+    count of firings is the budget times the negative hours, and the threshold
+    is one float32 step above the first decision that must not fire.
+    """
+    neg = np.concatenate([c.decisions for c in clips if c.label == 0] or [np.empty(0)])
+    neg_hours = sum(c.duration for c in clips if c.label == 0) / 3600.0
+    if neg.shape[0] == 0 or neg_hours <= 0:
+        return float("nan")
+    allowed = int(np.floor(max_fa_per_hour * neg_hours))
+    desc = np.sort(neg.astype(np.float32))[::-1]
+    if allowed >= desc.shape[0]:
+        return float(np.nextafter(desc[-1], -np.inf))
+    return float(np.nextafter(desc[allowed], np.float32(np.inf)))
+
+
+@dataclass
+class ClipRates:
+    """Clip-level alarm numbers, over the clips long enough for the rule to apply."""
+
+    eligible_pos: int
+    eligible_neg: int
+    detected: int
+    false_alarms: int
+
+
+def clip_rates(clips: list[ClipScores], threshold: float, rule: Rule | None) -> ClipRates:
+    need = rule.n if rule is not None else 1
+    elig = [c for c in clips if c.decisions.shape[0] >= need]
+    verdict = np.asarray([clip_alarmed(c.decisions, threshold, rule) for c in elig], dtype=bool)
+    labels = np.asarray([c.label for c in elig], dtype=np.int64)
+    return ClipRates(
+        eligible_pos=int((labels == 1).sum()),
+        eligible_neg=int((labels == 0).sum()),
+        detected=int((verdict & (labels == 1)).sum()),
+        false_alarms=int((verdict & (labels == 0)).sum()),
+    )
+
+
+def per_category_false_alarms(clips: list[ClipScores], threshold: float) -> pd.DataFrame:
+    """Which negative categories fire: drone-called windows and clips per category."""
+    rows = []
+    for c in clips:
+        if c.label != 0:
+            continue
+        fired = int((c.decisions >= threshold).sum())
+        rows.append({"category": c.category, "windows": c.decisions.shape[0], "fired": fired})
+    if not rows:
+        return pd.DataFrame(columns=["category", "clips", "windows", "fired", "fired_pct"])
+    df = pd.DataFrame(rows)
+    g = df.groupby("category").agg(
+        clips=("fired", "size"), windows=("windows", "sum"), fired=("fired", "sum")
+    )
+    g["fired_pct"] = 100.0 * g["fired"] / g["windows"].clip(lower=1)
+    return g.sort_values("fired_pct", ascending=False).reset_index()

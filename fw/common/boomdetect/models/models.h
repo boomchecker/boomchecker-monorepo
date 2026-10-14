@@ -19,5 +19,8 @@
 
 extern const classifier_t classifier_mlp_v6;
 extern const classifier_t classifier_svm_v3;
+extern const classifier_t classifier_mlp_f2;
+extern const classifier_t classifier_gbt_m1;
+extern const classifier_t classifier_mlp_m1;
 
 #endif /* BOOMDETECT_MODELS_H */

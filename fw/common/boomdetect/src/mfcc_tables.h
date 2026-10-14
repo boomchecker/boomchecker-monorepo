@@ -9,8 +9,12 @@
  * of those used to live in dsp_config.h as settable-looking constants that
  * nothing read, which made them look adjustable. They are not.
  *
- * The generator is not in this repository. Vendoring it is the remaining piece
- * of provenance work; until then these tables cannot be reproduced here.
+ * The generator is not in this repository, but the numbers can be reproduced:
+ * librosa.filters.mel(sr=16000, n_fft=1024, n_mels=20, fmin=0, fmax=8000,
+ * htk=False, norm="slaney") - Slaney's mel scale, every triangle normalised to
+ * unit area - a symmetric Hamming window (np.hamming) and an orthonormal DCT-II
+ * match the arrays below to 7e-8 (checked 2026-10). The training code reads this
+ * header instead of calling librosa, so parity is measured on these numbers.
  *
  * src/mfcc_processor.c static-asserts every dimension below against
  * dsp_config.h, because the two sets are independent and nothing else made

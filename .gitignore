@@ -57,3 +57,6 @@ fw/bom-stm32node/debug/STM32H563.svd
 # stm32node-cli writes captures to <cwd>/recordings; keep them local
 /recordings/
 scripts/median-filter/third_party/
+
+# Enclosure CAD (STEP/STL, CadQuery scripts, photos): kept locally
+/model/

@@ -1,6 +1,6 @@
 /**
  * @file dsp_config.h
- * @brief Shape of the detection chain: frame geometry and feature layout.
+ * @brief Shape of the detection chain: frame geometry and feature layouts.
  *
  * Every name here is BOOMDETECT_-prefixed, like the rest of the package's public
  * surface. They were not, and a public header on the firmware's include path
@@ -16,7 +16,7 @@
    comment here used to say the FFT "must be >= WINDOW_SIZE", which invited a
    combination that silently overruns: the transform reads and writes fftLen
    floats through a buffer sized from the window length, and in boomdetect_t
-   that buffer is followed by the accumulated MFCC frames and the features. */
+   that buffer is followed by the accumulated frames and the features. */
 #define BOOMDETECT_SAMPLE_RATE_HZ 16000.0f /* chain rate, after decimation */
 #define BOOMDETECT_WINDOW_SIZE    1024     /* samples per analysed frame */
 #define BOOMDETECT_FFT_SIZE       1024     /* == BOOMDETECT_WINDOW_SIZE */
@@ -32,10 +32,50 @@
 #define BOOMDETECT_MFCC_COEFFS 13
 #define BOOMDETECT_MEL_FILTERS 20
 
-/* Aggregated feature vector one classified window hands to the model:
-   [mean(13), std(13), dmean(13), cmax(13)], produced by aggregate() in
-   src/boomdetect.c. Every model translation unit under models/ static-asserts
-   its own slice against this. */
+/* Frames per classified window, and the firmware's value. The ceiling sizes
+   boomdetect_t's frame store; boomdetect_config_t::accum_frames picks the value
+   actually used. Lives here rather than in boomdetect.h because the layout-3
+   width below is derived from it. */
+#define BOOMDETECT_ACCUM_FRAMES_MAX 14u
+
+/* One frame descriptor: what boomdetect_step() keeps per accepted frame for the
+   extractors to aggregate (src/extractors.h documents the three blocks).
+   [ mfcc x 13 | log-mel x 20 | spectral scalars x 8 ] */
+#define BOOMDETECT_FRAME_SCALAR_COUNT 8
+#define BOOMDETECT_FRAME_WIDTH \
+    (BOOMDETECT_MFCC_COEFFS + BOOMDETECT_MEL_FILTERS + BOOMDETECT_FRAME_SCALAR_COUNT)
+
+/* Feature vector widths, one per layout (include/extractor.h names the ids).
+   Layout 1, the deployed one: [mean(13), std(13), dmean(13), cmax(13)], produced
+   by src/extractor_stats.c. Every model translation unit under models/
+   static-asserts its own slice against the width of the layout it declares. */
 #define BOOMDETECT_FEATURE_COUNT (4u * BOOMDETECT_MFCC_COEFFS)
+/* Layout 2: layout 1, mean and std of the 8 scalars, log-mel flux. */
+#define BOOMDETECT_FEATURE_COUNT_STATS_SPECTRAL \
+    (BOOMDETECT_FEATURE_COUNT + 2u * BOOMDETECT_FRAME_SCALAR_COUNT + 1u)
+/* Layout 3: the log-mel patch, frame-major. */
+#define BOOMDETECT_FEATURE_COUNT_LOGMEL (BOOMDETECT_ACCUM_FRAMES_MAX * BOOMDETECT_MEL_FILTERS)
+/* Layout 4: layout 2, then the modulation features of the 1-4 kHz envelope
+   (src/extractor_mod.c; features.py MOD_NAMES). */
+#define BOOMDETECT_MOD_FEATURES 10u
+#define BOOMDETECT_FEATURE_COUNT_STATS_SPECTRAL_MOD \
+    (BOOMDETECT_FEATURE_COUNT_STATS_SPECTRAL + BOOMDETECT_MOD_FEATURES)
+/* What boomdetect_t::features must hold: the widest layout. */
+#define BOOMDETECT_FEATURE_MAX BOOMDETECT_FEATURE_COUNT_LOGMEL
+
+/* The envelope behind layout 4. The 1-4 kHz band of the chain, rectified and
+   low-passed (three biquads, src/envelope_coefs.h), kept every
+   BOOMDETECT_ENV_DECIM-th sample - 1 kHz, BOOMDETECT_ENV_PER_HOP values per
+   512-sample hop - in a ring of BOOMDETECT_MOD_FRAMES hops (1.98 s) that
+   boomdetect_t carries across windows. A hovering drone's rotor noise is
+   amplitude-modulated at its blade-pass rate and the ring is what the
+   modulation spectrum is taken over. Twins: dsp/mfcc.py ENV_DECIM/ENV_PER_FRAME
+   and features.py MOD_FRAMES; the ring length is in samples so that a host run
+   with another hop still integrates the same two seconds. */
+#define BOOMDETECT_ENV_DECIM    16u
+#define BOOMDETECT_ENV_PER_HOP  (512u / BOOMDETECT_ENV_DECIM) /* at the default hop */
+#define BOOMDETECT_ENV_SECTIONS 3u                            /* biquads in the chain */
+#define BOOMDETECT_MOD_FRAMES   62u
+#define BOOMDETECT_ENV_RING     (BOOMDETECT_MOD_FRAMES * BOOMDETECT_ENV_PER_HOP) /* 1984 */
 
 #endif /* BOOMDETECT_DSP_CONFIG_H */
