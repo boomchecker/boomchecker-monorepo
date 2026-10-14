@@ -64,7 +64,7 @@ alarm in the field, see [field-manual.md](field-manual.md) (Czech).
 
 | command | what it does |
 |---|---|
-| `detect <sec> [squelch_milli] [thr_milli] [dbg] [rule]` | run for `<sec>` seconds (1..86400; `0` runs until any byte arrives on the console) under the alarm rule `rule` (`2of4` by default, or `mean<n>`), stream `LVL`/`DET` lines and `ALM` on alarm transitions, end with `DETEND` |
+| `detect <sec> [squelch_milli] [thr_milli] [dbg] [rule]` | run for `<sec>` seconds (1..86400; `0` runs until any byte arrives on the console) under the alarm rule `rule` (`2of4` by default, or `mean<n>`), stream `LVL`/`DET` lines, `ALM` on alarm transitions and `ALARM` with the GPS position after each `ALM ON`, end with `DETEND` |
 | `model [name]` | list the classifiers in this image, or select one |
 | `micslot [a\|b]` | which microphone of the PDM pair is decoded |
 | `micdiag` | probe the PDM data pins |
@@ -87,7 +87,11 @@ classified windows were called `DRONE`, and OFF when fewer than 1 were. The
 board prints `ALM t=<s>.<ms> ON|OFF hits=<k>/<n>` only on transitions, and
 `DETEND` counts the OFF→ON transitions in `alarms=` and stamps the first `DRONE`
 window and the first alarm (`first_drone=`, `first_alarm=`, seconds into the run,
-`-` if never) so a field log needs nothing but the trailer. Squelched frames yield no
+`-` if never) so a field log needs nothing but the trailer. Each `ALM ON` is
+followed by `ALARM t=<s>.<ms> lat= lon= sats= hdop= age= utc=`: the board
+listens to the GNSS module during the run and reports its last fix in decimal
+degrees, how old it is in seconds and the UTC time of the fix, or `-` in every
+field while it has had no fix since boot. Squelched frames yield no
 window and do not move the history. The constants are in `detect_service.h` and
 pinned by the host tool's tests; the training package evaluates clip-level
 verdicts with the same rule, so "alarm" means one thing on both sides.

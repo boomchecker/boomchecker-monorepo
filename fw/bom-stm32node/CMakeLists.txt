@@ -207,6 +207,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     ${CMAKE_SOURCE_DIR}/App/detect/detect_service.c
     ${CMAKE_SOURCE_DIR}/Core/Src/dfu_boot.c
     ${CMAKE_SOURCE_DIR}/Core/Src/gps.c
+    ${CMAKE_SOURCE_DIR}/Core/Src/nmea.c
     ${CMAKE_SOURCE_DIR}/third_party/embedded-cli/lib/src/embedded_cli.c
 )
 

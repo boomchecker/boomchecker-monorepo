@@ -87,4 +87,5 @@ def test_detect_description_quotes_the_defaults() -> None:
     assert spec.DETECT_DEFAULT_MODEL in detect.description
     assert "[dbg]" in detect.usage
     assert "ALM t=" in detect.response
+    assert "ALARM t=" in detect.response
     assert "alarms=<n>" in detect.response

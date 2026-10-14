@@ -9,7 +9,8 @@
  * code so the CubeMX files stay untouched - same pattern as mic.c/GPDMA.
  *
  * Reception is armed only while somebody will read the bytes: during
- * gps_run(), and from gps_send() until the next gps_run() drains the reply.
+ * gps_run(), during a `detect` run (gps_track_*, for the position on its ALARM
+ * lines), and from gps_send() until the next gps_run() drains the reply.
  * The module streams NMEA continuously (~960 B/s at 9600 Bd), so a ring left
  * armed in idle fills within about a second; being drop-newest it would then
  * discard the reply to a later `gpstx` and hand the next `gps` a second of
@@ -17,6 +18,7 @@
  ******************************************************************************
  */
 #include "gps.h"
+#include "nmea.h"
 #include "usart.h"   /* huart4 */
 #include "usb_cli.h" /* usb_cli_pump / connected / write_blocking */
 #include "main.h"    /* HAL_GetTick */
@@ -41,6 +43,94 @@ static volatile uint32_t s_err_ne, s_err_fe, s_err_ore, s_err_pe;
 
 static uint32_t s_cur_baud;      /* 0 = UART still at the CubeMX boot default */
 static bool     s_reply_pending; /* gps_send() armed RX, no gps_run() since   */
+
+/* Line assembly, shared by gps_run() and the tracking during `detect`. Room
+   for '\r' '\n' + NUL after the longest line. */
+static char     s_line[GPS_LINE_MAX + 3u];
+static uint32_t s_line_len;
+
+/* The last valid fix seen by either reader, kept across runs: a unit that
+   does not move still knows where it is, and gps_fix_t.tick_ms says how old. */
+static gps_fix_t  s_fix;
+static nmea_gga_t s_gga;
+static bool       s_gga_valid;
+
+static void gps_print(const char *line);
+
+/* Remember what a complete line says about the position. */
+static void gps_note_line(const char *line)
+{
+  nmea_rmc_t rmc;
+  nmea_gga_t gga;
+  if (nmea_parse_rmc(line, &rmc))
+  {
+    s_fix.valid    = true;
+    s_fix.lat_e6   = rmc.lat_e6;
+    s_fix.lon_e6   = rmc.lon_e6;
+    s_fix.utc_hms  = rmc.utc_hms;
+    s_fix.date_dmy = rmc.date_dmy;
+    s_fix.tick_ms  = HAL_GetTick();
+    /* The GGA of the same second comes next to it; until then the last one. */
+    s_fix.sats     = s_gga_valid ? s_gga.sats : 0u;
+    s_fix.hdop_x10 = s_gga_valid ? s_gga.hdop_x10 : 0u;
+  }
+  else if (nmea_parse_gga(line, &gga))
+  {
+    s_gga       = gga;
+    s_gga_valid = (gga.quality > 0u);
+    if (s_gga_valid && s_fix.valid)
+    {
+      s_fix.sats     = gga.sats;
+      s_fix.hdop_x10 = gga.hdop_x10;
+    }
+  }
+}
+
+/* Move the ring into s_line, handing every complete line (CRLF stripped) to
+   gps_note_line() and, when `print`, to the console with CRLF. An overlong
+   line is cut at GPS_LINE_MAX. Returns the bytes consumed; counts lines. */
+static uint32_t gps_drain(bool print, uint32_t *lines)
+{
+  uint32_t bytes = 0u;
+  while (s_tail != s_head)
+  {
+    uint8_t b = s_ring[s_tail];
+    s_tail    = (uint16_t)((s_tail + 1u) % GPS_RING_LEN);
+    bytes++;
+
+    if (b == (uint8_t)'\n' || s_line_len >= GPS_LINE_MAX)
+    {
+      while (s_line_len > 0u && (s_line[s_line_len - 1u] == '\r'
+                                 || s_line[s_line_len - 1u] == '\n'))
+      {
+        s_line_len--;
+      }
+      if (s_line_len > 0u)
+      {
+        s_line[s_line_len] = '\0';
+        gps_note_line(s_line);
+        if (print)
+        {
+          s_line[s_line_len]      = '\r';
+          s_line[s_line_len + 1u] = '\n';
+          s_line[s_line_len + 2u] = '\0';
+          gps_print(s_line);
+        }
+        (*lines)++;
+      }
+      s_line_len = 0u;
+      if (b != (uint8_t)'\n')
+      {
+        s_line[s_line_len++] = (char)b; /* first byte of the overlong tail */
+      }
+    }
+    else if (b != (uint8_t)'\r')
+    {
+      s_line[s_line_len++] = (char)b;
+    }
+  }
+  return bytes;
+}
 
 void UART4_IRQHandler(void)
 {
@@ -91,7 +181,8 @@ static int gps_uart_start(uint32_t baud, bool discard)
   }
   if (discard)
   {
-    s_tail = s_head;
+    s_tail     = s_head;
+    s_line_len = 0u;
     __HAL_UART_SEND_REQ(&huart4, UART_RXDATA_FLUSH_REQUEST); /* stale RDR byte */
   }
 
@@ -116,6 +207,7 @@ static void gps_uart_stop(void)
   CLEAR_BIT(UART4->CR1, USART_CR1_RXNEIE_RXFNEIE);
   HAL_NVIC_DisableIRQ(UART4_IRQn);
   s_tail          = s_head; /* drop the partial line the deadline cut off */
+  s_line_len      = 0u;
   s_reply_pending = false;
 }
 
@@ -126,8 +218,6 @@ static void gps_print(const char *line)
 
 void gps_run(uint32_t seconds, uint32_t baud)
 {
-  char     line[GPS_LINE_MAX + 3u]; /* room for '\r' '\n' + NUL */
-  uint32_t line_len = 0u;
   uint32_t lines = 0u, bytes = 0u;
   uint8_t  err = 0u;
 
@@ -167,38 +257,7 @@ void gps_run(uint32_t seconds, uint32_t baud)
       break;
     }
 
-    while (s_tail != s_head)
-    {
-      uint8_t b = s_ring[s_tail];
-      s_tail    = (uint16_t)((s_tail + 1u) % GPS_RING_LEN);
-      bytes++;
-
-      if (b == (uint8_t)'\n' || line_len >= GPS_LINE_MAX)
-      {
-        while (line_len > 0u && (line[line_len - 1u] == '\r'
-                                 || line[line_len - 1u] == '\n'))
-        {
-          line_len--;
-        }
-        if (line_len > 0u)
-        {
-          line[line_len]      = '\r';
-          line[line_len + 1u] = '\n';
-          line[line_len + 2u] = '\0';
-          gps_print(line);
-          lines++;
-        }
-        line_len = 0u;
-        if (b != (uint8_t)'\n')
-        {
-          line[line_len++] = (char)b; /* first byte of the overlong tail */
-        }
-      }
-      else if (b != (uint8_t)'\r')
-      {
-        line[line_len++] = (char)b;
-      }
-    }
+    bytes += gps_drain(true, &lines);
   }
 
   gps_uart_stop();
@@ -261,4 +320,29 @@ int gps_send(const char *sentence, uint32_t baud)
   }
   s_reply_pending = true;
   return 0;
+}
+
+int gps_track_start(void)
+{
+  return gps_uart_start(GPS_DEFAULT_BAUD, true);
+}
+
+void gps_track_poll(void)
+{
+  uint32_t lines = 0u;
+  (void)gps_drain(false, &lines);
+}
+
+void gps_track_stop(void)
+{
+  gps_uart_stop();
+}
+
+bool gps_last_fix(gps_fix_t *out)
+{
+  if (out != NULL)
+  {
+    *out = s_fix;
+  }
+  return s_fix.valid;
 }

@@ -24,6 +24,12 @@
  *   ALM t=<s>.<ms> <ON|OFF> hits=<k>/<n>            the alarm changed state on
  *   ALM t=<s>.<ms> <ON|OFF> mean=<+d.ddd>/<n>       the window that closed at t
  *                                                   (vote rule / mean rule)
+ *   ALARM t=<s>.<ms> lat=<deg|-> lon=<deg|-> sats=<n|-> hdop=<d.d|->
+ *         age=<s.d|-> utc=<YYYY-MM-DDThh:mm:ssZ|->  right after every ALM ON:
+ *                                                   the last GPS fix (decimal
+ *                                                   degrees, north/east +), how
+ *                                                   old it is and when the module
+ *                                                   took it; all "-" without one
  *   F=<n> a=<n> r=<n> h=<us> m=<us>                 per frame, only with dbg=1
  *   DETDBG h_max=<us> m_max=<us> w_max=<us> loop_max=<us> skipped=<n>
  *                                                   before DETEND, only with dbg=1:

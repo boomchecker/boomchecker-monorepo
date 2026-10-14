@@ -68,6 +68,7 @@ LVL t=1.984 rms=+0.031            úroveň vstupu, asi 1x za sekundu
 DET t=2.432 span=14 dec=+4.120 DRONE   jedno klasifikované okno (~448 ms)
 DET t=2.880 span=14 dec=-12.500 noise
 ALM t=3.328 ON hits=2/4           alarm změnil stav
+ALARM t=3.328 lat=50.102057 lon=14.426130 sats=7 hdop=1.2 age=0.4 utc=2026-10-14T11:24:43Z
 DETEND windows=64 drones=27 alarms=1 first_drone=2.432 first_alarm=3.328 overrun=0 err=0
 ```
 
@@ -79,6 +80,13 @@ Pro hodnocení citlivosti sleduj čísla z `DETEND`:
   označeného DRONE a prvního zapnutí alarmu; `-` když se to nestalo. U
   `gbt_m1` a `mlp_m1` odečti 2,2 s zahřívání (plní se kruh obálky, totéž po
   výpadku vzorků), dřív okno přijít nemůže.
+- `ALARM` přijde hned za každým `ALM ... ON` a nese polohu jednotky z GPS:
+  `lat`/`lon` ve stupních (sever/východ kladně, jde vložit do mapy),
+  `sats` a `hdop` (počet družic a přesnost, HDOP pod 2 je dobré), `age` =
+  kolik sekund je ten fix starý a `utc` = kdy ho modul změřil. Deska GPS
+  během `detect` poslouchá sama, nic se nespouští. Bez fixu od zapnutí desky
+  jsou všechna pole `-`; když fix během běhu vypadne, zůstane poslední známá
+  poloha a roste `age`.
 - `overrun=1` znamená ztracené vzorky, zapiš si to k běhu.
 - U sítí (`crnn_*`, `or_*`) se síť počítá po kouscích v dalších blocích
   mikrofonu, takže řádek `DET` přijde asi o 0,1–0,3 s později, než okno

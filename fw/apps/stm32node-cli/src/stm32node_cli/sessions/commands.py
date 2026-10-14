@@ -251,7 +251,7 @@ def _cmd_detect(ctx: CommandContext, args: list[str]) -> None:
     ctx.emit(f"-> detecting ({ran}) on {ctx.port} - press q then Enter to stop")
 
     def on_line(line: str) -> None:
-        alarm_on = line.startswith("ALM") and " ON " in line
+        alarm_on = (line.startswith("ALM") and " ON " in line) or line.startswith("ALARM")
         if "DRONE" in line or alarm_on:
             ctx.emit(f"[red]{line}[/red]")
         else:

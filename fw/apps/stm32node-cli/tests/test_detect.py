@@ -31,11 +31,15 @@ class _BoardTransport(FakeTransport):
         self.feed(self._answers.get(data.split()[0], b""))
 
 
-# A whole run: a level line, one DRONE window, its alarm transition, then DETEND.
+# A whole run: a level line, one DRONE window, its alarm transition with the
+# unit's position, then DETEND.
+_ALARM = (
+    "ALARM t=2.567 lat=50.102057 lon=14.426130 sats=7 hdop=1.2 age=0.4 utc=2026-10-14T11:24:43Z"
+)
 _RUN = (
     b"LVL t=1.000 rms=+0.012\r\n"
     b"DET t=2.567 span=14 dec=+5.234 DRONE\r\n"
-    b"ALM t=2.567 ON hits=2/4\r\n"
+    b"ALM t=2.567 ON hits=2/4\r\n" + _ALARM.encode() + b"\r\n"
     b"DETEND windows=1 drones=1 alarms=1 first_drone=2.567 first_alarm=2.567 overrun=0 err=0\r\n"
 )
 
@@ -56,6 +60,7 @@ def test_run_detect_sends_command_and_returns_trailer():
         "LVL t=1.000 rms=+0.012",
         "DET t=2.567 span=14 dec=+5.234 DRONE",
         "ALM t=2.567 ON hits=2/4",
+        _ALARM,
     ]
 
 

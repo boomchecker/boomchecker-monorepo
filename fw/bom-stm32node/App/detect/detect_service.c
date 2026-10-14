@@ -11,6 +11,7 @@
 #include "boomdetect_alarm.h"
 #include "boomdetect_selftest.h"
 #include "classifier.h"
+#include "gps.h"     /* gps_track_*, gps_last_fix: the position on ALARM lines */
 #include "main.h"    /* HAL_GetTick, DWT */
 #include "mic.h"     /* mic_dma_init/start/stop/poll/overrun, PCM_SAMPLES_PER_HALF,
                         PCM_FS_HZ */
@@ -234,6 +235,64 @@ static bool det_work_timed(boomdetect_event_t *ev)
   return done;
 }
 
+/* Microdegrees as "-d.dddddd". */
+static void fmt_e6(char *dst, size_t len, int32_t v)
+{
+  uint32_t mag = (v < 0) ? (uint32_t)(-(int64_t)v) : (uint32_t)v;
+  snprintf(dst, len, "%s%lu.%06lu", (v < 0) ? "-" : "", (unsigned long)(mag / 1000000u),
+           (unsigned long)(mag % 1000000u));
+}
+
+/* ALARM after an ALM ON: where the unit was, from the last GPS fix. age is how
+   old that fix is (s), utc when the module took it; all "-" without a fix. */
+static void det_report_alarm(uint32_t t_ms)
+{
+  char      line[160];
+  char      lat[16], lon[16], sats[8], hdop[12], age[16], utc[32];
+  gps_fix_t fix;
+
+  if (!gps_last_fix(&fix))
+  {
+    snprintf(line, sizeof(line), "ALARM t=%lu.%03lu lat=- lon=- sats=- hdop=- age=- utc=-\r\n",
+             (unsigned long)(t_ms / 1000u), (unsigned long)(t_ms % 1000u));
+    det_print(line);
+    return;
+  }
+  const uint32_t age_ds = (HAL_GetTick() - fix.tick_ms) / 100u;
+  const uint32_t hms    = fix.utc_hms;
+  fmt_e6(lat, sizeof(lat), fix.lat_e6);
+  fmt_e6(lon, sizeof(lon), fix.lon_e6);
+  if (fix.sats == 0u)
+  {
+    snprintf(sats, sizeof(sats), "-");
+    snprintf(hdop, sizeof(hdop), "-");
+  }
+  else
+  {
+    snprintf(sats, sizeof(sats), "%u", (unsigned)fix.sats);
+    snprintf(hdop, sizeof(hdop), "%u.%u", (unsigned)(fix.hdop_x10 / 10u),
+             (unsigned)(fix.hdop_x10 % 10u));
+  }
+  snprintf(age, sizeof(age), "%lu.%lu", (unsigned long)(age_ds / 10u),
+           (unsigned long)(age_ds % 10u));
+  if (fix.date_dmy != 0u)
+  {
+    snprintf(utc, sizeof(utc), "20%02lu-%02lu-%02luT%02lu:%02lu:%02luZ",
+             (unsigned long)(fix.date_dmy % 100u), (unsigned long)(fix.date_dmy / 100u % 100u),
+             (unsigned long)(fix.date_dmy / 10000u), (unsigned long)(hms / 10000u),
+             (unsigned long)(hms / 100u % 100u), (unsigned long)(hms % 100u));
+  }
+  else
+  {
+    snprintf(utc, sizeof(utc), "%02lu:%02lu:%02luZ", (unsigned long)(hms / 10000u),
+             (unsigned long)(hms / 100u % 100u), (unsigned long)(hms % 100u));
+  }
+  snprintf(line, sizeof(line), "ALARM t=%lu.%03lu lat=%s lon=%s sats=%s hdop=%s age=%s utc=%s\r\n",
+           (unsigned long)(t_ms / 1000u), (unsigned long)(t_ms % 1000u), lat, lon, sats, hdop,
+           age, utc);
+  det_print(line);
+}
+
 static void det_report_window(const boomdetect_event_t *ev);
 
 static void det_report(const boomdetect_event_t *ev, uint32_t debug)
@@ -313,6 +372,10 @@ static void det_report_window(const boomdetect_event_t *ev)
                  (unsigned)boomdetect_alarm_hits(&s_alarm), (unsigned)s_alarm.rule.n);
       }
       det_print(line);
+      if (boomdetect_alarm_on(&s_alarm))
+      {
+        det_report_alarm(t_ms);
+      }
     }
   }
 }
@@ -402,6 +465,9 @@ void detect_service_run(uint32_t seconds, uint32_t squelch_milli, int32_t thr_mi
     det_abort("DETERR mic start failed\r\n");
     return;
   }
+  /* Keeps the fix fresh for ALARM lines. A UART failure only costs the
+     position (the last fix, or "-"), not the run. */
+  (void)gps_track_start();
 
   bool mic_got = false;
   bool mic_ok  = true;
@@ -456,10 +522,13 @@ void detect_service_run(uint32_t seconds, uint32_t squelch_milli, int32_t thr_mi
         det_report_window(&wev);
       }
     }
+    gps_track_poll(); /* ~20 bytes per block at 9600 Bd */
     det_max(&s_loop_max, s_half_us + (DWT->CYCCNT - loop_c0) / 250u);
   }
 
   mic_stop();
+  gps_track_poll();
+  gps_track_stop();
 
   /* The last window's network may still be running: finish it, there is no
      block to keep up with any more. */
