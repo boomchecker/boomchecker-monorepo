@@ -24,6 +24,7 @@ import sys
 import pandas as pd
 
 from boomdetect_train import paths
+from boomdetect_train.augment import PROFILES
 from boomdetect_train.datasets.cache import FrameCache, build_source_cache
 from boomdetect_train.datasets.manifest import load_manifest, save_manifest, summarize
 from boomdetect_train.datasets.sources import build_rows
@@ -280,8 +281,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument(
         "--augment-profile",
         default="near",
-        choices=["near", "far"],
-        help="distances the variants draw from: near = 20-250 m, far = 50-500 m, quieter, windier",
+        choices=list(PROFILES),
+        help="distances the variants draw from: near = 20-250 m, far = 50-500 m, quieter, windier; "
+        "gust = near distances on a gusty wind floor (augment.py)",
     )
     p.add_argument(
         "--seed", type=int, default=42, help="model seed (initial weights, early-stopping split)"

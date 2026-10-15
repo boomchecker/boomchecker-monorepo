@@ -88,7 +88,12 @@ bdtrain train --name f1 --field --share field=0.25 drone_audio_dataset=0.15 --fo
                               # + the field recordings, sources weighted, 4 fold models
 bdtrain train --name f1 --field --augment 4 [--augment-profile far] ...
                               # + 4 distance variants of every field clip (augment.py;
-                              # near = 20-250 m, far = 50-500 m, quieter, windier floor)
+                              # near = 20-250 m, far = 50-500 m, quieter, windier floor,
+                              # gust = near on a gusty wind floor as 2026-10-14 recorded it)
+BOOMDETECT_SPECFLOOR=800,4,1.0,0.1 BOOMDETECT_DATA=<other root> bdtrain features ...
+                              # experiment: per-frame wind floor removal before log-mel and
+                              # scalars (dsp/mfcc.py spectral_floor); needs its own cache,
+                              # and the firmware does not have it
 bdtrain train --name f1_nr --field --field-exclude runner250 ...
                               # the same without one drone (or one negative category)
 bdtrain train ... --seed 1 --aug-seed 1

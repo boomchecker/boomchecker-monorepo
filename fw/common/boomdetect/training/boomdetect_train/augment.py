@@ -49,6 +49,7 @@ class Variant:
     gain_db: float  # applied to the recording before the floor is added
     white_dbfs: float  # RMS of the white floor
     rumble_dbfs: float  # RMS of the < 200 Hz rumble
+    rumble_kind: str = "lp200"  # "lp200": flat to 200 Hz; "gust": gusty wind (floor_noise)
 
 
 @dataclass(frozen=True)
@@ -58,6 +59,7 @@ class Profile:
     distance_m: tuple[float, float]
     drone_gain_db: tuple[float, float]
     rumble_dbfs: tuple[float, float] = (-58.0, -48.0)
+    rumble_kind: str = "lp200"
 
 
 PROFILES = {
@@ -67,6 +69,12 @@ PROFILES = {
     # the floor, and the floor itself is wind - 85-90 % of the energy below 300 Hz,
     # rumble around -47 dBFS - so the variants go further out and get a windier floor.
     "far": Profile((50.0, 500.0), (-25.0, -6.0), (-55.0, -40.0)),
+    # Gusty wind on an unscreened port, as 2026-10-14 sounded: the rumble below 100 Hz
+    # sat at 0.013-0.024 RMS (-38..-32 dBFS) in a wind nobody called strong. The near
+    # distances on a floor that spans that range (see floor_noise for its shape). As an
+    # augmentation it bought little on the real recordings (analysis/2026-10-14-lab);
+    # it is kept as the faithful synthetic stand-in to judge wind robustness with.
+    "gust": Profile((20.0, 250.0), (-20.0, -3.0), (-44.0, -26.0), "gust"),
 }
 
 
@@ -91,8 +99,23 @@ def _rms_to(x: np.ndarray, dbfs: float) -> np.ndarray:
 
 def floor_noise(n: int, sr: int, v: Variant, rng: np.random.Generator) -> np.ndarray:
     white = _rms_to(rng.standard_normal(n), v.white_dbfs)
-    sos = signal.butter(2, 200.0, btype="lowpass", fs=sr, output="sos")
-    rumble = _rms_to(signal.sosfilt(sos, rng.standard_normal(n)), v.rumble_dbfs)
+    raw = rng.standard_normal(n)
+    if v.rumble_kind == "gust":
+        # Wind on the port as 2026-10-14 recorded it: -6 dB/octave above 60 Hz with a tail to
+        # ~600 Hz, under a log-normal envelope that flickers at up to ~100 Hz with a 12 dB
+        # spread. The flicker is the point - a steady rumble below 120 Hz left the models
+        # alone, the gusts' frame-to-frame level changes (std / cmax of the low MFCCs) did not.
+        raw = signal.sosfilt(signal.butter(1, 60.0, btype="lowpass", fs=sr, output="sos"), raw)
+        sos = signal.butter(2, 600.0, btype="lowpass", fs=sr, output="sos")
+        flicker = signal.sosfilt(
+            signal.butter(2, 100.0, btype="lowpass", fs=sr, output="sos"), rng.standard_normal(n)
+        )
+        flicker = flicker / (np.std(flicker) + 1e-12) * (12.0 / 8.686)  # 12 dB sigma, in nepers
+        rumble = _rms_to(signal.sosfilt(sos, raw) * np.exp(flicker), v.rumble_dbfs)
+        return white + rumble
+    else:
+        sos = signal.butter(2, 200.0, btype="lowpass", fs=sr, output="sos")
+    rumble = _rms_to(signal.sosfilt(sos, raw), v.rumble_dbfs)
     return white + rumble
 
 
@@ -119,6 +142,7 @@ def draw_variant(
         gain_db=float(rng.uniform(*profile.drone_gain_db)) if drone else 0.0,
         white_dbfs=float(rng.uniform(-70.0, -62.0)),
         rumble_dbfs=float(rng.uniform(*profile.rumble_dbfs)),
+        rumble_kind=profile.rumble_kind,
     )
 
 

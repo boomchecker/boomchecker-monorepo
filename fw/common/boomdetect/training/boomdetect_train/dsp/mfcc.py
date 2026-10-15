@@ -111,6 +111,52 @@ def frame_envelope(env: np.ndarray, n_frames_: int) -> np.ndarray:
     return env[:need].reshape(n_frames_, ENV_PER_FRAME)
 
 
+def spectral_floor_params() -> tuple[float, int, float, float] | None:
+    """EXPERIMENT (2026-10-15): per-frame wind floor removal, off unless BOOMDETECT_SPECFLOOR is
+    set to "top_hz,half_width_bins,alpha,beta" (e.g. "800,4,1.0,0.1"). A run trained with it
+    needs its own frame cache (BOOMDETECT_DATA pointing at another data root). No parity: the
+    fixtures and the firmware do not know this filter. Offline on 5 seeds it made layout 4
+    nearly immune to synthetic gusts with no false alarms, but did not help the windy
+    2026-10-14 recordings (analysis/2026-10-14-lab/vysledky.md, section 11)."""
+    import os
+
+    raw = os.environ.get("BOOMDETECT_SPECFLOOR", "")
+    if not raw:
+        return None
+    top, w, alpha, beta = raw.split(",")
+    return float(top), int(w), float(alpha), float(beta)
+
+
+def spectral_floor(mag: np.ndarray, params: tuple[float, int, float, float] | None) -> np.ndarray:
+    """Remove the smooth broadband floor below `top_hz` from every frame, keep the tonal lines.
+
+    Within one frame wind is a smooth hump below ~600 Hz while a drone is a set of narrow
+    lines (a Hamming main lobe is ~4 bins, the lines 11 bins apart), so the median of the
+    magnitude over +-w bins estimates the wind in that very frame - no tracking over time, so
+    gusts are followed - and |Y| = max(|X| - alpha * floor, beta * |X|). Above `top_hz` the
+    spectrum is untouched, with a 4-bin linear blend at the edge.
+    """
+    if params is None or mag.shape[0] == 0:
+        return mag
+    top_hz, w, alpha, beta = params
+    bin_hz = SAMPLE_RATE_HZ / WINDOW_SIZE
+    k_hi = min(int(top_hz / bin_hz), mag.shape[1] - 1)
+    lo = 1  # keep DC as it is
+    seg = mag[:, lo : k_hi + 4 + w + 1]
+    padded = np.pad(seg, ((0, 0), (w, 0)), mode="edge")
+    win = np.lib.stride_tricks.sliding_window_view(padded, 2 * w + 1, axis=1)
+    floor = np.median(win, axis=2)  # (F, len(seg) - w)
+    n = min(floor.shape[1], k_hi + 4 - lo + 1)
+    x = mag[:, lo : lo + n]
+    y = np.maximum(x - alpha * floor[:, :n], beta * x)
+    blend = np.ones(n)
+    edge = np.arange(n) + lo
+    blend[edge > k_hi] = np.clip(1.0 - (edge[edge > k_hi] - k_hi) / 4.0, 0.0, 1.0)
+    out = mag.copy()
+    out[:, lo : lo + n] = blend * y + (1.0 - blend) * x
+    return out
+
+
 class Frontend:
     """The per-frame chain, bound to one set of tables."""
 
@@ -141,7 +187,7 @@ class Frontend:
         """Run the whole per-frame chain over a 16 kHz float signal."""
         frames = frame_signal(x16k)
         rms = frame_rms(frames)
-        mag = self.spectrum(frames)
+        mag = spectral_floor(self.spectrum(frames), spectral_floor_params())
         logmel = self.logmel_from_mag(mag)
         mfcc = self.mfcc_from_logmel(logmel)
         env = frame_envelope(envelope_1k(x16k), frames.shape[0])
