@@ -193,8 +193,8 @@ endif()
 # changes generated output via one of these instead - the generated .pb.h
 # bounds would silently stay stale on an incremental build after
 # `git submodule update`. Deliberately does NOT list generator/proto/
-# nanopb_pb2.py: that file is itself produced by the generator at build time,
-# so depending on it would mean depending on a build artifact.
+# nanopb_pb2.py: the generator does not build or need that file any more - it
+# imports this build's own copy instead, BOOMLINK_NANOPB_PB2 below.
 set(BOOMLINK_NANOPB_GENERATOR_FILES
   ${BOOMLINK_NANOPB_GENERATOR}
   ${BOOMLINK_NANOPB_DIR}/generator/proto/__init__.py
@@ -377,6 +377,29 @@ file(CONFIGURE OUTPUT ${BOOMLINK_NANOPB_OPTIONS_STAMP}
 set(BOOMLINK_GENERATED_DIR ${CMAKE_CURRENT_BINARY_DIR}/generated)
 file(MAKE_DIRECTORY ${BOOMLINK_GENERATED_DIR})
 
+# The generator needs nanopb_pb2.py (nanopb.proto compiled for Python). Left
+# to itself, each generator run builds it on first use into the submodule's
+# generator/proto/, and on a fresh checkout the parallel runs below race: one
+# imports the file while another is still writing it and fails with
+# "module 'proto.nanopb_pb2' has no attribute 'IS_8'". So it is built once
+# here, into the build tree, and every run imports that copy
+# (NANOPB_PB2_NO_REBUILD; the import is a plain `import nanopb_pb2`, hence
+# PYTHONPATH - replaced, not prepended, since protobuf and grpcio-tools come
+# from the interpreter's own site-packages).
+set(BOOMLINK_NANOPB_PB2_DIR ${CMAKE_CURRENT_BINARY_DIR}/nanopb_pb2)
+file(MAKE_DIRECTORY ${BOOMLINK_NANOPB_PB2_DIR})
+set(BOOMLINK_NANOPB_PB2 ${BOOMLINK_NANOPB_PB2_DIR}/nanopb_pb2.py)
+add_custom_command(
+  OUTPUT ${BOOMLINK_NANOPB_PB2}
+  COMMAND ${Python3_EXECUTABLE} -m grpc_tools.protoc
+          -I${BOOMLINK_NANOPB_DIR}/generator/proto
+          --python_out=${BOOMLINK_NANOPB_PB2_DIR}
+          ${BOOMLINK_NANOPB_DIR}/generator/proto/nanopb.proto
+  DEPENDS ${BOOMLINK_NANOPB_DIR}/generator/proto/nanopb.proto
+  COMMENT "Generating nanopb_pb2.py for the Nanopb generator"
+  VERBATIM
+)
+
 set(BOOMLINK_GENERATED_SOURCES "")
 foreach(proto_name IN LISTS BOOMLINK_PROTO_NAMES)
   set(out_c ${BOOMLINK_GENERATED_DIR}/${proto_name}.pb.c)
@@ -400,7 +423,10 @@ foreach(proto_name IN LISTS BOOMLINK_PROTO_NAMES)
   # find nothing and stay silent.
   add_custom_command(
     OUTPUT ${out_c} ${out_h}
-    COMMAND ${Python3_EXECUTABLE} ${BOOMLINK_NANOPB_GENERATOR}
+    COMMAND ${CMAKE_COMMAND} -E env
+            NANOPB_PB2_NO_REBUILD=1
+            PYTHONPATH=${BOOMLINK_NANOPB_PB2_DIR}
+            ${Python3_EXECUTABLE} ${BOOMLINK_NANOPB_GENERATOR}
             -I${BOOMLINK_PROTO_DIR}
             -I${BOOMLINK_NANOPB_OPTIONS_DIR}
             -D${BOOMLINK_GENERATED_DIR}
@@ -409,6 +435,7 @@ foreach(proto_name IN LISTS BOOMLINK_PROTO_NAMES)
             ${BOOMLINK_NANOPB_OPTIONS_FILES}
             ${BOOMLINK_NANOPB_OPTIONS_STAMP}
             ${BOOMLINK_NANOPB_GENERATOR_FILES}
+            ${BOOMLINK_NANOPB_PB2}
     COMMENT "Generating Nanopb code for ${proto_name}.proto"
     VERBATIM
   )
